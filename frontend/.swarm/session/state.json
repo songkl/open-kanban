@@ -1,0 +1,1582 @@
+{
+  "version": 2,
+  "writtenAt": 1774661187091,
+  "toolAggregates": {
+    "bash": {
+      "tool": "bash",
+      "count": 39,
+      "successCount": 39,
+      "failureCount": 0,
+      "totalDuration": 126830
+    },
+    "glob": {
+      "tool": "glob",
+      "count": 24,
+      "successCount": 24,
+      "failureCount": 0,
+      "totalDuration": 1066
+    },
+    "read": {
+      "tool": "read",
+      "count": 173,
+      "successCount": 173,
+      "failureCount": 0,
+      "totalDuration": 39144
+    },
+    "todowrite": {
+      "tool": "todowrite",
+      "count": 9,
+      "successCount": 9,
+      "failureCount": 0,
+      "totalDuration": 114
+    },
+    "write": {
+      "tool": "write",
+      "count": 9,
+      "successCount": 9,
+      "failureCount": 0,
+      "totalDuration": 15891
+    },
+    "edit": {
+      "tool": "edit",
+      "count": 84,
+      "successCount": 84,
+      "failureCount": 0,
+      "totalDuration": 133365
+    },
+    "grep": {
+      "tool": "grep",
+      "count": 50,
+      "successCount": 50,
+      "failureCount": 0,
+      "totalDuration": 2459
+    },
+    "chrome-devtools_navigate_page": {
+      "tool": "chrome-devtools_navigate_page",
+      "count": 9,
+      "successCount": 0,
+      "failureCount": 9,
+      "totalDuration": 6599
+    },
+    "chrome-devtools_take_snapshot": {
+      "tool": "chrome-devtools_take_snapshot",
+      "count": 18,
+      "successCount": 0,
+      "failureCount": 18,
+      "totalDuration": 1642
+    },
+    "chrome-devtools_list_console_messages": {
+      "tool": "chrome-devtools_list_console_messages",
+      "count": 3,
+      "successCount": 0,
+      "failureCount": 3,
+      "totalDuration": 19
+    },
+    "chrome-devtools_list_network_requests": {
+      "tool": "chrome-devtools_list_network_requests",
+      "count": 1,
+      "successCount": 0,
+      "failureCount": 1,
+      "totalDuration": 8
+    },
+    "kanban_create_task": {
+      "tool": "kanban_create_task",
+      "count": 22,
+      "successCount": 0,
+      "failureCount": 22,
+      "totalDuration": 1288
+    },
+    "chrome-devtools_wait_for": {
+      "tool": "chrome-devtools_wait_for",
+      "count": 5,
+      "successCount": 0,
+      "failureCount": 5,
+      "totalDuration": 2604
+    },
+    "chrome-devtools_click": {
+      "tool": "chrome-devtools_click",
+      "count": 6,
+      "successCount": 0,
+      "failureCount": 6,
+      "totalDuration": 50
+    },
+    "kanban_list_columns": {
+      "tool": "kanban_list_columns",
+      "count": 1,
+      "successCount": 0,
+      "failureCount": 1,
+      "totalDuration": 11
+    },
+    "kanban_delete_task": {
+      "tool": "kanban_delete_task",
+      "count": 9,
+      "successCount": 0,
+      "failureCount": 9,
+      "totalDuration": 342
+    },
+    "chrome-devtools_evaluate_script": {
+      "tool": "chrome-devtools_evaluate_script",
+      "count": 5,
+      "successCount": 0,
+      "failureCount": 5,
+      "totalDuration": 1067
+    },
+    "chrome-devtools_press_key": {
+      "tool": "chrome-devtools_press_key",
+      "count": 1,
+      "successCount": 0,
+      "failureCount": 1,
+      "totalDuration": 209
+    },
+    "kanban_list_tasks": {
+      "tool": "kanban_list_tasks",
+      "count": 10,
+      "successCount": 0,
+      "failureCount": 10,
+      "totalDuration": 276
+    },
+    "webfetch": {
+      "tool": "webfetch",
+      "count": 6,
+      "successCount": 6,
+      "failureCount": 0,
+      "totalDuration": 4064
+    },
+    "skill": {
+      "tool": "skill",
+      "count": 1,
+      "successCount": 1,
+      "failureCount": 0,
+      "totalDuration": 32
+    },
+    "kanban_update_task": {
+      "tool": "kanban_update_task",
+      "count": 50,
+      "successCount": 0,
+      "failureCount": 50,
+      "totalDuration": 9831
+    },
+    "kanban_get_task": {
+      "tool": "kanban_get_task",
+      "count": 1,
+      "successCount": 0,
+      "failureCount": 1,
+      "totalDuration": 86
+    },
+    "kanban_add_comment": {
+      "tool": "kanban_add_comment",
+      "count": 24,
+      "successCount": 0,
+      "failureCount": 24,
+      "totalDuration": 526
+    },
+    "lint": {
+      "tool": "lint",
+      "count": 1,
+      "successCount": 1,
+      "failureCount": 0,
+      "totalDuration": 4015
+    }
+  },
+  "activeAgent": {
+    "ses_2d0080fb5ffe55Qhqx7yDoEgla": "build",
+    "ses_2cfe3a681ffeJFS1bPMYedlJCj": "build",
+    "ses_2ce424a13ffeKeL4F1fpvi8ELa": "build",
+    "ses_2ce40ce65ffepdEDi2q4ejEwSe": "build",
+    "ses_2ce34b7bbffeVk1bw83a69YwjI": "build",
+    "ses_2ce19e301ffen1LpUYjh5fI8dh": "build"
+  },
+  "delegationChains": {},
+  "agentSessions": {
+    "ses_2d0080fb5ffe55Qhqx7yDoEgla": {
+      "agentName": "build",
+      "lastToolCallTime": 1774658612782,
+      "lastAgentEventTime": 1774658612782,
+      "delegationActive": false,
+      "activeInvocationId": 8,
+      "lastInvocationIdByAgent": {
+        "build": 8
+      },
+      "windows": {
+        "build:8": {
+          "id": 8,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:7": {
+          "id": 7,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:6": {
+          "id": 6,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:5": {
+          "id": 5,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:4": {
+          "id": 4,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:3": {
+          "id": 3,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:2": {
+          "id": 2,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:1": {
+          "id": 1,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        }
+      },
+      "lastCompactionHint": 0,
+      "architectWriteCount": 0,
+      "lastCoderDelegationTaskId": null,
+      "currentTaskId": null,
+      "turboMode": false,
+      "gateLog": {},
+      "reviewerCallCount": {},
+      "lastGateFailure": null,
+      "partialGateWarningsIssuedForTask": [],
+      "selfFixAttempted": false,
+      "selfCodingWarnedAtCount": 0,
+      "catastrophicPhaseWarnings": [],
+      "lastPhaseCompleteTimestamp": 0,
+      "lastPhaseCompletePhase": 0,
+      "phaseAgentsDispatched": [
+        "build"
+      ],
+      "lastCompletedPhaseAgentsDispatched": [],
+      "qaSkipCount": 0,
+      "qaSkipTaskIds": [],
+      "pendingAdvisoryMessages": [],
+      "taskWorkflowStates": {},
+      "scopeViolationDetected": false,
+      "model_fallback_index": 0,
+      "modelFallbackExhausted": false,
+      "coderRevisions": 0,
+      "revisionLimitHit": false
+    },
+    "ses_2cfe3a681ffeJFS1bPMYedlJCj": {
+      "agentName": "build",
+      "lastToolCallTime": 1774658612782,
+      "lastAgentEventTime": 1774658612782,
+      "delegationActive": false,
+      "activeInvocationId": 37,
+      "lastInvocationIdByAgent": {
+        "build": 37
+      },
+      "windows": {
+        "build:37": {
+          "id": 37,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:36": {
+          "id": 36,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:35": {
+          "id": 35,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:34": {
+          "id": 34,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:33": {
+          "id": 33,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:32": {
+          "id": 32,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:31": {
+          "id": 31,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:30": {
+          "id": 30,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:29": {
+          "id": 29,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:28": {
+          "id": 28,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:27": {
+          "id": 27,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:26": {
+          "id": 26,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:25": {
+          "id": 25,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:24": {
+          "id": 24,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:23": {
+          "id": 23,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:22": {
+          "id": 22,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:21": {
+          "id": 21,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:20": {
+          "id": 20,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:19": {
+          "id": 19,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:18": {
+          "id": 18,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:17": {
+          "id": 17,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:16": {
+          "id": 16,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:15": {
+          "id": 15,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:14": {
+          "id": 14,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:13": {
+          "id": 13,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:12": {
+          "id": 12,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:11": {
+          "id": 11,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:10": {
+          "id": 10,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:9": {
+          "id": 9,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:8": {
+          "id": 8,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:7": {
+          "id": 7,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:6": {
+          "id": 6,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:5": {
+          "id": 5,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:4": {
+          "id": 4,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:3": {
+          "id": 3,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:2": {
+          "id": 2,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:1": {
+          "id": 1,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        }
+      },
+      "lastCompactionHint": 0,
+      "architectWriteCount": 0,
+      "lastCoderDelegationTaskId": null,
+      "currentTaskId": null,
+      "turboMode": false,
+      "gateLog": {},
+      "reviewerCallCount": {},
+      "lastGateFailure": null,
+      "partialGateWarningsIssuedForTask": [],
+      "selfFixAttempted": false,
+      "selfCodingWarnedAtCount": 0,
+      "catastrophicPhaseWarnings": [],
+      "lastPhaseCompleteTimestamp": 0,
+      "lastPhaseCompletePhase": 0,
+      "phaseAgentsDispatched": [
+        "build"
+      ],
+      "lastCompletedPhaseAgentsDispatched": [],
+      "qaSkipCount": 0,
+      "qaSkipTaskIds": [],
+      "pendingAdvisoryMessages": [],
+      "taskWorkflowStates": {},
+      "scopeViolationDetected": false,
+      "model_fallback_index": 0,
+      "modelFallbackExhausted": false,
+      "coderRevisions": 0,
+      "revisionLimitHit": false
+    },
+    "ses_2ce424a13ffeKeL4F1fpvi8ELa": {
+      "agentName": "build",
+      "lastToolCallTime": 1774658612782,
+      "lastAgentEventTime": 1774658612782,
+      "delegationActive": false,
+      "activeInvocationId": 1,
+      "lastInvocationIdByAgent": {
+        "build": 1
+      },
+      "windows": {
+        "build:1": {
+          "id": 1,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        }
+      },
+      "lastCompactionHint": 0,
+      "architectWriteCount": 0,
+      "lastCoderDelegationTaskId": null,
+      "currentTaskId": null,
+      "turboMode": false,
+      "gateLog": {},
+      "reviewerCallCount": {},
+      "lastGateFailure": null,
+      "partialGateWarningsIssuedForTask": [],
+      "selfFixAttempted": false,
+      "selfCodingWarnedAtCount": 0,
+      "catastrophicPhaseWarnings": [],
+      "lastPhaseCompleteTimestamp": 0,
+      "lastPhaseCompletePhase": 0,
+      "phaseAgentsDispatched": [
+        "build"
+      ],
+      "lastCompletedPhaseAgentsDispatched": [],
+      "qaSkipCount": 0,
+      "qaSkipTaskIds": [],
+      "pendingAdvisoryMessages": [],
+      "taskWorkflowStates": {},
+      "scopeViolationDetected": false,
+      "model_fallback_index": 0,
+      "modelFallbackExhausted": false,
+      "coderRevisions": 0,
+      "revisionLimitHit": false
+    },
+    "ses_2ce40ce65ffepdEDi2q4ejEwSe": {
+      "agentName": "build",
+      "lastToolCallTime": 1774658612782,
+      "lastAgentEventTime": 1774658612782,
+      "delegationActive": false,
+      "activeInvocationId": 2,
+      "lastInvocationIdByAgent": {
+        "build": 2
+      },
+      "windows": {
+        "build:2": {
+          "id": 2,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:1": {
+          "id": 1,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        }
+      },
+      "lastCompactionHint": 0,
+      "architectWriteCount": 0,
+      "lastCoderDelegationTaskId": null,
+      "currentTaskId": null,
+      "turboMode": false,
+      "gateLog": {},
+      "reviewerCallCount": {},
+      "lastGateFailure": null,
+      "partialGateWarningsIssuedForTask": [],
+      "selfFixAttempted": false,
+      "selfCodingWarnedAtCount": 0,
+      "catastrophicPhaseWarnings": [],
+      "lastPhaseCompleteTimestamp": 0,
+      "lastPhaseCompletePhase": 0,
+      "phaseAgentsDispatched": [
+        "build"
+      ],
+      "lastCompletedPhaseAgentsDispatched": [],
+      "qaSkipCount": 0,
+      "qaSkipTaskIds": [],
+      "pendingAdvisoryMessages": [],
+      "taskWorkflowStates": {},
+      "scopeViolationDetected": false,
+      "model_fallback_index": 0,
+      "modelFallbackExhausted": false,
+      "coderRevisions": 0,
+      "revisionLimitHit": false
+    },
+    "ses_2ce34b7bbffeVk1bw83a69YwjI": {
+      "agentName": "build",
+      "lastToolCallTime": 1774658612782,
+      "lastAgentEventTime": 1774658612782,
+      "delegationActive": false,
+      "activeInvocationId": 6,
+      "lastInvocationIdByAgent": {
+        "build": 6
+      },
+      "windows": {
+        "build:6": {
+          "id": 6,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:5": {
+          "id": 5,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:4": {
+          "id": 4,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:3": {
+          "id": 3,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:2": {
+          "id": 2,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:1": {
+          "id": 1,
+          "agentName": "build",
+          "startedAtMs": 1774658612782,
+          "toolCalls": 0,
+          "consecutiveErrors": 0,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658612782,
+          "recentToolCalls": [],
+          "warningIssued": false,
+          "warningReason": ""
+        }
+      },
+      "lastCompactionHint": 0,
+      "architectWriteCount": 0,
+      "lastCoderDelegationTaskId": null,
+      "currentTaskId": null,
+      "turboMode": false,
+      "gateLog": {},
+      "reviewerCallCount": {},
+      "lastGateFailure": null,
+      "partialGateWarningsIssuedForTask": [],
+      "selfFixAttempted": false,
+      "selfCodingWarnedAtCount": 0,
+      "catastrophicPhaseWarnings": [],
+      "lastPhaseCompleteTimestamp": 0,
+      "lastPhaseCompletePhase": 0,
+      "phaseAgentsDispatched": [
+        "build"
+      ],
+      "lastCompletedPhaseAgentsDispatched": [],
+      "qaSkipCount": 0,
+      "qaSkipTaskIds": [],
+      "pendingAdvisoryMessages": [],
+      "taskWorkflowStates": {},
+      "scopeViolationDetected": false,
+      "model_fallback_index": 0,
+      "modelFallbackExhausted": false,
+      "coderRevisions": 0,
+      "revisionLimitHit": false
+    },
+    "ses_2ce19e301ffen1LpUYjh5fI8dh": {
+      "agentName": "build",
+      "lastToolCallTime": 1774661185067,
+      "lastAgentEventTime": 1774658657571,
+      "delegationActive": true,
+      "activeInvocationId": 5,
+      "lastInvocationIdByAgent": {
+        "build": 5
+      },
+      "windows": {
+        "build:5": {
+          "id": 5,
+          "agentName": "build",
+          "startedAtMs": 1774660981016,
+          "toolCalls": 38,
+          "consecutiveErrors": 3,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774661173418,
+          "recentToolCalls": [
+            {
+              "tool": "read",
+              "argsHash": 17835296016343304000,
+              "timestamp": 1774661079671
+            },
+            {
+              "tool": "edit",
+              "argsHash": 15835531449662112000,
+              "timestamp": 1774661088828
+            },
+            {
+              "tool": "read",
+              "argsHash": 17277724820999172000,
+              "timestamp": 1774661096509
+            },
+            {
+              "tool": "read",
+              "argsHash": 8612172130261668000,
+              "timestamp": 1774661101326
+            },
+            {
+              "tool": "grep",
+              "argsHash": 3474621185113173500,
+              "timestamp": 1774661105784
+            },
+            {
+              "tool": "grep",
+              "argsHash": 217593258445130940,
+              "timestamp": 1774661111005
+            },
+            {
+              "tool": "read",
+              "argsHash": 15295082400325898000,
+              "timestamp": 1774661114896
+            },
+            {
+              "tool": "read",
+              "argsHash": 4578438082434187000,
+              "timestamp": 1774661124445
+            },
+            {
+              "tool": "read",
+              "argsHash": 17490645485958978000,
+              "timestamp": 1774661129438
+            },
+            {
+              "tool": "grep",
+              "argsHash": 17559011076361396000,
+              "timestamp": 1774661133248
+            },
+            {
+              "tool": "read",
+              "argsHash": 1074908494033574000,
+              "timestamp": 1774661138120
+            },
+            {
+              "tool": "grep",
+              "argsHash": 1566471074896691700,
+              "timestamp": 1774661141537
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 17781760267366132000,
+              "timestamp": 1774661149406
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 15240902649712870000,
+              "timestamp": 1774661152559
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 2916708133830216700,
+              "timestamp": 1774661156809
+            },
+            {
+              "tool": "read",
+              "argsHash": 13956609525383444000,
+              "timestamp": 1774661161011
+            },
+            {
+              "tool": "edit",
+              "argsHash": 4891064943193448000,
+              "timestamp": 1774661170398
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 2698620206603073500,
+              "timestamp": 1774661178490
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 16472380255154194000,
+              "timestamp": 1774661181559
+            },
+            {
+              "tool": "kanban_list_tasks",
+              "argsHash": 7368451667191127000,
+              "timestamp": 1774661185067
+            }
+          ],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:4": {
+          "id": 4,
+          "agentName": "build",
+          "startedAtMs": 1774660285500,
+          "toolCalls": 40,
+          "consecutiveErrors": 3,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774660483602,
+          "recentToolCalls": [
+            {
+              "tool": "read",
+              "argsHash": 1625082843577053200,
+              "timestamp": 1774660400372
+            },
+            {
+              "tool": "read",
+              "argsHash": 13956609525383444000,
+              "timestamp": 1774660407481
+            },
+            {
+              "tool": "read",
+              "argsHash": 6033251550905874000,
+              "timestamp": 1774660411444
+            },
+            {
+              "tool": "edit",
+              "argsHash": 12486044928164430000,
+              "timestamp": 1774660417204
+            },
+            {
+              "tool": "read",
+              "argsHash": 24900622050616920,
+              "timestamp": 1774660420479
+            },
+            {
+              "tool": "read",
+              "argsHash": 419490436316942500,
+              "timestamp": 1774660423598
+            },
+            {
+              "tool": "edit",
+              "argsHash": 10660968748747958000,
+              "timestamp": 1774660426896
+            },
+            {
+              "tool": "edit",
+              "argsHash": 96946930285997760,
+              "timestamp": 1774660431000
+            },
+            {
+              "tool": "read",
+              "argsHash": 13956609525383444000,
+              "timestamp": 1774660435876
+            },
+            {
+              "tool": "edit",
+              "argsHash": 9464380850443770000,
+              "timestamp": 1774660443059
+            },
+            {
+              "tool": "edit",
+              "argsHash": 4345151978631637500,
+              "timestamp": 1774660447915
+            },
+            {
+              "tool": "read",
+              "argsHash": 4828692472694171000,
+              "timestamp": 1774660455394
+            },
+            {
+              "tool": "edit",
+              "argsHash": 14108189571102722000,
+              "timestamp": 1774660460530
+            },
+            {
+              "tool": "edit",
+              "argsHash": 17441386155143868000,
+              "timestamp": 1774660468101
+            },
+            {
+              "tool": "edit",
+              "argsHash": 3173080252254382000,
+              "timestamp": 1774660474076
+            },
+            {
+              "tool": "edit",
+              "argsHash": 11367048426734870000,
+              "timestamp": 1774660479346
+            },
+            {
+              "tool": "grep",
+              "argsHash": 4186767945794659300,
+              "timestamp": 1774660483498
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 16182690972085037000,
+              "timestamp": 1774660490471
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 9170219870352419000,
+              "timestamp": 1774660493289
+            },
+            {
+              "tool": "kanban_list_tasks",
+              "argsHash": 7368451667191127000,
+              "timestamp": 1774660496636
+            }
+          ],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:3": {
+          "id": 3,
+          "agentName": "build",
+          "startedAtMs": 1774659699909,
+          "toolCalls": 64,
+          "consecutiveErrors": 3,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774660050700,
+          "recentToolCalls": [
+            {
+              "tool": "read",
+              "argsHash": 16700126154493395000,
+              "timestamp": 1774659962556
+            },
+            {
+              "tool": "read",
+              "argsHash": 11650850638964600000,
+              "timestamp": 1774659973130
+            },
+            {
+              "tool": "read",
+              "argsHash": 16724469049898290000,
+              "timestamp": 1774659980274
+            },
+            {
+              "tool": "edit",
+              "argsHash": 13963912820684909000,
+              "timestamp": 1774659987058
+            },
+            {
+              "tool": "edit",
+              "argsHash": 9295076267184423000,
+              "timestamp": 1774659991331
+            },
+            {
+              "tool": "read",
+              "argsHash": 2040013411023635000,
+              "timestamp": 1774659997715
+            },
+            {
+              "tool": "edit",
+              "argsHash": 3591420810591119400,
+              "timestamp": 1774660002316
+            },
+            {
+              "tool": "read",
+              "argsHash": 4794042387357536000,
+              "timestamp": 1774660007509
+            },
+            {
+              "tool": "edit",
+              "argsHash": 6165358211908551000,
+              "timestamp": 1774660016058
+            },
+            {
+              "tool": "read",
+              "argsHash": 12588045612598180000,
+              "timestamp": 1774660019727
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 6614917546177616000,
+              "timestamp": 1774660024727
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 8213434279316783000,
+              "timestamp": 1774660027826
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 6941518622708314000,
+              "timestamp": 1774660032535
+            },
+            {
+              "tool": "read",
+              "argsHash": 7464425402379749000,
+              "timestamp": 1774660036387
+            },
+            {
+              "tool": "read",
+              "argsHash": 6967684491795024000,
+              "timestamp": 1774660040114
+            },
+            {
+              "tool": "edit",
+              "argsHash": 6109445962963437000,
+              "timestamp": 1774660046760
+            },
+            {
+              "tool": "read",
+              "argsHash": 9900663345814956000,
+              "timestamp": 1774660050694
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 12773956907380021000,
+              "timestamp": 1774660056281
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 10775305803131142000,
+              "timestamp": 1774660059583
+            },
+            {
+              "tool": "kanban_list_tasks",
+              "argsHash": 7368451667191127000,
+              "timestamp": 1774660066173
+            }
+          ],
+          "warningIssued": true,
+          "warningReason": "errors 4/5"
+        },
+        "build:2": {
+          "id": 2,
+          "agentName": "build",
+          "startedAtMs": 1774658806449,
+          "toolCalls": 95,
+          "consecutiveErrors": 2,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774659308685,
+          "recentToolCalls": [
+            {
+              "tool": "read",
+              "argsHash": 2073888587151282700,
+              "timestamp": 1774659192812
+            },
+            {
+              "tool": "grep",
+              "argsHash": 8554714349516303000,
+              "timestamp": 1774659204516
+            },
+            {
+              "tool": "grep",
+              "argsHash": 1619157350872576800,
+              "timestamp": 1774659207889
+            },
+            {
+              "tool": "read",
+              "argsHash": 4226643344126929000,
+              "timestamp": 1774659210548
+            },
+            {
+              "tool": "read",
+              "argsHash": 15158228658748381000,
+              "timestamp": 1774659226912
+            },
+            {
+              "tool": "grep",
+              "argsHash": 12431097095219022000,
+              "timestamp": 1774659238290
+            },
+            {
+              "tool": "read",
+              "argsHash": 2838142342203546000,
+              "timestamp": 1774659250359
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 1753479934004237000,
+              "timestamp": 1774659268015
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 1849288094329247700,
+              "timestamp": 1774659270943
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 18256466938430204000,
+              "timestamp": 1774659274755
+            },
+            {
+              "tool": "grep",
+              "argsHash": 1677139653405746400,
+              "timestamp": 1774659278725
+            },
+            {
+              "tool": "read",
+              "argsHash": 9202664491724106000,
+              "timestamp": 1774659282209
+            },
+            {
+              "tool": "edit",
+              "argsHash": 17372504908465857000,
+              "timestamp": 1774659289481
+            },
+            {
+              "tool": "edit",
+              "argsHash": 6306470252292938000,
+              "timestamp": 1774659293574
+            },
+            {
+              "tool": "read",
+              "argsHash": 7144722121743771000,
+              "timestamp": 1774659296827
+            },
+            {
+              "tool": "edit",
+              "argsHash": 16677902283444642000,
+              "timestamp": 1774659300794
+            },
+            {
+              "tool": "read",
+              "argsHash": 708508422165546200,
+              "timestamp": 1774659305662
+            },
+            {
+              "tool": "read",
+              "argsHash": 7144722121743771000,
+              "timestamp": 1774659308680
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 16020589955450700000,
+              "timestamp": 1774659313904
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 6668196663757636000,
+              "timestamp": 1774659317311
+            }
+          ],
+          "warningIssued": false,
+          "warningReason": ""
+        },
+        "build:1": {
+          "id": 1,
+          "agentName": "build",
+          "startedAtMs": 1774658657572,
+          "toolCalls": 7,
+          "consecutiveErrors": 2,
+          "hardLimitHit": false,
+          "lastSuccessTimeMs": 1774658686345,
+          "recentToolCalls": [
+            {
+              "tool": "skill",
+              "argsHash": 6302935817782927000,
+              "timestamp": 1774658661004
+            },
+            {
+              "tool": "kanban_list_tasks",
+              "argsHash": 7368451667191127000,
+              "timestamp": 1774658663689
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 9546632215677954000,
+              "timestamp": 1774658679470
+            },
+            {
+              "tool": "kanban_get_task",
+              "argsHash": 15935965195609618000,
+              "timestamp": 1774658682431
+            },
+            {
+              "tool": "read",
+              "argsHash": 14892842958798537000,
+              "timestamp": 1774658686280
+            },
+            {
+              "tool": "kanban_add_comment",
+              "argsHash": 4479851543233795000,
+              "timestamp": 1774658692639
+            },
+            {
+              "tool": "kanban_update_task",
+              "argsHash": 1367630275145267000,
+              "timestamp": 1774658694880
+            }
+          ],
+          "warningIssued": false,
+          "warningReason": ""
+        }
+      },
+      "lastCompactionHint": 0,
+      "architectWriteCount": 0,
+      "lastCoderDelegationTaskId": null,
+      "currentTaskId": null,
+      "turboMode": false,
+      "gateLog": {
+        "ses_2ce19e301ffen1LpUYjh5fI8dh:unknown": [
+          "lint"
+        ]
+      },
+      "reviewerCallCount": {},
+      "lastGateFailure": {
+        "tool": "lint",
+        "taskId": "ses_2ce19e301ffen1LpUYjh5fI8dh:unknown",
+        "timestamp": 1774659114571
+      },
+      "partialGateWarningsIssuedForTask": [],
+      "selfFixAttempted": false,
+      "selfCodingWarnedAtCount": 0,
+      "catastrophicPhaseWarnings": [],
+      "lastPhaseCompleteTimestamp": 0,
+      "lastPhaseCompletePhase": 0,
+      "phaseAgentsDispatched": [
+        "build"
+      ],
+      "lastCompletedPhaseAgentsDispatched": [],
+      "qaSkipCount": 0,
+      "qaSkipTaskIds": [],
+      "pendingAdvisoryMessages": [],
+      "taskWorkflowStates": {},
+      "scopeViolationDetected": false,
+      "model_fallback_index": 0,
+      "modelFallbackExhausted": false,
+      "coderRevisions": 0,
+      "revisionLimitHit": false
+    }
+  }
+}
