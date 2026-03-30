@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 RELEASE_DIR="$PROJECT_DIR/release"
 
-echo "=== Building KL-Kanban ==="
+echo "=== Building open-kanban ==="
 
 # Build frontend
 echo ""
@@ -19,10 +19,10 @@ rm -rf "$RELEASE_DIR/web"
 mkdir -p "$RELEASE_DIR/web"
 cp -r "$PROJECT_DIR/frontend/dist/." "$RELEASE_DIR/web/"
 
-# Also copy to backend/web for development
-mkdir -p "$PROJECT_DIR/backend/web"
-rm -rf "$PROJECT_DIR/backend/web/assets"
-cp -r "$PROJECT_DIR/frontend/dist/." "$PROJECT_DIR/backend/web/"
+# Copy to backend/cmd/server/web for embedding (MUST be done before backend build)
+mkdir -p "$PROJECT_DIR/backend/cmd/server/web"
+rm -rf "$PROJECT_DIR/backend/cmd/server/web"
+cp -r "$PROJECT_DIR/frontend/dist/." "$PROJECT_DIR/backend/cmd/server/web/"
 
 # Build MCP Server
 echo ""
@@ -51,7 +51,7 @@ echo "=== Build Complete ==="
 echo "Release:  $RELEASE_DIR/"
 echo "  ├── web/"
 echo "  ├── $OUTPUT_NAME"
-echo "  └── kl-kanban-mcp/"
+echo "  └── open-kanban-mcp/"
 echo ""
 echo "MCP Server published to npm: npm publish"
 echo "Run '$RELEASE_DIR/$OUTPUT_NAME' to start the server"

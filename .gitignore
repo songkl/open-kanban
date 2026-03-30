@@ -3,10 +3,14 @@ release/
 backend/kanban-server
 backend/kanban-server-*
 backend/web/assets/
+backend/uploads/
 frontend/dist/
 frontend/dist-ssr/
 mcp-server/dist/
 mcp-server/node_modules/
+
+# Salt file (in user home directory)
+.openkanban/
 
 # Database
 *.db
@@ -36,3 +40,5 @@ logs/
 *.tmp
 *.temp
 .cache/
+
+.swarm/

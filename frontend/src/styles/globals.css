@@ -5,16 +5,47 @@
     "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
+:root {
+  --bg-primary: #f4f4f5;
+  --bg-secondary: #ffffff;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --border-color: #e4e4e7;
+}
+
+.dark {
+  --bg-primary: #18181b;
+  --bg-secondary: #27272a;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --border-color: #3f3f46;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #f4f4f5;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.2s, color 0.2s;
 }
 
-/* Scrollbar styling */
+.dark body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Scrollbar styling - hidden by default, semi-transparent on hover */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+::-webkit-scrollbar:hover {
+  opacity: 1;
+}
+
+*:hover::-webkit-scrollbar {
+  opacity: 0.5;
 }
 
 ::-webkit-scrollbar-track {
@@ -22,10 +53,88 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: rgba(212, 212, 216, 0.8);
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+.dark::-webkit-scrollbar-thumb {
+  background: rgba(82, 82, 91, 0.8);
+}
+
+/* Mobile horizontal scroll support */
+#mobile-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior: contain;
+  height: 100%;
+  min-height: 0;
+}
+
+#mobile-scroll-container > div {
+  scroll-snap-align: start;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Column height in mobile scroll view */
+#mobile-scroll-container .flex.gap-3 {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Desktop columns horizontal scroll */
+#columns-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+
+#columns-scroll-container:hover {
+  scrollbar-color: rgba(161, 161, 170, 0.5) #e4e4e7;
+}
+
+#columns-scroll-container::-webkit-scrollbar {
+  height: 10px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+#columns-scroll-container:hover::-webkit-scrollbar {
+  opacity: 1;
+}
+
+#columns-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 5px;
+}
+
+#columns-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.5);
+  border-radius: 5px;
+}
+
+#columns-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.8);
+}
+
+.dark #columns-scroll-container {
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s;
+}
+
+.dark #columns-scroll-container:hover {
+  scrollbar-color: rgba(113, 113, 122, 0.5) #3f3f46;
+}
+
+.dark #columns-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark #columns-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.5);
+}
+
+.dark #columns-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.8);
 }

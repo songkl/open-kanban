@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   DndContext,
   closestCenter,
@@ -17,7 +18,8 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { boardsApi, columnsApi } from '@/services/api';
+import { boardsApi, columnsApi, authApi } from '@/services/api';
+import type { Agent } from '@/types/kanban';
 
 interface Board {
   id: string;
@@ -30,17 +32,25 @@ interface ColumnData {
   status: string | null;
   position: number;
   color: string;
+  description?: string;
   boardId: string;
+  ownerAgentId?: string;
 }
 
 function SortableColumn({
   column,
   onEdit,
   onDelete,
+  t,
+  canEdit,
+  canDelete,
 }: {
   column: ColumnData;
   onEdit: (column: ColumnData) => void;
   onDelete: (columnId: string) => void;
+  t: ReturnType<typeof useTranslation>[0];
+  canEdit?: boolean;
+  canDelete?: boolean;
 }) {
   const {
     attributes,
@@ -61,13 +71,13 @@ function SortableColumn({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-4 rounded-lg bg-white p-4 shadow"
+      className="group flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm border border-zinc-100 hover:shadow-md hover:border-zinc-200 transition-all duration-200"
     >
       <button
         {...attributes}
         {...listeners}
-        className="cursor-grab text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-        title="拖动排序"
+        className="cursor-grab text-zinc-300 hover:text-zinc-500 active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+        title={t('column.dragToSort')}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -85,29 +95,40 @@ function SortableColumn({
         </svg>
       </button>
       <div
-        className="h-4 w-4 rounded-full"
+        className="h-6 w-6 rounded-full shadow-sm"
         style={{ backgroundColor: column.color }}
       />
-      <span className="flex-1 font-medium text-zinc-800">{column.name}</span>
-      <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500">状态: {column.status || '无'}</span>
-      <span className="text-sm text-zinc-400">位置: {column.position}</span>
-      <button
-        onClick={() => onEdit(column)}
-        className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200"
-      >
-        编辑
-      </button>
-      <button
-        onClick={() => onDelete(column.id)}
-        className="rounded-md bg-red-100 px-3 py-1.5 text-sm text-red-600 hover:bg-red-200"
-      >
-        删除
-      </button>
+      <span className="flex-1 font-semibold text-zinc-800">{column.name}</span>
+      {column.status && (
+        <span className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500 border border-zinc-100">
+          {column.status}
+        </span>
+      )}
+      <span className="text-xs text-zinc-400 font-mono">#{column.position + 1}</span>
+      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {canEdit && (
+          <button
+            onClick={() => onEdit(column)}
+            className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-100 transition-colors"
+          >
+            {t('column.edit')}
+          </button>
+        )}
+        {canDelete && (
+          <button
+            onClick={() => onDelete(column.id)}
+            className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors"
+          >
+            {t('column.delete')}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 export function ColumnsPage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const boardIdFromUrl = searchParams.get('boardId');
 
@@ -120,7 +141,16 @@ export function ColumnsPage() {
   const [newColumnColor, setNewColumnColor] = useState('#6b7280');
   const [editingColumn, setEditingColumn] = useState<any>(null);
   const [editColumnColor, setEditColumnColor] = useState('#6b7280');
+  const [editColumnStatus, setEditColumnStatus] = useState('');
+  const [editColumnDescription, setEditColumnDescription] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null);
+  const [userBoardAccess, setUserBoardAccess] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [columnToDelete, setColumnToDelete] = useState<{ id: string; name: string; taskCount: number } | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [editColumnOwnerAgent, setEditColumnOwnerAgent] = useState<string>('');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -131,6 +161,7 @@ export function ColumnsPage() {
 
   useEffect(() => {
     fetchBoards();
+    fetchCurrentUser();
   }, []);
 
   useEffect(() => {
@@ -155,21 +186,61 @@ export function ColumnsPage() {
   useEffect(() => {
     if (selectedBoard) {
       fetchColumns(selectedBoard.id);
-      // Only update URL if it doesn't match selected board
       if (boardIdFromUrl !== selectedBoard.id) {
         setSearchParams({ boardId: selectedBoard.id });
       }
     }
   }, [selectedBoard?.id]);
 
+  useEffect(() => {
+    if (selectedBoard && currentUser) {
+      fetchUserPermissions(selectedBoard.id);
+    }
+  }, [selectedBoard?.id, currentUser?.id]);
+
+  useEffect(() => {
+    const loadAgents = async () => {
+      try {
+        const data = await authApi.getAgents();
+        setAgents(data || []);
+      } catch (err) {
+        console.error('Failed to fetch agents:', err);
+      }
+    };
+    loadAgents();
+  }, []);
+
   const fetchBoards = async () => {
     try {
       const data = await boardsApi.getAll();
-      setBoards(data);
+      setBoards(data || []);
     } catch (err) {
       console.error('Failed to fetch boards:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const data = await authApi.me();
+      if (data.user) {
+        setCurrentUser(data.user);
+      }
+    } catch (err) {
+      console.error('Failed to fetch current user:', err);
+    }
+  };
+
+  const fetchUserPermissions = async (boardId: string) => {
+    if (!currentUser) return;
+    try {
+      const data = await authApi.getPermissions(currentUser.id);
+      const boardPerm = data.permissions?.find((p: { boardId: string }) => p.boardId === boardId);
+      setUserBoardAccess(boardPerm?.access || null);
+    } catch (err) {
+      console.error('Failed to fetch permissions:', err);
+      setUserBoardAccess(null);
     }
   };
 
@@ -219,10 +290,10 @@ export function ColumnsPage() {
             columns: newColumns.map((col) => ({ id: col.id, position: col.position })),
           }),
         });
-        showToastMessage('排序已保存');
+        showToastMessage(t('column.sortSaved'));
       } catch (err) {
         console.error('Failed to save reorder:', err);
-        showToastMessage('保存排序失败');
+        showToastMessage(t('column.sortSaveFailed'));
         if (selectedBoard) fetchColumns(selectedBoard.id);
       }
     }
@@ -236,15 +307,17 @@ export function ColumnsPage() {
         name: newColumnName.trim(),
         boardId: selectedBoard.id,
         color: newColumnColor,
+        ownerAgentId: editColumnOwnerAgent || undefined,
       });
 
-      showToastMessage('列添加成功');
+      showToastMessage(t('column.addSuccess'));
       setNewColumnName('');
       setShowAddModal(false);
+      setEditColumnOwnerAgent('');
       fetchColumns(selectedBoard.id);
     } catch (err) {
       console.error('Failed to add column:', err);
-      showToastMessage('添加失败');
+      showToastMessage(t('column.addFailed'));
     }
   };
 
@@ -255,29 +328,67 @@ export function ColumnsPage() {
       await columnsApi.update(editingColumn.id, {
         name: newColumnName.trim(),
         color: editColumnColor,
+        status: editColumnStatus,
+        description: editColumnDescription,
+        ownerAgentId: editColumnOwnerAgent || undefined,
       });
 
-      showToastMessage('列更新成功');
+      showToastMessage(t('column.updateSuccess'));
       setEditingColumn(null);
       setNewColumnName('');
       setEditColumnColor('#6b7280');
+      setEditColumnStatus('');
+      setEditColumnDescription('');
+      setEditColumnOwnerAgent('');
       fetchColumns(selectedBoard!.id);
     } catch (err) {
       console.error('Failed to update column:', err);
-      showToastMessage('更新失败');
+      showToastMessage(t('column.updateFailed'));
     }
   };
 
   const handleDeleteColumn = async (columnId: string) => {
-    if (!confirm('确定要删除这列吗？该列的任务也会被删除。')) return;
+    const column = columns.find(c => c.id === columnId);
+    if (!column) return;
+    setColumnToDelete({ id: columnId, name: column.name, taskCount: column.tasks?.length || 0 });
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteColumn = async () => {
+    if (!columnToDelete) return;
 
     try {
-      await columnsApi.delete(columnId);
-      showToastMessage('列已删除');
+      await columnsApi.delete(columnToDelete.id);
+      showToastMessage(t('column.deleted'));
+      setShowDeleteModal(false);
+      setColumnToDelete(null);
       fetchColumns(selectedBoard!.id);
     } catch (err) {
       console.error('Failed to delete column:', err);
-      showToastMessage('删除失败');
+      showToastMessage(t('column.deleteFailed'));
+    }
+  };
+
+  const handleExport = async (format: 'json' | 'csv') => {
+    if (!selectedBoard) return;
+    setExporting(true);
+    try {
+      const response = await boardsApi.export(selectedBoard.id, format);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedBoard.name}_${new Date().toISOString().split('T')[0]}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showToastMessage(t('column.exportSuccess', { format: format.toUpperCase() }));
+    } catch (err) {
+      console.error('Failed to export:', err);
+      showToastMessage(t('column.exportFailed'));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -286,21 +397,32 @@ export function ColumnsPage() {
   if (loading && columns.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-zinc-500">加载中...</div>
+        <div className="text-zinc-500">{t('column.loading')}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-50 p-6">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-zinc-800">列管理</h1>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="5" height="18"/>
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-800">{t('nav.columnManagement')}</h1>
+            {selectedBoard && (
+              <p className="text-sm text-zinc-500">{selectedBoard.name}</p>
+            )}
+          </div>
           {boards.length > 1 && (
             <select
               value={selectedBoard?.id || boardIdFromUrl || ''}
               onChange={(e) => handleBoardChange(e.target.value)}
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm hover:border-zinc-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
               {boards.map((board) => (
                 <option key={board.id} value={board.id}>
@@ -309,33 +431,67 @@ export function ColumnsPage() {
               ))}
             </select>
           )}
-          {selectedBoard && boards.length <= 1 && (
-            <span className="text-sm text-zinc-500">{selectedBoard.name}</span>
-          )}
         </div>
-        <Link
-          to="/"
-          className="rounded-md bg-zinc-200 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-300"
-        >
-          返回看板
-        </Link>
+        <div className="flex items-center gap-3">
+          {selectedBoard && (
+            <div className="flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 shadow-sm border border-zinc-100">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" className="text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+              </svg>
+              <span className="text-xs font-medium text-zinc-600">{t('column.export')}:</span>
+              <button
+                onClick={() => handleExport('json')}
+                disabled={exporting}
+                className="rounded-lg px-2 py-1 text-xs font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
+              >
+                JSON
+              </button>
+              <button
+                onClick={() => handleExport('csv')}
+                disabled={exporting}
+                className="rounded-lg px-2 py-1 text-xs font-medium text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors"
+              >
+                CSV
+              </button>
+            </div>
+          )}
+          <Link
+            to="/"
+            className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-zinc-600 shadow-sm border border-zinc-100 hover:bg-zinc-50 hover:border-zinc-200 transition-all"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            {t('column.backToBoard')}
+          </Link>
+        </div>
       </header>
 
-      <div className="mb-4 flex items-center gap-4">
-        <button
-          type="button"
-          onClick={() => setShowAddModal(true)}
-          className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
-        >
-          + 添加列
-        </button>
-        <span className="text-sm text-zinc-500">💡 拖动手柄可调整列顺序</span>
+      <div className="mb-6 flex items-center gap-4">
+        {(userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN') && (
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            {t('column.addColumn')}
+          </button>
+        )}
+        <span className="flex items-center gap-2 text-sm text-zinc-500">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          {t('column.dragHint')}
+        </span>
       </div>
 
       {loading ? (
-        <div className="text-center text-zinc-500">加载中...</div>
+        <div className="text-center text-zinc-500">{t('column.loading')}</div>
       ) : columns.length === 0 ? (
-        <div className="text-center text-zinc-500">该看板没有列</div>
+        <div className="text-center text-zinc-500">{t('column.noColumns')}</div>
       ) : (
         <DndContext
           sensors={sensors}
@@ -355,8 +511,14 @@ export function ColumnsPage() {
                     setEditingColumn(col);
                     setNewColumnName(col.name);
                     setEditColumnColor(col.color || '#6b7280');
+                    setEditColumnStatus(col.status || '');
+                    setEditColumnDescription(col.description || '');
+                    setEditColumnOwnerAgent(col.ownerAgentId || '');
                   }}
                   onDelete={handleDeleteColumn}
+                  t={t}
+                  canEdit={userBoardAccess === 'WRITE' || userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
+                  canDelete={userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
                 />
               ))}
             </div>
@@ -366,71 +528,80 @@ export function ColumnsPage() {
 
       {showAddModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
           onClick={() => setShowAddModal(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">添加列</h2>
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-zinc-800">{t('modal.addColumn')}</h2>
+            </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  列名称
+                <label className="mb-2 block text-sm font-semibold text-zinc-700">
+                  {t('column.columnName')}
                 </label>
                 <input
                   type="text"
                   value={newColumnName}
                   onChange={(e) => setNewColumnName(e.target.value)}
-                  placeholder="例如：待测试"
-                  className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                  placeholder={t('column.namePlaceholder')}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  autoFocus
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  颜色
+                <label className="mb-2 block text-sm font-semibold text-zinc-700">
+                  {t('column.color')}
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   {[
-                    '#ef4444',
-                    '#f59e0b',
-                    '#3b82f6',
-                    '#22c55e',
-                    '#8b5cf6',
-                    '#6b7280',
-                  ].map((color) => (
+                    { color: '#ef4444', name: t('column.colorRed') },
+                    { color: '#f59e0b', name: t('column.colorOrange') },
+                    { color: '#3b82f6', name: t('column.colorBlue') },
+                    { color: '#22c55e', name: t('column.colorGreen') },
+                    { color: '#8b5cf6', name: t('column.colorPurple') },
+                    { color: '#6b7280', name: t('column.colorGray') },
+                  ].map(({ color, name }) => (
                     <button
                       key={color}
                       type="button"
                       onClick={() => setNewColumnColor(color)}
-                      className={`h-8 w-8 rounded-full ${
+                      className={`group relative h-10 w-10 rounded-xl transition-all hover:scale-110 ${
                         newColumnColor === color
-                          ? 'ring-2 ring-offset-2 ring-zinc-400'
-                          : ''
+                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                          : 'hover:ring-2 hover:ring-zinc-300 hover:ring-offset-1'
                       }`}
                       style={{ backgroundColor: color }}
+                      title={name}
                     />
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-8 flex gap-3">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="flex-1 rounded-md bg-zinc-100 px-4 py-2 text-zinc-700 hover:bg-zinc-200"
+                className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
               >
-                取消
+                {t('column.cancel')}
               </button>
               <button
                 onClick={handleAddColumn}
                 disabled={!newColumnName.trim()}
-                className="flex-1 rounded-md bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:bg-zinc-300"
+                className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 font-medium text-white hover:from-blue-600 hover:to-blue-700 disabled:from-zinc-300 disabled:to-zinc-300 transition-all shadow-sm hover:shadow"
               >
-                添加
+                {t('column.addColumn')}
               </button>
             </div>
           </div>
@@ -439,83 +610,175 @@ export function ColumnsPage() {
 
       {editingColumn && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
           onClick={() => setEditingColumn(null)}
         >
           <div
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">编辑列</h2>
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-zinc-800">{t('modal.editColumn')}</h2>
+            </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  列名称
+                <label className="mb-2 block text-sm font-semibold text-zinc-700">
+                  {t('column.columnName')}
                 </label>
                 <input
                   type="text"
                   value={newColumnName}
                   onChange={(e) => setNewColumnName(e.target.value)}
-                  className="w-full rounded-md border border-zinc-300 px-3 py-2"
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  autoFocus
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  状态码
+                <label className="mb-2 block text-sm font-semibold text-zinc-700">
+                  {t('column.statusCode')}
                 </label>
                 <input
                   type="text"
-                  value={editingColumn?.status || ''}
-                  disabled
-                  className="w-full cursor-not-allowed rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-zinc-500"
+                  value={editColumnStatus}
+                  onChange={(e) => setEditColumnStatus(e.target.value)}
+                  placeholder={t('column.statusPlaceholder')}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
-                <p className="mt-1 text-xs text-zinc-400">状态码由系统生成，无法修改</p>
+                <p className="mt-1.5 text-xs text-zinc-400">{t('column.statusCodeHint')}</p>
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">
-                  颜色
+                <label className="mb-2 block text-sm font-semibold text-zinc-700">
+                  {t('column.color')}
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   {[
-                    '#ef4444',
-                    '#f59e0b',
-                    '#3b82f6',
-                    '#22c55e',
-                    '#8b5cf6',
-                    '#6b7280',
-                  ].map((color) => (
+                    { color: '#ef4444', name: t('column.colorRed') },
+                    { color: '#f59e0b', name: t('column.colorOrange') },
+                    { color: '#3b82f6', name: t('column.colorBlue') },
+                    { color: '#22c55e', name: t('column.colorGreen') },
+                    { color: '#8b5cf6', name: t('column.colorPurple') },
+                    { color: '#6b7280', name: t('column.colorGray') },
+                  ].map(({ color, name }) => (
                     <button
                       key={color}
                       type="button"
                       onClick={() => setEditColumnColor(color)}
-                      className={`h-8 w-8 rounded-full ${
+                      className={`group relative h-10 w-10 rounded-xl transition-all hover:scale-110 ${
                         editColumnColor === color
-                          ? 'ring-2 ring-offset-2 ring-zinc-400'
-                          : ''
+                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                          : 'hover:ring-2 hover:ring-zinc-300 hover:ring-offset-1'
                       }`}
                       style={{ backgroundColor: color }}
+                      title={name}
                     />
                   ))}
                 </div>
               </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-zinc-700">
+                  {t('column.description')}
+                </label>
+                <textarea
+                  value={editColumnDescription}
+                  onChange={(e) => setEditColumnDescription(e.target.value)}
+                  placeholder={t('column.descriptionPlaceholder')}
+                  rows={3}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                />
+                <p className="mt-1.5 text-xs text-zinc-400">{t('column.descriptionHint')}</p>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-zinc-700">
+                  {t('column.ownerAgent')}
+                </label>
+                <select
+                  value={editColumnOwnerAgent}
+                  onChange={(e) => setEditColumnOwnerAgent(e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">{t('column.noOwnerAgent')}</option>
+                  {agents.filter(a => a.type === 'AGENT').map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.nickname}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-zinc-400">{t('column.ownerAgentHint')}</p>
+              </div>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-8 flex gap-3">
               <button
                 onClick={() => setEditingColumn(null)}
-                className="flex-1 rounded-md bg-zinc-100 px-4 py-2 text-zinc-700 hover:bg-zinc-200"
+                className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
               >
-                取消
+                {t('column.cancel')}
               </button>
               <button
                 onClick={handleUpdateColumn}
                 disabled={!newColumnName.trim()}
-                className="flex-1 rounded-md bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:bg-zinc-300"
+                className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 font-medium text-white hover:from-blue-600 hover:to-blue-700 disabled:from-zinc-300 disabled:to-zinc-300 transition-all shadow-sm hover:shadow"
               >
-                保存
+                {t('column.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && columnToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowDeleteModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-zinc-800">{t('modal.deleteColumn')}</h2>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-zinc-600 mb-3">
+                {t('column.confirmDeleteMessage', { columnName: columnToDelete.name })}
+              </p>
+              {columnToDelete.taskCount > 0 && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
+                  <p className="text-sm text-red-600">
+                    <span className="font-semibold">{columnToDelete.taskCount}</span> {t('column.tasksWillBeDeleted')}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+              >
+                {t('column.cancel')}
+              </button>
+              <button
+                onClick={confirmDeleteColumn}
+                className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 font-medium text-white hover:from-red-600 hover:to-red-700 transition-all shadow-sm hover:shadow"
+              >
+                {t('column.delete')}
               </button>
             </div>
           </div>
@@ -527,6 +790,7 @@ export function ColumnsPage() {
           {toast}
         </div>
       )}
+      </div>
     </div>
   );
 }

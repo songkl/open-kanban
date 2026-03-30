@@ -3,10 +3,13 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
-	"kanban-go/internal/models"
+	"open-kanban/internal/models"
+	"open-kanban/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,6 +17,12 @@ import (
 // GetColumns returns columns for a board
 func GetColumns(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		boardID := c.Query("boardId")
 
 		// Get first board if none specified
@@ -24,6 +33,14 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 			).Scan(&firstBoardID)
 			if err == nil {
 				boardID = firstBoardID
+			}
+		}
+
+		// Verify board access
+		if boardID != "" {
+			if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该看板"})
+				return
 			}
 		}
 
@@ -56,6 +73,7 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 				}
 
 				// Get tasks for this column
+				var tasks []gin.H
 				taskRows, err := db.Query(`
 					SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_at, updated_at
 					FROM tasks
@@ -64,7 +82,6 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 				`, col.ID)
 				if err == nil {
 					defer taskRows.Close()
-					var tasks []gin.H
 					for taskRows.Next() {
 						var task models.Task
 						var desc, assignee, meta sql.NullString
@@ -107,35 +124,35 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 							})
 						}
 					}
-
-					// Get agent config
-					var agentConfig *gin.H
-					var agentTypesStr string
-					err := db.QueryRow(
-						"SELECT agent_types FROM column_agents WHERE column_id = ?",
-						col.ID,
-					).Scan(&agentTypesStr)
-					if err == nil {
-						var agentTypes []string
-						json.Unmarshal([]byte(agentTypesStr), &agentTypes)
-						agentConfig = &gin.H{
-							"agentTypes": agentTypes,
-						}
-					}
-
-					columns = append(columns, gin.H{
-						"id":          col.ID,
-						"name":        col.Name,
-						"status":      col.Status,
-						"position":    col.Position,
-						"color":       col.Color,
-						"boardId":     col.BoardID,
-						"createdAt":   col.CreatedAt,
-						"updatedAt":   col.UpdatedAt,
-						"tasks":       tasks,
-						"agentConfig": agentConfig,
-					})
 				}
+
+				// Get agent config
+				var agentConfig *gin.H
+				var agentTypesStr string
+				err = db.QueryRow(
+					"SELECT agent_types FROM column_agents WHERE column_id = ?",
+					col.ID,
+				).Scan(&agentTypesStr)
+				if err == nil {
+					var agentTypes []string
+					json.Unmarshal([]byte(agentTypesStr), &agentTypes)
+					agentConfig = &gin.H{
+						"agentTypes": agentTypes,
+					}
+				}
+
+				columns = append(columns, gin.H{
+					"id":          col.ID,
+					"name":        col.Name,
+					"status":      col.Status,
+					"position":    col.Position,
+					"color":       col.Color,
+					"boardId":     col.BoardID,
+					"createdAt":   col.CreatedAt,
+					"updatedAt":   col.UpdatedAt,
+					"tasks":       tasks,
+					"agentConfig": agentConfig,
+				})
 			}
 		}
 
@@ -155,17 +172,38 @@ type CreateColumnRequest struct {
 // CreateColumn creates a new column
 func CreateColumn(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		var req CreateColumnRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "列名称不能为空"})
 			return
 		}
 
-		colID := generateID()
+		if req.BoardID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, req.BoardID, "ADMIN", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权在该看板创建列"})
+			return
+		}
+
+		colID := generateColumnID(db, req.Name, req.BoardID)
 		now := time.Now()
 		position := req.Position
-		if position == 0 && req.Position == 0 {
-			position = 0
+		if position == 0 {
+			var maxPosition int
+			err := db.QueryRow("SELECT COALESCE(MAX(position), -1) FROM columns WHERE board_id = ?", req.BoardID).Scan(&maxPosition)
+			if err != nil {
+				maxPosition = -1
+			}
+			position = maxPosition + 1
 		}
 		color := req.Color
 		if color == "" {
@@ -187,6 +225,8 @@ func CreateColumn(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建列失败"})
 			return
 		}
+
+		LogActivity(db, user.ID, "COLUMN_CREATE", "COLUMN", colID, req.Name, "", c.ClientIP(), getRequestSource(c))
 
 		broadcast()
 
@@ -215,10 +255,61 @@ type UpdateColumnRequest struct {
 // UpdateColumn updates a column
 func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		var req UpdateColumnRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 			return
+		}
+
+		if req.ID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
+			return
+		}
+
+		boardID, err := getBoardIDForColumn(db, req.ID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该列"})
+			return
+		}
+
+		var oldColumn struct {
+			Name     string
+			Status   *string
+			Position int
+			Color    string
+		}
+		db.QueryRow("SELECT name, status, position, color FROM columns WHERE id = ?", req.ID).Scan(&oldColumn.Name, &oldColumn.Status, &oldColumn.Position, &oldColumn.Color)
+
+		var changes []string
+
+		if req.Name != "" && req.Name != oldColumn.Name {
+			changes = append(changes, fmt.Sprintf("名称: '%s' → '%s'", oldColumn.Name, req.Name))
+		}
+		if req.Status != "" {
+			oldStatus := ""
+			if oldColumn.Status != nil {
+				oldStatus = *oldColumn.Status
+			}
+			if req.Status != oldStatus {
+				changes = append(changes, fmt.Sprintf("状态: '%s' → '%s'", oldStatus, req.Status))
+			}
+		}
+		if req.Position >= 0 && req.Position != oldColumn.Position {
+			changes = append(changes, fmt.Sprintf("位置: %d → %d", oldColumn.Position, req.Position))
+		}
+		if req.Color != "" && req.Color != oldColumn.Color {
+			changes = append(changes, fmt.Sprintf("颜色: '%s' → '%s'", oldColumn.Color, req.Color))
 		}
 
 		updates := []interface{}{time.Now()}
@@ -244,11 +335,18 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 		query += " WHERE id = ?"
 		updates = append(updates, req.ID)
 
-		_, err := db.Exec(query, updates...)
+		_, err = db.Exec(query, updates...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
 			return
 		}
+
+		details := ""
+		if len(changes) > 0 {
+			details = strings.Join(changes, ", ")
+		}
+
+		LogActivity(db, user.ID, "COLUMN_UPDATE", "COLUMN", req.ID, req.Name, details, c.ClientIP(), getRequestSource(c))
 
 		broadcast()
 
@@ -259,17 +357,36 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 // DeleteColumn deletes a column
 func DeleteColumn(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		id := c.Query("id")
 		if id == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
 			return
 		}
 
-		_, err := db.Exec("DELETE FROM columns WHERE id = ?", id)
+		boardID, err := getBoardIDForColumn(db, id)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, boardID, "ADMIN", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该列"})
+			return
+		}
+
+		_, err = db.Exec("DELETE FROM columns WHERE id = ?", id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
 			return
 		}
+
+		LogActivity(db, user.ID, "COLUMN_DELETE", "COLUMN", id, "", "", c.ClientIP(), getRequestSource(c))
 
 		broadcast()
 
@@ -392,6 +509,29 @@ func DeleteColumnAgent(db *sql.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}
+}
+
+func generateColumnID(db *sql.DB, name string, boardID string) string {
+	baseSlug := utils.ToPinyinSlug(name)
+	if baseSlug == "" {
+		baseSlug = "column"
+	}
+	
+	colID := baseSlug
+	counter := 1
+	for {
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM columns WHERE id = ? AND board_id = ?", colID, boardID).Scan(&count)
+		if err != nil {
+			break
+		}
+		if count == 0 {
+			return colID
+		}
+		colID = fmt.Sprintf("%s-%d", baseSlug, counter)
+		counter++
+	}
+	return colID
 }
 
 // Helper function to get comments for a task

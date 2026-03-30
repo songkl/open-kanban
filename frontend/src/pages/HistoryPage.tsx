@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { Task, Board } from '@/types/kanban';
-import { archivedApi, tasksApi, boardsApi } from '@/services/api';
+import { useTranslation } from 'react-i18next';
+import type { Task, Board, User } from '@/types/kanban';
+import { archivedApi, tasksApi, boardsApi, authApi } from '@/services/api';
 
 const priorityColors: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -10,6 +11,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export function HistoryPage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const boardIdFromUrl = searchParams.get('boardId');
 
@@ -18,9 +20,11 @@ export function HistoryPage() {
   const [selectedBoard, setSelectedBoard] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     fetchBoards();
+    fetchCurrentUser();
   }, []);
 
   useEffect(() => {
@@ -40,10 +44,21 @@ export function HistoryPage() {
   const fetchBoards = async () => {
     try {
       const data = await boardsApi.getAll();
-      setBoards(data);
+      setBoards(data || []);
     } catch (err) {
       console.error('Failed to fetch boards:', err);
-      setError(err instanceof Error ? err.message : '加载看板失败');
+      setError(err instanceof Error ? err.message : t('history.loadFailed'));
+    }
+  };
+
+  const fetchCurrentUser = async () => {
+    try {
+      const meData = await authApi.me();
+      if (meData.user) {
+        setCurrentUser(meData.user);
+      }
+    } catch (err) {
+      console.error('Failed to fetch current user:', err);
     }
   };
 
@@ -52,10 +67,10 @@ export function HistoryPage() {
     setError(null);
     try {
       const data = await archivedApi.getByBoard(boardId);
-      setTasks(data);
+      setTasks(data || []);
     } catch (err) {
       console.error('Failed to fetch archived tasks:', err);
-      setError(err instanceof Error ? err.message : '加载失败');
+      setError(err instanceof Error ? err.message : t('history.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -79,7 +94,15 @@ export function HistoryPage() {
   if (loading && boards.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-zinc-500">加载中...</div>
+        <div className="text-zinc-500">{t('history.loading')}</div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-zinc-500">{t('history.loading')}</div>
       </div>
     );
   }
@@ -87,13 +110,13 @@ export function HistoryPage() {
   if (error) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <div className="text-red-500">加载失败</div>
+        <div className="text-red-500">{t('history.loadFailed')}</div>
         <div className="text-sm text-zinc-400">{error}</div>
         <button
           onClick={() => selectedBoard && fetchTasks(selectedBoard)}
           className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
         >
-          重试
+          {t('history.retry')}
         </button>
       </div>
     );
@@ -107,9 +130,9 @@ export function HistoryPage() {
             to="/"
             className="rounded-md bg-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-300"
           >
-            ← 返回看板
+            {t('history.backToBoard')}
           </Link>
-          <h1 className="text-2xl font-bold text-zinc-800">历史归档</h1>
+          <h1 className="text-2xl font-bold text-zinc-800">{t('history.title')}</h1>
           {boards.length > 0 && (
             <select
               value={selectedBoard}
@@ -123,17 +146,25 @@ export function HistoryPage() {
               ))}
             </select>
           )}
+          {currentUser.role === 'ADMIN' && (
+            <Link
+              to="/activities"
+              className="rounded-md bg-blue-50 px-4 py-2 text-sm text-blue-700 hover:bg-blue-100"
+            >
+              {t('nav.activityLog')}
+            </Link>
+          )}
         </div>
-        <span className="text-sm text-zinc-500">{tasks.length} 个归档任务</span>
+        <span className="text-sm text-zinc-500">{t('history.archivedCount', { count: tasks.length })}</span>
       </header>
 
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <div className="text-zinc-500">加载中...</div>
+<div className="flex h-64 items-center justify-center">
+          <div className="text-zinc-500">{t('history.loading')}</div>
         </div>
       ) : tasks.length === 0 ? (
         <div className="rounded-lg bg-white p-8 text-center text-zinc-500">
-          暂无归档任务
+          {t('history.empty')}
         </div>
       ) : (
         <div className="flex flex-wrap gap-4">
@@ -172,7 +203,7 @@ export function HistoryPage() {
                     </div>
                   ))}
                   {task.subtasks.length > 3 && (
-                    <span className="text-xs text-zinc-400">+{task.subtasks.length - 3} 更多</span>
+                    <span className="text-xs text-zinc-400">{t('history.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
                   )}
                 </div>
               )}
@@ -180,7 +211,7 @@ export function HistoryPage() {
               <div className="flex items-center justify-between pl-3">
                 <div className="flex items-center gap-2">
                   <span className={`rounded px-2 py-0.5 text-xs font-medium ${priorityColors[task.priority] || priorityColors.medium}`}>
-                    {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
+                    {t(`task.priority.${task.priority}`)}
                   </span>
                   {task.subtasks && task.subtasks.length > 0 && (
                     <span className="text-xs text-zinc-400">
@@ -197,12 +228,12 @@ export function HistoryPage() {
 
               <div className="mt-2 border-t pt-2 pl-3">
                 <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <span>归档：{task.archivedAt ? new Date(task.archivedAt).toLocaleString('zh-CN') : '-'}</span>
+                  <span>{t('history.archivedAt')} {task.archivedAt ? new Date(task.archivedAt).toLocaleString() : '-'}</span>
                   <button
                     onClick={() => handleRestore(task.id)}
                     className="text-blue-500 hover:text-blue-600"
                   >
-                    恢复
+                    {t('history.recover')}
                   </button>
                 </div>
               </div>

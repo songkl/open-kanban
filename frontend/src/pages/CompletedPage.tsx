@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import type { Task } from '@/types/kanban';
 import { boardsApi, columnsApi, tasksApi } from '@/services/api';
@@ -11,6 +12,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export function CompletedPage() {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
@@ -29,7 +31,7 @@ export function CompletedPage() {
   const fetchBoards = async () => {
     try {
       const data = await boardsApi.getAll();
-      setBoards(data);
+      setBoards(data || []);
     } catch (err) {
       console.error('Failed to fetch boards:', err);
     }
@@ -52,14 +54,14 @@ export function CompletedPage() {
       }
 
       const completedTasks = allColumns
-        .filter((c) => c.name === '已完成')
+        .filter((c) => c.name === t('task.status.done'))
         .flatMap((c) => c.tasks || [])
-        .map((t: Task) => {
-          const boardId = t.columnId?.split('_')[0] || '';
+        .map((task: Task) => {
+          const boardId = task.columnId?.split('_')[0] || '';
           const board = boards.find((b) => b.id === boardId);
           return {
-            ...t,
-            columnName: '已完成',
+            ...task,
+            columnName: t('task.status.done'),
             boardName: board?.name || boardId,
           };
         });
@@ -92,7 +94,7 @@ export function CompletedPage() {
 
   const batchArchive = async () => {
     if (selectedTasks.size === 0) {
-      setToast('请先选择任务');
+      setToast(t('completed.selectTaskFirst'));
       setTimeout(() => setToast(null), 2000);
       return;
     }
@@ -103,25 +105,25 @@ export function CompletedPage() {
           tasksApi.archive(taskId, true)
         )
       );
-      setToast(`已归档 ${selectedTasks.size} 个任务`);
+      setToast(t('completed.archivedCount', { count: selectedTasks.size }));
       setSelectedTasks(new Set());
       fetchTasks();
       setTimeout(() => setToast(null), 2000);
     } catch (err) {
       console.error('Failed to batch archive:', err);
-      setToast('归档失败');
+      setToast(t('completed.archiveFailed'));
       setTimeout(() => setToast(null), 2000);
     }
   };
 
   const batchDelete = async () => {
     if (selectedTasks.size === 0) {
-      setToast('请先选择任务');
+      setToast(t('completed.selectTaskFirst'));
       setTimeout(() => setToast(null), 2000);
       return;
     }
 
-    if (!confirm(`确定要删除选中的 ${selectedTasks.size} 个任务吗？此操作不可恢复。`)) {
+    if (!confirm(t('completed.confirmDelete', { count: selectedTasks.size }))) {
       return;
     }
 
@@ -129,13 +131,13 @@ export function CompletedPage() {
       await Promise.all(
         Array.from(selectedTasks).map((taskId) => tasksApi.delete(taskId))
       );
-      setToast(`已删除 ${selectedTasks.size} 个任务`);
+      setToast(t('completed.deletedCount', { count: selectedTasks.size }));
       setSelectedTasks(new Set());
       fetchTasks();
       setTimeout(() => setToast(null), 2000);
     } catch (err) {
       console.error('Failed to batch delete:', err);
-      setToast('删除失败');
+      setToast(t('completed.deleteFailed'));
       setTimeout(() => setToast(null), 2000);
     }
   };
@@ -144,13 +146,13 @@ export function CompletedPage() {
     <div className="min-h-screen bg-zinc-100 p-6">
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-zinc-800">已完成任务管理</h1>
+          <h1 className="text-2xl font-bold text-zinc-800">{t('completed.title')}</h1>
         </div>
         <Link
           to="/"
           className="rounded-md bg-zinc-200 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-300"
         >
-          返回看板
+          {t('completed.backToBoard')}
         </Link>
       </header>
 
@@ -160,7 +162,7 @@ export function CompletedPage() {
           onChange={(e) => setBoardFilter(e.target.value)}
           className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
         >
-          <option value="all">所有看板</option>
+          <option value="all">{t('filter.all')}</option>
           {boards.map((board) => (
             <option key={board.id} value={board.id}>{board.name}</option>
           ))}
@@ -169,35 +171,35 @@ export function CompletedPage() {
         <div className="flex-1" />
 
         <span className="text-sm text-zinc-500">
-          已选择 {selectedTasks.size} / {tasks.length} 个任务
+          {t('completed.selectedCount', { selected: selectedTasks.size, total: tasks.length })}
         </span>
 
         <button
           onClick={toggleSelectAll}
           className="rounded-md bg-zinc-200 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-300"
         >
-          {selectedTasks.size === tasks.length ? '取消全选' : '全选'}
+          {selectedTasks.size === tasks.length ? t('completed.deselectAll') : t('completed.selectAll')}
         </button>
 
         <button
           onClick={batchArchive}
           className="rounded-md bg-orange-500 px-3 py-2 text-sm text-white hover:bg-orange-600"
         >
-          批量归档
+          {t('completed.batchArchive')}
         </button>
 
         <button
           onClick={batchDelete}
           className="rounded-md bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600"
         >
-          批量删除
+          {t('completed.batchDelete')}
         </button>
       </div>
 
       {loading ? (
-        <div className="text-center text-zinc-500">加载中...</div>
+        <div className="text-center text-zinc-500">{t('completed.loading')}</div>
       ) : tasks.length === 0 ? (
-        <div className="text-center text-zinc-500">没有已完成的任务</div>
+        <div className="text-center text-zinc-500">{t('completed.empty')}</div>
       ) : (
         <div className="space-y-2">
           {tasks.map((task) => (
@@ -220,7 +222,7 @@ export function CompletedPage() {
                   <span className={`rounded px-2 py-0.5 text-xs font-medium ${
                     priorityColors[task.priority] || 'bg-zinc-100 text-zinc-700'
                   }`}>
-                    {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
+                    {t(`task.priority.${task.priority}`)}
                   </span>
                   <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
                     {task.boardName}
@@ -240,7 +242,7 @@ export function CompletedPage() {
                 to="/"
                 className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200"
               >
-                查看
+                {t('task.enter')}
               </Link>
             </div>
           ))}

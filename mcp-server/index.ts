@@ -9,10 +9,15 @@ import {
 const API_BASE = process.env.KANBAN_API_URL || "http://localhost:3000";
 const MCP_TOKEN = process.env.KANBAN_MCP_TOKEN; // Token for MCP authentication
 
+const MCP_REQUEST_HEADER = "X-MCP-Request";
+
 // HTTP helper functions
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {},
+    headers: {
+      ...(MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {}),
+      [MCP_REQUEST_HEADER]: "true",
+    },
   });
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -26,6 +31,7 @@ async function apiPost<T>(path: string, body: any): Promise<T> {
     headers: { 
       "Content-Type": "application/json",
       ...(MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {}),
+      [MCP_REQUEST_HEADER]: "true",
     },
     body: JSON.stringify(body),
   });
@@ -41,6 +47,7 @@ async function apiPut<T>(path: string, body: any): Promise<T> {
     headers: { 
       "Content-Type": "application/json",
       ...(MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {}),
+      [MCP_REQUEST_HEADER]: "true",
     },
     body: JSON.stringify(body),
   });
@@ -53,7 +60,10 @@ async function apiPut<T>(path: string, body: any): Promise<T> {
 async function apiDelete(path: string): Promise<void> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "DELETE",
-    headers: MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {},
+    headers: {
+      ...(MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {}),
+      [MCP_REQUEST_HEADER]: "true",
+    },
   });
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -118,7 +128,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "list_tasks",
-        description: "列出所有任务或指定列的任务，可按 Agent 类型筛选（需要设置 KANBAN_MCP_TOKEN 环境变量）",
+        description: "列出所有任务或指定列的任务，支持多种筛选条件（需要设置 KANBAN_MCP_TOKEN 环境变量）",
         inputSchema: {
           type: "object",
           properties: {
@@ -138,6 +148,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             agentType: {
               type: "string",
               description: "可选：按 Agent 类型筛选，只返回该类型 Agent 可以处理的任务",
+            },
+            priority: {
+              type: "string",
+              enum: ["low", "medium", "high"],
+              description: "可选：按优先级筛选",
+            },
+            assignee: {
+              type: "string",
+              description: "可选：按负责人筛选（精确匹配）",
+            },
+            searchQuery: {
+              type: "string",
+              description: "可选：在任务标题和描述中搜索关键词",
+            },
+            dateRange: {
+              type: "string",
+              enum: ["today", "thisWeek", "thisMonth"],
+              description: "可选：按创建时间筛选 (today=今天, thisWeek=本周, thisMonth=本月)",
+            },
+            tag: {
+              type: "string",
+              description: "可选：按标签筛选（匹配 meta 中的标签值）",
             },
           },
         },
@@ -424,6 +456,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["id"],
         },
       },
+      {
+        name: "get_dashboard_stats",
+        description: "获取看板统计信息，包括各状态任务数量、优先级统计、发布状态等",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "complete_task",
+        description: "标记任务完成并自动流转到下一列（无需传状态参数，任务会根据列排序自动移动到下一列）",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "任务ID",
+            },
+          },
+          required: ["id"],
+        },
+      },
+      {
+        name: "list_my_tasks",
+        description: "获取当前Agent负责的任务（根据当前token对应的Agent类型和分配的任务，返回该Agent应该处理的任务）",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
     ],
   };
 });
@@ -479,7 +541,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "list_tasks": {
-        // First get all columns to map status to columnId
         const boardId = args.boardId as string | undefined;
         const url = boardId ? `/api/columns?boardId=${boardId}` : "/api/columns";
         const columns = await apiGet<any[]>(url);
@@ -502,30 +563,69 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Filter tasks based on columnId
         let tasks: any[] = [];
         if (columnId) {
           const col = columns.find((c: any) => c.id === columnId);
           tasks = col?.tasks || [];
         } else {
-          // Get all tasks from all columns
           tasks = columns.flatMap((c: any) => c.tasks || []);
         }
 
-        // Filter by agentType if provided
         if (args.agentType) {
           const agentType = args.agentType as string;
           tasks = tasks.filter((task: any) => {
-            // Check if the column has agent config that allows this agent type
             const col = columns.find((c: any) => c.id === task.columnId);
-            if (!col?.agentConfig) return false; // No config = not assignable to agents
-            
-            try {
-              const allowedTypes = JSON.parse(col.agentConfig);
-              return allowedTypes.includes(agentType);
-            } catch {
-              return false;
+            if (!col?.agentConfig) return false;
+            const allowedTypes = col.agentConfig.agentTypes || [];
+            return allowedTypes.includes(agentType);
+          });
+        }
+
+        if (args.priority) {
+          tasks = tasks.filter((task: any) => task.priority === args.priority);
+        }
+
+        if (args.assignee) {
+          tasks = tasks.filter((task: any) => task.assignee === args.assignee);
+        }
+
+        if (args.searchQuery) {
+          const query = (args.searchQuery as string).toLowerCase();
+          tasks = tasks.filter((task: any) => 
+            task.title?.toLowerCase().includes(query) ||
+            task.description?.toLowerCase().includes(query)
+          );
+        }
+
+        if (args.dateRange) {
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const startOfWeek = new Date(today);
+          startOfWeek.setDate(today.getDate() - today.getDay());
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+          tasks = tasks.filter((task: any) => {
+            const createdAt = new Date(task.createdAt);
+            switch (args.dateRange) {
+              case "today":
+                return createdAt >= today;
+              case "thisWeek":
+                return createdAt >= startOfWeek;
+              case "thisMonth":
+                return createdAt >= startOfMonth;
+              default:
+                return true;
             }
+          });
+        }
+
+        if (args.tag) {
+          tasks = tasks.filter((task: any) => {
+            if (!task.meta) return false;
+            const meta = typeof task.meta === 'string' ? JSON.parse(task.meta) : task.meta;
+            return Object.values(meta).some((v: any) => 
+              String(v).toLowerCase().includes((args.tag as string).toLowerCase())
+            );
           });
         }
         
@@ -724,6 +824,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await apiDelete(`/api/subtasks/${args.id}`);
         broadcast();
         return { content: [{ type: "text", text: "Subtask deleted successfully" }] };
+      }
+
+      case "get_dashboard_stats": {
+        const stats = await apiGet<any>("/api/dashboard/stats");
+        return { content: [{ type: "text", text: JSON.stringify(stats, null, 2) }] };
+      }
+
+      case "complete_task": {
+        const task = await apiPost<any>(`/api/tasks/${args.id}/complete`, {});
+        broadcast();
+        return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
+      }
+
+      case "list_my_tasks": {
+        const result = await apiGet<any>(`/api/mcp/my-tasks`);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
       default:

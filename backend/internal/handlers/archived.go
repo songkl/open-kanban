@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
-	"kanban-go/internal/models"
+	"open-kanban/internal/models"
 
 	"github.com/gin-gonic/gin"
 )

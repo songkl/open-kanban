@@ -1,9 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { Task, Board } from '@/types/kanban';
 import { draftsApi, columnsApi, boardsApi, tasksApi } from '@/services/api';
+import { showErrorToast } from '@/components/ErrorToast';
+
+const FAILED_TASK_CREATIONS_KEY = 'failedTaskCreations';
+
+interface FailedTaskCreation {
+  title: string;
+  description: string;
+  columnId: string;
+  position: number;
+  priority?: string;
+  published: boolean;
+  createdAt: string;
+}
+
+const saveFailedTaskToLocalStorage = (taskData: FailedTaskCreation) => {
+  try {
+    const existing = localStorage.getItem(FAILED_TASK_CREATIONS_KEY);
+    const failedTasks: FailedTaskCreation[] = existing ? JSON.parse(existing) : [];
+    failedTasks.push(taskData);
+    localStorage.setItem(FAILED_TASK_CREATIONS_KEY, JSON.stringify(failedTasks));
+  } catch (e) {
+    console.error('Failed to save task to localStorage:', e);
+  }
+};
 
 export function DraftsPage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const boardIdFromUrl = searchParams.get('boardId');
 
@@ -47,10 +73,10 @@ export function DraftsPage() {
     setError(null);
     try {
       const data = await draftsApi.getByBoard(boardId);
-      setTasks(data);
+      setTasks(data || []);
     } catch (err) {
       console.error('Failed to fetch drafts:', err);
-      setError(err instanceof Error ? err.message : '加载失败');
+      setError(err instanceof Error ? err.message : t('app.error.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -60,10 +86,10 @@ export function DraftsPage() {
     setLoading(true);
     try {
       const data = await boardsApi.getAll();
-      setBoards(data);
+      setBoards(data || []);
     } catch (err) {
       console.error('Failed to fetch boards:', err);
-      setError(err instanceof Error ? err.message : '加载看板失败');
+      setError(err instanceof Error ? err.message : t('app.error.loadFailed'));
       setLoading(false);
     }
   };
@@ -117,6 +143,16 @@ export function DraftsPage() {
       setNewDescription('');
     } catch (err) {
       console.error('Failed to create draft:', err);
+      saveFailedTaskToLocalStorage({
+        title: newTitle.trim(),
+        description: newDescription.trim(),
+        columnId: targetColumn,
+        position: 9999,
+        published: false,
+        createdAt: new Date().toISOString(),
+      });
+      setError(t('toast.saveFailed'));
+      setTimeout(() => setError(null), 3000);
     }
   };
 
@@ -126,7 +162,7 @@ export function DraftsPage() {
 
   const handlePublish = async () => {
     if (!publishTaskId || !publishTargetColumn) {
-      alert('请选择目标看板和列');
+      showErrorToast(t('drafts.selectTarget'), 'warning');
       return;
     }
     try {
@@ -136,16 +172,18 @@ export function DraftsPage() {
       setPublishTaskId(null);
     } catch (err) {
       console.error('Failed to publish task:', err);
+      showErrorToast(err instanceof Error ? err.message : t('toast.publishFailed'), 'error');
     }
   };
 
   const handleDelete = async (taskId: string) => {
-    if (!confirm('确定要删除这个草稿吗？')) return;
+    if (!confirm(t('drafts.confirmDelete'))) return;
     try {
       await tasksApi.delete(taskId);
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
     } catch (err) {
       console.error('Failed to delete draft:', err);
+      showErrorToast(err instanceof Error ? err.message : t('toast.deleteFailed'), 'error');
     }
   };
 
@@ -181,7 +219,7 @@ export function DraftsPage() {
   if (loading && boards.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-zinc-500">加载中...</div>
+        <div className="text-zinc-500">{t('drafts.loading')}</div>
       </div>
     );
   }
@@ -189,13 +227,13 @@ export function DraftsPage() {
   if (error) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <div className="text-red-500">加载失败</div>
+        <div className="text-red-500">{t('drafts.loadFailed')}</div>
         <div className="text-sm text-zinc-400">{error}</div>
         <button
           onClick={() => selectedBoard && fetchTasks(selectedBoard)}
           className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
         >
-          重试
+          {t('drafts.retry')}
         </button>
       </div>
     );
@@ -209,9 +247,9 @@ export function DraftsPage() {
             to="/"
             className="rounded-md bg-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-300"
           >
-            ← 返回看板
+            {t('drafts.backToBoard')}
           </Link>
-          <h1 className="text-2xl font-bold text-zinc-800">草稿箱</h1>
+          <h1 className="text-2xl font-bold text-zinc-800">{t('drafts.title')}</h1>
           {boards.length > 0 && (
             <select
               value={selectedBoard}
@@ -231,19 +269,19 @@ export function DraftsPage() {
             onClick={() => setShowAddModal(true)}
             className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
           >
-            + 新建任务
+            + {t('drafts.newTask')}
           </button>
-          <span className="text-sm text-zinc-500">{tasks.length} 个草稿</span>
+          <span className="text-sm text-zinc-500">{t('drafts.draftCount', { count: tasks.length })}</span>
         </div>
       </header>
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <div className="text-zinc-500">加载中...</div>
+          <div className="text-zinc-500">{t('drafts.loading')}</div>
         </div>
       ) : tasks.length === 0 ? (
         <div className="rounded-lg bg-white p-8 text-center text-zinc-500">
-          暂无草稿
+          {t('drafts.empty')}
         </div>
       ) : (
         <div className="flex flex-wrap gap-4">
@@ -261,7 +299,7 @@ export function DraftsPage() {
               <div className="flex items-start justify-between gap-2 pl-3">
                 <div className="flex-1">
                   <span className="mb-1 block text-xs text-zinc-400 font-mono">#{task.id.slice(-6)}</span>
-                  <h3 className="font-medium text-zinc-800">{task.title}</h3>
+                  <h3 className="font-medium text-zinc-800 break-words">{task.title}</h3>
                 </div>
               </div>
 
@@ -276,13 +314,13 @@ export function DraftsPage() {
                   {task.subtasks.slice(0, 3).map((subtask) => (
                     <div key={subtask.id} className="flex items-center gap-1.5 text-xs">
                       <span className={`h-1.5 w-1.5 rounded-full ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300'}`} />
-                      <span className={subtask.completed ? 'text-zinc-400 line-through' : 'text-zinc-600'}>
+                      <span className={subtask.completed ? 'text-zinc-400 line-through truncate' : 'text-zinc-600 truncate'}>
                         {subtask.title}
                       </span>
                     </div>
                   ))}
                   {task.subtasks.length > 3 && (
-                    <span className="text-xs text-zinc-400">+{task.subtasks.length - 3} 更多</span>
+                    <span className="text-xs text-zinc-400">{t('drafts.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
                   )}
                 </div>
               )}
@@ -292,7 +330,7 @@ export function DraftsPage() {
                   <span className={`rounded px-2 py-0.5 text-xs font-medium ${
                     task.priority === 'high' ? 'bg-red-100 text-red-700' : task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
                   }`}>
-                    {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
+                    {t(`task.priority.${task.priority}`)}
                   </span>
                   {task.subtasks && task.subtasks.length > 0 && (
                     <span className="text-xs text-zinc-400">
@@ -307,27 +345,27 @@ export function DraftsPage() {
                 </div>
               </div>
 
-              <div className="mt-2 border-t pt-2 pl-3">
+              <div className="mt-2 border-t border-zinc-200 pt-2 pl-3">
                 <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <span>创建：{new Date(task.createdAt).toLocaleString('zh-CN')}</span>
+                  <span>{t('drafts.createdAt')} {new Date(task.createdAt).toLocaleString()}</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(task)}
                       className="text-blue-500 hover:text-blue-600"
                     >
-                      编辑
+                      {t('drafts.edit')}
                     </button>
                     <button
                       onClick={() => handlePublishClick(task.id)}
                       className="text-green-500 hover:text-green-600"
                     >
-                      发布
+                      {t('drafts.publish')}
                     </button>
                     <button
                       onClick={() => handleDelete(task.id)}
                       className="text-red-500 hover:text-red-600"
                     >
-                      删除
+                      {t('drafts.delete')}
                     </button>
                   </div>
                 </div>
@@ -348,7 +386,7 @@ export function DraftsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-4 text-lg font-semibold text-zinc-800">
-              新建任务（草稿）
+              {t('drafts.newTask')}
             </h2>
 
             <form onSubmit={handleAddTask} className="space-y-4">
@@ -358,7 +396,7 @@ export function DraftsPage() {
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="输入任务标题"
+                  placeholder={t('drafts.titlePlaceholder')}
                   className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -367,14 +405,14 @@ export function DraftsPage() {
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="输入任务描述（可选，支持 Markdown）"
+                  placeholder={t('drafts.descriptionPlaceholder')}
                   rows={4}
                   className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">目标列</label>
+                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.targetColumn')}</label>
                 <select
                   value={targetColumn}
                   onChange={(e) => setTargetColumn(e.target.value)}
@@ -392,14 +430,14 @@ export function DraftsPage() {
                   onClick={() => setShowAddModal(false)}
                   className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
                 >
-                  取消
+                  {t('drafts.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={!newTitle.trim()}
                   className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
                 >
-                  保存草稿
+                  {t('drafts.saveDraft')}
                 </button>
               </div>
             </form>
@@ -418,7 +456,7 @@ export function DraftsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-4 text-lg font-semibold text-zinc-800">
-              编辑草稿
+              {t('drafts.editDraft')}
             </h2>
 
             <form onSubmit={handleUpdateTask} className="space-y-4">
@@ -428,7 +466,7 @@ export function DraftsPage() {
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="输入任务标题"
+                  placeholder={t('drafts.titlePlaceholder')}
                   className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -437,14 +475,14 @@ export function DraftsPage() {
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="输入任务描述（可选，支持 Markdown）"
+                  placeholder={t('drafts.descriptionPlaceholder')}
                   rows={4}
                   className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">目标列</label>
+                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.targetColumn')}</label>
                 <select
                   value={targetColumn}
                   onChange={(e) => setTargetColumn(e.target.value)}
@@ -466,14 +504,14 @@ export function DraftsPage() {
                   }}
                   className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
                 >
-                  取消
+                  {t('drafts.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={!newTitle.trim()}
                   className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
                 >
-                  保存修改
+                  {t('drafts.saveChanges')}
                 </button>
               </div>
             </form>
@@ -492,12 +530,12 @@ export function DraftsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-4 text-lg font-semibold text-zinc-800">
-              发布任务到看板
+              {t('drafts.publishToBoard')}
             </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">选择看板</label>
+                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.selectBoard')}</label>
                 <select
                   value={selectedBoard}
                   onChange={(e) => {
@@ -513,14 +551,14 @@ export function DraftsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">选择列</label>
+                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.selectColumn')}</label>
                 <select
                   value={publishTargetColumn}
                   onChange={(e) => setPublishTargetColumn(e.target.value)}
                   className="w-full rounded-md border border-zinc-300 px-4 py-2 text-base focus:border-blue-500 focus:outline-none"
                 >
                   {columns.length === 0 ? (
-                    <option value="">该看板暂无列</option>
+                    <option value="">{t('drafts.noColumns')}</option>
                   ) : (
                     columns.map((col) => (
                       <option key={col.id} value={col.id}>{col.name}</option>
@@ -537,14 +575,14 @@ export function DraftsPage() {
                   }}
                   className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
                 >
-                  取消
+                  {t('drafts.cancel')}
                 </button>
                 <button
                   onClick={handlePublish}
                   disabled={!publishTargetColumn}
                   className="flex-1 rounded-md bg-green-500 px-4 py-2.5 text-base font-medium text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
                 >
-                  发布
+                  {t('drafts.publish')}
                 </button>
               </div>
             </div>

@@ -3,7 +3,7 @@
 set -e
 
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║           KL-Kanban 一键安装脚本                          ║"
+echo "║           Open kanban 一键安装脚本                        ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -15,8 +15,8 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-GITHUB_REPO="kl-kanban/kl-kanban"
-INSTALL_DIR="$HOME/kl-kanban"
+GITHUB_REPO="open-kanban/open-kanban"
+INSTALL_DIR="$HOME/open-kanban"
 
 echo "=== 1. 检测平台 ==="
 echo ""
@@ -153,7 +153,7 @@ cat << 'MCP_EOF'
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["-y", "kl-kanban-mcp"],
+      "args": ["-y", "open-kanban-mcp"],
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }

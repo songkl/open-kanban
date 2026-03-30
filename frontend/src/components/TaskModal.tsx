@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
-import type { Task, Attachment, Column } from '@/types/kanban';
-import { columnsApi, subtasksApi, attachmentsApi } from '@/services/api';
-import { FileUpload } from './FileUpload';
+import MDEditor from '@uiw/react-md-editor';
+import type { Task, Attachment, Column, Agent } from '@/types/kanban';
+import { columnsApi, subtasksApi, attachmentsApi, authApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
 
 const STORAGE_KEY = 'kanban-username';
 
-// Format comment date
-function formatCommentDate(dateStr: string): string {
+function formatCommentDate(t: any, dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
@@ -19,13 +19,13 @@ function formatCommentDate(dateStr: string): string {
   const days = Math.floor(hours / 24);
 
   if (seconds < 60) {
-    return '刚刚';
+    return t('taskModal.justNow');
   } else if (minutes < 60) {
-    return `${minutes}分钟前`;
+    return t('taskModal.minutesAgo', { count: minutes });
   } else if (hours < 24) {
-    return `${hours}小时前`;
+    return t('taskModal.hoursAgo', { count: hours });
   } else if (days < 7) {
-    return `${days}天前`;
+    return t('taskModal.daysAgo', { count: days });
   } else {
     return date.toLocaleString('zh-CN', {
       month: 'short',
@@ -45,29 +45,87 @@ interface TaskModalProps {
   task: Task;
   columnName?: string;
   columns?: { id: string; name: string }[];
+  boardId?: string;
   boards?: Board[];
   canEdit?: boolean;
+  startEditing?: boolean;
   onClose: () => void;
   onUpdate: (task: Task) => void;
   onDelete: (taskId: string) => void;
   onArchive: (taskId: string) => void;
   onAddComment: (taskId: string, content: string, author: string) => void;
+  onEditingStarted?: () => void;
 }
 
 export function TaskModal({
   task,
   columnName,
   columns = [],
+  boardId,
   boards: _boards = [],
   canEdit = true,
+  startEditing = false,
   onClose,
   onUpdate,
   onDelete,
   onArchive,
   onAddComment,
+  onEditingStarted,
 }: TaskModalProps) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
+
+  useEffect(() => {
+    if (startEditing && !isEditing) {
+      setIsEditing(true);
+      onEditingStarted?.();
+    }
+  }, [startEditing]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Enter' && isEditing) {
+        const target = e.target as HTMLElement;
+        const isMDEditor = target.closest('.w-md-editor') || target.closest('[data-editor]');
+        if (!isMDEditor) {
+          e.preventDefault();
+          handleSave();
+          return;
+        }
+      }
+
+      if (e.key === 'Tab' && isEditing) {
+        e.preventDefault();
+        const fieldOrder = [
+          titleInputRef,
+          statusSelectRef,
+          prioritySelectRef,
+          assigneeSelectRef,
+          metaKeyInputRef,
+        ];
+        const currentIndex = fieldOrder.findIndex(ref => ref.current === e.target);
+        if (currentIndex === -1) {
+          titleInputRef.current?.focus();
+        } else {
+          const nextIndex = e.shiftKey
+            ? (currentIndex - 1 + fieldOrder.length) % fieldOrder.length
+            : (currentIndex + 1) % fieldOrder.length;
+          fieldOrder[nextIndex]?.current?.focus();
+        }
+        return;
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, isEditing]);
+
   const [editDesc, setEditDesc] = useState(task.description || '');
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editAssignee, setEditAssignee] = useState(task.assignee || '');
@@ -82,10 +140,19 @@ export function TaskModal({
   const [allColumns, setAllColumns] = useState<Column[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
-  const [pendingCommentAttachments, setPendingCommentAttachments] = useState<Attachment[]>([]);
+  const [uploadingInProgress, setUploadingInProgress] = useState(false);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [currentUser, setCurrentUser] = useState<{ nickname: string } | null>(null);
   const commentsRef = useRef<HTMLDivElement>(null);
+  const commentEditorRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const statusSelectRef = useRef<HTMLSelectElement>(null);
+  const prioritySelectRef = useRef<HTMLSelectElement>(null);
+  const assigneeSelectRef = useRef<HTMLSelectElement>(null);
+  const metaKeyInputRef = useRef<HTMLInputElement>(null);
+  const [commentsPage, setCommentsPage] = useState(1);
+  const COMMENTS_PER_PAGE = 10;
 
-  // Parse meta from task
   const parseMeta = (metaStr: string | Record<string, unknown> | null): Record<string, string> => {
     if (!metaStr) return {};
     if (typeof metaStr === 'object' && metaStr !== null) return metaStr as Record<string, string>;
@@ -99,198 +166,254 @@ export function TaskModal({
     return {};
   };
 
-  // Initialize
   useEffect(() => {
-    setIsEditing(false);
-    setEditMeta(parseMeta(task.meta));
-    const savedUsername = localStorage.getItem(STORAGE_KEY);
-    if (savedUsername) {
-      setCommentAuthor(savedUsername);
-    }
-    // Load all columns
-    if (task.columnId) {
-      const boardId = task.columnId.split('_')[0] || task.columnId;
-      columnsApi.getByBoard(boardId).then(setAllColumns).catch(() => setAllColumns([]));
-    }
-    // Load attachments
-    loadAttachments();
-    // Scroll to comments if there are comments
-    if (task.comments && task.comments.length > 0 && commentsRef.current) {
-      setTimeout(() => {
-        commentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-    }
-    // Handle ESC key to close modal
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
+    const loadAuthor = async () => {
+      try {
+        const meData = await authApi.me();
+        if (meData.user) {
+          setCurrentUser(meData.user);
+          setCommentAuthor(meData.user.nickname);
+          localStorage.setItem(STORAGE_KEY, meData.user.nickname);
+        }
+      } catch {
+        const savedAuthor = localStorage.getItem(STORAGE_KEY);
+        if (savedAuthor) {
+          setCommentAuthor(savedAuthor);
+        }
       }
     };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [task, onClose]);
+    loadAuthor();
+  }, []);
 
-  // Load attachments
-  const loadAttachments = async () => {
-    if (!task?.id) return;
-    setLoadingAttachments(true);
-    try {
-      const data = await attachmentsApi.getByTask(task.id);
-      setAttachments(data || []);
-    } catch (err) {
-      console.error('Failed to load attachments:', err);
-      setAttachments([]);
-    } finally {
-      setLoadingAttachments(false);
+  useEffect(() => {
+    setEditMeta(parseMeta(task.meta));
+  }, [task.meta]);
+
+  useEffect(() => {
+    if (boardId) {
+      columnsApi.getByBoard(boardId).then((data) => setAllColumns(data || [])).catch(console.error);
     }
-  };
+  }, [boardId]);
 
-  // Handle upload attachment
-  const handleUploadAttachment = async (newAttachments: Attachment[]) => {
-    setAttachments((prev) => [...prev, ...newAttachments]);
-  };
-
-  // Handle delete attachment
-  const handleDeleteAttachment = async (id: string) => {
-    try {
-      await attachmentsApi.delete(id);
-      setAttachments((prev) => prev.filter((a) => a.id !== id));
-    } catch (err) {
-      console.error('Failed to delete attachment:', err);
-      alert('删除附件失败');
+  useEffect(() => {
+    if (task.id) {
+      setLoadingAttachments(true);
+      attachmentsApi.getByTask(task.id)
+        .then((data) => setAttachments(data || []))
+        .catch(console.error)
+        .finally(() => setLoadingAttachments(false));
     }
-  };
+  }, [task.id]);
 
-  // Handle upload comment attachment
-  const handleUploadCommentAttachment = async (newAttachments: Attachment[]) => {
-    setPendingCommentAttachments((prev) => [...prev, ...newAttachments]);
-  };
-
-  // Handle remove pending comment attachment
-  const handleRemovePendingCommentAttachment = async (id: string) => {
-    try {
-      await attachmentsApi.delete(id);
-      setPendingCommentAttachments((prev) => prev.filter((a) => a.id !== id));
-    } catch (err) {
-      console.error('Failed to delete attachment:', err);
-      alert('删除附件失败');
+  useEffect(() => {
+    if (commentsRef.current) {
+      commentsRef.current.scrollTop = commentsRef.current.scrollHeight;
     }
-  };
+  }, [task.comments]);
+
+  useEffect(() => {
+    authApi.getAgents().then(setAgents).catch(console.error);
+  }, []);
 
   const handleAuthorChange = (value: string) => {
     setCommentAuthor(value);
-    if (value) {
-      localStorage.setItem(STORAGE_KEY, value);
-    }
+    localStorage.setItem(STORAGE_KEY, value);
   };
 
-  const handleSave = () => {
-    const targetColumnId = editColumn || allColumns[0]?.id || columns[0]?.id;
-    if (!targetColumnId) {
-      alert('无法保存：没有可用的列');
-      return;
-    }
-
-    onUpdate({
-      ...task,
-      title: editTitle,
-      description: editDesc || null,
-      priority: editPriority,
-      assignee: editAssignee || null,
-      meta: editMeta,
-      columnId: targetColumnId,
-    });
-    setIsEditing(false);
-  };
-
-  const handleAddComment = () => {
-    if (newComment.trim()) {
-      const author = commentAuthor || localStorage.getItem(STORAGE_KEY) || '匿名用户';
-      onAddComment(task.id, newComment.trim(), author);
-      setNewComment('');
-      // Clear pending comment attachments after submitting
-      setPendingCommentAttachments([]);
-    }
-  };
-
-  const handleAddSubtask = async (title: string) => {
+  const handleSave = async () => {
     try {
-      const subtask = await subtasksApi.create({ title, taskId: task.id });
-      setSubtasks([...subtasks, subtask]);
-    } catch (err) {
-      console.error('Failed to add subtask:', err);
+      const updatedTask = {
+        ...task,
+        title: editTitle,
+        description: editDesc,
+        priority: editPriority,
+        assignee: editAssignee,
+        meta: editMeta,
+        columnId: editColumn,
+      };
+      await onUpdate(updatedTask);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to save task:', error);
     }
   };
 
-  const handleToggleSubtask = async (subtaskId: string, completed: boolean) => {
-    try {
-      await subtasksApi.update(subtaskId, { completed });
-      setSubtasks(subtasks.map((s) => (s.id === subtaskId ? { ...s, completed } : s)));
-    } catch (err) {
-      console.error('Failed to toggle subtask:', err);
-    }
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+    onAddComment(task.id, newComment.trim(), commentAuthor);
+    setNewComment('');
   };
 
-  const handleDeleteSubtask = async (subtaskId: string) => {
+  const handleSubtasksChange = (newSubtasks: any[]) => {
+    setSubtasks(newSubtasks);
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    await attachmentsApi.delete(attachmentId);
+    setAttachments(attachments.filter(a => a.id !== attachmentId));
+  };
+
+  const uploadImage = useCallback(async (file: File): Promise<string | null> => {
     try {
-      await subtasksApi.delete(subtaskId);
-      setSubtasks(subtasks.filter((s) => s.id !== subtaskId));
-    } catch (err) {
-      console.error('Failed to delete subtask:', err);
+      const { promise } = attachmentsApi.upload(file, task.id);
+      const attachment = await promise;
+      setAttachments(prev => [...prev, attachment]);
+      return attachment.url;
+    } catch (error) {
+      console.error('Failed to upload image:', error);
+      return null;
+    }
+  }, [task.id]);
+
+  const insertImageMarkdown = (currentValue: string, imageUrl: string, altText: string = 'image'): string => {
+    const imageMarkdown = `\n![${altText}](${imageUrl})\n`;
+    return currentValue + imageMarkdown;
+  };
+
+  const handleEditorPaste = useCallback(async (e: React.ClipboardEvent, target: 'desc' | 'comment') => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          setUploadingInProgress(true);
+          const url = await uploadImage(file);
+          setUploadingInProgress(false);
+          if (url) {
+            if (target === 'desc') {
+              setEditDesc(prev => insertImageMarkdown(prev, url, file.name));
+            } else {
+              setNewComment(prev => insertImageMarkdown(prev, url, file.name));
+            }
+          }
+        }
+        return;
+      }
+    }
+  }, [uploadImage]);
+
+  const handleEditorDrop = useCallback(async (e: React.DragEvent, target: 'desc' | 'comment') => {
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    setUploadingInProgress(true);
+    for (const file of imageFiles) {
+      const url = await uploadImage(file);
+      if (url) {
+        if (target === 'desc') {
+          setEditDesc(prev => insertImageMarkdown(prev, url, file.name));
+        } else {
+          setNewComment(prev => insertImageMarkdown(prev, url, file.name));
+        }
+      }
+    }
+    setUploadingInProgress(false);
+  }, [uploadImage]);
+
+  const handleDelete = () => {
+    if (window.confirm(t('taskModal.confirmDelete'))) {
+      onDelete(task.id);
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={() => isEditing && setIsEditing(false)}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex-shrink-0 border-b border-zinc-100 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-zinc-800">
-              {isEditing ? '编辑任务' : '任务详情'}
-            </h2>
-            <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600">
-              ✕
+    <div className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 overflow-y-auto">
+      <div className="flex flex-col h-full max-h-[calc(100vh-4rem)] bg-white dark:bg-zinc-800 my-8 mx-auto max-w-6xl overflow-hidden">
+        {/* Header */}
+        <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-700 px-6 py-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            {columnName && (
+              <span className="rounded-full bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300">
+                {columnName}
+              </span>
+            )}
+            {!isEditing && (
+              <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {!isEditing && canEdit && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
+              >
+                {t('taskModal.editTask')}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 max-h-[calc(90vh-140px)]">
-          {isEditing ? (
-            <div className="space-y-6">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  标题 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 px-4 py-2.5"
-                />
-              </div>
+        <div className="flex flex-1 min-h-0">
+          {/* Main Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {/* Title - only show input when editing, title is in header otherwise */}
+            {isEditing && (
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="mb-4 w-full rounded-lg border border-zinc-200 px-4 py-2.5 text-xl font-semibold"
+              />
+            )}
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  描述 (支持 Markdown)
-                </label>
-                <textarea
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                  rows={6}
-                  className="w-full rounded-lg border border-zinc-200 px-4 py-2.5"
-                />
-              </div>
+            {/* Description */}
+            <div className="mb-6">
+              <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                {t('taskModal.description')} {isEditing && t('taskModal.descriptionHint')}
+              </label>
+              {isEditing ? (
+                <div
+                  id="desc-editor"
+                  className="rounded-lg border border-zinc-200 overflow-y-auto"
+                  onPaste={(e) => handleEditorPaste(e, 'desc')}
+                  onDrop={(e) => handleEditorDrop(e, 'desc')}
+                  onDragOver={(e) => e.preventDefault()}
+                >
+                  <MDEditor
+                    value={editDesc}
+                    onChange={(val) => setEditDesc(val || '')}
+                    height={200}
+                    preview="edit"
+                    hideToolbar={false}
+                    style={{ padding: 0 }}
+                  />
+                </div>
+              ) : (
+                <div className="prose prose-sm max-w-none rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-4">
+                  {task.description ? (
+                    <ReactMarkdown>{task.description}</ReactMarkdown>
+                  ) : (
+                    <span className="text-zinc-400 dark:text-zinc-500">{t('taskModal.noDescription')}</span>
+                  )}
+                </div>
+              )}
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
+            {/* Grid Layout for Edit Mode */}
+            {isEditing && (
+              <div className="mb-6 grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">状态</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.status')}</label>
                   <select
+                    ref={statusSelectRef}
                     value={editColumn}
                     onChange={(e) => setEditColumn(e.target.value)}
                     className="w-full rounded-lg border border-zinc-200 px-3 py-2"
@@ -302,38 +425,47 @@ export function TaskModal({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">优先级</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.priority')}</label>
                   <select
+                    ref={prioritySelectRef}
                     value={editPriority}
                     onChange={(e) => setEditPriority(e.target.value)}
                     className="w-full rounded-lg border border-zinc-200 px-3 py-2"
                   >
-                    <option value="low">低优先级</option>
-                    <option value="medium">中优先级</option>
-                    <option value="high">高优先级</option>
+                    <option value="low">{t('taskModal.priorityLow')}</option>
+                    <option value="medium">{t('taskModal.priorityMedium')}</option>
+                    <option value="high">{t('taskModal.priorityHigh')}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">负责人</label>
-                  <input
-                    type="text"
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.assignee')}</label>
+                  <select
+                    ref={assigneeSelectRef}
                     value={editAssignee}
                     onChange={(e) => setEditAssignee(e.target.value)}
-                    placeholder="未分配"
                     className="w-full rounded-lg border border-zinc-200 px-3 py-2"
-                  />
+                  >
+                    <option value="">{t('taskModal.unassigned')}</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.nickname}>
+                        {agent.nickname}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
+            )}
 
-              {/* Meta */}
-              <div>
-                <h4 className="mb-2 text-sm font-semibold text-zinc-600">元信息</h4>
-                <div className="space-y-2">
-                  {Object.entries(editMeta).map(([key, value]) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <span className="min-w-[80px] text-sm">{key}:</span>
-                      <span className="flex-1 text-sm">{value}</span>
+            {/* Meta */}
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-zinc-600">{t('taskModal.meta')}</h4>
+              <div className="space-y-2">
+                {Object.entries(editMeta).map(([key, value]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="min-w-[80px] text-sm">{key}:</span>
+                    <span className="flex-1 text-sm">{value}</span>
+                    {isEditing && (
                       <button
                         onClick={() => {
                           const newMeta = { ...editMeta };
@@ -342,23 +474,26 @@ export function TaskModal({
                         }}
                         className="text-xs text-red-500"
                       >
-                        删除
+                        {t('taskModal.delete')}
                       </button>
-                    </div>
-                  ))}
+                    )}
+                  </div>
+                ))}
+                {isEditing && (
                   <div className="flex gap-2">
                     <input
+                      ref={metaKeyInputRef}
                       type="text"
                       value={newMetaKey}
                       onChange={(e) => setNewMetaKey(e.target.value)}
-                      placeholder="键名"
+                      placeholder={t('taskModal.metaKey')}
                       className="w-24 rounded border border-zinc-200 px-2 py-1 text-sm"
                     />
                     <input
                       type="text"
                       value={newMetaValue}
                       onChange={(e) => setNewMetaValue(e.target.value)}
-                      placeholder="值"
+                      placeholder={t('taskModal.metaValue')}
                       className="flex-1 rounded border border-zinc-200 px-2 py-1 text-sm"
                     />
                     <button
@@ -369,252 +504,219 @@ export function TaskModal({
                           setNewMetaValue('');
                         }
                       }}
-                      className="rounded bg-blue-500 px-3 py-1 text-sm text-white"
+                      className="rounded bg-blue-500 px-3 py-1 text-sm text-white hover:bg-blue-600"
                     >
-                      添加
+                      {t('taskModal.add')}
                     </button>
                   </div>
-                </div>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-xl font-semibold text-zinc-800">{task.title || 'Untitled'}</h3>
-                <div className="mt-1 text-xs text-zinc-400">ID: {task.id || 'Unknown'}</div>
-                <div className="mt-2 flex gap-2">
-                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    task.priority === 'high' ? 'bg-red-100 text-red-700' :
-                    task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-green-100 text-green-700'
-                  }`}>
-                    {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
-                  </span>
-                  {task.assignee && (
-                    <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
-                      👤 {task.assignee}
-                    </span>
-                  )}
-                  {columnName && (
-                    <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-600">
-                      {columnName}
-                    </span>
-                  )}
-                </div>
-              </div>
 
-              {task.description && (
-                <div>
-                  <h4 className="mb-1 text-sm font-medium text-zinc-500">描述</h4>
-                  <div className="prose prose-sm max-w-none text-zinc-700 bg-zinc-50 rounded p-3">
-                    <ReactMarkdown>{task.description}</ReactMarkdown>
-                  </div>
-                </div>
-              )}
-
-              {/* Subtasks */}
-              <div className="mt-4">
-                <h4 className="mb-2 text-sm font-medium text-zinc-500">
-                  子任务 ({subtasks.length})
+            {/* Subtasks */}
+            <div className="mt-6">
+              <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-zinc-600">
+                  {t('taskModal.subtasks')} ({subtasks.filter(s => s.completed).length}/{subtasks.length})
                 </h4>
-                <div className="space-y-2">
-                  {subtasks.map((subtask) => (
-                    <div key={subtask.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={subtask.completed}
-                        onChange={(e) => handleToggleSubtask(subtask.id, e.target.checked)}
-                        className="h-4 w-4 rounded border-zinc-200"
-                      />
-                      <span className={`flex-1 text-sm ${subtask.completed ? 'line-through text-zinc-400' : 'text-zinc-700'}`}>
-                        {subtask.title}
-                      </span>
-                      {canEdit && (
-                        <button
-                          onClick={() => handleDeleteSubtask(subtask.id)}
-                          className="text-xs text-red-500 hover:text-red-600"
-                        >
-                          删除
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {canEdit && (
+                {isEditing && (
                   <button
                     onClick={() => setShowAddSubtaskModal(true)}
-                    className="mt-2 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600"
+                    className="text-sm text-blue-500 hover:text-blue-600"
                   >
-                    + 添加子任务
+                    + {t('taskModal.addSubtask')}
                   </button>
                 )}
               </div>
-
-              {/* Attachments */}
-              <div className="mt-4">
-                <h4 className="mb-2 text-sm font-medium text-zinc-500">
-                  附件 ({attachments.length})
-                </h4>
-                {loadingAttachments ? (
-                  <div className="flex items-center gap-2 text-sm text-zinc-400">
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    加载中...
-                  </div>
-                ) : (
-                  <>
-                    <AttachmentList
-                      attachments={attachments}
-                      onDelete={canEdit ? handleDeleteAttachment : undefined}
-                      canDelete={canEdit}
+              <div className="space-y-2">
+                {subtasks.map((subtask) => (
+                  <div key={subtask.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={subtask.completed}
+                      onChange={(e) => {
+                        if (isEditing) {
+                          subtasksApi.update(subtask.id, { completed: e.target.checked })
+                            .then(() => {
+                              const newSubtasks = subtasks.map(s =>
+                                s.id === subtask.id ? { ...s, completed: e.target.checked } : s
+                              );
+                              handleSubtasksChange(newSubtasks);
+                            });
+                        }
+                      }}
+                      disabled={!isEditing}
+                      className="h-4 w-4 rounded border-zinc-300"
                     />
-                    {canEdit && (
-                      <div className="mt-3">
-                        <FileUpload
-                          taskId={task.id}
-                          onUpload={handleUploadAttachment}
-                          maxFiles={5}
-                        />
-                      </div>
+                    <span className={`flex-1 text-sm ${subtask.completed ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
+                      {subtask.title}
+                    </span>
+                    {isEditing && (
+                      <button
+                        onClick={() => {
+                          subtasksApi.delete(subtask.id).then(() => {
+                            handleSubtasksChange(subtasks.filter(s => s.id !== subtask.id));
+                          });
+                        }}
+                        className="text-xs text-red-500 hover:text-red-600"
+                      >
+                        {t('taskModal.delete')}
+                      </button>
                     )}
-                  </>
+                  </div>
+                ))}
+                {subtasks.length === 0 && (
+                  <p className="text-sm text-zinc-400">{t('taskModal.noSubtasks')}</p>
                 )}
               </div>
+            </div>
 
-              {/* Meta display */}
-              {Object.keys(editMeta).length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {Object.entries(editMeta).map(([key, value]) => (
-                    <span key={key} className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700">
-                      {key}: {value}
-                    </span>
-                  ))}
+            {/* Attachments */}
+            <div className="mt-6">
+              <h4 className="mb-3 text-sm font-semibold text-zinc-600">
+                {t('taskModal.attachments')} ({attachments.length})
+              </h4>
+              {loadingAttachments ? (
+                <div className="text-sm text-zinc-400">{t('taskModal.loading')}</div>
+              ) : attachments.length > 0 ? (
+                <AttachmentList
+                  attachments={attachments}
+                  onDelete={canEdit ? handleDeleteAttachment : undefined}
+                  canDelete={canEdit}
+                />
+              ) : (
+                <p className="text-sm text-zinc-400">{t('taskModal.noAttachments')}</p>
+              )}
+              {uploadingInProgress && (
+                <p className="mt-2 text-sm text-blue-500">{t('taskModal.uploading')}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Comments Sidebar - 1/3 width */}
+          <div className="w-1/3 min-w-80 border-l border-zinc-100 dark:border-zinc-700 flex flex-col">
+            <div className="flex-shrink-0 p-4 pb-2 border-b border-zinc-100 dark:border-zinc-700 flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.comments')} ({task.comments?.length || 0})</h4>
+              {task.comments && task.comments.length > COMMENTS_PER_PAGE && (
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                  {commentsPage} / {Math.ceil(task.comments.length / COMMENTS_PER_PAGE)}
+                </span>
+              )}
+            </div>
+            <div ref={commentsRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+              {(task.comments || []).slice((commentsPage - 1) * COMMENTS_PER_PAGE, commentsPage * COMMENTS_PER_PAGE).map((comment) => (
+                <div key={comment.id} className="rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200">{comment.author}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">{formatCommentDate(t, comment.createdAt)}</span>
+                  </div>
+                  <div className="prose prose-sm max-w-none text-zinc-600 dark:text-zinc-300">
+                    <ReactMarkdown>{comment.content}</ReactMarkdown>
+                  </div>
+                  {/* Comment attachments */}
+                  {attachments.filter(a => a.commentId === comment.id).length > 0 && (
+                    <div className="mt-2">
+                      <AttachmentList
+                        attachments={attachments.filter(a => a.commentId === comment.id)}
+                        onDelete={undefined}
+                        canDelete={false}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {task.comments && task.comments.length > COMMENTS_PER_PAGE && (
+                <div className="flex justify-center gap-2 pt-2">
+                  <button
+                    onClick={() => { setCommentsPage(p => Math.max(1, p - 1)); commentsRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    disabled={commentsPage === 1}
+                    className="px-3 py-1 text-xs rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('taskModal.previousPage')}
+                  </button>
+                  <button
+                    onClick={() => { setCommentsPage(p => Math.min(Math.ceil(task.comments!.length / COMMENTS_PER_PAGE), p + 1)); commentsRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    disabled={commentsPage >= Math.ceil(task.comments.length / COMMENTS_PER_PAGE)}
+                    className="px-3 py-1 text-xs rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('taskModal.nextPage')}
+                  </button>
                 </div>
               )}
 
-              {/* Comments */}
-              <div ref={commentsRef} className="mt-6 border-t border-zinc-100 pt-4">
-                <h4 className="mb-3 text-sm font-medium text-zinc-500">
-                  讨论 ({(task.comments ?? []).length})
-                </h4>
-
-                <div className="mb-4 space-y-3">
-                  {(task.comments ?? []).length === 0 ? (
-                    <div className="flex flex-col items-center justify-center rounded-lg bg-zinc-50 py-8 text-center">
-                      <div className="mb-2 text-3xl">💬</div>
-                      <p className="text-sm text-zinc-500">暂无评论</p>
-                    </div>
-                  ) : (
-                    [...(task.comments ?? [])].reverse().map((comment) => {
-                      const isOwn = comment.author === commentAuthor || comment.author === localStorage.getItem(STORAGE_KEY);
-                      // Get attachments for this comment
-                      const commentAttachments = attachments.filter(a => a.commentId === comment.id);
-                      return (
-                        <div
-                          key={comment.id}
-                          className={`rounded-lg p-3 ${isOwn ? 'bg-blue-50 border border-blue-100' : 'bg-zinc-50'}`}
-                        >
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className={`text-sm font-medium ${isOwn ? 'text-blue-700' : 'text-zinc-700'}`}>
-                              {comment.author}
-                            </span>
-                            <span className="text-xs text-zinc-400">
-                              {formatCommentDate(comment.createdAt)}
-                            </span>
-                          </div>
-                          <div className="prose prose-sm max-w-none text-sm text-zinc-600">
-                            <ReactMarkdown>{comment.content}</ReactMarkdown>
-                          </div>
-                          {/* Comment attachments */}
-                          {commentAttachments.length > 0 && (
-                            <div className="mt-2">
-                              <AttachmentList
-                                attachments={commentAttachments}
-                                onDelete={canEdit ? handleDeleteAttachment : undefined}
-                                canDelete={canEdit}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Comment input */}
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={commentAuthor}
-                    onChange={(e) => handleAuthorChange(e.target.value)}
-                    placeholder="你的名字"
-                    className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm"
+            </div>
+            {/* Comment Input - Fixed at bottom */}
+            <div className="flex-shrink-0 p-4 border-t border-zinc-100 dark:border-zinc-700 space-y-2">
+              {currentUser ? (
+                <div className="text-sm text-zinc-500 dark:text-zinc-400">{t('taskModal.commentIdentity', { name: currentUser.nickname })}</div>
+              ) : (
+                <input
+                  type="text"
+                  value={commentAuthor}
+                  onChange={(e) => handleAuthorChange(e.target.value)}
+                  placeholder={t('taskModal.yourName')}
+                  className="w-full rounded-md border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200"
+                />
+              )}
+              
+              {isEditing && (
+                <div
+                  id="comment-editor"
+                  ref={commentEditorRef}
+                  className="rounded-lg border border-zinc-200 overflow-y-auto"
+                    onPaste={(e) => handleEditorPaste(e, 'comment')}
+                    onDrop={(e) => handleEditorDrop(e, 'comment')}
+                  onDragOver={(e) => e.preventDefault()}
+                >
+                  <MDEditor
+                    value={newComment}
+                    onChange={(val) => setNewComment(val || '')}
+                    height={120}
+                    preview="edit"
+                    hideToolbar={true}
+                    style={{ padding: 0 }}
                   />
-                  {/* Pending comment attachments */}
-                  {pendingCommentAttachments.length > 0 && (
-                    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-2">
-                      <div className="mb-1 text-xs text-zinc-500">待添加的附件：</div>
-                      <AttachmentList
-                        attachments={pendingCommentAttachments}
-                        onDelete={handleRemovePendingCommentAttachment}
-                        canDelete={true}
-                      />
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleAddComment();
-                        }
-                      }}
-                      placeholder="添加评论... (支持 Markdown，Enter 发送)"
-                      rows={3}
-                      className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none"
-                    />
-                    <button
-                      onClick={handleAddComment}
-                      disabled={!newComment.trim()}
-                      className="rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:bg-zinc-300"
-                    >
-                      发送
-                    </button>
-                  </div>
-                  {/* Comment file upload */}
-                  {canEdit && (
-                    <div className="mt-2">
-                      <FileUpload
-                        taskId={task.id}
-                        onUpload={handleUploadCommentAttachment}
-                        maxFiles={3}
-                      />
-                    </div>
-                  )}
                 </div>
+              )}
+              
+              {!isEditing && (
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder={`${t('taskModal.addComment')} ${t('taskModal.commentHint')}`}
+                  rows={3}
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none"
+                />
+              )}
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddComment}
+                  disabled={!newComment.trim() || (!isEditing && !currentUser && !commentAuthor.trim())}
+                  className="flex-1 rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:bg-zinc-300"
+                >
+                  {t('taskModal.send')}
+                </button>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="flex-shrink-0 flex items-center justify-between border-t border-zinc-100 px-6 py-4">
+        {/* Footer */}
+        <div className="flex-shrink-0 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-700 px-6 py-4">
           {isEditing ? (
             <div className="flex gap-2">
               <button
                 onClick={handleSave}
                 className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
               >
-                保存
+                {t('taskModal.save')}
               </button>
               <button
                 onClick={() => setIsEditing(false)}
-                className="rounded-md bg-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-300"
+                className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600"
               >
-                取消
+                {t('taskModal.cancel')}
               </button>
             </div>
           ) : canEdit ? (
@@ -623,34 +725,34 @@ export function TaskModal({
                 onClick={() => onArchive(task.id)}
                 className="text-sm text-orange-500 hover:text-orange-600"
               >
-                归档任务
+                {t('taskModal.archive')}
               </button>
               <button
-                onClick={() => onDelete(task.id)}
+                onClick={handleDelete}
                 className="text-sm text-red-500 hover:text-red-600"
               >
-                删除任务
+                {t('taskModal.delete')}
               </button>
             </div>
           ) : (
-            <span className="text-sm text-zinc-400">已完成任务不可修改</span>
-          )}
-          {!isEditing && canEdit && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
-            >
-              编辑
-            </button>
+            <span className="text-sm text-zinc-400 dark:text-zinc-500">{t('taskModal.completedNotEditable')}</span>
           )}
         </div>
+      </div>
 
+      {showAddSubtaskModal && (
         <AddSubtaskModal
           isOpen={showAddSubtaskModal}
           onClose={() => setShowAddSubtaskModal(false)}
-          onSubmit={handleAddSubtask}
+          onSubmit={(title) => {
+            subtasksApi.create({ taskId: task.id, title })
+              .then((newSubtask) => {
+                handleSubtasksChange([...subtasks, newSubtask]);
+              });
+            setShowAddSubtaskModal(false);
+          }}
         />
-      </div>
+      )}
     </div>
   );
 }

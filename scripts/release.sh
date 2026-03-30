@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 RELEASE_DIR="$PROJECT_DIR/release"
 
-echo "=== Building KL-Kanban ==="
+echo "=== Building open-kanban ==="
 
 # Check UPX
 UPX_OK=false

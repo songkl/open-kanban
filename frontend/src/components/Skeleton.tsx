@@ -63,12 +63,12 @@ export function Spinner({ className = '' }: { className?: string }) {
       className={`inline-block animate-spin rounded-full border-2 border-solid border-current border-r-transparent ${className}`}
       role="status"
     >
-      <span className="sr-only">加载中...</span>
+      <span className="sr-only">Loading...</span>
     </div>
   );
 }
 
-export function LoadingOverlay({ message = '加载中...' }: { message?: string }) {
+export function LoadingOverlay({ message }: { message?: string }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
       <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-4 shadow-lg">

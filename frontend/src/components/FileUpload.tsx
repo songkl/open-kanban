@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { attachmentsApi } from '@/services/api';
 import type { Attachment } from '@/types/kanban';
 
@@ -15,8 +16,9 @@ interface UploadingFile {
   id: string;
   file: File;
   progress: number;
-  status: 'pending' | 'uploading' | 'success' | 'error';
+  status: 'pending' | 'uploading' | 'success' | 'error' | 'cancelled';
   error?: string;
+  abort?: () => void;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -41,63 +43,77 @@ export function FileUpload({
   accept,
   disabled = false,
 }: FileUploadProps) {
+  const { t } = useTranslation();
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): string | null => {
     if (file.size > MAX_FILE_SIZE) {
-      return '文件过大，最大支持 10MB';
+      return t('upload.fileTooLarge');
     }
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return '不支持的文件类型';
+      return t('upload.unsupportedType');
     }
     return null;
   };
 
   const uploadFile = async (uploadingFile: UploadingFile) => {
-    const { file } = uploadingFile;
+    const { file, id } = uploadingFile;
+
+    const { promise, abort } = attachmentsApi.upload(
+      file,
+      taskId,
+      commentId,
+      (progress) => {
+        setUploadingFiles((prev) =>
+          prev.map((f) =>
+            f.id === id ? { ...f, progress } : f
+          )
+        );
+      }
+    );
 
     setUploadingFiles((prev) =>
       prev.map((f) =>
-        f.id === uploadingFile.id ? { ...f, status: 'uploading' } : f
+        f.id === id ? { ...f, status: 'uploading', abort } : f
       )
     );
 
     try {
-      const attachment = await attachmentsApi.upload(
-        file,
-        taskId,
-        commentId,
-        (progress) => {
-          setUploadingFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadingFile.id ? { ...f, progress } : f
-            )
-          );
-        }
-      );
+      const attachment = await promise;
 
       setUploadingFiles((prev) =>
         prev.map((f) =>
-          f.id === uploadingFile.id ? { ...f, status: 'success' } : f
+          f.id === id ? { ...f, status: 'success' } : f
         )
       );
 
       onUpload([attachment]);
 
-      // Remove from list after a delay
       setTimeout(() => {
-        setUploadingFiles((prev) => prev.filter((f) => f.id !== uploadingFile.id));
+        setUploadingFiles((prev) => prev.filter((f) => f.id !== id));
       }, 2000);
     } catch (error) {
-      setUploadingFiles((prev) =>
-        prev.map((f) =>
-          f.id === uploadingFile.id
-            ? { ...f, status: 'error', error: '上传失败' }
-            : f
-        )
-      );
+      const errorMessage = error instanceof Error ? error.message : t('upload.uploadFailed');
+      if (errorMessage === 'Upload cancelled') {
+        setUploadingFiles((prev) =>
+          prev.map((f) =>
+            f.id === id ? { ...f, status: 'cancelled', error: t('upload.cancelled') } : f
+          )
+        );
+        setTimeout(() => {
+          setUploadingFiles((prev) => prev.filter((f) => f.id !== id));
+        }, 2000);
+      } else {
+        setUploadingFiles((prev) =>
+          prev.map((f) =>
+            f.id === id
+              ? { ...f, status: 'error', error: t('upload.uploadFailed') }
+              : f
+          )
+        );
+      }
     }
   };
 
@@ -238,16 +254,16 @@ export function FileUpload({
           </div>
           <div className="text-sm">
             {isDragging ? (
-              <span className="text-blue-600 font-medium">松开以上传文件</span>
+              <span className="text-blue-600 font-medium">{t('upload.dropToUpload')}</span>
             ) : (
               <>
-                <span className="font-medium text-zinc-700">点击上传</span>
-                <span className="text-zinc-500"> 或拖拽文件到此处</span>
+                <span className="font-medium text-zinc-700">{t('upload.clickToUpload')}</span>
+                <span className="text-zinc-500"> {t('upload.orDragHere')}</span>
               </>
             )}
           </div>
           <div className="text-xs text-zinc-400">
-            支持图片和文档，单个文件最大 10MB
+            {t('upload.supportedFormats')}
           </div>
         </div>
       </div>
@@ -320,7 +336,7 @@ export function FileUpload({
                         clipRule="evenodd"
                       />
                     </svg>
-                    上传成功
+                    {t('upload.uploadSuccess')}
                   </div>
                 )}
                 {file.status === 'error' && (
@@ -332,31 +348,67 @@ export function FileUpload({
                         clipRule="evenodd"
                       />
                     </svg>
-                    {file.error || '上传失败'}
+                    {file.error || t('upload.uploadFailed')}
+                  </div>
+                )}
+                {file.status === 'cancelled' && (
+                  <div className="mt-1 flex items-center gap-1 text-xs text-zinc-400">
+                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    {file.error || t('upload.cancelled')}
                   </div>
                 )}
               </div>
 
-              {/* Remove Button */}
-              <button
-                onClick={() => handleRemove(file.id)}
-                className="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              {/* Cancel/Remove Button */}
+              {file.status === 'uploading' && file.abort && (
+                <button
+                  onClick={() => file.abort?.()}
+                  className="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-orange-500"
+                  title={t('upload.cancelUpload')}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              )}
+              {file.status !== 'uploading' && (
+                <button
+                  onClick={() => handleRemove(file.id)}
+                  className="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
           ))}
         </div>

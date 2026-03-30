@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ErrorToast {
   id: string;
@@ -19,6 +20,7 @@ export function showErrorToast(message: string, type: 'error' | 'warning' | 'inf
 }
 
 export function ErrorToastContainer() {
+  const { t } = useTranslation();
   const [toasts, setToasts] = useState<ErrorToast[]>([]);
 
   useEffect(() => {
@@ -92,14 +94,14 @@ export function ErrorToastContainer() {
           <div className="flex-shrink-0 mt-0.5">{getTypeIcon(toast.type)}</div>
           <div className="flex-1">
             <p className="text-sm font-medium">
-              {toast.type === 'error' ? '请求失败' : toast.type === 'warning' ? '警告' : '提示'}
+              {toast.type === 'error' ? t('app.error.requestFailed') : toast.type === 'warning' ? t('app.error.warning') : t('app.error.info')}
             </p>
             <p className="text-sm mt-1 opacity-90">{toast.message}</p>
           </div>
           <button
             onClick={() => removeToast(toast.id)}
             className="flex-shrink-0 -mr-1 -mt-1 p-1 rounded hover:bg-black/5 transition-colors"
-            aria-label="关闭"
+            aria-label={t('app.close')}
           >
             <svg className="w-4 h-4 opacity-50 hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

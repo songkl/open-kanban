@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Attachment } from '@/types/kanban';
 
 interface AttachmentListProps {
@@ -12,6 +13,7 @@ export function AttachmentList({
   onDelete,
   canDelete = true,
 }: AttachmentListProps) {
+  const { t } = useTranslation();
   const [previewImage, setPreviewImage] = useState<Attachment | null>(null);
 
   if (!attachments || attachments.length === 0) {
@@ -131,7 +133,7 @@ export function AttachmentList({
               <button
                 onClick={() => handlePreview(attachment)}
                 className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-                title={isImage(attachment.mimeType) ? '预览' : '打开'}
+                title={isImage(attachment.mimeType) ? t('attachment.preview') : t('attachment.open')}
               >
                 {isImage(attachment.mimeType) ? (
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -149,7 +151,7 @@ export function AttachmentList({
               <button
                 onClick={() => handleDownload(attachment)}
                 className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-                title="下载"
+                title={t('attachment.download')}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -161,7 +163,7 @@ export function AttachmentList({
                 <button
                   onClick={() => onDelete(attachment.id)}
                   className="rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500"
-                  title="删除"
+                  title={t('attachment.delete')}
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

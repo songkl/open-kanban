@@ -1,6 +1,6 @@
-# KL-Kanban Installation Guide
+# open-kanban Installation Guide
 
-This guide covers installing KL-Kanban MCP Server and OpenCode Skill for AI-powered autonomous task execution.
+This guide covers installing open-kanban MCP Server and OpenCode Skill for AI-powered autonomous task execution.
 
 ## Table of Contents
 
@@ -16,18 +16,18 @@ This guide covers installing KL-Kanban MCP Server and OpenCode Skill for AI-powe
 ### Prerequisites
 
 - Node.js >= 18.0.0
-- Running KL-Kanban backend service
+- Running open-kanban backend service
 
 ### Method 1: npm Install (Recommended)
 
 ```bash
-npm install -g kl-kanban-mcp
+npm install -g open-kanban-mcp
 ```
 
 ### Method 2: Local Source
 
 ```bash
-cd kl-kanban/mcp-server
+cd open-kanban/mcp-server
 npm install
 npm run build
 ```
@@ -42,7 +42,7 @@ Edit `~/.config/opencode/config.json` or project `.opencode/config.json`:
 {
   "mcpServers": {
     "kanban": {
-      "command": "kl-kanban-mcp",
+      "command": "open-kanban-mcp",
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }
@@ -60,7 +60,7 @@ Add to your MCP configuration:
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["-y", "kl-kanban-mcp"],
+      "args": ["-y", "open-kanban-mcp"],
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }
@@ -76,7 +76,7 @@ Add to your MCP configuration:
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["tsx", "/path/to/kl-kanban/mcp-server/index.ts"],
+      "args": ["tsx", "/path/to/open-kanban/mcp-server/index.ts"],
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }
@@ -184,7 +184,7 @@ AI will automatically:
 {
   "mcpServers": {
     "kanban": {
-      "command": "kl-kanban-mcp",
+      "command": "open-kanban-mcp",
       "env": {
         "KANBAN_API_URL": "http://localhost:8080",
         "KANBAN_MCP_TOKEN": ""  // Optional: auth token
@@ -198,7 +198,7 @@ AI will automatically:
 
 | Variable | Description |
 |----------|-------------|
-| `KANBAN_API_URL` | KL-Kanban backend API URL |
+| `KANBAN_API_URL` | open-kanban backend API URL |
 | `KANBAN_MCP_TOKEN` | Optional authentication token |
 
 ---
@@ -209,7 +209,7 @@ AI will automatically:
 
 ```bash
 # Test if MCP Server runs correctly
-npx kl-kanban-mcp --help
+npx open-kanban-mcp --help
 ```
 
 ### 2. Check Tool Availability

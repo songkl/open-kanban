@@ -1,6 +1,6 @@
-# KL-Kanban 安装指南
+# open-kanban 安装指南
 
-本指南介绍如何安装 KL-Kanban MCP Server 和 OpenCode Skill，实现 AI Agent 自动完成任务的工作流。
+本指南介绍如何安装 open-kanban MCP Server 和 OpenCode Skill，实现 AI Agent 自动完成任务的工作流。
 
 ## 目录
 
@@ -16,18 +16,18 @@
 ### 前置要求
 
 - Node.js >= 18.0.0
-- 已运行的 KL-Kanban 后端服务
+- 已运行的 open-kanban 后端服务
 
 ###方式一：npm 安装（推荐）
 
 ```bash
-npm install -g kl-kanban-mcp
+npm install -g open-kanban-mcp
 ```
 
 ### 方式二：本地源码运行
 
 ```bash
-cd kl-kanban/mcp-server
+cd open-kanban/mcp-server
 npm install
 npm run build
 ```
@@ -42,7 +42,7 @@ npm run build
 {
   "mcpServers": {
     "kanban": {
-      "command": "kl-kanban-mcp",
+      "command": "open-kanban-mcp",
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }
@@ -60,7 +60,7 @@ npm run build
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["-y", "kl-kanban-mcp"],
+      "args": ["-y", "open-kanban-mcp"],
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }
@@ -76,7 +76,7 @@ npm run build
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["tsx", "/path/to/kl-kanban/mcp-server/index.ts"],
+      "args": ["tsx", "/path/to/open-kanban/mcp-server/index.ts"],
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }
@@ -184,7 +184,7 @@ AI 将自动：
 {
   "mcpServers": {
     "kanban": {
-      "command": "kl-kanban-mcp",
+      "command": "open-kanban-mcp",
       "env": {
         "KANBAN_API_URL": "http://localhost:8080",
         "KANBAN_MCP_TOKEN": ""  // 可选：设置认证 Token
@@ -198,7 +198,7 @@ AI 将自动：
 
 | 变量 | 说明 |
 |------|------|
-| `KANBAN_API_URL` | KL-Kanban 后端 API 地址 |
+| `KANBAN_API_URL` | open-kanban 后端 API 地址 |
 | `KANBAN_MCP_TOKEN` | 可选认证 Token |
 
 ---
@@ -209,7 +209,7 @@ AI 将自动：
 
 ```bash
 # 测试 MCP Server 是否正常运行
-npx kl-kanban-mcp --help
+npx open-kanban-mcp --help
 ```
 
 ### 2. 检查工具可用性

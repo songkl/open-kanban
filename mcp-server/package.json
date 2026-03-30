@@ -1,11 +1,11 @@
 {
-  "name": "kl-kanban-mcp",
+  "name": "open-kanban-mcp",
   "version": "1.0.0",
-  "description": "MCP Server for KL-Kanban board",
+  "description": "MCP Server for Open kanban board",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "kl-kanban-mcp": "dist/index.js"
+    "open-kanban-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",

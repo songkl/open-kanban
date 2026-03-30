@@ -40,6 +40,7 @@ export interface Task {
   archived: boolean;
   archivedAt: string | null;
   published: boolean;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
   comments: Comment[];
@@ -52,6 +53,9 @@ export interface Column {
   status: string | null;
   position: number;
   color: string;
+  boardId?: string;
+  description?: string;
+  ownerAgentId?: string;
   tasks: Task[];
   createdAt: string;
   updatedAt: string;
@@ -60,16 +64,33 @@ export interface Column {
 export interface Board {
   id: string;
   name: string;
+  description?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface User {
   id: string;
-  username: string;
+  nickname: string;
   avatar: string | null;
-  role: 'ADMIN' | 'USER';
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
   type: 'HUMAN' | 'AGENT';
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastActiveAt?: string;
+}
+
+export interface Agent extends User {
+  tokenCount: number;
+}
+
+export interface Token {
+  id: string;
+  name: string;
+  key: string;
+  userId: string;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

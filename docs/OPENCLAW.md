@@ -1,6 +1,6 @@
-# KL-Kanban MCP & Skill 配置指南 (OpenClaw)
+# open-kanban MCP & Skill 配置指南 (OpenClaw)
 
-本文档供 OpenClaw 阅读和配置 KL-Kanban MCP Server 及 do-kanban Skill。
+本文档供 OpenClaw 阅读和配置 open-kanban MCP Server 及 do-kanban Skill。
 
 ---
 
@@ -13,7 +13,7 @@
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["tsx", "/Users/kl/Documents/ai/kl-kanban/mcp-server/index.ts"],
+      "args": ["tsx", "/Users/kl/Documents/ai/open-kanban/mcp-server/index.ts"],
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }
@@ -25,7 +25,7 @@
 ### 安装 MCP Server
 
 ```bash
-cd /Users/kl/Documents/ai/kl-kanban/mcp-server
+cd /Users/kl/Documents/ai/open-kanban/mcp-server
 npm install
 npm run build
 ```
@@ -131,7 +131,7 @@ Use the kanban MCP tools to pick and execute a pending task end-to-end:
 ### 1. 安装 MCP Server 依赖
 
 ```bash
-cd /Users/kl/Documents/ai/kl-kanban/mcp-server && npm install && npm run build
+cd /Users/kl/Documents/ai/open-kanban/mcp-server && npm install && npm run build
 ```
 
 ### 2. 配置 OpenClaw MCP
@@ -143,7 +143,7 @@ cd /Users/kl/Documents/ai/kl-kanban/mcp-server && npm install && npm run build
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["tsx", "/Users/kl/Documents/ai/kl-kanban/mcp-server/index.ts"],
+      "args": ["tsx", "/Users/kl/Documents/ai/open-kanban/mcp-server/index.ts"],
       "env": {
         "KANBAN_API_URL": "http://localhost:8080"
       }

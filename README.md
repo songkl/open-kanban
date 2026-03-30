@@ -1,6 +1,9 @@
-# KL-Kanban
+# Open kanban
 
 A collaborative kanban board built for the AI era — empowering your AI assistants to handle tasks autonomously.
+
+> **⚠️ Pure Vibe Project**: This project was built entirely by AI agents. The human author (songkl, skl@songkl.com) did not write a single line of code.
+
 
 [中文版本](./README_ZH.md)
 
@@ -70,25 +73,51 @@ npm run dev
 
 ## AI Agent Integration
 
-### One-Step Setup
+### One-Step Setup / 一键接入
 
-Add MCP configuration to Claude Code, Cursor, or OpenCode:
+Add MCP configuration to Claude Code, Cursor, or OpenCode.
+
+在 Claude Code、Cursor 或 OpenCode 中添加 MCP 配置。
+
+#### Claude Code / Open-Claw 配置
 
 ```json
 {
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["-y", "kl-kanban-mcp"],
+      "args": ["-y", "open-kanban-mcp@latest"],
       "env": {
-        "KANBAN_API_URL": "http://localhost:8080"
+        "KANBAN_API_URL": "http://localhost:8080",
+        "KANBAN_MCP_TOKEN": "{YOUR_KANBAN_TOKEN}"
       }
     }
   }
 }
 ```
 
+#### OpenCode 配置 / OpenCode Configuration
+
+```json
+"mcp": {
+  "kanban": {
+    "command": ["npx", "-y", "open-kanban-mcp@latest"],
+    "enabled": true,
+    "type": "local",
+    "environment": {
+      "KANBAN_API_URL": "http://localhost:8080",
+      "KANBAN_MCP_TOKEN": "YOUR_KANBAN_TOKEN"
+    }
+  }
+}
+```
+
+> **Note / 注意:** Generate your `KANBAN_MCP_TOKEN` via `GET /api/auth/token` after logging in, or use the CLI command `./kanban-server reset-password -user <nickname> -password <newpassword>` to reset your password.
+>
+> 在登录后通过 `GET /api/auth/token` 获取 Token，或使用 CLI 命令重置密码。
+
 For detailed installation instructions (including OpenCode skill setup), see [Installation Guide](./docs/INSTALL_EN.md).
+详细安装指南（包括 OpenCode Skill 配置）请查看[安装文档](./docs/INSTALL.md)。
 
 ### AI Capability Matrix
 
@@ -112,7 +141,7 @@ AI agents can autonomously advance task status and record decisions via comments
 ## Project Structure
 
 ```
-kl-kanban/
+open-kanban/
 ├── backend/                    # Go API server
 │   ├── cmd/server/            # Entry point
 │   └── internal/

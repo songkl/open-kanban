@@ -147,9 +147,21 @@ The database uses SQLite with the following tables:
 - `subtasks` - Task subtasks
 
 ## Authentication
-
 The server uses cookie-based authentication with the `kanban-token` cookie. The first user to log in automatically becomes an ADMIN.
 
 ## WebSocket Broadcast
 
 The server attempts to broadcast refresh events to a WebSocket server at `http://localhost:8081/broadcast`. This is optional and errors are silently ignored.
+
+## CLI Commands
+
+```bash
+# Reset user password
+./kanban-server reset-password -user <nickname> -password <newpassword>
+
+# Example: reset admin password
+./kanban-server reset-password -user admin -password MyNewPass123
+
+# Show help
+./kanban-server help
+```

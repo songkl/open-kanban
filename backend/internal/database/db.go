@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/mysql"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	_ "github.com/mattn/go-sqlite3"
 
-	"kanban-go/internal/database/migrations"
+	"open-kanban/internal/database/migrations"
 )
 
 // DBConfig holds database configuration
@@ -139,7 +139,13 @@ func runSQLiteMigrations(db *sql.DB) error {
 	}
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to run SQLite migrations: %w", err)
+		if strings.Contains(err.Error(), "Dirty") {
+			if forceErr := m.Force(8); forceErr != nil {
+				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+			}
+		} else {
+			return fmt.Errorf("failed to run SQLite migrations: %w", err)
+		}
 	}
 
 	return nil
@@ -162,7 +168,13 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 	}
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to run MySQL migrations: %w", err)
+		if strings.Contains(err.Error(), "Dirty") {
+			if forceErr := m.Force(8); forceErr != nil {
+				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+			}
+		} else {
+			return fmt.Errorf("failed to run MySQL migrations: %w", err)
+		}
 	}
 
 	return nil

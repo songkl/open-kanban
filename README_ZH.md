@@ -1,6 +1,9 @@
-# KL-Kanban
+# Open kanban
 
-一款专为 AI 时代打造的协作看板，让你的 AI 助手能够自主完成工作任务。
+一款专为 AI 时代打造的Agent流水线，让你的 AI 助手能够自主完成工作任务。
+
+> **⚠️ 纯 Vibe 项目**：本项目完全由 AI Agent 构建，人类作者（songkl, skl@songkl.com）未写一行代码。
+
 
 [English Version](./README.md)
 
@@ -57,25 +60,52 @@ npm run dev
 
 ## AI Agent 集成
 
-### 一键接入
+### 一键接入 / One-Step Setup
 
-在 Claude Code、Cursor 或 OpenCode 中添加 MCP 配置：
+在 Claude Code、Cursor 或 OpenCode 中添加 MCP 配置。
+
+Add MCP configuration to Claude Code, Cursor, or OpenCode.
+
+#### Claude Code / Open-Claw 配置
 
 ```json
 {
   "mcpServers": {
     "kanban": {
       "command": "npx",
-      "args": ["-y", "kl-kanban-mcp"],
+      "args": ["-y", "open-kanban-mcp@latest"],
       "env": {
-        "KANBAN_API_URL": "http://localhost:8080"
+        "KANBAN_API_URL": "http://localhost:8080",
+        "KANBAN_MCP_TOKEN": "{YOUR_KANBAN_TOKEN}"
       }
     }
   }
 }
 ```
 
-详细安装指南（包括 OpenCode Skill 配置）请查看 [安装文档](./docs/INSTALL.md)。
+#### OpenCode 配置 / OpenCode Configuration
+
+```json
+"mcp": {
+  "kanban": {
+    "command": ["npx", "-y", "open-kanban-mcp@latest"],
+    "enabled": true,
+    "type": "local",
+    "environment": {
+      "KANBAN_API_URL": "http://localhost:8080",
+      "KANBAN_MCP_TOKEN": "YOUR_KANBAN_TOKEN"
+    }
+  }
+}
+```
+
+> **注意 / Note:** 在登录后通过 `GET /api/auth/token` 获取 Token，或使用 CLI 命令重置密码：
+> `./kanban-server reset-password -user <nickname> -password <newpassword>`
+>
+> Generate your `KANBAN_MCP_TOKEN` via `GET /api/auth/token` after logging in, or use the CLI command above to reset your password.
+
+详细安装指南（包括 OpenCode Skill 配置）请查看[安装文档](./docs/INSTALL.md)。
+For detailed installation instructions (including OpenCode skill setup), see [Installation Guide](./docs/INSTALL_EN.md)。
 
 ### AI 能力矩阵
 
@@ -99,7 +129,7 @@ AI 可以自主推进任务状态，或通过评论记录决策过程。
 ## 项目结构
 
 ```
-kl-kanban/
+open-kanban/
 ├── backend/                    # Go API 服务
 │   ├── cmd/server/            # 入口
 │   └── internal/

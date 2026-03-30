@@ -6,20 +6,21 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"kanban-go/internal/models"
+	"open-kanban/internal/models"
 
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	MaxFileSize    = 10 * 1024 * 1024 // 10MB
-	UploadDir      = "./uploads"
+	MaxFileSize       = 10 * 1024 * 1024 // 10MB
+	UploadDir         = "./uploads"
 	AllowedImageTypes = "image/jpeg,image/png,image/gif,image/webp"
 	AllowedDocTypes   = "application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain"
 )
@@ -35,16 +36,45 @@ func isAllowedFileType(mimeType string) bool {
 	return false
 }
 
-// generateFileID generates a unique file ID
+// generateFileID generates a unique file ID with sufficient entropy
 func generateFileID() string {
-	bytes := make([]byte, 4)
+	bytes := make([]byte, 16)
 	rand.Read(bytes)
 	return "att_" + hex.EncodeToString(bytes)
+}
+
+// sanitizeFilename removes path traversal characters from filename
+func sanitizeFilename(filename string) string {
+	filename = filepath.Base(filename)
+	filename = strings.ReplaceAll(filename, string(filepath.Separator), "")
+	filename = strings.ReplaceAll(filename, "/", "")
+	filename = strings.ReplaceAll(filename, "\\", "")
+	filename = strings.ReplaceAll(filename, "..", "")
+	if filename == "" || filename == "." {
+		filename = "unnamed"
+	}
+	return filename
 }
 
 // UploadFile handles file upload (single or multiple)
 func UploadFile(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		if user.Role == "VIEWER" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法上传文件"})
+			return
+		}
+
+		if !checkRateLimit("upload:" + user.ID) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+			return
+		}
+
 		// Parse multipart form with max memory
 		if err := c.Request.ParseMultipartForm(MaxFileSize * 10); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "表单解析失败"})
@@ -54,6 +84,36 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 		// Get optional parameters
 		taskID := c.PostForm("taskId")
 		commentID := c.PostForm("commentId")
+
+		// Authorization check: verify user has access to the task/comment's board
+		if taskID != "" {
+			boardID, err := getBoardIDForTask(db, taskID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务 ID"})
+				return
+			}
+			if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "无权上传文件到该任务"})
+				return
+			}
+		} else if commentID != "" {
+			// Get task ID from comment
+			var cTaskID string
+			err := db.QueryRow("SELECT task_id FROM comments WHERE id = ?", commentID).Scan(&cTaskID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的评论 ID"})
+				return
+			}
+			boardID, err := getBoardIDForTask(db, cTaskID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的评论关联任务"})
+				return
+			}
+			if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "无权上传文件到该评论"})
+				return
+			}
+		}
 
 		// Get uploader ID from cookie/token (optional)
 		var uploaderID *string
@@ -104,7 +164,11 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 
 				// Generate file ID and storage path
 				fileID := generateFileID()
-				ext := filepath.Ext(header.Filename)
+				safeFilename := sanitizeFilename(header.Filename)
+				ext := filepath.Ext(safeFilename)
+				if ext == "" {
+					ext = ".bin"
+				}
 				storageName := fileID + ext
 				storagePath := filepath.Join(UploadDir, storageName)
 
@@ -142,8 +206,18 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 				`
 				now := time.Now()
 				_, err = db.Exec(query, fileID, header.Filename, storagePath, "local", mimeType, header.Size, uploaderID,
-					func() *string { if taskID != "" { return &taskID }; return nil }(),
-					func() *string { if commentID != "" { return &commentID }; return nil }(),
+					func() *string {
+						if taskID != "" {
+							return &taskID
+						}
+						return nil
+					}(),
+					func() *string {
+						if commentID != "" {
+							return &commentID
+						}
+						return nil
+					}(),
 					now, now)
 
 				if err != nil {
@@ -155,7 +229,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 				uploadedFiles = append(uploadedFiles, gin.H{
 					"id":       fileID,
 					"filename": header.Filename,
-					"url":      fmt.Sprintf("/api/uploads/%s", fileID),
+					"url":      fmt.Sprintf("/uploads/%s", fileID),
 					"mimeType": mimeType,
 					"size":     header.Size,
 				})
@@ -202,7 +276,11 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 
 		// Generate file ID and storage path
 		fileID := generateFileID()
-		ext := filepath.Ext(header.Filename)
+		safeFilename := sanitizeFilename(header.Filename)
+		ext := filepath.Ext(safeFilename)
+		if ext == "" {
+			ext = ".bin"
+		}
 		storageName := fileID + ext
 		storagePath := filepath.Join(UploadDir, storageName)
 
@@ -247,8 +325,18 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 		`
 		now := time.Now()
 		_, err = db.Exec(query, fileID, header.Filename, storagePath, "local", mimeType, header.Size, uploaderID,
-			func() *string { if taskID != "" { return &taskID }; return nil }(),
-			func() *string { if commentID != "" { return &commentID }; return nil }(),
+			func() *string {
+				if taskID != "" {
+					return &taskID
+				}
+				return nil
+			}(),
+			func() *string {
+				if commentID != "" {
+					return &commentID
+				}
+				return nil
+			}(),
 			now, now)
 
 		if err != nil {
@@ -262,7 +350,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"id":       fileID,
 			"filename": header.Filename,
-			"url":      fmt.Sprintf("/api/uploads/%s", fileID),
+			"url":      fmt.Sprintf("/uploads/%s", fileID),
 			"mimeType": mimeType,
 			"size":     header.Size,
 		})
@@ -272,11 +360,17 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 // ServeFile serves uploaded files
 func ServeFile(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		fileID := c.Param("id")
 
-		// Query database for file info
-		var storagePath, mimeType string
-		err := db.QueryRow("SELECT storage_path, mime_type FROM attachments WHERE id = ?", fileID).Scan(&storagePath, &mimeType)
+		var taskID, storagePath, mimeType string
+		var commentID sql.NullString
+		err := db.QueryRow("SELECT task_id, comment_id, storage_path, mime_type FROM attachments WHERE id = ?", fileID).Scan(&taskID, &commentID, &storagePath, &mimeType)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
@@ -286,30 +380,96 @@ func ServeFile(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		if taskID != "" {
+			boardID, err := getBoardIDForTask(db, taskID)
+			if err == nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该文件"})
+				return
+			}
+		}
+
+		if commentID.Valid && taskID == "" {
+			var cTaskID string
+			err := db.QueryRow("SELECT task_id FROM comments WHERE id = ?", commentID.String).Scan(&cTaskID)
+			if err == nil {
+				boardID, err := getBoardIDForTask(db, cTaskID)
+				if err == nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+					c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该文件"})
+					return
+				}
+			}
+		}
+
+		// Security: Validate storage path is within upload directory to prevent path traversal
+		absUploadDir, err := filepath.Abs(UploadDir)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "服务器配置错误"})
+			return
+		}
+		absFilePath, err := filepath.Abs(storagePath)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的文件路径"})
+			return
+		}
+		if !strings.HasPrefix(absFilePath, absUploadDir+string(filepath.Separator)) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "禁止访问该文件"})
+			return
+		}
+
 		// Check if file exists
-		if _, err := os.Stat(storagePath); os.IsNotExist(err) {
+		if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
 			return
 		}
 
-		// Set content type if available
-		if mimeType != "" {
-			c.Header("Content-Type", mimeType)
+		// Open file
+		file, err := os.Open(absFilePath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "无法读取文件"})
+			return
+		}
+		defer file.Close()
+
+		// Get file size
+		fileInfo, err := file.Stat()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "无法获取文件信息"})
+			return
 		}
 
-		// Serve file
-		c.File(storagePath)
+		// Set content type - use stored mimeType if available, otherwise detect from extension
+		contentType := mimeType
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(storagePath))
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+		}
+
+		// Use DataFromReader to properly set Content-Type header before sending file content
+		c.DataFromReader(http.StatusOK, fileInfo.Size(), contentType, file, nil)
 	}
 }
 
 // DeleteAttachment deletes an attachment
 func DeleteAttachment(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		if user.Role == "VIEWER" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法删除附件"})
+			return
+		}
+
 		fileID := c.Param("id")
 
-		// Get file path before deleting record
-		var storagePath string
-		err := db.QueryRow("SELECT storage_path FROM attachments WHERE id = ?", fileID).Scan(&storagePath)
+		var taskID, storagePath string
+		var commentID sql.NullString
+		err := db.QueryRow("SELECT task_id, comment_id, storage_path FROM attachments WHERE id = ?", fileID).Scan(&taskID, &commentID, &storagePath)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "附件不存在"})
@@ -317,6 +477,26 @@ func DeleteAttachment(db *sql.DB) gin.HandlerFunc {
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询附件失败"})
 			return
+		}
+
+		if taskID != "" {
+			boardID, err := getBoardIDForTask(db, taskID)
+			if err == nil && !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该附件"})
+				return
+			}
+		}
+
+		if commentID.Valid && taskID == "" {
+			var cTaskID string
+			err := db.QueryRow("SELECT task_id FROM comments WHERE id = ?", commentID.String).Scan(&cTaskID)
+			if err == nil {
+				boardID, err := getBoardIDForTask(db, cTaskID)
+				if err == nil && !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+					c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该附件"})
+					return
+				}
+			}
 		}
 
 		// Delete from database
@@ -332,10 +512,26 @@ func DeleteAttachment(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Security: Validate storage path is within upload directory to prevent path traversal
+		absUploadDir, err := filepath.Abs(UploadDir)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "服务器配置错误"})
+			return
+		}
+		absFilePath, err := filepath.Abs(storagePath)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的文件路径"})
+			return
+		}
+		if !strings.HasPrefix(absFilePath, absUploadDir+string(filepath.Separator)) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "禁止访问该文件"})
+			return
+		}
+
 		// Delete physical file
-		if err := os.Remove(storagePath); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(absFilePath); err != nil && !os.IsNotExist(err) {
 			// Log error but don't fail the request
-			fmt.Printf("Failed to delete file %s: %v\n", storagePath, err)
+			fmt.Printf("Failed to delete file %s: %v\n", absFilePath, err)
 		}
 
 		c.Status(http.StatusNoContent)

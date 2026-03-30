@@ -2,7 +2,11 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
+
+	"open-kanban/internal/utils"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,11 +26,52 @@ var defaultColumns = []struct {
 	{Name: "已完成", Position: 4, Color: "#22c55e", Status: "done"},
 }
 
+func ensureUniqueBoardAlias(tx *sql.Tx, alias string) string {
+	base := alias
+	counter := 1
+	for {
+		var count int
+		err := tx.QueryRow("SELECT COUNT(*) FROM boards WHERE short_alias = ?", alias).Scan(&count)
+		if err != nil {
+			break
+		}
+		if count == 0 {
+			return alias
+		}
+		alias = fmt.Sprintf("%s-%d", base, counter)
+		counter++
+	}
+	return alias
+}
+
+func generateColumnIDForTx(tx *sql.Tx, name string, boardID string) string {
+	baseSlug := utils.ToPinyinSlug(name)
+	if baseSlug == "" {
+		baseSlug = "column"
+	}
+
+	colID := baseSlug
+	counter := 1
+	for {
+		var count int
+		err := tx.QueryRow("SELECT COUNT(*) FROM columns WHERE id = ? AND board_id = ?", colID, boardID).Scan(&count)
+		if err != nil {
+			break
+		}
+		if count == 0 {
+			return colID
+		}
+		colID = fmt.Sprintf("%s-%d", baseSlug, counter)
+		counter++
+	}
+	return colID
+}
+
 // GetBoards returns all boards
 func GetBoards(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := db.Query(`
-			SELECT id, name, deleted, created_at, updated_at,
+			SELECT id, name, COALESCE(description, ''), deleted, created_at, updated_at,
 				(SELECT COUNT(*) FROM columns WHERE board_id = b.id) as column_count
 			FROM boards b
 			WHERE deleted = false
@@ -40,17 +85,18 @@ func GetBoards(db *sql.DB) gin.HandlerFunc {
 
 		var boards []gin.H
 		for rows.Next() {
-			var id, name string
+			var id, name, description string
 			var deleted bool
 			var createdAt, updatedAt time.Time
 			var columnCount int
-			if err := rows.Scan(&id, &name, &deleted, &createdAt, &updatedAt, &columnCount); err == nil {
+			if err := rows.Scan(&id, &name, &description, &deleted, &createdAt, &updatedAt, &columnCount); err == nil {
 				boards = append(boards, gin.H{
-					"id":        id,
-					"name":      name,
-					"deleted":   deleted,
-					"createdAt": createdAt,
-					"updatedAt": updatedAt,
+					"id":          id,
+					"name":        name,
+					"description": description,
+					"deleted":     deleted,
+					"createdAt":   createdAt,
+					"updatedAt":   updatedAt,
 					"_count": gin.H{
 						"columns": columnCount,
 					},
@@ -64,13 +110,21 @@ func GetBoards(db *sql.DB) gin.HandlerFunc {
 
 // CreateBoardRequest represents board creation request
 type CreateBoardRequest struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ShortAlias string `json:"shortAlias"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // CreateBoard creates a new board with default columns
 func CreateBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		var req CreateBoardRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "看板名称不能为空"})
@@ -89,11 +143,17 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 		}
 		defer tx.Rollback()
 
+		shortAlias := req.ShortAlias
+		if shortAlias == "" {
+			shortAlias = utils.ToBoardAlias(req.Name)
+		}
+		shortAlias = ensureUniqueBoardAlias(tx, shortAlias)
+
 		// Create board
 		now := time.Now()
 		_, err = tx.Exec(
-			"INSERT INTO boards (id, name, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-			boardID, req.Name, false, now, now,
+			"INSERT INTO boards (id, name, description, short_alias, task_counter, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			boardID, req.Name, req.Description, shortAlias, 1000, false, now, now,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
@@ -102,7 +162,7 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 
 		// Create default columns
 		for _, col := range defaultColumns {
-			colID := generateID()
+			colID := generateColumnIDForTx(tx, col.Name, boardID)
 			_, err = tx.Exec(
 				"INSERT INTO columns (id, name, status, position, color, board_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 				colID, col.Name, col.Status, col.Position, col.Color, boardID, now, now,
@@ -118,14 +178,18 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		LogActivity(db, user.ID, "BOARD_CREATE", "BOARD", boardID, req.Name, "", c.ClientIP(), getRequestSource(c))
+
 		// Get created board with columns
 		var board gin.H
 		board = gin.H{
-			"id":        boardID,
-			"name":      req.Name,
-			"deleted":   false,
-			"createdAt": now,
-			"updatedAt": now,
+			"id":          boardID,
+			"name":        req.Name,
+			"description": req.Description,
+			"shortAlias":  shortAlias,
+			"deleted":     false,
+			"createdAt":   now,
+			"updatedAt":   now,
 		}
 
 		c.JSON(http.StatusOK, board)
@@ -134,15 +198,27 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 
 // UpdateBoardRequest represents board update request
 type UpdateBoardRequest struct {
-	Name string `json:"name"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // UpdateBoard updates a board
 func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		id := c.Param("id")
 		if id == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, id, "ADMIN", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该看板"})
 			return
 		}
 
@@ -152,27 +228,37 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		var oldName, oldDesc string
+		db.QueryRow("SELECT name, COALESCE(description, '') FROM boards WHERE id = ?", id).Scan(&oldName, &oldDesc)
+
+		details := ""
+		if req.Name != "" && req.Name != oldName {
+			details = fmt.Sprintf("名称: '%s' → '%s'", oldName, req.Name)
+		}
+		if req.Description != oldDesc {
+			if details != "" {
+				details += "; "
+			}
+			details += fmt.Sprintf("说明: '%s' → '%s'", oldDesc, req.Description)
+		}
+
 		now := time.Now()
 		_, err := db.Exec(
-			"UPDATE boards SET name = ?, updated_at = ? WHERE id = ?",
-			req.Name, now, id,
+			"UPDATE boards SET name = ?, description = ?, updated_at = ? WHERE id = ?",
+			req.Name, req.Description, now, id,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
 			return
 		}
 
-		// Get updated board
-		var board gin.H
-		err = db.QueryRow(
-			"SELECT id, name, deleted, created_at, updated_at FROM boards WHERE id = ?",
-			id,
-		).Scan(&board, &board, &board, &board, &board)
+		LogActivity(db, user.ID, "BOARD_UPDATE", "BOARD", id, req.Name, details, c.ClientIP(), getRequestSource(c))
 
 		c.JSON(http.StatusOK, gin.H{
-			"id":        id,
-			"name":      req.Name,
-			"updatedAt": now,
+			"id":          id,
+			"name":        req.Name,
+			"description": req.Description,
+			"updatedAt":   now,
 		})
 	}
 }
@@ -180,9 +266,20 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 // DeleteBoard soft deletes a board
 func DeleteBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
 		id := c.Param("id")
 		if id == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, id, "ADMIN", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该看板"})
 			return
 		}
 
@@ -196,6 +293,445 @@ func DeleteBoard(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		LogActivity(db, user.ID, "BOARD_DELETE", "BOARD", id, "", "", c.ClientIP(), getRequestSource(c))
+
 		c.JSON(http.StatusOK, gin.H{"success": true})
+	}
+}
+
+// ExportBoardRequest represents export request
+type ExportBoardRequest struct {
+	Format string `json:"format"` // json or csv
+}
+
+// ExportBoard exports board data as JSON or CSV
+func ExportBoard(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		boardID := c.Param("id")
+		if boardID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该看板"})
+			return
+		}
+
+		format := c.Query("format")
+		if format == "" {
+			format = "json"
+		}
+
+		if format != "json" && format != "csv" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的导出格式，仅支持 json 和 csv"})
+			return
+		}
+
+		var boardName string
+		err := db.QueryRow("SELECT name FROM boards WHERE id = ? AND deleted = false", boardID).Scan(&boardName)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "看板不存在"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取看板失败"})
+			return
+		}
+
+		exportData := gin.H{
+			"boardName":  boardName,
+			"exportedAt": time.Now(),
+			"columns":    []gin.H{},
+		}
+
+		colRows, err := db.Query(`
+			SELECT id, name, status, position, color, board_id, created_at, updated_at
+			FROM columns WHERE board_id = ? ORDER BY position ASC
+		`, boardID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取列失败"})
+			return
+		}
+		defer colRows.Close()
+
+		var columns []gin.H
+		for colRows.Next() {
+			var col struct {
+				ID        string
+				Name      string
+				Status    sql.NullString
+				Position  int
+				Color     string
+				BoardID   string
+				CreatedAt time.Time
+				UpdatedAt time.Time
+			}
+			if err := colRows.Scan(&col.ID, &col.Name, &col.Status, &col.Position, &col.Color, &col.BoardID, &col.CreatedAt, &col.UpdatedAt); err != nil {
+				continue
+			}
+
+			var statusVal *string
+			if col.Status.Valid {
+				statusVal = &col.Status.String
+			}
+
+			taskRows, err := db.Query(`
+				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_at, updated_at
+				FROM tasks WHERE column_id = ? ORDER BY position ASC
+			`, col.ID)
+			if err != nil {
+				continue
+			}
+
+			var tasks []gin.H
+			for taskRows.Next() {
+				var task struct {
+					ID          string
+					Title       string
+					Description sql.NullString
+					Priority    string
+					Assignee    sql.NullString
+					Meta        sql.NullString
+					ColumnID    string
+					Position    int
+					Published   bool
+					Archived    bool
+					ArchivedAt  sql.NullTime
+					CreatedAt   time.Time
+					UpdatedAt   time.Time
+				}
+				if err := taskRows.Scan(&task.ID, &task.Title, &task.Description, &task.Priority, &task.Assignee, &task.Meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &task.ArchivedAt, &task.CreatedAt, &task.UpdatedAt); err != nil {
+					continue
+				}
+
+				var descVal, assigneeVal, metaVal *string
+				if task.Description.Valid {
+					descVal = &task.Description.String
+				}
+				if task.Assignee.Valid {
+					assigneeVal = &task.Assignee.String
+				}
+				if task.Meta.Valid {
+					metaVal = &task.Meta.String
+				}
+
+				comments, _ := getCommentsForTask(db, task.ID)
+				subtasks, _ := getSubtasksForTask(db, task.ID)
+
+				tasks = append(tasks, gin.H{
+					"id":          task.ID,
+					"title":       task.Title,
+					"description": descVal,
+					"priority":    task.Priority,
+					"assignee":    assigneeVal,
+					"meta":        metaVal,
+					"columnId":    task.ColumnID,
+					"position":    task.Position,
+					"published":   task.Published,
+					"archived":    task.Archived,
+					"archivedAt":  task.ArchivedAt.Time,
+					"createdAt":   task.CreatedAt,
+					"updatedAt":   task.UpdatedAt,
+					"comments":    comments,
+					"subtasks":    subtasks,
+				})
+			}
+			taskRows.Close()
+
+			columns = append(columns, gin.H{
+				"id":        col.ID,
+				"name":      col.Name,
+				"status":    statusVal,
+				"position":  col.Position,
+				"color":     col.Color,
+				"boardId":   col.BoardID,
+				"createdAt": col.CreatedAt,
+				"updatedAt": col.UpdatedAt,
+				"tasks":     tasks,
+			})
+		}
+		exportData["columns"] = columns
+
+		if format == "json" {
+			c.JSON(http.StatusOK, exportData)
+		} else {
+			csv := generateCSV(exportData)
+			timestamp := time.Now().Format("20060102_150405")
+			filename := fmt.Sprintf("%s_%s.csv", boardName, timestamp)
+			c.Header("Content-Description", "File Transfer")
+			c.Header("Content-Disposition", "attachment; filename="+filename)
+			c.Data(http.StatusOK, "text/csv; charset=utf-8", []byte(csv))
+		}
+	}
+}
+
+func generateCSV(data gin.H) string {
+	var sb strings.Builder
+	sb.WriteString("\xEF\xBB\xBF")
+
+	sb.WriteString("列名称,任务标题,任务描述,优先级,负责人,状态,创建时间,更新时间,子任务,评论\n")
+
+	columns, _ := data["columns"].([]gin.H)
+	for _, col := range columns {
+		colName, _ := col["name"].(string)
+		tasks, _ := col["tasks"].([]gin.H)
+		for _, task := range tasks {
+			title, _ := task["title"].(string)
+			desc, _ := task["description"].(string)
+			priority, _ := task["priority"].(string)
+			assignee, _ := task["assignee"].(string)
+			published := task["published"].(bool)
+			createdAt := task["createdAt"].(time.Time).Format("2006-01-02 15:04:05")
+			updatedAt := task["updatedAt"].(time.Time).Format("2006-01-02 15:04:05")
+
+			status := "进行中"
+			if !published {
+				status = "草稿"
+			}
+
+			subtasks, _ := task["subtasks"].([]gin.H)
+			subtaskTitles := []string{}
+			for _, st := range subtasks {
+				if t, ok := st["title"].(string); ok {
+					completed := st["completed"].(bool)
+					mark := "○"
+					if completed {
+						mark = "●"
+					}
+					subtaskTitles = append(subtaskTitles, mark+t)
+				}
+			}
+
+			comments, _ := task["comments"].([]gin.H)
+			commentContents := []string{}
+			for _, cm := range comments {
+				if content, ok := cm["content"].(string); ok {
+					author, _ := cm["author"].(string)
+					commentContents = append(commentContents, author+": "+content)
+				}
+			}
+
+			sb.WriteString(fmt.Sprintf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+				escapeCSV(colName),
+				escapeCSV(title),
+				escapeCSV(desc),
+				priority,
+				escapeCSV(assignee),
+				status,
+				createdAt,
+				updatedAt,
+				escapeCSV(strings.Join(subtaskTitles, "; ")),
+				escapeCSV(strings.Join(commentContents, "; ")),
+			))
+		}
+	}
+
+	return sb.String()
+}
+
+func escapeCSV(s string) string {
+	s = strings.ReplaceAll(s, "\"", "\"\"")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return s
+}
+
+type ImportData struct {
+	BoardName string         `json:"boardName"`
+	Columns   []ImportColumn `json:"columns"`
+}
+
+type ImportColumn struct {
+	ID       string       `json:"id"`
+	Name     string       `json:"name"`
+	Status   *string      `json:"status"`
+	Position int          `json:"position"`
+	Color    string       `json:"color"`
+	Tasks    []ImportTask `json:"tasks"`
+}
+
+type ImportTask struct {
+	ID          string          `json:"id"`
+	Title       string          `json:"title"`
+	Description *string         `json:"description"`
+	Priority    string          `json:"priority"`
+	Assignee    *string         `json:"assignee"`
+	Meta        *string         `json:"meta"`
+	Position    int             `json:"position"`
+	Published   bool            `json:"published"`
+	Comments    []ImportComment `json:"comments"`
+	Subtasks    []ImportSubtask `json:"subtasks"`
+}
+
+type ImportComment struct {
+	Content string `json:"content"`
+	Author  string `json:"author"`
+}
+
+type ImportSubtask struct {
+	Title     string `json:"title"`
+	Completed bool   `json:"completed"`
+}
+
+type ImportBoardRequest struct {
+	Data    ImportData `json:"data"`
+	BoardID string     `json:"boardId"`
+}
+
+func ImportBoard(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		var req ImportBoardRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的导入数据"})
+			return
+		}
+
+		boardID := req.BoardID
+		if boardID == "" {
+			boardID = generateID()
+		}
+
+		boardName := req.Data.BoardName
+		if boardName == "" {
+			boardName = "Imported Board"
+		}
+
+		if boardID != "" {
+			var exists bool
+			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM boards WHERE id = ? AND deleted = false)", boardID).Scan(&exists)
+			if err == nil && exists {
+				c.JSON(http.StatusConflict, gin.H{"error": "看板 ID 已存在，如需覆盖请确认后重试"})
+				return
+			}
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+			return
+		}
+		defer tx.Rollback()
+
+		now := time.Now()
+		_, err = tx.Exec(
+			"INSERT INTO boards (id, name, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			boardID, boardName, false, now, now,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+			return
+		}
+
+		columnIDMap := make(map[string]string)
+
+		for _, col := range req.Data.Columns {
+			colID := generateID()
+			columnIDMap[col.ID] = colID
+
+			status := ""
+			if col.Status != nil {
+				status = *col.Status
+			}
+
+			color := col.Color
+			if color == "" {
+				color = "#6b7280"
+			}
+
+			_, err = tx.Exec(
+				"INSERT INTO columns (id, name, status, position, color, board_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				colID, col.Name, status, col.Position, color, boardID, now, now,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建列失败"})
+				return
+			}
+		}
+
+		for _, col := range req.Data.Columns {
+			newColID := columnIDMap[col.ID]
+
+			for _, task := range col.Tasks {
+				taskID := generateID()
+
+				description := ""
+				if task.Description != nil {
+					description = *task.Description
+				}
+
+				assignee := ""
+				if task.Assignee != nil {
+					assignee = *task.Assignee
+				}
+
+				meta := ""
+				if task.Meta != nil {
+					meta = *task.Meta
+				}
+
+				priority := task.Priority
+				if priority == "" {
+					priority = "medium"
+				}
+
+				_, err = tx.Exec(
+					"INSERT INTO tasks (id, title, description, priority, assignee, meta, column_id, position, published, archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+					taskID, task.Title, description, priority, assignee, meta, newColID, task.Position, task.Published, false, now, now,
+				)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败"})
+					return
+				}
+
+				for _, comment := range task.Comments {
+					commentID := generateID()
+					_, err = tx.Exec(
+						"INSERT INTO comments (id, content, author, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+						commentID, comment.Content, comment.Author, taskID, now, now,
+					)
+					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "创建评论失败"})
+						return
+					}
+				}
+
+				for _, subtask := range task.Subtasks {
+					subtaskID := generateID()
+					_, err = tx.Exec(
+						"INSERT INTO subtasks (id, title, completed, task_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+						subtaskID, subtask.Title, subtask.Completed, taskID, now, now,
+					)
+					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "创建子任务失败"})
+						return
+					}
+				}
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "导入失败"})
+			return
+		}
+
+		LogActivity(db, user.ID, "BOARD_IMPORT", "BOARD", boardID, boardName, "", c.ClientIP(), getRequestSource(c))
+
+		c.JSON(http.StatusOK, gin.H{
+			"id":   boardID,
+			"name": boardName,
+		})
 	}
 }
