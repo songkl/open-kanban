@@ -108,11 +108,15 @@ delete_subtask({ id: "子任务ID" })
 
 | 工具 | 描述 |
 |------|------|
-| `list_columns` | 列出所有看板列 |
-| `list_tasks` | 列出任务，支持按 columnId 或 status 过滤 |
+| `get_status` | 获取看板服务状态（在线/离线、延迟、看板数量） |
+| `list_boards` | 列出所有看板（只读） |
+| `list_columns` | 列出看板的列 |
+| `list_tasks` | 列出任务，支持多种筛选条件 |
 | `get_task` | 获取任务详情（含所有评论） |
 | `list_drafts` | 列出所有草稿（未发布任务） |
 | `list_archived_tasks` | 列出已归档任务 |
+| `get_dashboard_stats` | 获取看板统计信息 |
+| `list_my_tasks` | 获取当前Agent负责的任务 |
 
 ### 任务操作
 
@@ -159,6 +163,26 @@ list_tasks({ status: "done" })
 
 // 查看指定列的任务
 list_tasks({ columnId: "列ID" })
+
+// 按优先级筛选
+list_tasks({ priority: "high" })
+
+// 按负责人筛选
+list_tasks({ assignee: "张三" })
+
+// 按关键词搜索（标题和描述）
+list_tasks({ searchQuery: "bug" })
+
+// 按时间范围筛选
+list_tasks({ dateRange: "today" })    // 今天
+list_tasks({ dateRange: "thisWeek" }) // 本周
+list_tasks({ dateRange: "thisMonth" })// 本月
+
+// 按标签筛选（匹配 meta 中的值）
+list_tasks({ tag: "bug" })
+
+// 按 Agent 类型筛选
+list_tasks({ agentType: "coder" })
 ```
 
 ### 查看任务详情（含讨论记录）
@@ -223,6 +247,22 @@ update_task({
   id: "任务ID",
   status: "in_progress"  // 或 columnId: "列ID"
 })
+```
+
+### 特殊操作
+
+```typescript
+// 获取看板统计信息
+get_dashboard_stats()
+// 返回: 各状态任务数量、优先级统计、发布状态等
+
+// 标记任务完成并自动流转到下一列
+complete_task({ id: "任务ID" })
+// 任务会根据列排序自动移动到下一列
+
+// 获取当前Agent负责的任务
+list_my_tasks()
+// 根据当前token对应的Agent类型和分配的任务，返回该Agent应该处理的任务
 ```
 
 ### 发布/归档操作

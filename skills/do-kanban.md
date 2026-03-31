@@ -4,7 +4,7 @@ Use the kanban MCP tools to pick and execute a pending task end-to-end:
 
 ## Steps
 
-1. **获取待办任务** — 调用 `mcp__kanban__list_tasks` 并传入 `status: "todo"` 获取所有待办任务。如果没有待办任务，告知用户并停止。获取时要注意用户是否给了 board或boardId,和 status
+1. **获取待办任务** — 调用 `mcp__kanban__list_my_tasks` 获取当前Agent负责的任务。如果获取不到，调用 `mcp__kanban__list_tasks` 并传入 `status: "todo"` 获取所有待办任务。如果没有待办任务，告知用户并停止。
 
 2. **选择任务（自动按优先级）** — 按以下规则自动选择任务，无需人工参与：
    - 首先按优先级排序：high > medium > low
@@ -22,7 +22,7 @@ Use the kanban MCP tools to pick and execute a pending task end-to-end:
    - 修改了哪些文件（如有）
    - 需要审核的要点
 
-7. **移动到待审核** — 调用 `mcp__kanban__update_task` 将任务 `status` 改为 `review`，告知用户任务已完成并等待审核。
+7. **移动到下一列** — 调用 `mcp__kanban__complete_task` 将任务自动流转到看板流水线的下一列，告知用户任务已完成。
 
 ## 错误处理
 
