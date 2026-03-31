@@ -6,13 +6,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"open-kanban/internal/database"
 	"open-kanban/internal/models"
 
 	"github.com/gin-gonic/gin"
@@ -188,7 +187,6 @@ var (
 	}
 	salt     string
 	saltOnce sync.Once
-	saltFile = filepath.Join(os.Getenv("HOME"), ".openkanban", "salt")
 )
 
 // getSalt returns the application salt, generating one if it doesn't exist
@@ -201,33 +199,30 @@ func getSalt() (string, error) {
 }
 
 func loadOrGenerateSalt() (string, error) {
-	// Ensure directory exists
-	dir := filepath.Dir(saltFile)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create salt directory: %w", err)
+	db, err := database.InitDB()
+	if err != nil {
+		return "", fmt.Errorf("failed to init database: %w", err)
+	}
+	defer db.Close()
+
+	var existingSalt string
+	err = db.QueryRow("SELECT value FROM app_config WHERE key = 'password_salt'").Scan(&existingSalt)
+	if err == nil && len(existingSalt) >= 32 {
+		return existingSalt, nil
 	}
 
-	// Try to load existing salt
-	if data, err := os.ReadFile(saltFile); err == nil {
-		salt := string(data)
-		if len(salt) >= 32 {
-			return salt, nil
-		}
-	}
-
-	// Generate new salt
 	saltBytes := make([]byte, 32)
 	if _, err := rand.Read(saltBytes); err != nil {
 		return "", fmt.Errorf("failed to generate salt: %w", err)
 	}
-	salt = hex.EncodeToString(saltBytes)
+	newSalt := hex.EncodeToString(saltBytes)
 
-	// Save to file
-	if err := os.WriteFile(saltFile, []byte(salt), 0600); err != nil {
+	_, err = db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('password_salt', ?)", newSalt)
+	if err != nil {
 		return "", fmt.Errorf("failed to save salt: %w", err)
 	}
 
-	return salt, nil
+	return newSalt, nil
 }
 
 // hashWithSalt hashes input with the application salt
@@ -478,13 +473,12 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			// Hash password if provided
 			var hashedPassword *string
 			if req.Password != "" {
-				hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+				hashed, err := hashWithSalt(req.Password)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "密码加密失败"})
 					return
 				}
-				hashedPassword = new(string)
-				*hashedPassword = string(hashed)
+				hashedPassword = &hashed
 			}
 
 			// Create user
@@ -559,8 +553,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if existingUser.Password != "" {
-			err = bcrypt.CompareHashAndPassword([]byte(existingUser.Password), []byte(req.Password))
-			if err != nil {
+			if !verifyWithSalt(req.Password, existingUser.Password) {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "密码错误"})
 				return
 			}
