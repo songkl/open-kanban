@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install UPX
+        run: sudo apt-get install -y upx
+
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Prepare web archive
+        run: |
+          mkdir -p release
+          cp -r frontend/dist release/web
+          cd release
+          tar -czf web.tar.gz web/
+
+      - name: Build MCP Server
+        run: |
+          cd mcp-server
+          npm install
+          npm run build
+
+      - name: Build Backend (cross-compile)
+        run: |
+          cd backend
+          PLATFORMS=("darwin amd64" "darwin arm64" "linux amd64" "linux arm64" "windows amd64")
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            set -- $PLATFORM
+            GOOS=$1 GOARCH=$2
+            OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}"
+            [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
+            echo "Building $OUTPUT_NAME..."
+            GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "../release/$OUTPUT_NAME" ./cmd/server/main.go
+            upx -9 --best "../release/$OUTPUT_NAME" || true
+          done
+
+      - name: Copy Skill file
+        run: |
+          mkdir -p release/skill
+          cp mcp/MCP_SETUP.md release/skill/ 2>/dev/null || true
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*
+          draft: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
