@@ -123,12 +123,15 @@ For detailed installation instructions (including OpenCode skill setup), see [In
 
 | Capability | Tools |
 |------------|-------|
-| Task Management | `create_task`, `update_task`, `delete_task` |
-| Task Query | `list_tasks`, `get_task`, `list_drafts` |
-| Status Flow | `update_task(status)`, `archive_task` |
+| Status | `get_status` |
+| Board Management | `list_boards`, `get_board` |
+| Column Management | `list_columns`, `get_column` |
+| Task Management | `create_task`, `update_task`, `delete_task`, `complete_task` |
+| Task Query | `list_tasks`, `get_task`, `list_drafts`, `list_archived_tasks` |
+| Task Publishing | `publish_task`, `archive_task` |
 | Collaboration | `add_comment`, `list_comments` |
-| Subtasks | `create_subtask`, `update_subtask` |
-| Board Navigation | `list_boards`, `list_columns` |
+| Subtasks | `list_subtasks`, `create_subtask`, `update_subtask`, `delete_subtask` |
+| Dashboard | `get_dashboard_stats`, `list_my_tasks` |
 
 ### Task Workflow
 

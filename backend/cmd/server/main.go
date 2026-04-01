@@ -356,9 +356,10 @@ func main() {
 
 	// Print startup banner
 	fmt.Println("")
-	fmt.Println("  ============================================")
-	fmt.Println("       O P E N   K A N B A N")
-	fmt.Println("  ============================================")
+	fmt.Println(`   dP"Yb  88""Yb 888888 88b 88     88  dP    db    88b 88 88""Yb    db    88b 88 `)
+	fmt.Println(`  dP   Yb 88__dP 88__   88Yb88     88odP    dPYb   88Yb88 88__dP   dPYb   88Yb88 `)
+	fmt.Println(`  Yb   dP 88"""  88""   88 Y88     88"Yb   dP__Yb  88 Y88 88""Yb  dP__Yb  88 Y88 `)
+	fmt.Println(`   YbodP  88     888888 88  Y8     88  Yb dP""""Yb 88  Y8 88oodP dP""""Yb 88  Y8 `)
 	fmt.Println("")
 	fmt.Println("  https://github.com/songkl/open-kanban")
 	fmt.Println("")
