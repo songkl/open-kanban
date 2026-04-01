@@ -61,7 +61,7 @@ func main() {
 	}
 
 	// Create Gin router
-	r := gin.Default()
+	r := gin.New()
 
 	// Global rate limiting middleware
 	r.Use(handlers.GlobalRateLimitMiddleware())
@@ -354,6 +354,17 @@ func main() {
 		port = "8080"
 	}
 
+	// Print startup banner
+	fmt.Println("")
+	fmt.Println("  ██╗    ██╗███████╗██████╗ ███████╗██╗")
+	fmt.Println("  ██║    ██║██╔════╝██╔══██╗██╔════╝██║")
+	fmt.Println("  ██║ █╗ ██║█████╗  ██████╔╝█████╗  ██║")
+	fmt.Println("  ██║███╗██║██╔══╝  ██╔══██╗██╔══╝  ╚═╝")
+	fmt.Println("  ╚███╔███╔╝███████╗██████╔╝███████╗██╗")
+	fmt.Println("   ╚══╝╚══╝ ╚══════╝╚═════╝ ╚══════╝╚═╝")
+	fmt.Println("")
+	fmt.Println("  Open Kanban - https://github.com/songkl/open-kanban")
+	fmt.Println("")
 	log.Printf("Server starting on port %s", port)
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
