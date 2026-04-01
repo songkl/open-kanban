@@ -16,11 +16,7 @@
     "mcp-server",
     "kanban"
   ],
-  "author": "songkl <skl@songkl.com>",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/songkl/open-kanban"
-  },
+  "author": "",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"

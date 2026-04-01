@@ -10,6 +10,7 @@ import { CompletedPage } from './pages/CompletedPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { ActivityLogPage } from './pages/ActivityLogPage';
 import { AgentActivityPage } from './pages/AgentActivityPage';
+import { UserDetailPage } from './pages/UserDetailPage';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/activities" element={<ActivityLogPage />} />
       <Route path="/agent-activity" element={<AgentActivityPage />} />
+      <Route path="/user/:userId" element={<UserDetailPage />} />
     </Routes>
   );
 }

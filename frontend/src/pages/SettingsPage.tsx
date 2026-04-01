@@ -831,7 +831,9 @@ export function SettingsPage() {
                           size="md"
                         />
                         <div>
-                          <div className="font-medium text-zinc-800">{user.nickname}</div>
+                          <Link to={`/user/${user.id}`} className="font-medium text-zinc-800 hover:text-blue-600 dark:hover:text-blue-400">
+                            {user.nickname}
+                          </Link>
                           <div className="flex gap-2 mt-1">
                             <select
                               value={user.role}

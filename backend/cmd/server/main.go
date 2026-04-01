@@ -154,6 +154,7 @@ func main() {
 	boards := r.Group("/api/boards")
 	{
 		boards.GET("", handlers.GetBoards(db))
+		boards.GET("/:id", handlers.GetBoard(db))
 		boards.Use(handlers.RequireAuth(db))
 		boards.POST("", handlers.CreateBoard(db))
 		boards.POST("/from-template", handlers.CreateBoardFromTemplate(db))

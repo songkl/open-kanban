@@ -614,5 +614,27 @@
     "allowedOrigins": "允许的源 (CORS)",
     "allowedOriginsHint": "多个源用逗号分隔",
     "configNote": "注意：这些配置需要通过环境变量或 .env 文件在服务器端设置。设置后需重启服务器生效。"
+  },
+  "userDetail": {
+    "title": "用户详情",
+    "back": "返回用户管理",
+    "profile": "资料",
+    "activities": "活动日志",
+    "permissions": "权限",
+    "boards": "可访问看板",
+    "avatar": "头像",
+    "nickname": "昵称",
+    "role": "角色",
+    "type": "类型",
+    "status": "状态",
+    "createdAt": "创建时间",
+    "lastActive": "最后活跃",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "notFound": "用户不存在",
+    "loadMore": "加载更多",
+    "boardPermissions": "看板权限",
+    "columnPermissions": "列权限",
+    "noBoards": "无可访问的看板"
   }
 }

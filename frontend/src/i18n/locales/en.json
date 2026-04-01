@@ -614,5 +614,27 @@
     "allowedOrigins": "Allowed Origins (CORS)",
     "allowedOriginsHint": "Multiple origins separated by commas",
     "configNote": "Note: These configurations need to be set via environment variables or .env file on the server side. Restart the server after making changes."
+  },
+  "userDetail": {
+    "title": "User Detail",
+    "back": "Back to Users",
+    "profile": "Profile",
+    "activities": "Activities",
+    "permissions": "Permissions",
+    "boards": "Accessible Boards",
+    "avatar": "Avatar",
+    "nickname": "Nickname",
+    "role": "Role",
+    "type": "Type",
+    "status": "Status",
+    "createdAt": "Created At",
+    "lastActive": "Last Active",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "notFound": "User not found",
+    "loadMore": "Load More",
+    "boardPermissions": "Board Permissions",
+    "columnPermissions": "Column Permissions",
+    "noBoards": "No accessible boards"
   }
 }

@@ -83,7 +83,7 @@ func GetBoards(db *sql.DB) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var boards []gin.H
+		boards := []gin.H{}
 		for rows.Next() {
 			var id, name, description string
 			var deleted bool
@@ -105,6 +105,51 @@ func GetBoards(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, boards)
+	}
+}
+
+// GetBoard returns a single board by ID
+func GetBoard(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		boardID := c.Param("id")
+		if boardID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "看板ID不能为空"})
+			return
+		}
+
+		var id, name, description, shortAlias string
+		var deleted bool
+		var createdAt, updatedAt time.Time
+		var columnCount int
+
+		err := db.QueryRow(`
+			SELECT b.id, b.name, COALESCE(b.description, ''), COALESCE(b.short_alias, ''), b.deleted, b.created_at, b.updated_at,
+				(SELECT COUNT(*) FROM columns WHERE board_id = b.id) as column_count
+			FROM boards b
+			WHERE b.id = ? AND b.deleted = false
+		`, boardID).Scan(&id, &name, &description, &shortAlias, &deleted, &createdAt, &updatedAt, &columnCount)
+
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "看板不存在"})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取看板失败"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"id":          id,
+			"name":        name,
+			"description": description,
+			"shortAlias":  shortAlias,
+			"deleted":      deleted,
+			"createdAt":   createdAt,
+			"updatedAt":   updatedAt,
+			"_count": gin.H{
+				"columns": columnCount,
+			},
+		})
 	}
 }
 

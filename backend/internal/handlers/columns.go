@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,12 +48,55 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 		// Get columns
 		var rows *sql.Rows
 		var err error
-		if boardID != "" {
+		positionsParam := c.Query("positions")
+
+		if boardID != "" && positionsParam != "" {
+			// Both boardId and positions specified
+			positions := strings.Split(positionsParam, ",")
+			placeholders := make([]string, len(positions))
+			args := make([]interface{}, 0, len(positions)+1)
+			args = append(args, boardID) // boardID first for WHERE board_id = ?
+			for i, p := range positions {
+				placeholders[i] = "?"
+				pos, err := strconv.Atoi(strings.TrimSpace(p))
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "无效的位置值"})
+					return
+				}
+				args = append(args, pos)
+			}
+			query := fmt.Sprintf(
+				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE board_id = ? AND position IN (%s) ORDER BY position ASC",
+				strings.Join(placeholders, ","),
+			)
+			rows, err = db.Query(query, args...)
+		} else if boardID != "" {
+			// Only boardId specified
 			rows, err = db.Query(
 				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE board_id = ? ORDER BY position ASC",
 				boardID,
 			)
+		} else if positionsParam != "" {
+			// Only positions specified
+			positions := strings.Split(positionsParam, ",")
+			placeholders := make([]string, len(positions))
+			args := make([]interface{}, len(positions))
+			for i, p := range positions {
+				placeholders[i] = "?"
+				pos, err := strconv.Atoi(strings.TrimSpace(p))
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "无效的位置值"})
+					return
+				}
+				args[i] = pos
+			}
+			query := fmt.Sprintf(
+				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE position IN (%s) ORDER BY position ASC",
+				strings.Join(placeholders, ","),
+			)
+			rows, err = db.Query(query, args...)
 		} else {
+			// No filters
 			rows, err = db.Query(
 				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns ORDER BY position ASC",
 			)
@@ -63,7 +107,7 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var columns []gin.H
+		columns := []gin.H{}
 		for rows.Next() {
 			var col models.Column
 			var status sql.NullString
