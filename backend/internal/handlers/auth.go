@@ -2003,16 +2003,18 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 
 		if requestedColumnID != "" && user.Role == "ADMIN" {
 			rows, err = db.Query(`
-				SELECT cp.id, cp.column_id, col.name, cp.access
+				SELECT cp.id, cp.column_id, col.name, cp.access, u.id, u.nickname
 				FROM column_permissions cp
 				JOIN columns col ON cp.column_id = col.id
+				JOIN users u ON cp.user_id = u.id
 				WHERE cp.column_id = ?
 			`, requestedColumnID)
 		} else {
 			rows, err = db.Query(`
-				SELECT cp.id, cp.column_id, col.name, cp.access
+				SELECT cp.id, cp.column_id, col.name, cp.access, u.id, u.nickname
 				FROM column_permissions cp
 				JOIN columns col ON cp.column_id = col.id
+				JOIN users u ON cp.user_id = u.id
 				WHERE cp.user_id = ?
 			`, targetUserID)
 		}
@@ -2024,13 +2026,15 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 
 		var permissions []gin.H
 		for rows.Next() {
-			var id, columnID, columnName, access string
-			if err := rows.Scan(&id, &columnID, &columnName, &access); err == nil {
+			var id, columnID, columnName, access, userID, userNickname string
+			if err := rows.Scan(&id, &columnID, &columnName, &access, &userID, &userNickname); err == nil {
 				permissions = append(permissions, gin.H{
-					"id":         id,
-					"columnId":   columnID,
-					"columnName": columnName,
-					"access":     access,
+					"id":           id,
+					"columnId":     columnID,
+					"columnName":   columnName,
+					"access":       access,
+					"userId":       userID,
+					"userNickname": userNickname,
 				})
 			}
 		}

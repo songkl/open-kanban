@@ -166,7 +166,7 @@ export function ColumnsPage() {
   const [editColumnOwnerAgent, setEditColumnOwnerAgent] = useState<string>('');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionColumn, setPermissionColumn] = useState<ColumnData | null>(null);
-  const [columnPermissions, setColumnPermissions] = useState<Array<{ id: string; columnId: string; columnName: string; access: string }>>([]);
+  const [columnPermissions, setColumnPermissions] = useState<Array<{ id: string; columnId: string; columnName: string; access: string; userId: string; userNickname: string }>>([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
 
   const sensors = useSensors(
@@ -861,11 +861,11 @@ export function ColumnsPage() {
                         <div key={perm.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
                           <div className="flex items-center gap-3">
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-xs font-bold">
-                              {perm.access.charAt(0)}
+                              {perm.userNickname.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-zinc-800">{perm.columnName}</div>
-                              <div className="text-xs text-zinc-400">{perm.access} - {t('column.permission.' + perm.access)}</div>
+                              <div className="text-sm font-medium text-zinc-800">{perm.userNickname}</div>
+                              <div className="text-xs text-zinc-400">{perm.columnName} - {t('column.permission.' + perm.access)}</div>
                             </div>
                           </div>
                           <button

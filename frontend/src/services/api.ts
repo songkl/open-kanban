@@ -281,7 +281,7 @@ export const authApi = {
   deletePermission: (id: string) =>
     fetchApi<void>(`/api/auth/permissions?id=${id}`, { method: 'DELETE' }),
   getColumnPermissions: (userId?: string, columnId?: string) =>
-    fetchApi<{ permissions: Array<{ id: string; columnId: string; columnName: string; access: string }> }>(
+    fetchApi<{ permissions: Array<{ id: string; columnId: string; columnName: string; access: string; userId: string; userNickname: string }> }>(
       `/api/auth/permissions/columns${userId ? `?userId=${userId}` : columnId ? `?columnId=${columnId}` : ''}`
     ),
   setColumnPermission: (userId: string, columnId: string, access: string) =>
