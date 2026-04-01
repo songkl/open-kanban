@@ -1,6 +1,7 @@
 -- Rollback consolidated schema v1.0.0
 -- Drops all tables created by the consolidated initial schema
 
+DROP TABLE IF EXISTS column_permissions;
 DROP TABLE IF EXISTS templates;
 DROP TABLE IF EXISTS activities;
 DROP TABLE IF EXISTS attachments;

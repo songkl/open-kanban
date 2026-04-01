@@ -19,6 +19,7 @@ import { TaskCard } from '../components/TaskCard';
 import { TaskModal } from '../components/TaskModal';
 import { AddTaskModal } from '../components/AddTaskModal';
 import { UserAvatar } from '../components/UserAvatar';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { boardsApi, columnsApi, tasksApi, commentsApi, authApi, setGlobalErrorHandler } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { ErrorToastContainer, showErrorToast } from '../components/ErrorToast';
@@ -130,6 +131,13 @@ export function BoardPage() {
   const lastLocalUpdateRef = useRef<number>(0);
   const REFRESH_DEBOUNCE_MS = 1000;
   const [columnPagination, setColumnPagination] = useState<Record<string, { page: number; hasMore: boolean; isLoadingMore: boolean }>>({});
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    variant?: 'danger' | 'warning' | 'default';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
   const showToastMessage = (message: string) => {
     setToast(message);
@@ -570,14 +578,28 @@ export function BoardPage() {
       if (e.key === 'Delete') {
         if (selectedTask) {
           e.preventDefault();
-          if (window.confirm(t('task.confirmDelete'))) {
-            deleteTask(selectedTask.id);
-          }
+          setConfirmDialog({
+            isOpen: true,
+            title: t('task.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
+            message: t('task.confirmDelete'),
+            variant: 'danger',
+            onConfirm: () => {
+              deleteTask(selectedTask.id);
+              setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+            },
+          });
         } else if (selectedTasks.size > 0) {
           e.preventDefault();
-          if (window.confirm(t('task.confirmBatchDelete', { count: selectedTasks.size }))) {
-            batchDelete();
-          }
+          setConfirmDialog({
+            isOpen: true,
+            title: t('task.confirmBatchDeleteTitle') || t('modal.deleteConfirmTitle'),
+            message: t('task.confirmBatchDelete', { count: selectedTasks.size }),
+            variant: 'danger',
+            onConfirm: () => {
+              batchDelete();
+              setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+            },
+          });
         }
         return;
       }
@@ -710,6 +732,10 @@ export function BoardPage() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        if (message.type === 'ping') {
+          ws.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
         if (message.type === 'refresh') {
           const now = Date.now();
           if (now - lastLocalUpdateRef.current < REFRESH_DEBOUNCE_MS) {
@@ -718,6 +744,20 @@ export function BoardPage() {
           }
           if (currentBoardRef.current) {
             fetchColumns(currentBoardRef.current.id, true);
+          }
+        } else if (message.type === 'task_notification') {
+          const { boardId, taskId, action } = message;
+          if (currentBoardRef.current && boardId === currentBoardRef.current.id) {
+            const now = Date.now();
+            if (now - lastLocalUpdateRef.current < REFRESH_DEBOUNCE_MS) {
+              return;
+            }
+            if (action === 'create') {
+              fetchColumns(currentBoardRef.current.id, true);
+            } else if (action === 'update' || action === 'update_status') {
+              handleTaskNotificationUpdate(taskId);
+            } else if (action === 'new_comment') {
+            }
           }
         }
       } catch {
@@ -819,6 +859,40 @@ export function BoardPage() {
         ...prev,
         [columnId]: { ...currentPagination, isLoadingMore: false }
       }));
+    }
+  };
+
+  const handleTaskNotificationUpdate = async (taskId: string) => {
+    try {
+      const updatedTask = await tasksApi.getById(taskId);
+      if (!updatedTask) return;
+
+      const parsedTask = {
+        ...updatedTask,
+        meta: typeof updatedTask.meta === 'string' ? JSON.parse(updatedTask.meta || '{}') : updatedTask.meta || null,
+      };
+
+      const oldColumn = columns.find(col => col.tasks.some(t => t.id === taskId));
+      const newColumnId = parsedTask.columnId;
+
+      if (oldColumn && oldColumn.id !== newColumnId) {
+        setColumns(cols => cols.map(col => {
+          if (col.id === oldColumn.id) {
+            return { ...col, tasks: col.tasks.filter(t => t.id !== taskId) };
+          }
+          if (col.id === newColumnId) {
+            return { ...col, tasks: [...col.tasks, parsedTask] };
+          }
+          return col;
+        }));
+      } else if (oldColumn) {
+        setColumns(cols => cols.map(col => ({
+          ...col,
+          tasks: col.tasks.map(t => t.id === taskId ? parsedTask : t)
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to handle task notification update:', error);
     }
   };
 
@@ -1030,7 +1104,6 @@ export function BoardPage() {
 
   const batchDelete = async () => {
     if (selectedTasks.size === 0) return;
-    if (!confirm(t('task.confirmBatchDelete', { count: selectedTasks.size }))) return;
 
     try {
       lastLocalUpdateRef.current = Date.now();
@@ -1138,7 +1211,7 @@ export function BoardPage() {
     }
   };
 
-  const addTask = async (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string) => {
+  const addTask = async (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => {
     const taskTitle = title || prompt(t('task.enterTitle'));
     if (!taskTitle?.trim()) return;
 
@@ -1154,6 +1227,7 @@ export function BoardPage() {
         columnId: targetColumnId,
         position: 9999,
         published: published ?? true,
+        priority: priority || 'medium',
       });
 
       if (isSameBoard) {
@@ -1176,7 +1250,7 @@ export function BoardPage() {
         description: description || '',
         columnId: targetColumnId,
         position: 9999,
-        priority: undefined,
+        priority: priority || 'medium',
         published: published ?? true,
         createdAt: new Date().toISOString(),
       });
@@ -1839,8 +1913,8 @@ export function BoardPage() {
             setShowAddTaskModal(false);
             setDefaultColumnIdForNewTask(undefined);
           }}
-          onSubmit={(title, description, published, columnId, boardId) => {
-            addTask(columnId, title, description, published, boardId);
+          onSubmit={(title, description, published, columnId, boardId, priority) => {
+            addTask(columnId, title, description, published, boardId, priority);
             setShowAddTaskModal(false);
             setDefaultColumnIdForNewTask(undefined);
           }}
@@ -1939,6 +2013,16 @@ export function BoardPage() {
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white">
           {toast}
         </div>
+      )}
+      {confirmDialog.isOpen && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        />
       )}
       <ErrorToastContainer />
     </div>

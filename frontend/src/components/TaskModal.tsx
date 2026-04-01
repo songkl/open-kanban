@@ -136,6 +136,7 @@ export function TaskModal({
   const [commentAuthor, setCommentAuthor] = useState('');
   const [subtasks, setSubtasks] = useState<any[]>(task.subtasks ?? []);
   const [showAddSubtaskModal, setShowAddSubtaskModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [editColumn, setEditColumn] = useState(task.columnId);
   const [allColumns, setAllColumns] = useState<Column[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -320,9 +321,12 @@ export function TaskModal({
   }, [uploadImage]);
 
   const handleDelete = () => {
-    if (window.confirm(t('taskModal.confirmDelete'))) {
-      onDelete(task.id);
-    }
+    setShowDeleteConfirmModal(true);
+  };
+
+  const confirmDelete = () => {
+    setShowDeleteConfirmModal(false);
+    onDelete(task.id);
   };
 
   return (
@@ -752,6 +756,30 @@ export function TaskModal({
             setShowAddSubtaskModal(false);
           }}
         />
+      )}
+
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirmModal(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-semibold text-zinc-800">{t('taskModal.confirmDeleteTitle')}</h3>
+            <p className="mb-6 text-sm text-zinc-600">{t('taskModal.confirmDelete')}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirmModal(false)}
+                className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
+              >
+                {t('taskModal.cancel')}
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 rounded-md bg-red-500 px-4 py-2.5 text-base font-medium text-white hover:bg-red-600"
+              >
+                {t('taskModal.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

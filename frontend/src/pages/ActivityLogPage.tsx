@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { authApi, tasksApi, commentsApi } from '../services/api';
+import { authApi, tasksApi, commentsApi, activitiesApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
 import { TaskModal } from '../components/TaskModal';
@@ -91,13 +91,11 @@ export function ActivityLogPage() {
   const loadActivities = async (filters?: { action?: string; startTime?: string; endTime?: string }) => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (filters?.action) params.append('action', filters.action);
-      if (filters?.startTime) params.append('startTime', filters.startTime);
-      if (filters?.endTime) params.append('endTime', filters.endTime);
-      const queryString = params.toString();
-      const res = await fetch(`/api/auth/activities${queryString ? '?' + queryString : ''}`, { credentials: 'include' });
-      const data = await res.json();
+      const data = await activitiesApi.getAll({
+        action: filters?.action,
+        startTime: filters?.startTime,
+        endTime: filters?.endTime,
+      });
       setActivities(data.activities || []);
     } catch (err) {
       console.error('Failed to load activities:', err);

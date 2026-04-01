@@ -3,6 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '@/types/kanban';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface TaskCardProps {
   task: Task;
@@ -43,6 +44,13 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
   const taskId = task?.id ?? `temp-${Math.random().toString(36).slice(2)}`;
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    variant?: 'danger' | 'warning' | 'default';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
   const {
     attributes,
@@ -159,9 +167,16 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (window.confirm(t('task.confirmDelete'))) {
-                      onDelete(task.id);
-                    }
+                    setConfirmDialog({
+                      isOpen: true,
+                      title: t('task.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
+                      message: t('task.confirmDelete'),
+                      variant: 'danger',
+                      onConfirm: () => {
+                        onDelete(task.id);
+                        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                      },
+                    });
                     setShowMoreMenu(false);
                   }}
                   className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 rounded-b-md"
@@ -271,6 +286,16 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           </span>
         )}
       </div>
+      {confirmDialog.isOpen && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        />
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { boardsApi, columnsApi, authApi } from '@/services/api';
+import { AddColumnPermissionForm } from '@/components/AddColumnPermissionForm';
 import type { Agent } from '@/types/kanban';
 
 interface Board {
@@ -41,16 +42,20 @@ function SortableColumn({
   column,
   onEdit,
   onDelete,
+  onPermission,
   t,
   canEdit,
   canDelete,
+  canManagePermission,
 }: {
   column: ColumnData;
   onEdit: (column: ColumnData) => void;
   onDelete: (columnId: string) => void;
+  onPermission: (column: ColumnData) => void;
   t: ReturnType<typeof useTranslation>[0];
   canEdit?: boolean;
   canDelete?: boolean;
+  canManagePermission?: boolean;
 }) {
   const {
     attributes,
@@ -106,6 +111,14 @@ function SortableColumn({
       )}
       <span className="text-xs text-zinc-400 font-mono">#{column.position + 1}</span>
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {canManagePermission && (
+          <button
+            onClick={() => onPermission(column)}
+            className="rounded-lg bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-100 transition-colors"
+          >
+            {t('column.permissions')}
+          </button>
+        )}
         {canEdit && (
           <button
             onClick={() => onEdit(column)}
@@ -151,6 +164,10 @@ export function ColumnsPage() {
   const [columnToDelete, setColumnToDelete] = useState<{ id: string; name: string; taskCount: number } | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [editColumnOwnerAgent, setEditColumnOwnerAgent] = useState<string>('');
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [permissionColumn, setPermissionColumn] = useState<ColumnData | null>(null);
+  const [columnPermissions, setColumnPermissions] = useState<Array<{ id: string; columnId: string; columnName: string; access: string }>>([]);
+  const [permissionLoading, setPermissionLoading] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -282,14 +299,10 @@ export function ColumnsPage() {
       setColumns(newColumns);
 
       try {
-        await fetch('/api/columns/reorder', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            boardId: selectedBoard!.id,
-            columns: newColumns.map((col) => ({ id: col.id, position: col.position })),
-          }),
-        });
+        await columnsApi.reorder(
+          selectedBoard!.id,
+          newColumns.map((col) => ({ id: col.id, position: col.position }))
+        );
         showToastMessage(t('column.sortSaved'));
       } catch (err) {
         console.error('Failed to save reorder:', err);
@@ -366,6 +379,32 @@ export function ColumnsPage() {
     } catch (err) {
       console.error('Failed to delete column:', err);
       showToastMessage(t('column.deleteFailed'));
+    }
+  };
+
+  const handleOpenPermissionModal = async (column: ColumnData) => {
+    setPermissionColumn(column);
+    setShowPermissionModal(true);
+    setPermissionLoading(true);
+    try {
+      const data = await authApi.getColumnPermissions(undefined, column.id);
+      setColumnPermissions(data.permissions || []);
+    } catch (err) {
+      console.error('Failed to fetch column permissions:', err);
+    } finally {
+      setPermissionLoading(false);
+    }
+  };
+
+  const handleDeleteColumnPermission = async (permissionId: string) => {
+    try {
+      await authApi.deleteColumnPermission(permissionId);
+      if (permissionColumn) {
+        const data = await authApi.getColumnPermissions(undefined, permissionColumn.id);
+        setColumnPermissions(data.permissions || []);
+      }
+    } catch (err) {
+      console.error('Failed to delete column permission:', err);
     }
   };
 
@@ -456,7 +495,7 @@ export function ColumnsPage() {
             </div>
           )}
           <Link
-            to="/"
+            to={selectedBoard ? `/board/${selectedBoard.id}` : '/boards'}
             className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-zinc-600 shadow-sm border border-zinc-100 hover:bg-zinc-50 hover:border-zinc-200 transition-all"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -516,9 +555,11 @@ export function ColumnsPage() {
                     setEditColumnOwnerAgent(col.ownerAgentId || '');
                   }}
                   onDelete={handleDeleteColumn}
+                  onPermission={handleOpenPermissionModal}
                   t={t}
                   canEdit={userBoardAccess === 'WRITE' || userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
                   canDelete={userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
+                  canManagePermission={currentUser?.role === 'ADMIN'}
                 />
               ))}
             </div>
@@ -779,6 +820,86 @@ export function ColumnsPage() {
                 className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 font-medium text-white hover:from-red-600 hover:to-red-700 transition-all shadow-sm hover:shadow"
               >
                 {t('column.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPermissionModal && permissionColumn && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowPermissionModal(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-zinc-800">{t('column.columnPermissions')}</h2>
+                <p className="text-sm text-zinc-500">{permissionColumn.name}</p>
+              </div>
+            </div>
+
+              {permissionLoading ? (
+              <div className="py-8 text-center text-zinc-500">{t('common.loading')}</div>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-zinc-700 mb-3">{t('column.currentPermissions')}</h3>
+                  {columnPermissions.length === 0 ? (
+                    <p className="text-sm text-zinc-400 py-4 text-center">{t('column.noPermissions')}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {columnPermissions.map((perm) => (
+                        <div key={perm.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-xs font-bold">
+                              {perm.access.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-zinc-800">{perm.columnName}</div>
+                              <div className="text-xs text-zinc-400">{perm.access} - {t('column.permission.' + perm.access)}</div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteColumnPermission(perm.id)}
+                            className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                          >
+                            {t('column.remove')}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-zinc-100 pt-4">
+                  <h3 className="text-sm font-semibold text-zinc-700 mb-3">{t('column.addPermission')}</h3>
+                  <AddColumnPermissionForm
+                    columnId={permissionColumn.id}
+                    onPermissionAdded={() => {
+                      if (permissionColumn) {
+                        handleOpenPermissionModal(permissionColumn);
+                      }
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowPermissionModal(false)}
+                className="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+              >
+                {t('common.close')}
               </button>
             </div>
           </div>

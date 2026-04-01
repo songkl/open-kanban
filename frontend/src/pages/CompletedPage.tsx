@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import type { Task } from '@/types/kanban';
 import { boardsApi, columnsApi, tasksApi } from '@/services/api';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 const priorityColors: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -19,6 +20,13 @@ export function CompletedPage() {
   const [boardFilter, setBoardFilter] = useState<string>('all');
   const [boards, setBoards] = useState<{ id: string; name: string }[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    variant?: 'danger' | 'warning' | 'default';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     fetchBoards();
@@ -123,23 +131,28 @@ export function CompletedPage() {
       return;
     }
 
-    if (!confirm(t('completed.confirmDelete', { count: selectedTasks.size }))) {
-      return;
-    }
-
-    try {
-      await Promise.all(
-        Array.from(selectedTasks).map((taskId) => tasksApi.delete(taskId))
-      );
-      setToast(t('completed.deletedCount', { count: selectedTasks.size }));
-      setSelectedTasks(new Set());
-      fetchTasks();
-      setTimeout(() => setToast(null), 2000);
-    } catch (err) {
-      console.error('Failed to batch delete:', err);
-      setToast(t('completed.deleteFailed'));
-      setTimeout(() => setToast(null), 2000);
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: t('completed.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
+      message: t('completed.confirmDelete', { count: selectedTasks.size }),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await Promise.all(
+            Array.from(selectedTasks).map((taskId) => tasksApi.delete(taskId))
+          );
+          setToast(t('completed.deletedCount', { count: selectedTasks.size }));
+          setSelectedTasks(new Set());
+          fetchTasks();
+          setTimeout(() => setToast(null), 2000);
+        } catch (err) {
+          console.error('Failed to batch delete:', err);
+          setToast(t('completed.deleteFailed'));
+          setTimeout(() => setToast(null), 2000);
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   return (
@@ -253,6 +266,16 @@ export function CompletedPage() {
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white">
           {toast}
         </div>
+      )}
+      {confirmDialog.isOpen && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        />
       )}
     </div>
   );

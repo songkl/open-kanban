@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ func broadcast() {
 	BroadcastRefresh()
 }
 
-// GetTasks returns tasks for a column with pagination
+// GetTasks returns tasks with optional filtering by columnId, boardId, or status
 func GetTasks(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -30,18 +31,12 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		}
 
 		columnID := c.Query("columnId")
+		boardID := c.Query("boardId")
+		status := c.Query("status")
 
-		// Verify column access if columnID specified
-		if columnID != "" {
-			boardID, err := getBoardIDForColumn(db, columnID)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
-				return
-			}
-			if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该列"})
-				return
-			}
+		if columnID != "" && !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "READ", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该列"})
+			return
 		}
 
 		page := 1
@@ -58,15 +53,53 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		}
 		offset := (page - 1) * pageSize
 
+		var columnIDs []string
+		if boardID != "" || status != "" {
+			query := "SELECT c.id FROM columns c"
+			var args []interface{}
+			var conditions []string
+			if boardID != "" {
+				conditions = append(conditions, "c.board_id = ?")
+				args = append(args, boardID)
+			}
+			if status != "" {
+				conditions = append(conditions, "c.status = ?")
+				args = append(args, status)
+			}
+			if len(conditions) > 0 {
+				query += " WHERE " + strings.Join(conditions, " AND ")
+			}
+			rows, err := db.Query(query, args...)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var colID string
+					if err := rows.Scan(&colID); err == nil {
+						columnIDs = append(columnIDs, colID)
+					}
+				}
+			}
+		}
+
+		if columnID != "" && len(columnIDs) == 0 {
+			columnIDs = append(columnIDs, columnID)
+		}
+
 		var total int
 		var countQuery string
 		var countArgs []interface{}
-		if columnID != "" {
-			countQuery = "SELECT COUNT(*) FROM tasks WHERE column_id = ?"
-			countArgs = []interface{}{columnID}
+		if len(columnIDs) > 0 {
+			placeholders := make([]string, len(columnIDs))
+			for i := range columnIDs {
+				placeholders[i] = "?"
+			}
+			countQuery = fmt.Sprintf("SELECT COUNT(*) FROM tasks WHERE column_id IN (%s)", strings.Join(placeholders, ","))
+			countArgs = make([]interface{}, len(columnIDs))
+			for i, id := range columnIDs {
+				countArgs[i] = id
+			}
 		} else {
 			countQuery = "SELECT COUNT(*) FROM tasks"
-			countArgs = []interface{}{}
 		}
 		if err := db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
@@ -75,19 +108,29 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 
 		var rows *sql.Rows
 		var err error
-		if columnID != "" {
-			rows, err = db.Query(`
-				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_by, created_at, updated_at
-				FROM tasks
-				WHERE column_id = ?
-				ORDER BY position ASC
+		if len(columnIDs) > 0 {
+			placeholders := make([]string, len(columnIDs))
+			args := make([]interface{}, 0, len(columnIDs)+2)
+			for i, id := range columnIDs {
+				placeholders[i] = "?"
+				args = append(args, id)
+			}
+			query := fmt.Sprintf(`
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at
+				FROM tasks t
+				JOIN columns c ON t.column_id = c.id
+				WHERE t.column_id IN (%s)
+				ORDER BY c.position ASC, t.position ASC
 				LIMIT ? OFFSET ?
-			`, columnID, pageSize, offset)
+			`, strings.Join(placeholders, ","))
+			args = append(args, pageSize, offset)
+			rows, err = db.Query(query, args...)
 		} else {
 			rows, err = db.Query(`
-				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_by, created_at, updated_at
-				FROM tasks
-				ORDER BY position ASC
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at
+				FROM tasks t
+				JOIN columns c ON t.column_id = c.id
+				ORDER BY c.position ASC, t.position ASC
 				LIMIT ? OFFSET ?
 			`, pageSize, offset)
 		}
@@ -207,14 +250,15 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+		if !checkColumnAccessWithBoardFallback(db, user.ID, req.ColumnID, "WRITE", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权在该列创建任务"})
 			return
 		}
 
 		taskID, err := generateTaskID(db, boardID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "生成任务ID失败"})
+			log.Printf("generateTaskID error: boardID=%s, err=%v", boardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "生成任务ID失败: " + err.Error()})
 			return
 		}
 		now := time.Now()
@@ -279,7 +323,8 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		boardID, err := getBoardIDForTask(db, id)
+		var columnID string
+		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
@@ -289,7 +334,7 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "READ", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该任务"})
 			return
 		}
@@ -385,7 +430,8 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		boardID, err := getBoardIDForTask(db, id)
+		var columnID string
+		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
@@ -395,8 +441,7 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Check board access first
-		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该任务"})
 			return
 		}
@@ -483,6 +528,41 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 		}
 		if req.Position != nil && *req.Position != oldTask.Position {
 			changes = append(changes, fmt.Sprintf("位置: %d → %d", oldTask.Position, *req.Position))
+			targetColumnID := req.ColumnID
+			if targetColumnID == "" {
+				targetColumnID = oldTask.ColumnID
+			}
+			newPos := *req.Position
+			oldPos := oldTask.Position
+			isSameColumn := targetColumnID == oldTask.ColumnID
+			if isSameColumn {
+				if newPos < oldPos {
+					_, err = db.Exec(`
+						UPDATE tasks 
+						SET position = position + 1, updated_at = NOW()
+						WHERE column_id = ? AND position >= ? AND position < ? AND id != ?
+					`, targetColumnID, newPos, oldPos, id)
+				} else if newPos > oldPos {
+					_, err = db.Exec(`
+						UPDATE tasks 
+						SET position = position - 1, updated_at = NOW()
+						WHERE column_id = ? AND position > ? AND position <= ? AND id != ?
+					`, targetColumnID, oldPos, newPos, id)
+				}
+			} else {
+				_, err = db.Exec(`
+					UPDATE tasks 
+					SET position = position - 1, updated_at = NOW()
+					WHERE column_id = ? AND position > ?
+				`, oldTask.ColumnID, oldPos)
+				if err == nil {
+					_, err = db.Exec(`
+						UPDATE tasks 
+						SET position = position + 1, updated_at = NOW()
+						WHERE column_id = ? AND position >= ? AND id != ?
+					`, targetColumnID, newPos, id)
+				}
+			}
 		}
 		if req.Published != nil && *req.Published != oldTask.Published {
 			oldPub := "否"
@@ -579,7 +659,8 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		boardID, err := getBoardIDForTask(db, id)
+		var columnID string
+		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
@@ -589,7 +670,6 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// ADMIN can delete any task, MEMBER can only delete their own
 		if user.Role == "MEMBER" {
 			var createdBy sql.NullString
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
@@ -605,7 +685,7 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 				c.JSON(http.StatusForbidden, gin.H{"error": "只能删除自己创建的任务"})
 				return
 			}
-		} else if !checkBoardAccess(db, user.ID, boardID, "ADMIN", user.Role) {
+		} else if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "ADMIN", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该任务"})
 			return
 		}
@@ -653,7 +733,8 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		boardID, err := getBoardIDForTask(db, id)
+		var columnID string
+		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
@@ -663,8 +744,7 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Check board access
-		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权归档该任务"})
 			return
 		}
@@ -801,7 +881,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				JOIN columns c ON t.column_id = c.id
 				WHERE t.archived = false AND t.published = true
 				  AND (t.assignee = ? OR t.column_id IN (%s))
-				ORDER BY t.position ASC, t.created_at ASC
+				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
 			`, strings.Join(placeholders, ","))
 
 			taskRows, err = db.Query(query, args...)
@@ -815,7 +895,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				JOIN columns c ON t.column_id = c.id
 				WHERE t.archived = false AND t.published = true
 				  AND t.assignee = ?
-				ORDER BY t.position ASC, t.created_at ASC
+				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
 			`, user.Nickname)
 		} else if len(columnIDs) > 0 {
 			// Only column match, no userAgent
@@ -836,7 +916,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				JOIN columns c ON t.column_id = c.id
 				WHERE t.archived = false AND t.published = true
 				  AND t.column_id IN (%s)
-				ORDER BY t.position ASC, t.created_at ASC
+				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
 			`, strings.Join(placeholders, ","))
 
 			taskRows, err = db.Query(query, args...)
@@ -928,8 +1008,9 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Get task's current column and board
-		boardID, err := getBoardIDForTask(db, id)
+		// Get task's current column
+		var columnID string
+		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
@@ -939,8 +1020,7 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Check board access
-		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权操作该任务"})
 			return
 		}
@@ -963,9 +1043,10 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Get current column's position
+		// Get current column's position and board_id
 		var currentPosition int
-		err = db.QueryRow("SELECT position FROM columns WHERE id = ?", currentColumnID).Scan(&currentPosition)
+		var boardID string
+		err = db.QueryRow("SELECT position, board_id FROM columns WHERE id = ?", currentColumnID).Scan(&currentPosition, &boardID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取列信息失败"})
 			return
@@ -1036,9 +1117,13 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 
 func generateTaskID(db *sql.DB, boardID string) (string, error) {
 	var shortAlias string
-	err := db.QueryRow("SELECT short_alias FROM boards WHERE id = ?", boardID).Scan(&shortAlias)
+	err := db.QueryRow("SELECT COALESCE(short_alias, '') FROM boards WHERE id = ?", boardID).Scan(&shortAlias)
 	if err != nil {
 		return "", err
+	}
+
+	if shortAlias == "" {
+		shortAlias = "T"
 	}
 
 	tx, err := db.Begin()
@@ -1048,23 +1133,13 @@ func generateTaskID(db *sql.DB, boardID string) (string, error) {
 	defer tx.Rollback()
 
 	var counter int
-	err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ? FOR UPDATE", boardID).Scan(&counter)
+	err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ?", boardID).Scan(&counter)
 	if err != nil {
 		return "", err
 	}
 
 	counter++
-	newCounter := counter
-
-	digits := 4
-	if newCounter >= 10000 {
-		digits = 6
-	}
-	if newCounter >= 1000000 {
-		digits = 8
-	}
-
-	_, err = tx.Exec("UPDATE boards SET task_counter = ? WHERE id = ?", newCounter, boardID)
+	_, err = tx.Exec("UPDATE boards SET task_counter = ? WHERE id = ?", counter, boardID)
 	if err != nil {
 		return "", err
 	}
@@ -1074,6 +1149,14 @@ func generateTaskID(db *sql.DB, boardID string) (string, error) {
 		return "", err
 	}
 
-	taskID := fmt.Sprintf("%s-%0*d", shortAlias, digits, newCounter)
+	digits := 4
+	if counter >= 10000 {
+		digits = 6
+	}
+	if counter >= 1000000 {
+		digits = 8
+	}
+
+	taskID := fmt.Sprintf("%s-%0*d", shortAlias, digits, counter)
 	return taskID, nil
 }

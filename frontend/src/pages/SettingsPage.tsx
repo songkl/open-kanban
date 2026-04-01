@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { authApi, attachmentsApi } from '../services/api';
+import { authApi, attachmentsApi, activitiesApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { showErrorToast } from '../components/ErrorToast';
 import { UserAvatar } from '../components/UserAvatar';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { User, Token, Agent } from '../types/kanban';
 
 type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts';
@@ -73,6 +74,15 @@ export function SettingsPage() {
   const [activityFilterStartTime, setActivityFilterStartTime] = useState('');
   const [activityFilterEndTime, setActivityFilterEndTime] = useState('');
 
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    variant?: 'danger' | 'warning' | 'default';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
   const userNicknameMap = users.reduce((acc, user) => {
     acc[user.id] = user.nickname;
     return acc;
@@ -119,14 +129,11 @@ export function SettingsPage() {
 
   const loadActivities = async (filters?: { userId?: string; action?: string; startTime?: string; endTime?: string }) => {
     try {
-      const params = new URLSearchParams();
-      if (filters?.userId) params.append('userId', filters.userId);
-      if (filters?.action) params.append('action', filters.action);
-      if (filters?.startTime) params.append('startTime', filters.startTime);
-      if (filters?.endTime) params.append('endTime', filters.endTime);
-      const queryString = params.toString();
-      const res = await fetch(`/api/auth/activities${queryString ? '?' + queryString : ''}`, { credentials: 'include' });
-      const data = await res.json();
+      const data = await activitiesApi.getAll({
+        action: filters?.action,
+        startTime: filters?.startTime,
+        endTime: filters?.endTime,
+      });
       setActivities(data.activities || []);
     } catch (err) {
       console.error('Failed to load activities:', err);
@@ -198,15 +205,22 @@ export function SettingsPage() {
     }
   };
 
-  const handleDeleteToken = async (id: string) => {
-    if (!confirm(t('settings.deleteTokenConfirm'))) return;
-
-    try {
-      await authApi.deleteToken(id);
-      await loadTokens();
-    } catch (err) {
-      console.error('Failed to delete token:', err);
-    }
+  const handleDeleteToken = (id: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: t('settings.deleteTokenTitle') || t('modal.deleteConfirmTitle'),
+      message: t('settings.deleteTokenConfirm'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteToken(id);
+          await loadTokens();
+        } catch (err) {
+          console.error('Failed to delete token:', err);
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   const switchToTab = (tab: Tab) => {
@@ -708,13 +722,21 @@ export function SettingsPage() {
                       <div className="flex gap-2">
                         <button
                           onClick={async () => {
-                            if (!confirm(t('settings.toggleEnabledConfirm', { name: agent.nickname, action: agent.enabled ? t('settings.disable') : t('settings.enable') }))) return;
-                            try {
-                              await authApi.setUserEnabled(agent.id, !agent.enabled);
-                              await loadAgents();
-                            } catch (err) {
-                              console.error('Failed to toggle agent enabled:', err);
-                            }
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: t('settings.toggleEnabledTitle') || t('modal.confirmTitle'),
+                              message: t('settings.toggleEnabledConfirm', { name: agent.nickname, action: agent.enabled ? t('settings.disable') : t('settings.enable') }),
+                              variant: 'warning',
+                              onConfirm: async () => {
+                                try {
+                                  await authApi.setUserEnabled(agent.id, !agent.enabled);
+                                  await loadAgents();
+                                } catch (err) {
+                                  console.error('Failed to toggle agent enabled:', err);
+                                }
+                                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                              },
+                            });
                           }}
                           className={`rounded px-3 py-1 text-sm ${agent.enabled ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
                         >
@@ -732,14 +754,22 @@ export function SettingsPage() {
                         </button>
                         <button
                           onClick={async () => {
-                            if (!confirm(t('settings.resetTokenConfirm', { name: agent.nickname }))) return;
-                            try {
-                              const data = await authApi.resetAgentToken(agent.id);
-                              setNewAgentToken(data.token);
-                              setShowTokenModal(true);
-                            } catch (err) {
-                              console.error('Failed to reset token:', err);
-                            }
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: t('settings.resetTokenTitle') || t('modal.confirmTitle'),
+                              message: t('settings.resetTokenConfirm', { name: agent.nickname }),
+                              variant: 'warning',
+                              onConfirm: async () => {
+                                try {
+                                  const data = await authApi.resetAgentToken(agent.id);
+                                  setNewAgentToken(data.token);
+                                  setShowTokenModal(true);
+                                } catch (err) {
+                                  console.error('Failed to reset token:', err);
+                                }
+                                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                              },
+                            });
                           }}
                           className="rounded bg-blue-50 px-3 py-1 text-sm text-blue-600 hover:bg-blue-100"
                         >
@@ -747,13 +777,21 @@ export function SettingsPage() {
                         </button>
                         <button
                           onClick={async () => {
-                            if (!confirm(t('settings.deleteAgentConfirm', { name: agent.nickname }))) return;
-                            try {
-                              await authApi.deleteAgent(agent.id);
-                              await loadAgents();
-                            } catch (err) {
-                              console.error('Failed to delete agent:', err);
-                            }
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: t('settings.deleteAgentTitle') || t('modal.deleteConfirmTitle'),
+                              message: t('settings.deleteAgentConfirm', { name: agent.nickname }),
+                              variant: 'danger',
+                              onConfirm: async () => {
+                                try {
+                                  await authApi.deleteAgent(agent.id);
+                                  await loadAgents();
+                                } catch (err) {
+                                  console.error('Failed to delete agent:', err);
+                                }
+                                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                              },
+                            });
                           }}
                           className="rounded bg-red-50 px-3 py-1 text-sm text-red-600 hover:bg-red-100"
                         >
@@ -800,13 +838,21 @@ export function SettingsPage() {
                               onChange={async (e) => {
                                 const newRole = e.target.value as 'ADMIN' | 'MEMBER' | 'VIEWER';
                                 if (newRole === user.role) return;
-                                if (!confirm(t('settings.confirmRoleChange', { name: user.nickname, role: newRole === 'ADMIN' ? t('settings.admin') : newRole === 'MEMBER' ? t('settings.member') : t('settings.viewer') }))) return;
-                                try {
-                                  await authApi.updateUser(user.id, { role: newRole });
-                                  await loadUsers();
-                                } catch (err) {
-                                  console.error('Failed to update user role:', err);
-                                }
+                                setConfirmDialog({
+                                  isOpen: true,
+                                  title: t('settings.confirmRoleChangeTitle') || t('modal.confirmTitle'),
+                                  message: t('settings.confirmRoleChange', { name: user.nickname, role: newRole === 'ADMIN' ? t('settings.admin') : newRole === 'MEMBER' ? t('settings.member') : t('settings.viewer') }),
+                                  variant: 'warning',
+                                  onConfirm: async () => {
+                                    try {
+                                      await authApi.updateUser(user.id, { role: newRole });
+                                      await loadUsers();
+                                    } catch (err) {
+                                      console.error('Failed to update user role:', err);
+                                    }
+                                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                  },
+                                });
                               }}
                               disabled={user.id === currentUser?.id}
                               className={`rounded-lg px-2 py-1 text-xs border font-medium ${user.role === 'ADMIN' ? 'bg-blue-100 text-blue-700 border-blue-200' : user.role === 'MEMBER' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-600 border-zinc-200'} ${user.id === currentUser?.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -828,13 +874,21 @@ export function SettingsPage() {
                               showErrorToast(t('settings.cannotDisableSelf'), 'warning');
                               return;
                             }
-                            if (!confirm(t('settings.toggleEnabledConfirm', { name: user.nickname, action: user.enabled ? t('settings.disable') : t('settings.enable') }))) return;
-                            try {
-                              await authApi.setUserEnabled(user.id, !user.enabled);
-                              await loadUsers();
-                            } catch (err) {
-                              console.error('Failed to toggle user enabled:', err);
-                            }
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: t('settings.toggleEnabledTitle') || t('modal.confirmTitle'),
+                              message: t('settings.toggleEnabledConfirm', { name: user.nickname, action: user.enabled ? t('settings.disable') : t('settings.enable') }),
+                              variant: 'warning',
+                              onConfirm: async () => {
+                                try {
+                                  await authApi.setUserEnabled(user.id, !user.enabled);
+                                  await loadUsers();
+                                } catch (err) {
+                                  console.error('Failed to toggle user enabled:', err);
+                                }
+                                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                              },
+                            });
                           }}
                           disabled={user.id === currentUser?.id}
                           className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${user.enabled ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'} ${user.id === currentUser?.id ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -1025,6 +1079,16 @@ export function SettingsPage() {
             </form>
           </div>
         </div>
+      )}
+      {confirmDialog.isOpen && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        />
       )}
     </div>
   );

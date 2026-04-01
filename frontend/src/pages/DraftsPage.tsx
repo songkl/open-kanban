@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { Task, Board } from '@/types/kanban';
 import { draftsApi, columnsApi, boardsApi, tasksApi } from '@/services/api';
 import { showErrorToast } from '@/components/ErrorToast';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 const FAILED_TASK_CREATIONS_KEY = 'failedTaskCreations';
 
@@ -48,6 +49,13 @@ export function DraftsPage() {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    variant?: 'danger' | 'warning' | 'default';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     fetchBoards();
@@ -176,15 +184,23 @@ export function DraftsPage() {
     }
   };
 
-  const handleDelete = async (taskId: string) => {
-    if (!confirm(t('drafts.confirmDelete'))) return;
-    try {
-      await tasksApi.delete(taskId);
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-    } catch (err) {
-      console.error('Failed to delete draft:', err);
-      showErrorToast(err instanceof Error ? err.message : t('toast.deleteFailed'), 'error');
-    }
+  const handleDelete = (taskId: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: t('drafts.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
+      message: t('drafts.confirmDelete'),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await tasksApi.delete(taskId);
+          setTasks((prev) => prev.filter((t) => t.id !== taskId));
+        } catch (err) {
+          console.error('Failed to delete draft:', err);
+          showErrorToast(err instanceof Error ? err.message : t('toast.deleteFailed'), 'error');
+        }
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   const handleEdit = (task: Task) => {
@@ -588,6 +604,16 @@ export function DraftsPage() {
             </div>
           </div>
         </div>
+      )}
+      {confirmDialog.isOpen && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        />
       )}
     </div>
   );

@@ -49,12 +49,12 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 		var err error
 		if boardID != "" {
 			rows, err = db.Query(
-				"SELECT id, name, status, position, color, board_id, created_at, updated_at FROM columns WHERE board_id = ? ORDER BY position ASC",
+				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE board_id = ? ORDER BY position ASC",
 				boardID,
 			)
 		} else {
 			rows, err = db.Query(
-				"SELECT id, name, status, position, color, board_id, created_at, updated_at FROM columns ORDER BY position ASC",
+				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns ORDER BY position ASC",
 			)
 		}
 		if err != nil {
@@ -67,9 +67,17 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 		for rows.Next() {
 			var col models.Column
 			var status sql.NullString
-			if err := rows.Scan(&col.ID, &col.Name, &status, &col.Position, &col.Color, &col.BoardID, &col.CreatedAt, &col.UpdatedAt); err == nil {
+			var description sql.NullString
+			var ownerAgentId sql.NullString
+			if err := rows.Scan(&col.ID, &col.Name, &status, &col.Position, &col.Color, &description, &ownerAgentId, &col.BoardID, &col.CreatedAt, &col.UpdatedAt); err == nil {
 				if status.Valid {
 					col.Status = &status.String
+				}
+				if description.Valid {
+					col.Description = description.String
+				}
+				if ownerAgentId.Valid {
+					col.OwnerAgentID = &ownerAgentId.String
 				}
 
 				// Get tasks for this column
@@ -142,16 +150,18 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 				}
 
 				columns = append(columns, gin.H{
-					"id":          col.ID,
-					"name":        col.Name,
-					"status":      col.Status,
-					"position":    col.Position,
-					"color":       col.Color,
-					"boardId":     col.BoardID,
-					"createdAt":   col.CreatedAt,
-					"updatedAt":   col.UpdatedAt,
-					"tasks":       tasks,
-					"agentConfig": agentConfig,
+					"id":           col.ID,
+					"name":         col.Name,
+					"status":       col.Status,
+					"position":     col.Position,
+					"color":        col.Color,
+					"description":  col.Description,
+					"ownerAgentId": col.OwnerAgentID,
+					"boardId":      col.BoardID,
+					"createdAt":    col.CreatedAt,
+					"updatedAt":    col.UpdatedAt,
+					"tasks":        tasks,
+					"agentConfig":  agentConfig,
 				})
 			}
 		}
@@ -245,11 +255,13 @@ func CreateColumn(db *sql.DB) gin.HandlerFunc {
 
 // UpdateColumnRequest represents column update request
 type UpdateColumnRequest struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	Position int    `json:"position"`
-	Color    string `json:"color"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Status       string  `json:"status"`
+	Position     int     `json:"position"`
+	Color        string  `json:"color"`
+	Description  string  `json:"description"`
+	OwnerAgentId *string `json:"ownerAgentId"`
 }
 
 // UpdateColumn updates a column
@@ -272,24 +284,35 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		boardID, err := getBoardIDForColumn(db, req.ID)
+		var exists bool
+		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM columns WHERE id = ?)", req.ID).Scan(&exists)
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+			return
+		}
+		if !exists {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
 			return
 		}
 
-		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+		if !checkColumnAccessWithBoardFallback(db, user.ID, req.ID, "WRITE", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该列"})
 			return
 		}
 
 		var oldColumn struct {
-			Name     string
-			Status   *string
-			Position int
-			Color    string
+			Name         string
+			Status       *string
+			Position     int
+			Color        string
+			Description  string
+			OwnerAgentId *string
 		}
-		db.QueryRow("SELECT name, status, position, color FROM columns WHERE id = ?", req.ID).Scan(&oldColumn.Name, &oldColumn.Status, &oldColumn.Position, &oldColumn.Color)
+		err = db.QueryRow("SELECT name, status, position, color, description, owner_agent_id FROM columns WHERE id = ?", req.ID).Scan(&oldColumn.Name, &oldColumn.Status, &oldColumn.Position, &oldColumn.Color, &oldColumn.Description, &oldColumn.OwnerAgentId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+			return
+		}
 
 		var changes []string
 
@@ -311,6 +334,18 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 		if req.Color != "" && req.Color != oldColumn.Color {
 			changes = append(changes, fmt.Sprintf("颜色: '%s' → '%s'", oldColumn.Color, req.Color))
 		}
+		if req.Description != "" && req.Description != oldColumn.Description {
+			changes = append(changes, fmt.Sprintf("说明: '%s' → '%s'", oldColumn.Description, req.Description))
+		}
+		if req.OwnerAgentId != nil {
+			oldOwnerAgentId := ""
+			if oldColumn.OwnerAgentId != nil {
+				oldOwnerAgentId = *oldColumn.OwnerAgentId
+			}
+			if *req.OwnerAgentId != oldOwnerAgentId {
+				changes = append(changes, fmt.Sprintf("负责人: '%s' → '%s'", oldOwnerAgentId, *req.OwnerAgentId))
+			}
+		}
 
 		updates := []interface{}{time.Now()}
 		query := "UPDATE columns SET updated_at = ?"
@@ -330,6 +365,14 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 		if req.Color != "" {
 			query += ", color = ?"
 			updates = append(updates, req.Color)
+		}
+		if req.Description != "" {
+			query += ", description = ?"
+			updates = append(updates, req.Description)
+		}
+		if req.OwnerAgentId != nil {
+			query += ", owner_agent_id = ?"
+			updates = append(updates, *req.OwnerAgentId)
 		}
 
 		query += " WHERE id = ?"
@@ -369,18 +412,19 @@ func DeleteColumn(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		boardID, err := getBoardIDForColumn(db, id)
-		if err != nil {
+		var exists bool
+		db.QueryRow("SELECT EXISTS(SELECT 1 FROM columns WHERE id = ?)", id).Scan(&exists)
+		if !exists {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
 			return
 		}
 
-		if !checkBoardAccess(db, user.ID, boardID, "ADMIN", user.Role) {
+		if !checkColumnAccessWithBoardFallback(db, user.ID, id, "ADMIN", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该列"})
 			return
 		}
 
-		_, err = db.Exec("DELETE FROM columns WHERE id = ?", id)
+		_, err := db.Exec("DELETE FROM columns WHERE id = ?", id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
 			return
@@ -424,6 +468,72 @@ func GetColumnAgent(db *sql.DB) gin.HandlerFunc {
 // SetColumnAgentRequest represents agent config request
 type SetColumnAgentRequest struct {
 	AgentTypes []string `json:"agentTypes"`
+}
+
+// ReorderColumnsRequest represents column reorder request
+type ReorderColumnsRequest struct {
+	BoardID string                     `json:"boardId"`
+	Columns []ReorderColumnItemRequest `json:"columns"`
+}
+
+type ReorderColumnItemRequest struct {
+	ID       string `json:"id"`
+	Position int    `json:"position"`
+}
+
+// ReorderColumns updates the position of columns
+func ReorderColumns(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		var req ReorderColumnsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			return
+		}
+
+		if req.BoardID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, req.BoardID, "WRITE", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该看板"})
+			return
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "数据库错误"})
+			return
+		}
+		defer tx.Rollback()
+
+		now := time.Now()
+		for _, col := range req.Columns {
+			_, err := tx.Exec(
+				"UPDATE columns SET position = ?, updated_at = ? WHERE id = ? AND board_id = ?",
+				col.Position, now, col.ID, req.BoardID,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "更新列排序失败"})
+				return
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存排序失败"})
+			return
+		}
+
+		broadcast()
+
+		c.JSON(http.StatusOK, gin.H{"success": true})
+	}
 }
 
 // SetColumnAgent sets agent config for a column
@@ -516,7 +626,7 @@ func generateColumnID(db *sql.DB, name string, boardID string) string {
 	if baseSlug == "" {
 		baseSlug = "column"
 	}
-	
+
 	colID := baseSlug
 	counter := 1
 	for {

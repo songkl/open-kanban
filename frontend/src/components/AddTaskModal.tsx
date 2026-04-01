@@ -14,7 +14,7 @@ interface AddTaskModalProps {
   currentBoardId?: string;
   boards?: Board[];
   onClose: () => void;
-  onSubmit: (title: string, description: string, published: boolean, columnId?: string, boardId?: string) => void;
+  onSubmit: (title: string, description: string, published: boolean, columnId?: string, boardId?: string, priority?: string) => void;
 }
 
 export function AddTaskModal({
@@ -32,6 +32,7 @@ export function AddTaskModal({
   const [selectedBoardId, setSelectedBoardId] = useState(currentBoardId || '');
   const [columns, setColumns] = useState<{ id: string; name: string }[]>([]);
   const [selectedColumnId, setSelectedColumnId] = useState('');
+  const [priority, setPriority] = useState('medium');
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descEditorRef = useRef<HTMLDivElement>(null);
 
@@ -55,6 +56,7 @@ export function AddTaskModal({
       setDescription('');
       setIsPublished(true);
       setSelectedBoardId(currentBoardId || '');
+      setPriority('medium');
       setTimeout(() => titleInputRef.current?.focus(), 0);
     }
   }, [isOpen, currentBoardId]);
@@ -79,7 +81,7 @@ export function AddTaskModal({
       if (e.key === 'Enter') {
         e.preventDefault();
         if (title.trim()) {
-          onSubmit(title.trim(), description.trim(), isPublished, selectedColumnId, selectedBoardId);
+          onSubmit(title.trim(), description.trim(), isPublished, selectedColumnId, selectedBoardId, priority);
           setTitle('');
           setDescription('');
           setIsPublished(false);
@@ -91,7 +93,7 @@ export function AddTaskModal({
       if (e.key === 's') {
         e.preventDefault();
         if (title.trim()) {
-          onSubmit(title.trim(), description.trim(), false, selectedColumnId, selectedBoardId);
+          onSubmit(title.trim(), description.trim(), false, selectedColumnId, selectedBoardId, priority);
           setTitle('');
           setDescription('');
           setIsPublished(false);
@@ -100,7 +102,7 @@ export function AddTaskModal({
         return;
       }
     }
-  }, [onClose, title, description, isPublished, selectedColumnId, selectedBoardId, onSubmit]);
+  }, [onClose, title, description, isPublished, selectedColumnId, selectedBoardId, priority, onSubmit]);
 
   useEffect(() => {
     if (isOpen) {
@@ -112,7 +114,7 @@ export function AddTaskModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title.trim()) {
-      onSubmit(title.trim(), description.trim(), isPublished, selectedColumnId, selectedBoardId);
+      onSubmit(title.trim(), description.trim(), isPublished, selectedColumnId, selectedBoardId, priority);
       setTitle('');
       setDescription('');
       setIsPublished(false);
@@ -211,6 +213,19 @@ export function AddTaskModal({
             />
             {t('task.publishHint')}
           </label>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">{t('taskModal.priority')}</label>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm"
+            >
+              <option value="low">{t('taskModal.priorityLow')}</option>
+              <option value="medium">{t('taskModal.priorityMedium')}</option>
+              <option value="high">{t('taskModal.priorityHigh')}</option>
+            </select>
+          </div>
 
           <div className="flex gap-3">
             <button

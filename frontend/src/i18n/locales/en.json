@@ -14,6 +14,9 @@
     },
     "close": "Close"
   },
+  "common": {
+    "close": "Close"
+  },
   "upload": {
     "fileTooLarge": "File too large, max 10MB",
     "unsupportedType": "Unsupported file type",
@@ -237,7 +240,21 @@
     "colorGray": "Gray",
     "ownerAgent": "Owner Agent",
     "ownerAgentHint": "Assign an Agent to own this column. The Agent can get exclusive tasks via MCP.",
-    "noOwnerAgent": "None"
+    "noOwnerAgent": "None",
+    "permissions": "Permissions",
+    "columnPermissions": "Column Permissions",
+    "currentPermissions": "Current Permissions",
+    "noPermissions": "No permissions set for this column",
+    "addPermission": "Add Permission",
+    "selectUser": "Select user",
+    "add": "Add",
+    "remove": "Remove",
+    "permissionAddFailed": "Failed to add permission",
+    "permission": {
+      "READ": "Read",
+      "WRITE": "Write",
+      "ADMIN": "Admin"
+    }
   },
   "wsStatus": {
     "connected": "Real-time sync connected",
@@ -560,6 +577,7 @@
     "nextPage": "Next",
     "commentIdentity": "Commenting as: {{name}}",
     "confirmDelete": "Are you sure you want to delete this task?",
+    "confirmDeleteTitle": "Confirm Delete",
     "yourName": "Your name",
     "addComment": "Add comment",
     "commentHint": "Supports Markdown",

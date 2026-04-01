@@ -22,7 +22,7 @@ export function setGlobalErrorHandler(handler: ((error: Error) => void) | null) 
 
 async function fetchApi<T>(
   path: string,
-  options?: RequestInit
+  options?: RequestInit & { skip401Handling?: boolean }
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
   try {
@@ -38,7 +38,7 @@ async function fetchApi<T>(
     const data = await response.json();
 
     if (!response.ok) {
-      if (response.status === 401) {
+      if (response.status === 401 && !options?.skip401Handling) {
         window.location.href = '/login';
         throw new Error(i18n.t('app.error.unauthorized'));
       }
@@ -127,6 +127,11 @@ export const columnsApi = {
     }),
   delete: (id: string) =>
     fetchApi<void>(`/api/columns?id=${id}`, { method: 'DELETE' }),
+  reorder: (boardId: string, columns: { id: string; position: number }[]) =>
+    fetchApi<void>('/api/columns/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ boardId, columns }),
+    }),
 };
 
 // Tasks API
@@ -275,11 +280,72 @@ export const authApi = {
     }),
   deletePermission: (id: string) =>
     fetchApi<void>(`/api/auth/permissions?id=${id}`, { method: 'DELETE' }),
+  getColumnPermissions: (userId?: string, columnId?: string) =>
+    fetchApi<{ permissions: Array<{ id: string; columnId: string; columnName: string; access: string }> }>(
+      `/api/auth/permissions/columns${userId ? `?userId=${userId}` : columnId ? `?columnId=${columnId}` : ''}`
+    ),
+  setColumnPermission: (userId: string, columnId: string, access: string) =>
+    fetchApi<{ permission: { id: string; userId: string; columnId: string; columnName: string; access: string } }>('/api/auth/permissions/columns', {
+      method: 'POST',
+      body: JSON.stringify({ userId, columnId, access }),
+    }),
+  deleteColumnPermission: (id: string) =>
+    fetchApi<void>(`/api/auth/permissions/columns?id=${id}`, { method: 'DELETE' }),
   setUserEnabled: (userId: string, enabled: boolean) =>
     fetchApi<void>('/api/auth/users/enabled', {
       method: 'POST',
       body: JSON.stringify({ userId, enabled }),
     }),
+};
+
+// Activities API
+interface Activity {
+  id: string;
+  userId: string;
+  userNickname?: string;
+  userAvatar?: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  targetTitle?: string;
+  details?: string;
+  createdAt: string;
+}
+
+export const activitiesApi = {
+  getAll: (filters?: { action?: string; startTime?: string; endTime?: string; pageSize?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.action) params.append('action', filters.action);
+    if (filters?.startTime) params.append('startTime', filters.startTime);
+    if (filters?.endTime) params.append('endTime', filters.endTime);
+    if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
+    const queryString = params.toString();
+    return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
+      `/api/auth/activities${queryString ? '?' + queryString : ''}`,
+      { skip401Handling: true }
+    );
+  },
+  getByAgent: (agentId?: string, offset = 0, limit = 50) => {
+    const params = new URLSearchParams();
+    params.append('agentOnly', 'true');
+    if (agentId) params.append('userId', agentId);
+    params.append('limit', String(limit));
+    params.append('offset', String(offset));
+    return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
+      `/api/auth/activities?${params.toString()}`,
+      { skip401Handling: true }
+    );
+  },
+  getByUser: (userId: string, offset = 0, limit = 50) => {
+    const params = new URLSearchParams();
+    params.append('userId', userId);
+    params.append('limit', String(limit));
+    params.append('offset', String(offset));
+    return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
+      `/api/auth/activities?${params.toString()}`,
+      { skip401Handling: true }
+    );
+  },
 };
 
 // Archived & Drafts API

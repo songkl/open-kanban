@@ -41,18 +41,18 @@ type Board struct {
 
 // Column represents a column in a board
 type Column struct {
-	ID            string       `json:"id"`
-	Name          string       `json:"name"`
-	Status        *string      `json:"status,omitempty"`
-	Position      int          `json:"position"`
-	Color         string       `json:"color"`
-	Description   string       `json:"description,omitempty"`
-	BoardID       string       `json:"boardId"`
-	OwnerAgentID  *string      `json:"ownerAgentId,omitempty"`
-	CreatedAt     time.Time    `json:"createdAt"`
-	UpdatedAt     time.Time    `json:"updatedAt"`
-	Tasks         []Task       `json:"tasks,omitempty"`
-	AgentConfig   *ColumnAgent `json:"agentConfig,omitempty"`
+	ID           string       `json:"id"`
+	Name         string       `json:"name"`
+	Status       *string      `json:"status,omitempty"`
+	Position     int          `json:"position"`
+	Color        string       `json:"color"`
+	Description  string       `json:"description,omitempty"`
+	BoardID      string       `json:"boardId"`
+	OwnerAgentID *string      `json:"ownerAgentId,omitempty"`
+	CreatedAt    time.Time    `json:"createdAt"`
+	UpdatedAt    time.Time    `json:"updatedAt"`
+	Tasks        []Task       `json:"tasks,omitempty"`
+	AgentConfig  *ColumnAgent `json:"agentConfig,omitempty"`
 }
 
 // ColumnAgent represents agent configuration for a column
@@ -112,6 +112,16 @@ type BoardPermission struct {
 	Access  string `json:"access"` // READ, WRITE, ADMIN
 	Board   *Board `json:"board,omitempty"`
 	User    *User  `json:"user,omitempty"`
+}
+
+// ColumnPermission represents user permissions for a column
+type ColumnPermission struct {
+	ID       string  `json:"id"`
+	UserID   string  `json:"userId"`
+	ColumnID string  `json:"columnId"`
+	Access   string  `json:"access"` // READ, WRITE, ADMIN
+	Column   *Column `json:"column,omitempty"`
+	User     *User   `json:"user,omitempty"`
 }
 
 // Attachment represents a file attachment

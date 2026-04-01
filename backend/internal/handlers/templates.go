@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -453,6 +454,10 @@ func CreateBoardFromTemplate(db *sql.DB) gin.HandlerFunc {
 			boardID, req.Name, false, now, now,
 		)
 		if err != nil {
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				c.JSON(http.StatusConflict, gin.H{"error": "看板ID已被占用，请重新尝试"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
 			return
 		}

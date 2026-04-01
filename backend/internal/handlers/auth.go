@@ -175,18 +175,9 @@ func GlobalRateLimitMiddleware() gin.HandlerFunc {
 }
 
 var (
-	avatarOptions = []string{
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Luna",
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Max",
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Bella",
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie",
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Sophie",
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Jack",
-		"https://api.dicebear.com/7.x/avataaars/svg?seed=Olivia",
-	}
-	salt     string
-	saltOnce sync.Once
+	avatarOptions = []string{}
+	salt          string
+	saltOnce      sync.Once
 )
 
 // getSalt returns the application salt, generating one if it doesn't exist
@@ -454,11 +445,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 
 			isFirstUser := userCount == 0
 
-			// Generate avatar if not provided
 			avatar := req.Avatar
-			if avatar == "" {
-				avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
-			}
 
 			// Set user type and role
 			userType := req.Type
@@ -1736,11 +1723,7 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Generate avatar if not provided
 		avatar := req.Avatar
-		if avatar == "" {
-			avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
-		}
 
 		agentID := generateID()
 		now := time.Now()
@@ -1775,19 +1758,27 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Grant agent WRITE permission on all boards by default
+		// Grant agent WRITE permission on all boards by default (batch insert)
 		rows, err := db.Query("SELECT id FROM boards WHERE deleted = false")
 		if err == nil {
 			defer rows.Close()
+			var boardIDs []string
 			for rows.Next() {
 				var boardID string
 				if err := rows.Scan(&boardID); err == nil {
-					permID := generateID()
-					db.Exec(
-						"INSERT INTO board_permissions (id, user_id, board_id, access) VALUES (?, ?, ?, ?)",
-						permID, agentID, boardID, "ADMIN",
-					)
+					boardIDs = append(boardIDs, boardID)
 				}
+			}
+			if len(boardIDs) > 0 {
+				args := make([]interface{}, 0, len(boardIDs)*4)
+				placeholders := make([]string, len(boardIDs))
+				for i, boardID := range boardIDs {
+					permID := generateID()
+					placeholders[i] = "(?, ?, ?, ?)"
+					args = append(args, permID, agentID, boardID, "ADMIN")
+				}
+				query := "INSERT INTO board_permissions (id, user_id, board_id, access) VALUES " + strings.Join(placeholders, ", ")
+				db.Exec(query, args...)
 			}
 		}
 
@@ -1943,6 +1934,187 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"success": true})
+	}
+}
+
+func checkColumnAccess(db *sql.DB, userID, columnID, requiredAccess string, userRole string) bool {
+	if userRole == "ADMIN" {
+		return true
+	}
+	if userID == "" || columnID == "" {
+		return false
+	}
+	var access string
+	err := db.QueryRow(
+		"SELECT access FROM column_permissions WHERE user_id = ? AND column_id = ?",
+		userID, columnID,
+	).Scan(&access)
+	if err != nil {
+		return false
+	}
+	accessLevel := map[string]int{"READ": 1, "WRITE": 2, "ADMIN": 3}
+	requiredLevel := accessLevel[requiredAccess]
+	userLevel := accessLevel[access]
+	return userLevel >= requiredLevel
+}
+
+func checkColumnAccessWithBoardFallback(db *sql.DB, userID, columnID, requiredAccess string, userRole string) bool {
+	if checkColumnAccess(db, userID, columnID, requiredAccess, userRole) {
+		return true
+	}
+	boardID, err := getBoardIDForColumn(db, columnID)
+	if err != nil {
+		return false
+	}
+	return checkBoardAccess(db, userID, boardID, requiredAccess, userRole)
+}
+
+type SetColumnPermissionRequest struct {
+	UserID   string `json:"userId"`
+	ColumnID string `json:"columnId"`
+	Access   string `json:"access"`
+}
+
+func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		targetUserID := user.ID
+		requestedUserID := c.Query("userId")
+		requestedColumnID := c.Query("columnId")
+
+		if requestedUserID != "" && user.Role == "ADMIN" {
+			targetUserID = requestedUserID
+		} else if requestedUserID != "" && user.Role != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以查看其他用户的权限"})
+			return
+		}
+
+		var rows *sql.Rows
+		var err error
+
+		if requestedColumnID != "" && user.Role == "ADMIN" {
+			rows, err = db.Query(`
+				SELECT cp.id, cp.column_id, col.name, cp.access
+				FROM column_permissions cp
+				JOIN columns col ON cp.column_id = col.id
+				WHERE cp.column_id = ?
+			`, requestedColumnID)
+		} else {
+			rows, err = db.Query(`
+				SELECT cp.id, cp.column_id, col.name, cp.access
+				FROM column_permissions cp
+				JOIN columns col ON cp.column_id = col.id
+				WHERE cp.user_id = ?
+			`, targetUserID)
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取失败"})
+			return
+		}
+		defer rows.Close()
+
+		var permissions []gin.H
+		for rows.Next() {
+			var id, columnID, columnName, access string
+			if err := rows.Scan(&id, &columnID, &columnName, &access); err == nil {
+				permissions = append(permissions, gin.H{
+					"id":         id,
+					"columnId":   columnID,
+					"columnName": columnName,
+					"access":     access,
+				})
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"permissions": permissions})
+	}
+}
+
+func SetColumnPermission(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+		if user.Role != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以分配权限"})
+			return
+		}
+
+		var req SetColumnPermissionRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "参数不完整"})
+			return
+		}
+
+		if req.UserID == "" || req.ColumnID == "" || req.Access == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "参数不完整"})
+			return
+		}
+
+		validAccesses := map[string]bool{"READ": true, "WRITE": true, "ADMIN": true}
+		if !validAccesses[req.Access] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的权限值"})
+			return
+		}
+
+		permID := generateID()
+		_, err := db.Exec(`
+			INSERT INTO column_permissions (id, user_id, column_id, access)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(user_id, column_id) DO UPDATE SET access = excluded.access
+		`, permID, req.UserID, req.ColumnID, req.Access)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "设置失败"})
+			return
+		}
+
+		var columnName string
+		db.QueryRow("SELECT name FROM columns WHERE id = ?", req.ColumnID).Scan(&columnName)
+
+		c.JSON(http.StatusOK, gin.H{
+			"permission": gin.H{
+				"id":         permID,
+				"userId":     req.UserID,
+				"columnId":   req.ColumnID,
+				"columnName": columnName,
+				"access":     req.Access,
+			},
+		})
+	}
+}
+
+func DeleteColumnPermission(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+		if user.Role != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以删除权限"})
+			return
+		}
+
+		permID := c.Query("id")
+		if permID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "权限 ID 必填"})
+			return
+		}
+
+		_, err := db.Exec("DELETE FROM column_permissions WHERE id = ?", permID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
 			return
 		}
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { authApi } from '../services/api';
+import { authApi, activitiesApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
 import type { Agent } from '../types/kanban';
@@ -106,6 +106,9 @@ export function AgentActivityPage() {
                 : prev;
               return [newActivity, ...filtered];
             });
+            authApi.getAgents().then((agentsData) => {
+              setAgents(agentsData || []);
+            });
           }
         } catch {}
       };
@@ -169,14 +172,7 @@ export function AgentActivityPage() {
 
   const loadActivities = async (agentId?: string, offset = 0) => {
     try {
-      const params = new URLSearchParams();
-      params.append('agentOnly', 'true');
-      if (agentId) params.append('userId', agentId);
-      params.append('limit', '50');
-      params.append('offset', String(offset));
-      const queryString = params.toString();
-      const res = await fetch(`/api/auth/activities${queryString ? '?' + queryString : ''}`, { credentials: 'include' });
-      const data = await res.json();
+      const data = await activitiesApi.getByAgent(agentId, offset, 50);
       const newActivities = data.activities || [];
       if (offset === 0) {
         setActivities(newActivities);
@@ -203,13 +199,7 @@ export function AgentActivityPage() {
 
   const syncActivities = async (agentId?: string) => {
     try {
-      const params = new URLSearchParams();
-      params.append('agentOnly', 'true');
-      if (agentId) params.append('userId', agentId);
-      params.append('limit', '50');
-      const queryString = params.toString();
-      const res = await fetch(`/api/auth/activities${queryString ? '?' + queryString : ''}`, { credentials: 'include' });
-      const data = await res.json();
+      const data = await activitiesApi.getByAgent(agentId, 0, 50);
       const fetched = data.activities || [];
       setActivities((prev) => {
         const existingIds = new Set(prev.map((a) => a.id));

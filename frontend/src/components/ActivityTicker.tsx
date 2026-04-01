@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { activitiesApi } from '@/services/api';
 
 interface Activity {
   id: string;
@@ -40,8 +41,7 @@ export function ActivityTicker() {
 
   const fetchActivities = async () => {
     try {
-      const res = await fetch('/api/auth/activities?pageSize=20', { credentials: 'include' });
-      const data = await res.json();
+      const data = await activitiesApi.getAll({ pageSize: 20 });
       setActivities(data.activities || []);
     } catch (err) {
       console.error('Failed to fetch activities:', err);

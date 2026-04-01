@@ -12,7 +12,7 @@ cd "$PROJECT_DIR/backend"
 if [ -d "$PROJECT_DIR/frontend/dist" ]; then
     rm -rf cmd/server/web
     mkdir -p cmd/server/web
-    cp -r "$PROJECT_DIR/frontend/dist/." cmd/server/web/
+    cp -r "$PROJECT_DIR/frontend/dist/." web/
 fi
 
 go build -ldflags="-s -w" -o kanban-server ./cmd/server/main.go

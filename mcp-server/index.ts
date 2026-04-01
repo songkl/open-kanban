@@ -629,7 +629,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           });
         }
         
-        return { content: [{ type: "text", text: JSON.stringify(tasks, null, 2) }] };
+        const lightweightTasks = tasks.map(({ comments, subtasks, ...task }: any) => task);
+        return { content: [{ type: "text", text: JSON.stringify(lightweightTasks, null, 2) }] };
       }
 
       case "get_task": {

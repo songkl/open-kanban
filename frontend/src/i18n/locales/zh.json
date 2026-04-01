@@ -14,6 +14,9 @@
     },
     "close": "关闭"
   },
+  "common": {
+    "close": "关闭"
+  },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",
     "unsupportedType": "不支持的文件类型",
@@ -237,7 +240,21 @@
     "colorGray": "灰色",
     "ownerAgent": "负责人Agent",
     "ownerAgentHint": "指定负责该列的Agent，通过MCP可获取专属任务",
-    "noOwnerAgent": "无"
+    "noOwnerAgent": "无",
+    "permissions": "权限",
+    "columnPermissions": "列权限",
+    "currentPermissions": "当前权限",
+    "noPermissions": "该列暂无权限设置",
+    "addPermission": "添加权限",
+    "selectUser": "选择用户",
+    "add": "添加",
+    "remove": "移除",
+    "permissionAddFailed": "添加权限失败",
+    "permission": {
+      "READ": "读取",
+      "WRITE": "写入",
+      "ADMIN": "管理"
+    }
   },
   "wsStatus": {
     "connected": "实时同步已连接",
@@ -560,6 +577,7 @@
     "nextPage": "下一页",
     "commentIdentity": "评论身份: {{name}}",
     "confirmDelete": "确定要删除这个任务吗？",
+    "confirmDeleteTitle": "确认删除",
     "yourName": "你的名字",
     "addComment": "添加评论",
     "commentHint": "支持 Markdown",

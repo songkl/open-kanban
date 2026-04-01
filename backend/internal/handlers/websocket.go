@@ -45,6 +45,12 @@ func isOriginAllowed(origin string) bool {
 	return false
 }
 
+const (
+	pingInterval = 30 * time.Second
+	pongTimeout  = 10 * time.Second
+	readDeadline = pongTimeout + pingInterval
+)
+
 var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -91,6 +97,13 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		}
 		defer conn.Close()
 
+		// Set initial read deadline for authentication/initial connection
+		conn.SetReadDeadline(time.Now().Add(readDeadline))
+		conn.SetPongHandler(func(appData string) error {
+			conn.SetReadDeadline(time.Now().Add(readDeadline))
+			return nil
+		})
+
 		// Register client with user info
 		clientsMux.Lock()
 		clients[conn] = true
@@ -98,18 +111,36 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 
 		log.Printf("WebSocket client connected (user: %s), total clients: %d", userID, len(clients))
 
+		// Start ping ticker for this connection
+		pingTicker := time.NewTicker(pingInterval)
+		defer pingTicker.Stop()
+
 		// Keep connection alive and handle disconnect
 		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				// Client disconnected
-				clientsMux.Lock()
-				delete(clients, conn)
-				clientsMux.Unlock()
-				log.Printf("WebSocket client disconnected (user: %s), total clients: %d", userID, len(clients))
-				break
+			select {
+			case <-pingTicker.C:
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					log.Printf("Failed to send ping to client (user: %s): %v", userID, err)
+					goto cleanup
+				}
+			default:
+				conn.SetReadDeadline(time.Now().Add(readDeadline))
+				_, _, err := conn.ReadMessage()
+				if err != nil {
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+						log.Printf("WebSocket read error (user: %s): %v", userID, err)
+					}
+					goto cleanup
+				}
 			}
 		}
+
+	cleanup:
+		pingTicker.Stop()
+		clientsMux.Lock()
+		delete(clients, conn)
+		clientsMux.Unlock()
+		log.Printf("WebSocket client disconnected (user: %s), total clients: %d", userID, len(clients))
 	}
 }
 
