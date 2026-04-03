@@ -20,22 +20,11 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { boardsApi, columnsApi, authApi } from '@/services/api';
 import { AddColumnPermissionForm } from '@/components/AddColumnPermissionForm';
-import type { Agent } from '@/types/kanban';
+import type { Agent, Column } from '@/types/kanban';
 
 interface Board {
   id: string;
   name: string;
-}
-
-interface ColumnData {
-  id: string;
-  name: string;
-  status: string | null;
-  position: number;
-  color: string;
-  description?: string;
-  boardId: string;
-  ownerAgentId?: string;
 }
 
 function SortableColumn({
@@ -48,10 +37,10 @@ function SortableColumn({
   canDelete,
   canManagePermission,
 }: {
-  column: ColumnData;
-  onEdit: (column: ColumnData) => void;
+  column: Column;
+  onEdit: (column: Column) => void;
   onDelete: (columnId: string) => void;
-  onPermission: (column: ColumnData) => void;
+  onPermission: (column: Column) => void;
   t: ReturnType<typeof useTranslation>[0];
   canEdit?: boolean;
   canDelete?: boolean;
@@ -147,12 +136,12 @@ export function ColumnsPage() {
 
   const [boards, setBoards] = useState<Board[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
-  const [columns, setColumns] = useState<any[]>([]);
+  const [columns, setColumns] = useState<Column[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('#6b7280');
-  const [editingColumn, setEditingColumn] = useState<any>(null);
+  const [editingColumn, setEditingColumn] = useState<Column | null>(null);
   const [editColumnColor, setEditColumnColor] = useState('#6b7280');
   const [editColumnStatus, setEditColumnStatus] = useState('');
   const [editColumnDescription, setEditColumnDescription] = useState('');
@@ -165,7 +154,7 @@ export function ColumnsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [editColumnOwnerAgent, setEditColumnOwnerAgent] = useState<string>('');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [permissionColumn, setPermissionColumn] = useState<ColumnData | null>(null);
+  const [permissionColumn, setPermissionColumn] = useState<Column | null>(null);
   const [columnPermissions, setColumnPermissions] = useState<Array<{ id: string; columnId: string; columnName: string; access: string; userId: string; userNickname: string }>>([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
 
@@ -382,7 +371,7 @@ export function ColumnsPage() {
     }
   };
 
-  const handleOpenPermissionModal = async (column: ColumnData) => {
+  const handleOpenPermissionModal = async (column: Column) => {
     setPermissionColumn(column);
     setShowPermissionModal(true);
     setPermissionLoading(true);

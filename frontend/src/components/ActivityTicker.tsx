@@ -33,12 +33,6 @@ export function ActivityTicker() {
   const [isPaused, setIsPaused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchActivities();
-    const interval = setInterval(fetchActivities, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   const fetchActivities = async () => {
     try {
       const data = await activitiesApi.getAll({ pageSize: 20 });
@@ -47,6 +41,12 @@ export function ActivityTicker() {
       console.error('Failed to fetch activities:', err);
     }
   };
+
+  useEffect(() => {
+    fetchActivities();
+    const interval = setInterval(fetchActivities, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);

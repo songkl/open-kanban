@@ -1,6 +1,13 @@
 import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent } from '@/types/kanban';
 import i18n from '@/i18n';
 
+export interface Permission {
+  id: string;
+  boardId: string;
+  boardName: string;
+  access: string;
+}
+
 // Vite environment variables type declaration
 declare global {
   interface ImportMetaEnv {
@@ -80,7 +87,7 @@ export const boardsApi = {
   },
   copy: (id: string) =>
     fetchApi<Board>(`/api/boards/${id}/copy`, { method: 'POST' }),
-  import: (data: { data: any; boardId?: string }) =>
+  import: (data: { data: Record<string, unknown>; boardId?: string }) =>
     fetchApi<Board>('/api/boards/import', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -204,12 +211,12 @@ export const subtasksApi = {
 // Auth API
 export const authApi = {
   login: (nickname: string, password?: string, avatar?: string) =>
-    fetchApi<{ user: any; token: string }>('/api/auth/login', {
+    fetchApi<{ user: User; token: string }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ nickname, password, avatar }),
     }),
   init: (nickname: string, password?: string, avatar?: string, allowRegistration = true, requirePassword = false, authEnabled = true) =>
-    fetchApi<{ user: any; token: string }>('/api/auth/init', {
+    fetchApi<{ user: User; token: string }>('/api/auth/init', {
       method: 'POST',
       body: JSON.stringify({ nickname, password, avatar, allowRegistration, requirePassword, authEnabled }),
     }),
@@ -217,19 +224,18 @@ export const authApi = {
     const res = await fetch('/api/auth/me', { credentials: 'include' });
     const data = await res.json();
     if (!res.ok && res.status === 401) {
-      // Not logged in - return data anyway for needsSetup check
       return data as { user: null; needsSetup: boolean; allowRegistration?: boolean; requirePassword?: boolean; authEnabled?: boolean };
     }
     if (!res.ok) {
       throw new Error(data.error || `API Error: ${res.status}`);
     }
     return data as {
-      user: any;
+      user: User;
       needsSetup: boolean;
       allowRegistration?: boolean;
       requirePassword?: boolean;
       authEnabled?: boolean;
-      permissions?: any[];
+      permissions?: Permission[];
     };
   },
   getConfig: () => fetchApi<{ allowRegistration: boolean; requirePassword: boolean; authEnabled: boolean }>('/api/auth/config'),

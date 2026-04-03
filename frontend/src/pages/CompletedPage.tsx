@@ -2,9 +2,14 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
-import type { Task } from '@/types/kanban';
+import type { Task, Column } from '@/types/kanban';
 import { boardsApi, columnsApi, tasksApi } from '@/services/api';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+
+interface TaskWithExtras extends Task {
+  columnName: string;
+  boardName: string;
+}
 
 const priorityColors: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -14,7 +19,7 @@ const priorityColors: Record<string, string> = {
 
 export function CompletedPage() {
   const { t } = useTranslation();
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<TaskWithExtras[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [boardFilter, setBoardFilter] = useState<string>('all');
@@ -48,7 +53,7 @@ export function CompletedPage() {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const allColumns: any[] = [];
+      const allColumns: Column[] = [];
 
       if (boardFilter === 'all') {
         for (const board of boards.length > 0 ? boards : [{ id: '' }]) {
@@ -63,16 +68,14 @@ export function CompletedPage() {
 
       const completedTasks = allColumns
         .filter((c) => c.name === t('task.status.done'))
-        .flatMap((c) => c.tasks || [])
-        .map((task: Task) => {
-          const boardId = task.columnId?.split('_')[0] || '';
-          const board = boards.find((b) => b.id === boardId);
+        .flatMap((c) => (c.tasks || []).map((task: Task) => {
+          const board = boards.find((b) => b.id === c.boardId);
           return {
             ...task,
             columnName: t('task.status.done'),
-            boardName: board?.name || boardId,
+            boardName: board?.name || c.boardId || 'Unknown',
           };
-        });
+        }));
 
       setTasks(completedTasks);
     } catch (err) {

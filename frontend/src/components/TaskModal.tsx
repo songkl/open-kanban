@@ -2,14 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import MDEditor from '@uiw/react-md-editor';
-import type { Task, Attachment, Column, Agent } from '@/types/kanban';
+import type { Task, Attachment, Column, Agent, Subtask } from '@/types/kanban';
 import { columnsApi, subtasksApi, attachmentsApi, authApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
 
 const STORAGE_KEY = 'kanban-username';
 
-function formatCommentDate(t: any, dateStr: string): string {
+function formatCommentDate(t: ReturnType<typeof useTranslation>[0], dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
@@ -134,7 +134,7 @@ export function TaskModal({
   const [newMetaValue, setNewMetaValue] = useState('');
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
-  const [subtasks, setSubtasks] = useState<any[]>(task.subtasks ?? []);
+  const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks ?? []);
   const [showAddSubtaskModal, setShowAddSubtaskModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [editColumn, setEditColumn] = useState(task.columnId);
@@ -245,7 +245,7 @@ export function TaskModal({
     setNewComment('');
   };
 
-  const handleSubtasksChange = (newSubtasks: any[]) => {
+  const handleSubtasksChange = (newSubtasks: Subtask[]) => {
     setSubtasks(newSubtasks);
   };
 
