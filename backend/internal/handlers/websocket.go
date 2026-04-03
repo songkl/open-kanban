@@ -25,21 +25,13 @@ func splitOrigins(origins string) []string {
 }
 
 func isOriginAllowed(origin string) bool {
-	allowedOrigins := []string{
-		"http://localhost:5173",
-		"http://localhost:3000",
-		"http://localhost:8080",
+	if origin == "" {
+		return false
 	}
+	allowedOrigins := splitOrigins(os.Getenv("ALLOWED_ORIGINS"))
 	for _, allowed := range allowedOrigins {
 		if origin == allowed {
 			return true
-		}
-	}
-	if envOrigins := os.Getenv("ALLOWED_ORIGINS"); envOrigins != "" {
-		for _, allowed := range splitOrigins(envOrigins) {
-			if origin == allowed {
-				return true
-			}
 		}
 	}
 	return false
@@ -68,13 +60,26 @@ var (
 // WebSocketHandler handles WebSocket connections
 func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Authenticate WebSocket connection
-		tokenKey := c.Query("token")
+		// Authenticate WebSocket connection - prefer Header or Cookie over URL parameter
+		tokenKey := ""
+
+		// Try Authorization header first (Bearer token)
+		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+		}
+
+		// Try cookie second
 		if tokenKey == "" {
-			// Try to get from cookie
 			if cookie, err := c.Cookie("kanban-token"); err == nil && cookie != "" {
 				tokenKey = cookie
 			}
+		}
+
+		// Fall back to URL parameter only if no header or cookie provided (deprecated - kept for backwards compatibility)
+		if tokenKey == "" {
+			tokenKey = c.Query("token")
 		}
 
 		if tokenKey == "" {

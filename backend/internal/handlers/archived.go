@@ -212,3 +212,153 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, tasks)
 	}
 }
+
+type BatchRequest struct {
+	IDs      []string `json:"ids"`
+	ColumnID string   `json:"columnId,omitempty"`
+}
+
+func BatchDeleteDrafts(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		if user.Role == "VIEWER" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法删除草稿"})
+			return
+		}
+
+		var req BatchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			return
+		}
+
+		if len(req.IDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs 不能为空"})
+			return
+		}
+
+		placeholders := make([]string, len(req.IDs))
+		args := make([]interface{}, len(req.IDs))
+		for i, id := range req.IDs {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+
+		query := "DELETE FROM tasks WHERE id IN (" + joinPlaceholders(placeholders) + ") AND published = false AND archived = false"
+		result, err := db.Exec(query, args...)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除草稿失败"})
+			return
+		}
+
+		deleted, _ := result.RowsAffected()
+		c.JSON(http.StatusOK, gin.H{"deleted": deleted})
+	}
+}
+
+func BatchPublishDrafts(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		if user.Role == "VIEWER" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法发布草稿"})
+			return
+		}
+
+		var req BatchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			return
+		}
+
+		if len(req.IDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs 不能为空"})
+			return
+		}
+
+		if req.ColumnID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "columnId 不能为空"})
+			return
+		}
+
+		placeholders := make([]string, len(req.IDs))
+		args := make([]interface{}, len(req.IDs))
+		for i, id := range req.IDs {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+
+		query := "UPDATE tasks SET published = true, column_id = ?, updated_at = datetime('now') WHERE id IN (" + joinPlaceholders(placeholders) + ") AND published = false AND archived = false"
+		result, err := db.Exec(query, append([]interface{}{req.ColumnID}, args...)...)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "发布草稿失败"})
+			return
+		}
+
+		published, _ := result.RowsAffected()
+		c.JSON(http.StatusOK, gin.H{"published": published})
+	}
+}
+
+func BatchArchiveDrafts(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		if user.Role == "VIEWER" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法归档草稿"})
+			return
+		}
+
+		var req BatchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			return
+		}
+
+		if len(req.IDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs 不能为空"})
+			return
+		}
+
+		placeholders := make([]string, len(req.IDs))
+		args := make([]interface{}, len(req.IDs))
+		for i, id := range req.IDs {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+
+		query := "UPDATE tasks SET archived = true, archived_at = datetime('now'), updated_at = datetime('now') WHERE id IN (" + joinPlaceholders(placeholders) + ") AND published = false AND archived = false"
+		result, err := db.Exec(query, args...)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "归档草稿失败"})
+			return
+		}
+
+		archived, _ := result.RowsAffected()
+		c.JSON(http.StatusOK, gin.H{"archived": archived})
+	}
+}
+
+func joinPlaceholders(placeholders []string) string {
+	result := ""
+	for i, p := range placeholders {
+		if i > 0 {
+			result += ","
+		}
+		result += p
+	}
+	return result
+}

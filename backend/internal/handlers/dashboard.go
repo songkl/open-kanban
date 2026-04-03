@@ -34,42 +34,38 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 
 		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE archived = false").Scan(&stats.TotalTasks)
 
-		var todoCount, inProgressCount, reviewCount, doneCount int
-		db.QueryRow(`
-			SELECT COUNT(*) FROM tasks t
+		rows, err := db.Query(`
+			SELECT col.status, COUNT(*) as cnt FROM tasks t
 			JOIN columns col ON t.column_id = col.id
-			WHERE col.status = 'todo' AND t.archived = false
-		`).Scan(&todoCount)
-		stats.TasksByStatus["todo"] = todoCount
+			WHERE t.archived = false
+			GROUP BY col.status
+		`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var status string
+				var count int
+				if rows.Scan(&status, &count) == nil {
+					stats.TasksByStatus[status] = count
+				}
+			}
+		}
 
-		db.QueryRow(`
-			SELECT COUNT(*) FROM tasks t
-			JOIN columns col ON t.column_id = col.id
-			WHERE col.status = 'in_progress' AND t.archived = false
-		`).Scan(&inProgressCount)
-		stats.TasksByStatus["in_progress"] = inProgressCount
-
-		db.QueryRow(`
-			SELECT COUNT(*) FROM tasks t
-			JOIN columns col ON t.column_id = col.id
-			WHERE col.status = 'review' AND t.archived = false
-		`).Scan(&reviewCount)
-		stats.TasksByStatus["review"] = reviewCount
-
-		db.QueryRow(`
-			SELECT COUNT(*) FROM tasks t
-			JOIN columns col ON t.column_id = col.id
-			WHERE col.status = 'done' AND t.archived = false
-		`).Scan(&doneCount)
-		stats.TasksByStatus["done"] = doneCount
-
-		var lowCount, mediumCount, highCount int
-		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE priority = 'low' AND archived = false").Scan(&lowCount)
-		stats.TasksByPriority["low"] = lowCount
-		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE priority = 'medium' AND archived = false").Scan(&mediumCount)
-		stats.TasksByPriority["medium"] = mediumCount
-		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE priority = 'high' AND archived = false").Scan(&highCount)
-		stats.TasksByPriority["high"] = highCount
+		rows, err = db.Query(`
+			SELECT priority, COUNT(*) as cnt FROM tasks
+			WHERE archived = false
+			GROUP BY priority
+		`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var priority string
+				var count int
+				if rows.Scan(&priority, &count) == nil {
+					stats.TasksByPriority[priority] = count
+				}
+			}
+		}
 
 		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE published = true AND archived = false").Scan(&stats.PublishedTasks)
 		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE published = false AND archived = false").Scan(&stats.DraftTasks)

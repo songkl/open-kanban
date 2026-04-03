@@ -63,6 +63,9 @@ func main() {
 	// Create Gin router
 	r := gin.New()
 
+	// Structured logging middleware
+	r.Use(handlers.RequestLoggerMiddleware())
+
 	// Global rate limiting middleware
 	r.Use(handlers.GlobalRateLimitMiddleware())
 
@@ -72,12 +75,8 @@ func main() {
 
 		c.Writer.Header().Set("Vary", "Origin")
 
-		// Allow specific origins
-		allowedOrigins := []string{
-			"http://localhost:5173", // Vite dev server
-			"http://localhost:3000", // Next.js dev server
-			"http://localhost:8080", // Same origin
-		}
+		// Get allowed origins from environment variable only
+		allowedOrigins := splitOrigins(os.Getenv("ALLOWED_ORIGINS"))
 
 		// Check if origin is allowed
 		isAllowed := false
@@ -87,17 +86,6 @@ func main() {
 				isAllowed = true
 				allowedOrigin = allowed
 				break
-			}
-		}
-
-		// Also allow if from env
-		if !isAllowed && os.Getenv("ALLOWED_ORIGINS") != "" {
-			for _, allowed := range splitOrigins(os.Getenv("ALLOWED_ORIGINS")) {
-				if origin == allowed {
-					isAllowed = true
-					allowedOrigin = allowed
-					break
-				}
 			}
 		}
 
@@ -126,6 +114,10 @@ func main() {
 		auth.GET("/me", handlers.GetMe(db))
 		auth.GET("/config", handlers.GetAppConfig(db))
 	}
+
+	// Health check endpoint (public, no auth required)
+	r.GET("/api/health", handlers.HealthCheck)
+
 	authProtected := r.Group("/api/auth")
 	authProtected.Use(handlers.RequireAuth(db))
 	{

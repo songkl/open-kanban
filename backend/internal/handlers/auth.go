@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,6 +66,20 @@ var (
 const tokenCacheDuration = 5 * time.Minute
 
 func init() {
+	// Initialize rate limit configuration from environment variables
+	if maxReq := getEnvInt("RATE_LIMIT_MAX_REQUESTS", 5); maxReq > 0 {
+		rateLimitOpts.maxRequests = maxReq
+	}
+	if windowSec := getEnvInt("RATE_LIMIT_WINDOW_SECONDS", 60); windowSec > 0 {
+		rateLimitOpts.windowSecs = windowSec
+	}
+	if globalMaxReq := getEnvInt("GLOBAL_RATE_LIMIT_MAX_REQUESTS", 100); globalMaxReq > 0 {
+		globalRateLimitOpts.maxRequests = globalMaxReq
+	}
+	if globalWindowSec := getEnvInt("GLOBAL_RATE_LIMIT_WINDOW_SECONDS", 60); globalWindowSec > 0 {
+		globalRateLimitOpts.windowSecs = globalWindowSec
+	}
+
 	go cleanupRateLimitMap()
 	go cleanupGlobalRateLimitMap()
 	go cleanupTokenCache()
@@ -327,7 +342,11 @@ func Init(db *sql.DB) gin.HandlerFunc {
 		// Generate avatar if not provided
 		avatar := req.Avatar
 		if avatar == "" {
-			avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
+			if len(avatarOptions) > 0 {
+				avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
+			} else {
+				avatar = fmt.Sprintf("avatar-%d", time.Now().UnixNano()%1000)
+			}
 		}
 
 		// Hash password if provided
@@ -1302,6 +1321,25 @@ func generateID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if intVal, err := strconv.Atoi(val); err == nil && intVal > 0 {
+			return intVal
+		}
+	}
+	return defaultVal
+}
+
+func validateInputLength(value string, maxLength int) bool {
+	return len(value) <= maxLength
+}
+
+func sanitizeString(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "\x00", "")
+	return value
 }
 
 func generateTokenKey() string {

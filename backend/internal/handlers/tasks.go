@@ -116,7 +116,9 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 				args = append(args, id)
 			}
 			query := fmt.Sprintf(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+					(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
+					(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
 				WHERE t.column_id IN (%s)
@@ -127,7 +129,9 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 			rows, err = db.Query(query, args...)
 		} else {
 			rows, err = db.Query(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+					(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
+					(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
 				ORDER BY c.position ASC, t.position ASC
@@ -145,7 +149,8 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 			var task models.Task
 			var desc, assignee, meta, createdBy sql.NullString
 			var archivedAt sql.NullTime
-			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &createdBy, &task.CreatedAt, &task.UpdatedAt); err == nil {
+			var commentCount, subtaskCount int
+			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount); err == nil {
 				if desc.Valid {
 					task.Description = &desc.String
 				}
@@ -162,26 +167,23 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 					task.CreatedBy = createdBy.String
 				}
 
-				comments, _ := getCommentsForTask(db, task.ID)
-				subtasks, _ := getSubtasksForTask(db, task.ID)
-
 				tasks = append(tasks, gin.H{
-					"id":          task.ID,
-					"title":       task.Title,
-					"description": task.Description,
-					"priority":    task.Priority,
-					"assignee":    task.Assignee,
-					"meta":        task.Meta,
-					"columnId":    task.ColumnID,
-					"position":    task.Position,
-					"published":   task.Published,
-					"archived":    task.Archived,
-					"archivedAt":  task.ArchivedAt,
-					"createdBy":   task.CreatedBy,
-					"createdAt":   task.CreatedAt,
-					"updatedAt":   task.UpdatedAt,
-					"comments":    comments,
-					"subtasks":    subtasks,
+					"id":           task.ID,
+					"title":        task.Title,
+					"description":  task.Description,
+					"priority":     task.Priority,
+					"assignee":     task.Assignee,
+					"meta":         task.Meta,
+					"columnId":     task.ColumnID,
+					"position":     task.Position,
+					"published":    task.Published,
+					"archived":     task.Archived,
+					"archivedAt":   task.ArchivedAt,
+					"createdBy":    task.CreatedBy,
+					"createdAt":    task.CreatedAt,
+					"updatedAt":    task.UpdatedAt,
+					"commentCount": commentCount,
+					"subtaskCount": subtaskCount,
 				})
 			}
 		}
