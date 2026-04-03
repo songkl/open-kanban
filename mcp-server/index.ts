@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod/v4";
 
-const API_BASE = process.env.KANBAN_API_URL || "http://localhost:3000";
+const API_BASE = process.env.KANBAN_API_URL || "http://localhost:8080";
 const MCP_TOKEN = process.env.KANBAN_MCP_TOKEN;
 const MCP_REQUEST_HEADER = "X-MCP-Request";
 
