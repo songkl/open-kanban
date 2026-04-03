@@ -41,5 +41,5 @@ Every new feature addition **must** include:
 
 - Backend: `go build -o /tmp/server ./cmd/server`
 - Frontend: `npm run build`
-- MCP Server: `npm run build` in mcp-server directory
+- MCP Server: `npm run build` in mcp-server directory, for dev PORT=8081
 
