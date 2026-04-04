@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
+import { SafeMarkdown } from '@/components/SafeMarkdown';
 import type { Task, Column } from '@/types/kanban';
 import { boardsApi, columnsApi, tasksApi } from '@/services/api';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -246,7 +246,7 @@ export function CompletedPage() {
                 </div>
                 {task.description && (
                   <div className="mt-1 text-sm text-zinc-500 line-clamp-2">
-                    <ReactMarkdown>{task.description}</ReactMarkdown>
+                    <SafeMarkdown>{task.description}</SafeMarkdown>
                   </div>
                 )}
                 <div className="mt-1 text-xs text-zinc-400">

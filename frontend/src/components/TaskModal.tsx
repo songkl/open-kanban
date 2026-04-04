@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
+import { SafeMarkdown } from './SafeMarkdown';
 import type { Task, Attachment, Column, Agent, Subtask } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
@@ -407,7 +407,7 @@ export function TaskModal({
               ) : (
                 <div className="prose prose-sm max-w-none rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-4">
                   {task.description ? (
-                    <ReactMarkdown>{task.description}</ReactMarkdown>
+                    <SafeMarkdown>{task.description}</SafeMarkdown>
                   ) : (
                     <span className="text-zinc-400 dark:text-zinc-500">{t('taskModal.noDescription')}</span>
                   )}
@@ -641,7 +641,7 @@ export function TaskModal({
                     <span className="text-xs text-zinc-400 dark:text-zinc-500">{formatCommentDate(t, comment.createdAt)}</span>
                   </div>
                   <div className="prose prose-sm max-w-none text-zinc-600 dark:text-zinc-300">
-                    <ReactMarkdown>{comment.content}</ReactMarkdown>
+                    <SafeMarkdown>{comment.content}</SafeMarkdown>
                   </div>
                   {/* Comment attachments */}
                   {attachments.filter(a => a.commentId === comment.id).length > 0 && (

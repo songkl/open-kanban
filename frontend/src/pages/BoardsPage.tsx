@@ -6,7 +6,6 @@ import { ErrorToastContainer } from '../components/ErrorToast';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 import type { Board } from '../types/kanban';
-import { toEnglishSlug } from '../utils/slug';
 
 interface Template {
   id: string;
@@ -95,13 +94,13 @@ export function BoardsPage() {
           await boardsApi.createFromTemplate({
             name: boardName.trim(),
             templateId: selectedTemplate,
-            boardId: boardId || toEnglishSlug(boardName),
+            boardId: boardId || undefined,
           });
           showToastMessage(t('toast.boardCreated'));
         } else {
           await boardsApi.create({
             name: boardName.trim(),
-            id: boardId || toEnglishSlug(boardName),
+            id: boardId || undefined,
           });
           showToastMessage(t('toast.boardCreated'));
         }

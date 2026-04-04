@@ -5,7 +5,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
+import { SafeMarkdown } from './SafeMarkdown';
 import { TaskCard } from './TaskCard';
 import type { Column as ColumnType, Task } from '@/types/kanban';
 
@@ -178,7 +178,7 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
             </button>
             {showDescription && (
               <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400 prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{column.description}</ReactMarkdown>
+                <SafeMarkdown>{column.description}</SafeMarkdown>
               </div>
             )}
           </div>
