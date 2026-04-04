@@ -177,6 +177,11 @@ func setupDashboardDB(t *testing.T) *sql.DB {
 		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
 		UNIQUE(user_id, column_id)
 	);
+
+	CREATE INDEX IF NOT EXISTS idx_tasks_column_archived ON tasks(column_id, archived);
+	CREATE INDEX IF NOT EXISTS idx_tasks_column_position ON tasks(column_id, position);
+	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_activities_action_target ON activities(action, target_type);
 	`
 
 	_, err = db.Exec(schema)

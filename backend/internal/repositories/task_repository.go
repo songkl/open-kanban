@@ -86,25 +86,29 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 			args = append(args, id)
 		}
 		inClause := buildInClause(len(columnIDs))
-		query := `SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
+		query := `SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 		          t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
-		          (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-		          (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
+		          COALESCE(cc.cnt, 0) as comment_count,
+		          COALESCE(sc.cnt, 0) as subtask_count
 		          FROM tasks t
-		          JOIN columns c ON t.column_id = c.id
+		          JOIN columns col ON t.column_id = col.id
+		          LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
+		          LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
 		          WHERE t.column_id IN ` + inClause + `
-		          ORDER BY c.position ASC, t.position ASC
+		          ORDER BY col.position ASC, t.position ASC
 		          LIMIT ? OFFSET ?`
 		args = append(args, pageSize, offset)
 		rows, err = r.db.Query(query, args...)
 	} else {
-		rows, err = r.db.Query(`SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
+		rows, err = r.db.Query(`SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 		                         t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
-		                         (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-		                         (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
+		                         COALESCE(cc.cnt, 0) as comment_count,
+		                         COALESCE(sc.cnt, 0) as subtask_count
 		                         FROM tasks t
-		                         JOIN columns c ON t.column_id = c.id
-		                         ORDER BY c.position ASC, t.position ASC
+		                         JOIN columns col ON t.column_id = col.id
+		                         LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
+		                         LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+		                         ORDER BY col.position ASC, t.position ASC
 		                         LIMIT ? OFFSET ?`, pageSize, offset)
 	}
 
