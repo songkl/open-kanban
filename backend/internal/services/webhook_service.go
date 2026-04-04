@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -49,9 +49,9 @@ func InitWebhookService() *WebhookService {
 	}
 
 	if enabled && url != "" {
-		log.Printf("[Webhook] Service enabled, URL: %s", url)
+		slog.Info("Webhook service enabled", "url", url)
 	} else if enabled {
-		log.Printf("[Webhook] Service enabled but WEBHOOK_URL not set")
+		slog.Warn("Webhook service enabled but WEBHOOK_URL not set")
 	}
 
 	return webhookService
@@ -106,7 +106,7 @@ func (s *WebhookService) SendWebhook(event string, task WebhookTask) error {
 		return fmt.Errorf("webhook returned non-success status: %d", resp.StatusCode)
 	}
 
-	log.Printf("[Webhook] Successfully sent %s for task %s", event, task.ID)
+	slog.Info("Webhook sent successfully", "event", event, "task_id", task.ID)
 	return nil
 }
 

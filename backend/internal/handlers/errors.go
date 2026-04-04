@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -98,7 +98,8 @@ func RecoveryWithErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Printf("Panic recovered: %v", err)
+				requestID := GetRequestID(c)
+				slog.Error("Panic recovered", "error", err, "request_id", requestID, "path", c.Request.URL.Path, "method", c.Request.Method)
 				if gin.Mode() == gin.DebugMode {
 					c.JSON(http.StatusInternalServerError, gin.H{
 						"error":  "Internal server error",

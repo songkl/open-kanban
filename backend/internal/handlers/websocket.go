@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"database/sql"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -169,9 +169,11 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			log.Printf("WebSocket upgrade failed: %v", err)
+			slog.Error("WebSocket upgrade failed", "error", err, "request_id", GetRequestID(c), "user_id", userID)
 			return
 		}
+
+		requestID := GetRequestID(c)
 
 		conn.SetPongHandler(func(appData string) error {
 			conn.SetReadDeadline(time.Now().Add(readDeadline))
@@ -183,7 +185,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		clientsMux.Unlock()
 		incrementUserConnCount(userID)
 
-		log.Printf("WebSocket client connected (user: %s), total clients: %d, user connections: %d", userID, getConnectionCount(), userConnCount[userID])
+		slog.Info("WebSocket client connected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConnCount[userID])
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -201,7 +203,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				case <-pingTicker.C:
 					conn.SetWriteDeadline(time.Now().Add(pingWriteDeadline))
 					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-						log.Printf("Failed to send ping to client (user: %s): %v", userID, err)
+						slog.Warn("Failed to send ping to client", "request_id", requestID, "user_id", userID, "error", err)
 						return
 					}
 				}
@@ -213,18 +215,18 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			msgType, _, err := conn.ReadMessage()
 			if err != nil {
 				if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == websocket.CloseProtocolError {
-					log.Printf("WebSocket client sent invalid data (user: %s): %v", userID, err)
+					slog.Warn("WebSocket client sent invalid data", "request_id", requestID, "user_id", userID, "error", err)
 				} else if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("WebSocket read error (user: %s): %v", userID, err)
+					slog.Warn("WebSocket read error", "request_id", requestID, "user_id", userID, "error", err)
 				} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					log.Printf("WebSocket connection timeout (user: %s): no activity detected", userID)
+					slog.Warn("WebSocket connection timeout", "request_id", requestID, "user_id", userID, "reason", "no activity detected")
 				}
 				break
 			}
 			if msgType == websocket.TextMessage {
 				conn.SetWriteDeadline(time.Now().Add(pingWriteDeadline))
 				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`)); err != nil {
-					log.Printf("Failed to send heartbeat_ack to client (user: %s): %v", userID, err)
+					slog.Warn("Failed to send heartbeat_ack to client", "request_id", requestID, "user_id", userID, "error", err)
 					break
 				}
 			}
@@ -239,7 +241,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		decrementUserConnCount(userID)
 
 		conn.Close()
-		log.Printf("WebSocket client disconnected (user: %s), total clients: %d, user connections: %d", userID, getConnectionCount(), userConnCount[userID])
+		slog.Info("WebSocket client disconnected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConnCount[userID])
 	}
 }
 
@@ -259,7 +261,7 @@ type TaskNotification struct {
 func BroadcastActivity(activity any) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in BroadcastActivity: %v", r)
+			slog.Error("Recovered from panic in BroadcastActivity", "panic", r)
 		}
 	}()
 
@@ -275,7 +277,7 @@ func BroadcastActivity(activity any) {
 
 	for _, client := range clientList {
 		if err := client.SetWriteDeadline(writeDeadline); err != nil {
-			log.Printf("Failed to set write deadline: %v", err)
+			slog.Warn("Failed to set write deadline", "error", err)
 			continue
 		}
 		err := client.WriteJSON(message)
@@ -292,7 +294,7 @@ func BroadcastActivity(activity any) {
 func BroadcastRefresh() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in BroadcastRefresh: %v", r)
+			slog.Error("Recovered from panic in BroadcastRefresh", "panic", r)
 		}
 	}()
 
@@ -308,7 +310,7 @@ func BroadcastRefresh() {
 
 	for _, client := range clientList {
 		if err := client.SetWriteDeadline(writeDeadline); err != nil {
-			log.Printf("Failed to set write deadline: %v", err)
+			slog.Warn("Failed to set write deadline", "error", err)
 			continue
 		}
 		err := client.WriteJSON(message)
@@ -325,7 +327,7 @@ func BroadcastRefresh() {
 func BroadcastTaskNotification(boardID, taskID, action string) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered from panic in BroadcastTaskNotification: %v", r)
+			slog.Error("Recovered from panic in BroadcastTaskNotification", "panic", r)
 		}
 	}()
 
@@ -346,7 +348,7 @@ func BroadcastTaskNotification(boardID, taskID, action string) {
 
 	for _, client := range clientList {
 		if err := client.SetWriteDeadline(writeDeadline); err != nil {
-			log.Printf("Failed to set write deadline: %v", err)
+			slog.Warn("Failed to set write deadline", "error", err)
 			continue
 		}
 		err := client.WriteJSON(notification)

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -433,16 +433,25 @@ func (s *TaskService) generateTaskID(columnID string) (string, error) {
 		shortAlias = "T"
 	}
 
+	var counter int
 	tx, err := s.db.Begin()
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback()
 
-	var counter int
-	err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ?", boardID).Scan(&counter)
+	err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ? FOR UPDATE", boardID).Scan(&counter)
 	if err != nil {
-		return "", err
+		tx.Rollback()
+		tx, err = s.db.Begin()
+		if err != nil {
+			return "", err
+		}
+		defer tx.Rollback()
+		err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ?", boardID).Scan(&counter)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	counter++
@@ -527,7 +536,7 @@ func (s *TaskService) TriggerAgentForTask(taskID, agentID, agentPrompt, taskTitl
 		return
 	}
 
-	log.Printf("[Agent Trigger] Task %s (%s) triggered for agent %s", taskID, taskTitle, agentID)
+	slog.Info("Agent trigger task", "task_id", taskID, "task_title", taskTitle, "agent_id", agentID)
 
 	go func() {
 		payload := map[string]interface{}{
@@ -541,11 +550,11 @@ func (s *TaskService) TriggerAgentForTask(taskID, agentID, agentPrompt, taskTitl
 
 		payloadBytes, err := json.Marshal(payload)
 		if err != nil {
-			log.Printf("[Agent Trigger] Failed to marshal payload for task %s: %v", taskID, err)
+			slog.Error("Agent trigger failed to marshal payload", "task_id", taskID, "error", err)
 			return
 		}
 
-		log.Printf("[Agent Trigger] Task %s triggered for agent %s. Payload: %s", taskID, agentID, string(payloadBytes))
+		slog.Info("Agent trigger payload", "task_id", taskID, "agent_id", agentID, "payload", string(payloadBytes))
 	}()
 }
 
