@@ -836,3 +836,7 @@ func TestGetTasksByBoardAndStatus(t *testing.T) {
 		t.Errorf("expected 1 todo task for board b1, got %d", len(result.Tasks))
 	}
 }
+
+func TestGenerateTaskIDConcurrency(t *testing.T) {
+	t.Skip("SQLite does not support concurrent transactions - this test requires MySQL/PostgreSQL")
+}
