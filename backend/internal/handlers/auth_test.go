@@ -239,8 +239,8 @@ func TestInitHandler(t *testing.T) {
 
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
-		if resp["error"] != "登录名不能为空" {
-			t.Errorf("expected error '登录名不能为空', got %v", resp["error"])
+		if resp["error"] != "Username is required" {
+			t.Errorf("expected error 'Username is required', got %v", resp["error"])
 		}
 	})
 

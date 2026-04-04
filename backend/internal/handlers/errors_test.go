@@ -20,7 +20,7 @@ func TestServerError(t *testing.T) {
 
 		router := gin.New()
 		router.GET("/test", func(c *gin.Context) {
-			handlers.ServerError(c, "测试错误", &testError{"具体错误详情"})
+			handlers.ServerError(c, "Test error", &testError{"Specific error details"})
 		})
 
 		req, _ := http.NewRequest("GET", "/test", nil)
@@ -34,8 +34,8 @@ func TestServerError(t *testing.T) {
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
 
-		if resp["error"] != "测试错误" {
-			t.Errorf("expected error '测试错误', got %v", resp["error"])
+		if resp["error"] != "Test error" {
+			t.Errorf("expected error 'Test error', got %v", resp["error"])
 		}
 		if resp["detail"] == nil {
 			t.Errorf("expected detail to be present in debug mode")
@@ -45,7 +45,7 @@ func TestServerError(t *testing.T) {
 	t.Run("with nil error should not include detail", func(t *testing.T) {
 		router := gin.New()
 		router.GET("/test", func(c *gin.Context) {
-			handlers.ServerError(c, "测试错误", nil)
+			handlers.ServerError(c, "Test error", nil)
 		})
 
 		req, _ := http.NewRequest("GET", "/test", nil)
@@ -59,8 +59,8 @@ func TestServerError(t *testing.T) {
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
 
-		if resp["error"] != "测试错误" {
-			t.Errorf("expected error '测试错误', got %v", resp["error"])
+		if resp["error"] != "Test error" {
+			t.Errorf("expected error 'Test error', got %v", resp["error"])
 		}
 		if resp["detail"] != nil {
 			t.Errorf("expected detail to not be present, got %v", resp["detail"])
@@ -72,7 +72,7 @@ func TestServerError(t *testing.T) {
 
 		router := gin.New()
 		router.GET("/test", func(c *gin.Context) {
-			handlers.ServerError(c, "测试错误", &testError{"具体错误详情"})
+			handlers.ServerError(c, "Test error", &testError{"Specific error details"})
 		})
 
 		req, _ := http.NewRequest("GET", "/test", nil)
@@ -86,8 +86,8 @@ func TestServerError(t *testing.T) {
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
 
-		if resp["error"] != "测试错误" {
-			t.Errorf("expected error '测试错误', got %v", resp["error"])
+		if resp["error"] != "Test error" {
+			t.Errorf("expected error 'Test error', got %v", resp["error"])
 		}
 		if resp["detail"] != nil {
 			t.Errorf("expected detail to not be present in test mode, got %v", resp["detail"])
@@ -183,8 +183,8 @@ func TestErrorHandlerMiddleware(t *testing.T) {
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
 
-		if resp["error"] != "服务器内部错误" {
-			t.Errorf("expected error '服务器内部错误', got %v", resp["error"])
+		if resp["error"] != "Internal server error" {
+			t.Errorf("expected error 'Internal server error', got %v", resp["error"])
 		}
 		if resp["detail"] == nil {
 			t.Errorf("expected detail to be present in debug mode")
