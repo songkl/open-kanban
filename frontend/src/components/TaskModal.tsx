@@ -224,7 +224,7 @@ export function TaskModal({
     localStorage.setItem(STORAGE_KEY, value);
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     try {
       const updatedTask = {
         ...task,
@@ -242,7 +242,7 @@ export function TaskModal({
     } catch (error) {
       console.error('Failed to save task:', error);
     }
-  };
+  }, [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
