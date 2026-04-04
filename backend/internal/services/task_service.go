@@ -483,14 +483,29 @@ func (s *TaskService) calculatePosition(columnID, priority string) (int, error) 
 		if maxHighPos > 0 {
 			return maxHighPos + 1000, nil
 		}
+		minMedPos, _ := s.taskRepo.GetMinPositionForMediumPriority(columnID)
+		if minMedPos > 0 && minMedPos > 1000 {
+			return minMedPos - 1000, nil
+		}
 		return 1000, nil
 	case "medium":
+		maxMedPos, err := s.taskRepo.GetMaxPositionForPriority(columnID, "medium")
+		if err != nil && err != sql.ErrNoRows {
+			return 0, err
+		}
+		if maxMedPos > 0 {
+			return maxMedPos + 1000, nil
+		}
 		maxHighPos, _ := s.taskRepo.GetMaxPositionForPriority(columnID, "high")
 		minLowPos, _ := s.taskRepo.GetMinPositionForLowPriority(columnID)
 		if maxHighPos > 0 && minLowPos > 0 {
 			return (maxHighPos + minLowPos) / 2, nil
-		} else if maxHighPos > 0 {
+		}
+		if maxHighPos > 0 {
 			return maxHighPos + 1000, nil
+		}
+		if minLowPos > 0 && minLowPos > 2000 {
+			return minLowPos - 1000, nil
 		}
 		return 2000, nil
 	case "low":

@@ -225,6 +225,30 @@ func (r *TaskRepository) GetMinPositionForLowPriority(columnID string) (int, err
 	return 0, nil
 }
 
+func (r *TaskRepository) GetMinPositionForMediumPriority(columnID string) (int, error) {
+	var minPos sql.NullInt64
+	err := r.db.QueryRow("SELECT MIN(position) FROM tasks WHERE column_id = ? AND priority = 'medium'", columnID).Scan(&minPos)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, err
+	}
+	if minPos.Valid {
+		return int(minPos.Int64), nil
+	}
+	return 0, nil
+}
+
+func (r *TaskRepository) GetMinPositionForHighPriority(columnID string) (int, error) {
+	var minPos sql.NullInt64
+	err := r.db.QueryRow("SELECT MIN(position) FROM tasks WHERE column_id = ? AND priority = 'high'", columnID).Scan(&minPos)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, err
+	}
+	if minPos.Valid {
+		return int(minPos.Int64), nil
+	}
+	return 0, nil
+}
+
 func (r *TaskRepository) ShiftPositionsUp(columnID string, fromPos, toPos int, excludeID string) error {
 	_, err := r.db.Exec(`
 		UPDATE tasks SET position = position + 1, updated_at = NOW()
