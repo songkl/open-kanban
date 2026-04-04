@@ -92,10 +92,13 @@ jobs:
           go-version: '1.24'
 
       - name: Run Go tests
-        run: go test ./... -race -coverprofile=coverage.out
+        run: |
+          cd backend
+          go test ./... -race -coverprofile=coverage.out
 
       - name: Check coverage
         run: |
+          cd backend
           go tool cover -func=coverage.out | tail -1
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Coverage: $COVERAGE%"
@@ -108,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage
-          path: coverage.out
+          path: backend/coverage.out
 
   go-build:
     name: Go Build
@@ -123,7 +126,9 @@ jobs:
           go-version: '1.24'
 
       - name: Build Go backend
-        run: go build -o /dev/null ./cmd/server/main.go
+        run: |
+          cd backend
+          go build -o /dev/null ./cmd/server/main.go
 
   frontend-lint:
     name: Frontend Lint
