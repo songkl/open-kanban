@@ -9,10 +9,11 @@ import { BatchOperationBar } from '../components/BatchOperationBar';
 import { WsWarning } from '../components/WsWarning';
 import { SearchBar } from '../components/SearchBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { BoardSelector } from '../components/BoardSelector';
 import { boardsApi } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
-import type { Task, Column as ColumnType, Board } from '../types/kanban';
+import type { Task, Column as ColumnType } from '../types/kanban';
 
 const LAST_BOARD_KEY = 'lastSelectedBoardId';
 const DARK_MODE_KEY = 'darkMode';
@@ -227,6 +228,27 @@ export function BoardPage() {
       console.error('Export failed:', error);
       showToastMessage(t('export.failed'));
     }
+  }, [currentBoard, t]);
+
+  const handleReset = useCallback(() => {
+    if (!currentBoard) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: t('confirm.resetBoardTitle'),
+      message: t('confirm.resetBoard', { name: currentBoard.name }),
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await boardsApi.reset(currentBoard.id);
+          showToastMessage(t('toast.boardReset'));
+          window.location.reload();
+        } catch (error) {
+          console.error('Reset failed:', error);
+          showToastMessage(t('toast.resetFailed'));
+        }
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
   }, [currentBoard, t]);
 
   useEffect(() => {
@@ -530,6 +552,7 @@ export function BoardPage() {
           exportMenuRef={exportMenuRef}
           preferencesMenuRef={preferencesMenuRef}
           onExport={handleExport}
+          onReset={handleReset}
           onSetDarkMode={setDarkMode}
           darkMode={darkMode}
           i18n={i18n}
@@ -601,79 +624,3 @@ export function BoardPage() {
     </div>
   );
 }
-
-interface BoardSelectorProps {
-  boards: Board[];
-  currentBoard: Board | null;
-  boardIdFromUrl: string;
-  showDropdown: boolean;
-  onToggleDropdown: () => void;
-  onSelectBoard: (id: string) => void;
-}
-
-import { forwardRef } from 'react';
-
-const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
-  ({ boards, currentBoard, boardIdFromUrl, showDropdown, onToggleDropdown, onSelectBoard }, ref) => {
-    const { t } = useTranslation();
-
-    return (
-      <div ref={ref} className="relative">
-        <button
-          onClick={onToggleDropdown}
-          className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm hover:bg-zinc-50 max-w-36"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="3" width="7" height="7" />
-            <rect x="14" y="3" width="7" height="7" />
-            <rect x="14" y="14" width="7" height="7" />
-            <rect x="3" y="14" width="7" height="7" />
-          </svg>
-          <span className="truncate max-w-24">
-            {currentBoard?.name || boards.find((b) => b.id === boardIdFromUrl)?.name || t('board.selectBoard')}
-          </span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-        {showDropdown && (
-          <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg z-50">
-            {boards.map((board) => (
-              <button
-                key={board.id}
-                onClick={() => onSelectBoard(board.id)}
-                className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 ${
-                  board.id === boardIdFromUrl ? 'bg-blue-50 text-blue-700 font-medium' : 'text-zinc-700'
-                }`}
-              >
-                {board.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-);
-
-BoardSelector.displayName = 'BoardSelector';

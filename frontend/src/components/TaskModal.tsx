@@ -464,22 +464,22 @@ export function TaskModal({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">Agent ID</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.agentId')}</label>
                   <input
                     type="text"
                     value={editAgentId}
                     onChange={(e) => setEditAgentId(e.target.value)}
-                    placeholder={t('taskModal.agentIdPlaceholder') || 'e.g., claude, gpt-4'}
+                    placeholder={t('taskModal.agentIdPlaceholder')}
                     className="w-full rounded-lg border border-zinc-200 px-3 py-2"
                   />
                 </div>
 
                 <div className="col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">Agent Prompt</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.agentPrompt')}</label>
                   <textarea
                     value={editAgentPrompt}
                     onChange={(e) => setEditAgentPrompt(e.target.value)}
-                    placeholder={t('taskModal.agentPromptPlaceholder') || 'Instructions for the agent...'}
+                    placeholder={t('taskModal.agentPromptPlaceholder')}
                     rows={3}
                     className="w-full rounded-lg border border-zinc-200 px-3 py-2 resize-none"
                   />

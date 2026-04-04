@@ -51,16 +51,20 @@ export function AddTaskModal({
     }
   }, [selectedBoardId, isOpen, defaultColumnId]);
 
+  const resetForm = useCallback(() => {
+    setTitle('');
+    setDescription('');
+    setIsPublished(true);
+    setSelectedBoardId(currentBoardId || '');
+    setPriority('medium');
+    setTimeout(() => titleInputRef.current?.focus(), 0);
+  }, [currentBoardId]);
+
   useEffect(() => {
     if (isOpen) {
-      setTitle('');
-      setDescription('');
-      setIsPublished(true);
-      setSelectedBoardId(currentBoardId || '');
-      setPriority('medium');
-      setTimeout(() => titleInputRef.current?.focus(), 0);
+      void resetForm();
     }
-  }, [isOpen, currentBoardId]);
+  }, [isOpen, resetForm]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -128,8 +132,8 @@ export function AddTaskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" />
 
-      <div className="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-800">{t('task.addTask')}</h2>
+      <div className="relative z-10 w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-xl">
+        <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('task.addTask')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -139,14 +143,14 @@ export function AddTaskModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('task.titlePlaceholder')}
-              className="w-full rounded-md border border-zinc-200 px-4 py-3 text-base focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-4 py-3 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">{t('taskModal.description')}</label>
-            <div ref={descEditorRef} className="overflow-hidden rounded-lg border border-zinc-200">
-              <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 250 }} disabled />}>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('taskModal.description')}</label>
+            <div ref={descEditorRef} className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none dark:bg-zinc-700 dark:text-zinc-100" style={{ height: 250 }} disabled />}>
                 <MarkdownEditor
                   value={description}
                   onChange={(val) => setDescription(val || '')}
@@ -158,11 +162,11 @@ export function AddTaskModal({
 
           {boards.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">{t('task.selectBoard')}</label>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('task.selectBoard')}</label>
               <select
                 value={selectedBoardId}
                 onChange={(e) => setSelectedBoardId(e.target.value)}
-                className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm dark:bg-zinc-700 dark:text-zinc-100"
               >
                 {boards.map((board) => (
                   <option key={board.id} value={board.id}>
@@ -175,7 +179,7 @@ export function AddTaskModal({
 
           {columns.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">{t('task.selectColumn')}</label>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('task.selectColumn')}</label>
               <select
                 value={selectedColumnId}
                 onChange={(e) => setSelectedColumnId(e.target.value)}
@@ -192,7 +196,7 @@ export function AddTaskModal({
                     setSelectedColumnId(columns[nextIndex].id);
                   }
                 }}
-                className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm dark:bg-zinc-700 dark:text-zinc-100"
               >
                 {columns.map((col) => (
                   <option key={col.id} value={col.id}>
@@ -203,22 +207,22 @@ export function AddTaskModal({
             </div>
           )}
 
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
             <input
               type="checkbox"
               checked={isPublished}
               onChange={(e) => setIsPublished(e.target.checked)}
-              className="h-4 w-4 rounded border-zinc-200"
+              className="h-4 w-4 rounded border-zinc-200 dark:border-zinc-600 dark:bg-zinc-700"
             />
             {t('task.publishHint')}
           </label>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">{t('taskModal.priority')}</label>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('taskModal.priority')}</label>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              className="w-full rounded-md border border-zinc-200 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm dark:bg-zinc-700 dark:text-zinc-100"
             >
               <option value="low">{t('taskModal.priorityLow')}</option>
               <option value="medium">{t('taskModal.priorityMedium')}</option>
@@ -230,14 +234,14 @@ export function AddTaskModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
+              className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600"
             >
               {t('task.cancel')}
             </button>
             <button
               type="submit"
               disabled={!title.trim()}
-              className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:bg-zinc-300"
+              className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
             >
               {t('task.add')}
             </button>

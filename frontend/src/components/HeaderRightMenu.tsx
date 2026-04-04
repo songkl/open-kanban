@@ -22,6 +22,7 @@ interface HeaderRightMenuProps {
   exportMenuRef: React.RefObject<HTMLDivElement | null>;
   preferencesMenuRef: React.RefObject<HTMLDivElement | null>;
   onExport: (format: 'json' | 'csv') => void;
+  onReset: () => void;
   onSetDarkMode: (dark: boolean) => void;
   darkMode: boolean;
   i18n: { language: string; changeLanguage: (lang: string) => void };
@@ -46,6 +47,7 @@ export function HeaderRightMenu({
   exportMenuRef,
   preferencesMenuRef,
   onExport,
+  onReset,
   onSetDarkMode,
   darkMode,
   i18n,
@@ -127,6 +129,19 @@ export function HeaderRightMenu({
               </div>
             )}
           </div>
+          <div className="border-t border-zinc-100 my-1" />
+          <button
+            onClick={() => {
+              onReset();
+              onSetShowMoreMenu(false);
+            }}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-zinc-100"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            {t('nav.resetBoard')}
+          </button>
           <div className="relative">
             <button
               onClick={() => onSetShowPreferencesMenu(!showPreferencesMenu)}

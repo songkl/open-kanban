@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface AddSubtaskModalProps {
@@ -15,11 +15,15 @@ export function AddSubtaskModal({
   const { t } = useTranslation();
   const [title, setTitle] = useState('');
 
+  const resetForm = useCallback(() => {
+    setTitle('');
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
-      setTitle('');
+      void resetForm();
     }
-  }, [isOpen]);
+  }, [isOpen, resetForm]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

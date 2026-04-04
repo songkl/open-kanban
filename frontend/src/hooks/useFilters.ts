@@ -32,13 +32,17 @@ export function useFilters() {
 
   const [searchQuery, setSearchQuery] = useState('');
 
+  const syncFiltersWithSearch = useCallback(() => {
+    setFilters(prev => ({ ...prev, searchQuery }));
+  }, [searchQuery]);
+
   useEffect(() => {
     localStorage.setItem(FILTER_PRESETS_KEY, JSON.stringify(filterPresets));
   }, [filterPresets]);
 
   useEffect(() => {
-    setFilters(prev => ({ ...prev, searchQuery }));
-  }, [searchQuery]);
+    void syncFiltersWithSearch();
+  }, [syncFiltersWithSearch]);
 
   const clearFilters = useCallback(() => {
     setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '' });

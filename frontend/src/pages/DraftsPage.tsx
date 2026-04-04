@@ -235,7 +235,7 @@ export function DraftsPage() {
   if (loading && boards.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-zinc-500">{t('drafts.loading')}</div>
+        <div className="text-zinc-500 dark:text-zinc-400">{t('drafts.loading')}</div>
       </div>
     );
   }
@@ -244,7 +244,7 @@ export function DraftsPage() {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <div className="text-red-500">{t('drafts.loadFailed')}</div>
-        <div className="text-sm text-zinc-400">{error}</div>
+        <div className="text-sm text-zinc-400 dark:text-zinc-500">{error}</div>
         <button
           onClick={() => selectedBoard && fetchTasks(selectedBoard)}
           className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
@@ -256,21 +256,21 @@ export function DraftsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
             to="/"
-            className="rounded-md bg-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-300"
+            className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
           >
             {t('drafts.backToBoard')}
           </Link>
-          <h1 className="text-2xl font-bold text-zinc-800">{t('drafts.title')}</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('drafts.title')}</h1>
           {boards.length > 0 && (
             <select
               value={selectedBoard}
               onChange={(e) => handleBoardChange(e.target.value)}
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm"
+              className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm dark:text-zinc-100"
             >
               {boards.map((board) => (
                 <option key={board.id} value={board.id}>
@@ -287,16 +287,16 @@ export function DraftsPage() {
           >
             + {t('drafts.newTask')}
           </button>
-          <span className="text-sm text-zinc-500">{t('drafts.draftCount', { count: tasks.length })}</span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">{t('drafts.draftCount', { count: tasks.length })}</span>
         </div>
       </header>
 
       {loading ? (
         <div className="flex h-64 items-center justify-center">
-          <div className="text-zinc-500">{t('drafts.loading')}</div>
+          <div className="text-zinc-500 dark:text-zinc-400">{t('drafts.loading')}</div>
         </div>
       ) : tasks.length === 0 ? (
-        <div className="rounded-lg bg-white p-8 text-center text-zinc-500">
+        <div className="rounded-lg bg-white dark:bg-zinc-800 p-8 text-center text-zinc-500 dark:text-zinc-400">
           {t('drafts.empty')}
         </div>
       ) : (
@@ -304,23 +304,23 @@ export function DraftsPage() {
           {tasks.map((task) => (
             <div
               key={task.id}
-              className="group relative w-80 rounded-lg bg-white p-3 shadow-sm transition-all hover:shadow-md"
+              className="group relative w-80 rounded-lg bg-white dark:bg-zinc-800 p-3 shadow-sm transition-all hover:shadow-md border border-zinc-200 dark:border-zinc-700"
             >
               <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100">
-                <span className="h-0.5 w-1 rounded-full bg-zinc-400" />
-                <span className="h-0.5 w-1 rounded-full bg-zinc-400" />
-                <span className="h-0.5 w-1 rounded-full bg-zinc-400" />
+                <span className="h-0.5 w-1 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                <span className="h-0.5 w-1 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                <span className="h-0.5 w-1 rounded-full bg-zinc-400 dark:bg-zinc-500" />
               </div>
 
               <div className="flex items-start justify-between gap-2 pl-3">
                 <div className="flex-1">
-                  <span className="mb-1 block text-xs text-zinc-400 font-mono">#{task.id.slice(-6)}</span>
-                  <h3 className="font-medium text-zinc-800 break-words">{task.title}</h3>
+                  <span className="mb-1 block text-xs text-zinc-400 dark:text-zinc-500 font-mono">#{task.id.slice(-6)}</span>
+                  <h3 className="font-medium text-zinc-800 dark:text-zinc-100 break-words">{task.title}</h3>
                 </div>
               </div>
 
               {task.description && (
-                <p className="mb-2 text-sm text-zinc-500 line-clamp-2 pl-3">
+                <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2 pl-3">
                   {task.description}
                 </p>
               )}
@@ -329,14 +329,14 @@ export function DraftsPage() {
                 <div className="mb-2 space-y-1 pl-3">
                   {task.subtasks.slice(0, 3).map((subtask) => (
                     <div key={subtask.id} className="flex items-center gap-1.5 text-xs">
-                      <span className={`h-1.5 w-1.5 rounded-full ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300'}`} />
-                      <span className={subtask.completed ? 'text-zinc-400 line-through truncate' : 'text-zinc-600 truncate'}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+                      <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
                         {subtask.title}
                       </span>
                     </div>
                   ))}
                   {task.subtasks.length > 3 && (
-                    <span className="text-xs text-zinc-400">{t('drafts.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">{t('drafts.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
                   )}
                 </div>
               )}
@@ -344,42 +344,42 @@ export function DraftsPage() {
               <div className="flex items-center justify-between pl-3">
                 <div className="flex items-center gap-2">
                   <span className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    task.priority === 'high' ? 'bg-red-100 text-red-700' : task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                    task.priority === 'high' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' : task.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                   }`}>
                     {t(`task.priority.${task.priority}`)}
                   </span>
                   {task.subtasks && task.subtasks.length > 0 && (
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">
                       ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   {task.comments && task.comments.length > 0 && (
-                    <span className="text-xs text-zinc-400">💬 {task.comments.length}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">💬 {task.comments.length}</span>
                   )}
                 </div>
               </div>
 
-              <div className="mt-2 border-t border-zinc-200 pt-2 pl-3">
-                <div className="flex items-center justify-between text-xs text-zinc-400">
+              <div className="mt-2 border-t border-zinc-200 dark:border-zinc-700 pt-2 pl-3">
+                <div className="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500">
                   <span>{t('drafts.createdAt')} {new Date(task.createdAt).toLocaleString()}</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(task)}
-                      className="text-blue-500 hover:text-blue-600"
+                      className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
                     >
                       {t('drafts.edit')}
                     </button>
                     <button
                       onClick={() => handlePublishClick(task.id)}
-                      className="text-green-500 hover:text-green-600"
+                      className="text-green-500 dark:text-green-400 hover:text-green-600 dark:hover:text-green-300"
                     >
                       {t('drafts.publish')}
                     </button>
                     <button
                       onClick={() => handleDelete(task.id)}
-                      className="text-red-500 hover:text-red-600"
+                      className="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300"
                     >
                       {t('drafts.delete')}
                     </button>
@@ -398,10 +398,10 @@ export function DraftsPage() {
         >
           <div className="absolute inset-0 bg-black/50" />
           <div
-            className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">
               {t('drafts.newTask')}
             </h2>
 
@@ -413,7 +413,7 @@ export function DraftsPage() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder={t('drafts.titlePlaceholder')}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 />
               </div>
 
@@ -423,16 +423,16 @@ export function DraftsPage() {
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder={t('drafts.descriptionPlaceholder')}
                   rows={4}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none resize-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 text-base focus:border-blue-500 focus:outline-none resize-none dark:bg-zinc-700 dark:text-zinc-100"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.targetColumn')}</label>
+                <label className="block text-sm text-zinc-600 dark:text-zinc-300 mb-1">{t('drafts.targetColumn')}</label>
                 <select
                   value={targetColumn}
                   onChange={(e) => setTargetColumn(e.target.value)}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-2 text-base focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 >
                   {columns.map((col) => (
                     <option key={col.id} value={col.id}>{col.name}</option>
@@ -444,14 +444,14 @@ export function DraftsPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
+                  className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600"
                 >
                   {t('drafts.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={!newTitle.trim()}
-                  className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                  className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
                 >
                   {t('drafts.saveDraft')}
                 </button>
@@ -468,10 +468,10 @@ export function DraftsPage() {
         >
           <div className="absolute inset-0 bg-black/50" />
           <div
-            className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">
               {t('drafts.editDraft')}
             </h2>
 
@@ -483,7 +483,7 @@ export function DraftsPage() {
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder={t('drafts.titlePlaceholder')}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 />
               </div>
 
@@ -493,16 +493,16 @@ export function DraftsPage() {
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder={t('drafts.descriptionPlaceholder')}
                   rows={4}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none resize-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 text-base focus:border-blue-500 focus:outline-none resize-none dark:bg-zinc-700 dark:text-zinc-100"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.targetColumn')}</label>
+                <label className="block text-sm text-zinc-600 dark:text-zinc-300 mb-1">{t('drafts.targetColumn')}</label>
                 <select
                   value={targetColumn}
                   onChange={(e) => setTargetColumn(e.target.value)}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-2 text-base focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 >
                   {columns.map((col) => (
                     <option key={col.id} value={col.id}>{col.name}</option>
@@ -518,14 +518,14 @@ export function DraftsPage() {
                     setNewTitle('');
                     setNewDescription('');
                   }}
-                  className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
+                  className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600"
                 >
                   {t('drafts.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={!newTitle.trim()}
-                  className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                  className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
                 >
                   {t('drafts.saveChanges')}
                 </button>
@@ -542,23 +542,23 @@ export function DraftsPage() {
         >
           <div className="absolute inset-0 bg-black/50" />
           <div
-            className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">
               {t('drafts.publishToBoard')}
             </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.selectBoard')}</label>
+                <label className="block text-sm text-zinc-600 dark:text-zinc-300 mb-1">{t('drafts.selectBoard')}</label>
                 <select
                   value={selectedBoard}
                   onChange={(e) => {
                     setSelectedBoard(e.target.value);
                     fetchColumnsByBoard(e.target.value);
                   }}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-2 text-base focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 >
                   {boards.map((board) => (
                     <option key={board.id} value={board.id}>{board.name}</option>
@@ -567,11 +567,11 @@ export function DraftsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-zinc-600 mb-1">{t('drafts.selectColumn')}</label>
+                <label className="block text-sm text-zinc-600 dark:text-zinc-300 mb-1">{t('drafts.selectColumn')}</label>
                 <select
                   value={publishTargetColumn}
                   onChange={(e) => setPublishTargetColumn(e.target.value)}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-2 text-base focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 >
                   {columns.length === 0 ? (
                     <option value="">{t('drafts.noColumns')}</option>
@@ -589,14 +589,14 @@ export function DraftsPage() {
                   onClick={() => {
                     setPublishTaskId(null);
                   }}
-                  className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
+                  className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600"
                 >
                   {t('drafts.cancel')}
                 </button>
                 <button
                   onClick={handlePublish}
                   disabled={!publishTargetColumn}
-                  className="flex-1 rounded-md bg-green-500 px-4 py-2.5 text-base font-medium text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                  className="flex-1 rounded-md bg-green-500 px-4 py-2.5 text-base font-medium text-white hover:bg-green-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
                 >
                   {t('drafts.publish')}
                 </button>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { activitiesApi } from '@/services/api';
 
@@ -33,20 +33,20 @@ export function ActivityTicker() {
   const [isPaused, setIsPaused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     try {
       const data = await activitiesApi.getAll({ pageSize: 20 });
       setActivities(data.activities || []);
     } catch (err) {
       console.error('Failed to fetch activities:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchActivities();
-    const interval = setInterval(fetchActivities, 30000);
+    void fetchActivities();
+    const interval = setInterval(() => void fetchActivities(), 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchActivities]);
 
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr);

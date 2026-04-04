@@ -42,6 +42,7 @@
     "columnManagement": "Column Management",
     "more": "More",
     "export": "Export Data",
+    "resetBoard": "Reset Board",
     "activityLog": "Activity Log",
     "records": "records",
     "preferences": "Preferences",
@@ -299,6 +300,8 @@
     "boardCreated": "Board created",
     "boardUpdated": "Board updated",
     "boardDeleted": "Board deleted",
+    "boardReset": "Board reset",
+    "resetFailed": "Reset failed",
     "saveFailed": "Save failed",
     "deleteFailed": "Delete failed",
     "publishFailed": "Publish failed",
@@ -316,6 +319,8 @@
   "confirm": {
     "deleteBoardTitle": "Delete Board",
     "deleteBoard": "Are you sure you want to delete board \"{{name}}\"? All columns and tasks will be deleted!",
+    "resetBoardTitle": "Reset Board",
+    "resetBoard": "Are you sure you want to reset board \"{{name}}\"? All columns and tasks will be cleared!",
     "deleteTemplateTitle": "Delete Template",
     "deleteTemplate": "Are you sure you want to delete this template?",
     "yes": "Yes",
@@ -585,7 +590,11 @@
     "save": "Save",
     "cancel": "Cancel",
     "archive": "Archive",
-    "completedNotEditable": "Completed tasks cannot be modified"
+    "completedNotEditable": "Completed tasks cannot be modified",
+    "agentId": "Agent ID",
+    "agentIdPlaceholder": "e.g., claude, gpt-4",
+    "agentPrompt": "Agent Prompt",
+    "agentPromptPlaceholder": "Instructions for the agent..."
   },
   "skeleton": {
     "loading": "Loading..."

@@ -42,6 +42,7 @@
     "columnManagement": "列管理",
     "more": "更多",
     "export": "导出数据",
+    "resetBoard": "重置看板",
     "activityLog": "活动日志",
     "records": "条记录",
     "preferences": "偏好设置",
@@ -299,6 +300,8 @@
     "boardCreated": "看板已创建",
     "boardUpdated": "看板已更新",
     "boardDeleted": "看板已删除",
+    "boardReset": "看板已重置",
+    "resetFailed": "重置失败",
     "saveFailed": "保存失败",
     "deleteFailed": "删除失败",
     "publishFailed": "发布失败",
@@ -316,6 +319,8 @@
   "confirm": {
     "deleteBoardTitle": "删除看板",
     "deleteBoard": "确定要删除看板 \"{{name}}\" 吗？\n删除后所有列和任务都将被删除！",
+    "resetBoardTitle": "重置看板",
+    "resetBoard": "确定要重置看板「{{name}}」吗？\n所有列和任务都将被清空！",
     "deleteTemplateTitle": "删除模板",
     "deleteTemplate": "确定要删除这个模板吗？",
     "yes": "确定",
@@ -585,7 +590,11 @@
     "save": "保存",
     "cancel": "取消",
     "archive": "归档任务",
-    "completedNotEditable": "已完成任务不可修改"
+    "completedNotEditable": "已完成任务不可修改",
+    "agentId": "Agent ID",
+    "agentIdPlaceholder": "例如 claude, gpt-4",
+    "agentPrompt": "Agent Prompt",
+    "agentPromptPlaceholder": "给 Agent 的指令..."
   },
   "skeleton": {
     "loading": "加载中..."
