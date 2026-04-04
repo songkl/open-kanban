@@ -433,20 +433,18 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 }
 
 func getCurrentUserFromToken(db *sql.DB, tokenKey string) *models.User {
-	tokenCacheMux.Lock()
-	if cached, ok := tokenCache[tokenKey]; ok && time.Now().Before(cached.expiresAt) {
-		user := cached.user
-		tokenCacheMux.Unlock()
-		return user
+	if cached, ok := tokenCache.Load(tokenKey); ok {
+		if entry, ok := cached.(*cachedUser); ok && time.Now().Before(entry.expiresAt) && entry.user.Enabled {
+			return entry.user
+		}
 	}
-	tokenCacheMux.Unlock()
 
 	var user models.User
 	var token models.Token
 	err := db.QueryRow(
-		"SELECT t.id, t.expires_at, u.id, u.username, u.nickname, u.avatar, u.type, u.role FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
+		"SELECT t.id, t.expires_at, u.id, u.username, u.nickname, u.avatar, u.type, u.role, u.enabled FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
 		tokenKey,
-	).Scan(&token.ID, &token.ExpiresAt, &user.ID, &user.Username, &user.Nickname, &user.Avatar, &user.Type, &user.Role)
+	).Scan(&token.ID, &token.ExpiresAt, &user.ID, &user.Username, &user.Nickname, &user.Avatar, &user.Type, &user.Role, &user.Enabled)
 	if err != nil {
 		return nil
 	}
@@ -455,14 +453,16 @@ func getCurrentUserFromToken(db *sql.DB, tokenKey string) *models.User {
 		return nil
 	}
 
+	if !user.Enabled {
+		return nil
+	}
+
 	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
 
-	tokenCacheMux.Lock()
-	tokenCache[tokenKey] = &cachedUser{
+	tokenCache.Store(tokenKey, &cachedUser{
 		user:      &user,
 		expiresAt: time.Now().Add(tokenCacheDuration),
-	}
-	tokenCacheMux.Unlock()
+	})
 
 	return &user
 }

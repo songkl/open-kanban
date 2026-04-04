@@ -283,13 +283,11 @@ func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
 		}
 	}
 
-	tokenCacheMux.Lock()
-	if cached, ok := tokenCache[tokenKey]; ok && time.Now().Before(cached.expiresAt) {
-		user := cached.user
-		tokenCacheMux.Unlock()
-		return user
+	if cached, ok := tokenCache.Load(tokenKey); ok {
+		if entry, ok := cached.(*cachedUser); ok && time.Now().Before(entry.expiresAt) && entry.user.Enabled {
+			return entry.user
+		}
 	}
-	tokenCacheMux.Unlock()
 
 	var user models.User
 	var token models.Token
@@ -311,12 +309,10 @@ func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
 
 	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
 
-	tokenCacheMux.Lock()
-	tokenCache[tokenKey] = &cachedUser{
+	tokenCache.Store(tokenKey, &cachedUser{
 		user:      &user,
 		expiresAt: time.Now().Add(tokenCacheDuration),
-	}
-	tokenCacheMux.Unlock()
+	})
 
 	return &user
 }
