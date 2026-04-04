@@ -100,6 +100,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 			}
 		} else {
 			countQuery = "SELECT COUNT(*) FROM tasks"
+			countArgs = []interface{}{}
 		}
 		if err := db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
