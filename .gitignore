@@ -46,3 +46,4 @@ logs/
 devDoc/
 logs/
 tmp/
+backend/cmd/server/web/
