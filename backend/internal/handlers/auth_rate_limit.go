@@ -13,10 +13,13 @@ type rateLimitEntry struct {
 	resetTime time.Time
 }
 
+const maxRateLimitEntries = 10000
+
 var (
-	rateLimitMap  = make(map[string]*rateLimitEntry)
-	rateLimitMux  sync.Mutex
-	rateLimitOpts = struct {
+	rateLimitMap      = make(map[string]*rateLimitEntry)
+	rateLimitMux      sync.Mutex
+	rateLimitMapOrder []string
+	rateLimitOpts     = struct {
 		maxRequests int
 		windowSecs  int
 	}{
@@ -30,10 +33,13 @@ type globalRateLimitEntry struct {
 	resetTime time.Time
 }
 
+const maxGlobalRateLimitEntries = 10000
+
 var (
-	globalRateLimitMap  = make(map[string]*globalRateLimitEntry)
-	globalRateLimitMux  sync.Mutex
-	globalRateLimitOpts = struct {
+	globalRateLimitMap      = make(map[string]*globalRateLimitEntry)
+	globalRateLimitMux      sync.Mutex
+	globalRateLimitMapOrder []string
+	globalRateLimitOpts     = struct {
 		maxRequests int
 		windowSecs  int
 	}{
@@ -56,10 +62,14 @@ func (m *memoryRateLimitStore) check(key string, maxRequests int, windowSecs int
 	entry, exists := rateLimitMap[key]
 
 	if !exists || now.After(entry.resetTime) {
+		if len(rateLimitMap) >= maxRateLimitEntries {
+			cleanupOldRateLimitEntriesLocked(now)
+		}
 		rateLimitMap[key] = &rateLimitEntry{
 			count:     1,
 			resetTime: now.Add(time.Duration(windowSecs) * time.Second),
 		}
+		rateLimitMapOrder = append(rateLimitMapOrder, key)
 		return true
 	}
 
@@ -96,6 +106,22 @@ var (
 	redisClient            *redis.Client
 )
 
+func cleanupOldRateLimitEntriesLocked(now time.Time) {
+	for key, entry := range rateLimitMap {
+		if now.After(entry.resetTime) {
+			delete(rateLimitMap, key)
+		}
+	}
+	if len(rateLimitMap) >= maxRateLimitEntries {
+		targetSize := maxRateLimitEntries / 2
+		for len(rateLimitMap) > targetSize && len(rateLimitMapOrder) > 0 {
+			oldestKey := rateLimitMapOrder[0]
+			rateLimitMapOrder = rateLimitMapOrder[1:]
+			delete(rateLimitMap, oldestKey)
+		}
+	}
+}
+
 func cleanupRateLimitMap() {
 	for {
 		time.Sleep(5 * time.Minute)
@@ -108,6 +134,49 @@ func cleanupRateLimitMap() {
 		}
 		rateLimitMux.Unlock()
 	}
+}
+
+func cleanupOldGlobalRateLimitEntriesLocked(now time.Time) {
+	for key, entry := range globalRateLimitMap {
+		if now.After(entry.resetTime) {
+			delete(globalRateLimitMap, key)
+		}
+	}
+	if len(globalRateLimitMap) >= maxGlobalRateLimitEntries {
+		targetSize := maxGlobalRateLimitEntries / 2
+		for len(globalRateLimitMap) > targetSize && len(globalRateLimitMapOrder) > 0 {
+			oldestKey := globalRateLimitMapOrder[0]
+			globalRateLimitMapOrder = globalRateLimitMapOrder[1:]
+			delete(globalRateLimitMap, oldestKey)
+		}
+	}
+}
+
+func CheckGlobalRateLimit(key string, maxRequests int, windowSecs int) bool {
+	globalRateLimitMux.Lock()
+	defer globalRateLimitMux.Unlock()
+
+	now := time.Now()
+	entry, exists := globalRateLimitMap[key]
+
+	if !exists || now.After(entry.resetTime) {
+		if len(globalRateLimitMap) >= maxGlobalRateLimitEntries {
+			cleanupOldGlobalRateLimitEntriesLocked(now)
+		}
+		globalRateLimitMap[key] = &globalRateLimitEntry{
+			count:     1,
+			resetTime: now.Add(time.Duration(windowSecs) * time.Second),
+		}
+		globalRateLimitMapOrder = append(globalRateLimitMapOrder, key)
+		return true
+	}
+
+	if entry.count >= maxRequests {
+		return false
+	}
+
+	entry.count++
+	return true
 }
 
 func cleanupGlobalRateLimitMap() {
@@ -128,10 +197,12 @@ func ResetRateLimitMapForTest() {
 	rateLimitMux.Lock()
 	defer rateLimitMux.Unlock()
 	rateLimitMap = make(map[string]*rateLimitEntry)
+	rateLimitMapOrder = nil
 }
 
 func ResetGlobalRateLimitMapForTest() {
 	globalRateLimitMux.Lock()
 	defer globalRateLimitMux.Unlock()
 	globalRateLimitMap = make(map[string]*globalRateLimitEntry)
+	globalRateLimitMapOrder = nil
 }
