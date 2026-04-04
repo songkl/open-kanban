@@ -48,17 +48,21 @@ export function FileUpload({
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const validateFile = (file: File): string | null => {
-    if (file.size > MAX_FILE_SIZE) {
-      return t('upload.fileTooLarge');
-    }
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return t('upload.unsupportedType');
-    }
-    return null;
-  };
+  const validateFile = useCallback(
+    (file: File): string | null => {
+      if (file.size > MAX_FILE_SIZE) {
+        return t('upload.fileTooLarge');
+      }
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        return t('upload.unsupportedType');
+      }
+      return null;
+    },
+    [t]
+  );
 
-  const uploadFile = async (uploadingFile: UploadingFile) => {
+  const uploadFile = useCallback(
+    async (uploadingFile: UploadingFile) => {
     const { file, id } = uploadingFile;
 
     const { promise, abort } = attachmentsApi.upload(
@@ -115,7 +119,7 @@ export function FileUpload({
         );
       }
     }
-  };
+  }, [taskId, commentId, t, onUpload]);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
@@ -145,7 +149,7 @@ export function FileUpload({
           uploadFile(uploadingFile);
         });
     },
-    [disabled, maxFiles, uploadingFiles.length, taskId, commentId]
+    [disabled, maxFiles, uploadingFiles.length, validateFile, uploadFile]
   );
 
   const handleDragOver = useCallback(

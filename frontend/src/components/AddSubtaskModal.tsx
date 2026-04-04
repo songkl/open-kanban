@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface AddSubtaskModalProps {
@@ -16,7 +16,9 @@ export function AddSubtaskModal({
   const [title, setTitle] = useState('');
 
   const resetForm = useCallback(() => {
-    setTitle('');
+    startTransition(() => {
+      setTitle('');
+    });
   }, []);
 
   useEffect(() => {

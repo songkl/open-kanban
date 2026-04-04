@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { columnsApi } from '@/services/api';
 
@@ -52,17 +52,19 @@ export function AddTaskModal({
   }, [selectedBoardId, isOpen, defaultColumnId]);
 
   const resetForm = useCallback(() => {
-    setTitle('');
-    setDescription('');
-    setIsPublished(true);
-    setSelectedBoardId(currentBoardId || '');
-    setPriority('medium');
+    startTransition(() => {
+      setTitle('');
+      setDescription('');
+      setIsPublished(true);
+      setSelectedBoardId(currentBoardId || '');
+      setPriority('medium');
+    });
     setTimeout(() => titleInputRef.current?.focus(), 0);
   }, [currentBoardId]);
 
   useEffect(() => {
     if (isOpen) {
-      void resetForm();
+      resetForm();
     }
   }, [isOpen, resetForm]);
 

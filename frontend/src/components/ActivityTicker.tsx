@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { activitiesApi } from '@/services/api';
 
@@ -36,15 +36,17 @@ export function ActivityTicker() {
   const fetchActivities = useCallback(async () => {
     try {
       const data = await activitiesApi.getAll({ pageSize: 20 });
-      setActivities(data.activities || []);
+      startTransition(() => {
+        setActivities(data.activities || []);
+      });
     } catch (err) {
       console.error('Failed to fetch activities:', err);
     }
   }, []);
 
   useEffect(() => {
-    void fetchActivities();
-    const interval = setInterval(() => void fetchActivities(), 30000);
+    fetchActivities();
+    const interval = setInterval(() => fetchActivities(), 30000);
     return () => clearInterval(interval);
   }, [fetchActivities]);
 

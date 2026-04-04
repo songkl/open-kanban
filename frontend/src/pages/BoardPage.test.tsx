@@ -35,18 +35,13 @@ vi.mock('@/services/api', () => ({
   setGlobalErrorHandler: vi.fn(),
 }));
 
-vi.spyOn(global, 'WebSocket').mockImplementation(() => ({
-  onopen: null,
-  onclose: null,
-  onmessage: null,
-  onerror: null,
-  close: vi.fn(),
-  send: vi.fn(),
-  readyState: 1,
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  dispatchEvent: vi.fn(),
-}) as any);
+vi.mock('@/hooks/useBoardWebSocket', () => ({
+  useBoardWebSocket: () => ({
+    wsStatus: 'disconnected' as const,
+    reconnectCount: 0,
+    connectWebSocket: vi.fn(),
+  }),
+}));
 
 describe('BoardPage', () => {
   it('renders loading skeleton initially', () => {

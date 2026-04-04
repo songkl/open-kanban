@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { FilterState, FilterPreset } from '../hooks/useBoardState';
+import type { FilterState, FilterPreset } from '../hooks/useFilters';
 
 interface FilterPanelContentProps {
   filters: FilterState;

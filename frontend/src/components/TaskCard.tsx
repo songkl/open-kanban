@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -41,7 +41,8 @@ function highlightText(text: string, query: string): React.ReactNode {
 
 export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, searchQuery, isSelected, onSelect }: TaskCardProps) {
   const { t } = useTranslation();
-  const taskId = task?.id ?? `temp-${Math.random().toString(36).slice(2)}`;
+  const tempId = useId();
+  const taskId = task?.id ?? `temp-${tempId}`;
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -275,7 +276,11 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             className="flex items-center gap-1 cursor-pointer text-xs text-zinc-400 hover:text-blue-500"
             onClick={(e) => {
               e.stopPropagation();
-              onCommentsClick ? onCommentsClick() : onClick();
+              if (onCommentsClick) {
+                onCommentsClick();
+              } else {
+                onClick();
+              }
             }}
             title={t('taskCard.viewComments')}
           >

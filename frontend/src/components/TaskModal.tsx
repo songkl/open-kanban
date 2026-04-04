@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import type { Task, Attachment, Column, Agent, Subtask } from '@/types/kanban';
@@ -76,10 +76,13 @@ export function TaskModal({
   const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
+  const saveHandlerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (startEditing && !isEditing) {
-      setIsEditing(true);
+      startTransition(() => {
+        setIsEditing(true);
+      });
       onEditingStarted?.();
     }
   }, [startEditing]);
@@ -97,7 +100,7 @@ export function TaskModal({
         const isTextarea = target.tagName === 'TEXTAREA' || target.closest('textarea');
         if (!isTextarea) {
           e.preventDefault();
-          handleSave();
+          saveHandlerRef.current?.();
           return;
         }
       }
@@ -190,7 +193,9 @@ export function TaskModal({
   }, []);
 
   useEffect(() => {
-    setEditMeta(parseMeta(task.meta));
+    startTransition(() => {
+      setEditMeta(parseMeta(task.meta));
+    });
   }, [task.meta]);
 
   useEffect(() => {
@@ -201,7 +206,9 @@ export function TaskModal({
 
   useEffect(() => {
     if (task.id) {
-      setLoadingAttachments(true);
+      startTransition(() => {
+        setLoadingAttachments(true);
+      });
       attachmentsApi.getByTask(task.id)
         .then((data) => setAttachments(data || []))
         .catch(console.error)
@@ -243,6 +250,10 @@ export function TaskModal({
       console.error('Failed to save task:', error);
     }
   }, [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate]);
+
+  useEffect(() => {
+    saveHandlerRef.current = handleSave;
+  }, [handleSave]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
