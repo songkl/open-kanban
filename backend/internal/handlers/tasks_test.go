@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"open-kanban/internal/handlers"
 
@@ -98,6 +99,8 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		agent_id TEXT,
+		agent_prompt TEXT,
 		created_by TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -199,6 +202,7 @@ func TestGetTasksHandler(t *testing.T) {
 }
 
 func TestCreateTaskHandler(t *testing.T) {
+	handlers.ResetRateLimitMapForTest()
 	db := setupTasksDB(t)
 	defer db.Close()
 
@@ -250,6 +254,135 @@ func TestCreateTaskHandler(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestCreateTaskHandlerWithPriority(t *testing.T) {
+	handlers.ResetRateLimitMapForTest()
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/tasks", handlers.CreateTask(db))
+
+	t.Run("high priority first task gets position 1000", func(t *testing.T) {
+		body := map[string]interface{}{"title": "High Priority Task", "columnId": "c1", "priority": "high"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+			return
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if int(resp["position"].(float64)) != 1000 {
+			t.Errorf("expected position 1000, got %v", resp["position"])
+		}
+	})
+
+	t.Run("high priority second task gets position 2000", func(t *testing.T) {
+		time.Sleep(100 * time.Millisecond)
+		body := map[string]interface{}{"title": "High Priority Task 2", "columnId": "c1", "priority": "high"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+			return
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if int(resp["position"].(float64)) != 2000 {
+			t.Errorf("expected position 2000, got %v", resp["position"])
+		}
+	})
+
+	t.Run("low priority task gets MAX position + 1", func(t *testing.T) {
+		time.Sleep(100 * time.Millisecond)
+		body := map[string]interface{}{"title": "Low Priority Task", "columnId": "c1", "priority": "low"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+			return
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if int(resp["position"].(float64)) != 2001 {
+			t.Errorf("expected position 2001 (MAX 2000 + 1), got %v", resp["position"])
+		}
+	})
+
+	t.Run("medium priority task between high and low", func(t *testing.T) {
+		time.Sleep(100 * time.Millisecond)
+		body := map[string]interface{}{"title": "Medium Priority Task", "columnId": "c1", "priority": "medium"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+			return
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if int(resp["position"].(float64)) != 2000 {
+			t.Errorf("expected position 2000 ((2000+2001)/2), got %v", resp["position"])
+		}
+	})
+
+	t.Run("explicit position is used when provided", func(t *testing.T) {
+		time.Sleep(100 * time.Millisecond)
+		body := map[string]interface{}{"title": "Task with explicit position", "columnId": "c1", "position": 500}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+			return
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if int(resp["position"].(float64)) != 500 {
+			t.Errorf("expected position 500, got %v", resp["position"])
 		}
 	})
 }

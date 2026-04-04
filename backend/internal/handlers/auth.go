@@ -99,6 +99,12 @@ func cleanupRateLimitMap() {
 	}
 }
 
+func ResetRateLimitMapForTest() {
+	rateLimitMux.Lock()
+	defer rateLimitMux.Unlock()
+	rateLimitMap = make(map[string]*rateLimitEntry)
+}
+
 func cleanupGlobalRateLimitMap() {
 	for {
 		time.Sleep(5 * time.Minute)
