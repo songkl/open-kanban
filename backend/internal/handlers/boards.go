@@ -396,6 +396,7 @@ func ExportBoard(db *sql.DB) gin.HandlerFunc {
 		}
 
 		exportData := gin.H{
+			"boardId":    boardID,
 			"boardName":  boardName,
 			"exportedAt": time.Now(),
 			"columns":    []gin.H{},
@@ -616,6 +617,7 @@ type ImportTask struct {
 	Meta        *string         `json:"meta"`
 	Position    int             `json:"position"`
 	Published   bool            `json:"published"`
+	Archived    bool            `json:"archived"`
 	Comments    []ImportComment `json:"comments"`
 	Subtasks    []ImportSubtask `json:"subtasks"`
 }
@@ -633,6 +635,7 @@ type ImportSubtask struct {
 type ImportBoardRequest struct {
 	Data    ImportData `json:"data"`
 	BoardID string     `json:"boardId"`
+	Reset   bool       `json:"reset"`
 }
 
 func ImportBoard(db *sql.DB) gin.HandlerFunc {
@@ -659,13 +662,18 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 			boardName = "Imported Board"
 		}
 
+		var boardExists bool
 		if boardID != "" {
-			var exists bool
-			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM boards WHERE id = ? AND deleted = false)", boardID).Scan(&exists)
-			if err == nil && exists {
-				c.JSON(http.StatusConflict, gin.H{"error": "看板 ID 已存在，如需覆盖请确认后重试"})
+			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM boards WHERE id = ? AND deleted = false)", boardID).Scan(&boardExists)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "检查看板失败"})
 				return
 			}
+		}
+
+		if boardExists && !req.Reset {
+			c.JSON(http.StatusConflict, gin.H{"error": "看板 ID 已存在，如需覆盖请确认后重试"})
+			return
 		}
 
 		tx, err := db.Begin()
@@ -676,13 +684,29 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 		defer tx.Rollback()
 
 		now := time.Now()
-		_, err = tx.Exec(
-			"INSERT INTO boards (id, name, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-			boardID, boardName, false, now, now,
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
-			return
+		if boardExists && req.Reset {
+			if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "无权重置该看板"})
+				return
+			}
+			_, err = tx.Exec("UPDATE boards SET name = ?, updated_at = ? WHERE id = ?", boardName, now, boardID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "重置看板失败"})
+				return
+			}
+			if err := resetBoardData(tx, boardID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "清空看板数据失败"})
+				return
+			}
+		} else {
+			_, err = tx.Exec(
+				"INSERT INTO boards (id, name, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				boardID, boardName, false, now, now,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+				return
+			}
 		}
 
 		columnIDMap := make(map[string]string)
@@ -739,7 +763,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 
 				_, err = tx.Exec(
 					"INSERT INTO tasks (id, title, description, priority, assignee, meta, column_id, position, published, archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-					taskID, task.Title, description, priority, assignee, meta, newColID, task.Position, task.Published, false, now, now,
+					taskID, task.Title, description, priority, assignee, meta, newColID, task.Position, task.Published, task.Archived, now, now,
 				)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败"})
@@ -778,6 +802,87 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 		}
 
 		LogActivity(db, user.ID, "BOARD_IMPORT", "BOARD", boardID, boardName, "", c.ClientIP(), getRequestSource(c))
+
+		c.JSON(http.StatusOK, gin.H{
+			"id":   boardID,
+			"name": boardName,
+		})
+	}
+}
+
+func resetBoardData(tx *sql.Tx, boardID string) error {
+	if _, err := tx.Exec("DELETE FROM column_permissions WHERE column_id IN (SELECT id FROM columns WHERE board_id = ?)", boardID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM column_agents WHERE column_id IN (SELECT id FROM columns WHERE board_id = ?)", boardID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM attachments WHERE task_id IN (SELECT id FROM tasks WHERE column_id IN (SELECT id FROM columns WHERE board_id = ?))", boardID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM comments WHERE task_id IN (SELECT id FROM tasks WHERE column_id IN (SELECT id FROM columns WHERE board_id = ?))", boardID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE column_id IN (SELECT id FROM columns WHERE board_id = ?))", boardID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM tasks WHERE column_id IN (SELECT id FROM columns WHERE board_id = ?)", boardID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM columns WHERE board_id = ?", boardID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ResetBoard(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			return
+		}
+
+		boardID := c.Param("id")
+		if boardID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			return
+		}
+
+		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权重置该看板"})
+			return
+		}
+
+		var boardName string
+		err := db.QueryRow("SELECT name FROM boards WHERE id = ? AND deleted = false", boardID).Scan(&boardName)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "看板不存在"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取看板失败"})
+			return
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "重置看板失败"})
+			return
+		}
+		defer tx.Rollback()
+
+		if err := resetBoardData(tx, boardID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "清空看板数据失败"})
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "重置看板失败"})
+			return
+		}
+
+		LogActivity(db, user.ID, "BOARD_UPDATE", "BOARD", boardID, boardName, "重置看板", c.ClientIP(), getRequestSource(c))
 
 		c.JSON(http.StatusOK, gin.H{
 			"id":   boardID,

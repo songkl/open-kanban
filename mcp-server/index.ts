@@ -6,6 +6,7 @@ import { z } from "zod/v4";
 const API_BASE = process.env.KANBAN_API_URL || "http://localhost:8080";
 const MCP_TOKEN = process.env.KANBAN_MCP_TOKEN;
 const MCP_REQUEST_HEADER = "X-MCP-Request";
+const BROADCAST_URL = process.env.BROADCAST_URL || "http://localhost:3001/broadcast";
 
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -67,7 +68,7 @@ async function apiDelete(path: string): Promise<void> {
 
 async function broadcast() {
   try {
-    await fetch("http://localhost:3001/broadcast", {
+    await fetch(BROADCAST_URL, {
       method: "POST",
       body: JSON.stringify({ type: "refresh" }),
     });

@@ -34,6 +34,7 @@ export function BoardsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [showImportConflictConfirm, setShowImportConflictConfirm] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pendingImportData, setPendingImportData] = useState<{data: any; boardId?: string} | null>(null);
   const navigate = useNavigate();
 
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -225,28 +226,50 @@ export function BoardsPage() {
     setShowImportConflictConfirm(false);
     setImportFile(null);
     setImportBoardId('');
+    setPendingImportData(null);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImportFile(file);
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (data.boardId) {
+          setImportBoardId(data.boardId);
+        }
+      } catch (error) {
+        console.error('Failed to parse JSON file:', error);
+      }
     }
   };
 
-  const handleImport = async () => {
-    if (!importFile) return;
+  const handleImport = async (withReset = false) => {
+    if (!importFile && !pendingImportData) return;
 
     try {
-      const text = await importFile.text();
-      const data = JSON.parse(text);
-      await boardsApi.import({ data, boardId: importBoardId || undefined });
+      let data;
+      let boardId;
+      if (pendingImportData) {
+        data = pendingImportData.data;
+        boardId = pendingImportData.boardId;
+      } else {
+        const text = await importFile!.text();
+        data = JSON.parse(text);
+        boardId = importBoardId || undefined;
+      }
+      await boardsApi.import({ data, boardId, reset: withReset });
       showToastMessage(t('toast.importSuccess'));
       closeImportModal();
       fetchBoards();
     } catch (error: any) {
       console.error('Import failed:', error);
       if (error?.response?.status === 409) {
+        if (!pendingImportData && importFile) {
+          const text = await importFile.text();
+          setPendingImportData({ data: JSON.parse(text), boardId: importBoardId || undefined });
+        }
         setShowImportConflictConfirm(true);
       } else {
         showToastMessage(t('toast.importFailed'));
@@ -256,7 +279,19 @@ export function BoardsPage() {
 
   const handleImportConflictConfirm = async () => {
     setShowImportConflictConfirm(false);
-    showToastMessage(t('toast.importFailed'));
+    if (pendingImportData) {
+      try {
+        await boardsApi.import({ data: pendingImportData.data, boardId: pendingImportData.boardId, reset: true });
+        showToastMessage(t('toast.importSuccess'));
+        closeImportModal();
+        fetchBoards();
+      } catch (error) {
+        showToastMessage(t('toast.importFailed'));
+      }
+      setPendingImportData(null);
+    } else {
+      showToastMessage(t('toast.importFailed'));
+    }
   };
 
   const handleExport = async (boardId: string, boardName: string, format: 'json' | 'csv') => {
@@ -711,7 +746,7 @@ export function BoardsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleImport}
+                  onClick={() => handleImport()}
                   disabled={!importFile}
                   className={`flex-1 rounded-xl px-4 py-3 font-medium transition-all shadow-sm hover:shadow ${!importFile ? 'bg-gradient-to-r from-zinc-300 to-zinc-300 text-zinc-400' : 'bg-gradient-to-r from-sky-500 to-sky-600 text-white hover:from-sky-600 hover:to-sky-700'}`}
                 >

@@ -22,7 +22,8 @@ func setupBoardsDB(t *testing.T) *sql.DB {
 	schema := `
 	CREATE TABLE users (
 		id TEXT PRIMARY KEY,
-		nickname TEXT UNIQUE NOT NULL,
+		username TEXT UNIQUE NOT NULL,
+		nickname TEXT NOT NULL,
 		password TEXT,
 		avatar TEXT,
 		type TEXT DEFAULT 'HUMAN',
@@ -94,6 +95,61 @@ func setupBoardsDB(t *testing.T) *sql.DB {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
 	);
+	CREATE TABLE comments (
+		id TEXT PRIMARY KEY,
+		content TEXT NOT NULL,
+		author TEXT DEFAULT 'Anonymous',
+		task_id TEXT NOT NULL,
+		user_id TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+	);
+	CREATE TABLE subtasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		completed BOOLEAN DEFAULT 0,
+		task_id TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
+	CREATE TABLE attachments (
+		id TEXT PRIMARY KEY,
+		filename TEXT NOT NULL,
+		storage_path TEXT NOT NULL,
+		storage_type TEXT DEFAULT 'local',
+		mime_type TEXT,
+		size INTEGER,
+		uploader_id TEXT,
+		task_id TEXT,
+		comment_id TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+		FOREIGN KEY (uploader_id) REFERENCES users(id) ON DELETE SET NULL
+	);
+	CREATE TABLE column_agents (
+		id TEXT PRIMARY KEY,
+		column_id TEXT UNIQUE NOT NULL,
+		agent_types TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
+	);
+	CREATE TABLE column_permissions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		column_id TEXT NOT NULL,
+		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
+		UNIQUE(user_id, column_id)
+	);
 	CREATE TABLE activities (
 		id TEXT PRIMARY KEY,
 		user_id TEXT NOT NULL,
@@ -117,7 +173,7 @@ func setupBoardsDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
-	_, err = db.Exec(`INSERT INTO users (id, nickname, password, role, enabled, avatar) VALUES ('u1', 'admin', 'pass', 'ADMIN', 1, '')`)
+	_, err = db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar) VALUES ('u1', 'admin', 'admin', 'pass', 'ADMIN', 1, '')`)
 	if err != nil {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
@@ -521,6 +577,228 @@ func TestDeleteBoardHandler(t *testing.T) {
 
 		if resp["success"] != true {
 			t.Errorf("expected success=true, got %v", resp["success"])
+		}
+	})
+}
+
+func TestResetBoardHandler(t *testing.T) {
+	db := setupBoardsDB(t)
+	defer db.Close()
+
+	_, _ = db.Exec(`INSERT INTO boards (id, name) VALUES ('b1', 'Board to Reset')`)
+	_, _ = db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('bp1', 'u1', 'b1', 'WRITE')`)
+	_, _ = db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c1', 'Column 1', 'b1', 0)`)
+	_, _ = db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'Column 2', 'b1', 1)`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position) VALUES ('t1', 'Task 1', 'c1', 0)`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position) VALUES ('t2', 'Task 2', 'c1', 1)`)
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/boards/:id/reset", handlers.ResetBoard(db))
+
+	t.Run("reset without auth returns 401", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/boards/b1/reset", nil)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reset with auth returns 200 and clears board data", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/boards/b1/reset", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		if resp["id"] != "b1" {
+			t.Errorf("expected board id b1, got %v", resp["id"])
+		}
+
+		var colCount int
+		db.QueryRow("SELECT COUNT(*) FROM columns WHERE board_id = 'b1'").Scan(&colCount)
+		if colCount != 0 {
+			t.Errorf("expected 0 columns after reset, got %d", colCount)
+		}
+
+		var taskCount int
+		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE column_id IN (SELECT id FROM columns WHERE board_id = 'b1')").Scan(&taskCount)
+		if taskCount != 0 {
+			t.Errorf("expected 0 tasks after reset, got %d", taskCount)
+		}
+
+		var boardExists bool
+		db.QueryRow("SELECT EXISTS(SELECT 1 FROM boards WHERE id = 'b1' AND deleted = false)").Scan(&boardExists)
+		if !boardExists {
+			t.Errorf("board should still exist after reset")
+		}
+	})
+
+	t.Run("reset non-existent board returns 404", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/boards/nonexistent/reset", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reset without permission returns 403", func(t *testing.T) {
+		_, _ = db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar, type) VALUES ('u2', 'member', 'member', 'pass', 'MEMBER', 1, '', 'HUMAN')`)
+		_, _ = db.Exec(`INSERT INTO tokens (id, name, key, user_id, expires_at) VALUES ('t2', 'default', 'member-token', 'u2', NULL)`)
+		_, _ = db.Exec(`INSERT INTO boards (id, name) VALUES ('b2', 'Board No Access')`)
+		_, _ = db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('bp2', 'u2', 'b2', 'READ')`)
+
+		req, _ := http.NewRequest("POST", "/api/boards/b2/reset", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "member-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected 403, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestImportBoardHandler(t *testing.T) {
+	db := setupBoardsDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/boards/import", handlers.ImportBoard(db))
+
+	importData := map[string]interface{}{
+		"boardName": "Imported Board",
+		"columns": []map[string]interface{}{
+			{
+				"id":       "col1",
+				"name":     "To Do",
+				"status":   "todo",
+				"position": 0,
+				"color":    "#ef4444",
+				"tasks": []map[string]interface{}{
+					{
+						"id":        "task1",
+						"title":     "Regular Task",
+						"published": true,
+						"archived":  false,
+					},
+					{
+						"id":        "task2",
+						"title":     "Archived Task",
+						"published": true,
+						"archived":  true,
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("import without auth returns 401", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"data": importData})
+		req, _ := http.NewRequest("POST", "/api/boards/import", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("import new board returns 200 and preserves archived status", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]interface{}{"data": importData})
+		req, _ := http.NewRequest("POST", "/api/boards/import", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		if resp["name"] != "Imported Board" {
+			t.Errorf("expected board name 'Imported Board', got %v", resp["name"])
+		}
+
+		var regularArchived bool
+		var archivedTaskArchived bool
+
+		var regularTaskID string
+		db.QueryRow("SELECT id FROM tasks WHERE title = 'Regular Task'").Scan(&regularTaskID)
+		db.QueryRow("SELECT archived FROM tasks WHERE id = ?", regularTaskID).Scan(&regularArchived)
+
+		var archivedTaskID string
+		db.QueryRow("SELECT id FROM tasks WHERE title = 'Archived Task'").Scan(&archivedTaskID)
+		db.QueryRow("SELECT archived FROM tasks WHERE id = ?", archivedTaskID).Scan(&archivedTaskArchived)
+
+		if regularArchived != false {
+			t.Errorf("expected regular task archived=false, got %v", regularArchived)
+		}
+		if archivedTaskArchived != true {
+			t.Errorf("expected archived task archived=true, got %v", archivedTaskArchived)
+		}
+	})
+
+	t.Run("import with reset clears existing data and reimports", func(t *testing.T) {
+		_, _ = db.Exec(`INSERT INTO boards (id, name) VALUES ('reset-board', 'Board To Reset')`)
+		_, _ = db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('bp-reset', 'u1', 'reset-board', 'WRITE')`)
+		_, _ = db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('rc1', 'Old Column', 'reset-board', 0)`)
+		_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position) VALUES ('rt1', 'Old Task', 'rc1', 0)`)
+
+		body, _ := json.Marshal(map[string]interface{}{
+			"data":    importData,
+			"boardId": "reset-board",
+			"reset":   true,
+		})
+		req, _ := http.NewRequest("POST", "/api/boards/import", bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var colCount int
+		db.QueryRow("SELECT COUNT(*) FROM columns WHERE board_id = 'reset-board'").Scan(&colCount)
+		if colCount != 1 {
+			t.Errorf("expected 1 column after reset import, got %d", colCount)
+		}
+
+		var taskCount int
+		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE column_id IN (SELECT id FROM columns WHERE board_id = 'reset-board')").Scan(&taskCount)
+		if taskCount != 2 {
+			t.Errorf("expected 2 tasks after reset import, got %d", taskCount)
+		}
+
+		var oldTaskCount int
+		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE title = 'Old Task'").Scan(&oldTaskCount)
+		if oldTaskCount != 0 {
+			t.Errorf("expected 0 old tasks after reset import, got %d", oldTaskCount)
 		}
 	})
 }

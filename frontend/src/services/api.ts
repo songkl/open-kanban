@@ -20,7 +20,29 @@ declare global {
 
 const API_BASE = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.host}`;
 
-// Global error handler for API requests
+const DEFAULT_RETRY_COUNT = 3;
+const DEFAULT_RETRY_DELAY = 1000;
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status?: number,
+    public isNetworkError = false,
+    public isAbortError = false
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError && error.message.includes('fetch');
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 let globalErrorHandler: ((error: Error) => void) | null = null;
 
 export function setGlobalErrorHandler(handler: ((error: Error) => void) | null) {
@@ -29,13 +51,14 @@ export function setGlobalErrorHandler(handler: ((error: Error) => void) | null) 
 
 async function fetchApi<T>(
   path: string,
-  options?: RequestInit & { skip401Handling?: boolean }
+  options?: RequestInit & { skip401Handling?: boolean; signal?: AbortSignal }
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
   try {
     const response = await fetch(url, {
       ...options,
       credentials: 'include',
+      signal: options?.signal,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
@@ -47,18 +70,99 @@ async function fetchApi<T>(
     if (!response.ok) {
       if (response.status === 401 && !options?.skip401Handling) {
         window.location.href = '/login';
-        throw new Error(i18n.t('app.error.unauthorized'));
+        throw new ApiError(i18n.t('app.error.unauthorized'), 401);
       }
-      throw new Error(data.error || i18n.t('app.error.requestFailed', { status: response.status }));
+      throw new ApiError(data.error || i18n.t('app.error.requestFailed', { status: response.status }), response.status);
     }
 
     return data;
   } catch (error) {
+    if (isAbortError(error)) {
+      const abortError = new ApiError('Request was cancelled', undefined, false, true);
+      if (globalErrorHandler) globalErrorHandler(abortError);
+      throw abortError;
+    }
     if (globalErrorHandler && error instanceof Error) {
       globalErrorHandler(error);
     }
+    if (error instanceof ApiError) throw error;
+    if (isNetworkError(error)) {
+      throw new ApiError(i18n.t('app.error.networkError'), undefined, true);
+    }
     throw error;
   }
+}
+
+interface RetryOptions {
+  retries?: number;
+  retryDelay?: number;
+  signal?: AbortSignal;
+  retryOn?: (error: ApiError) => boolean;
+}
+
+async function fetchApiWithRetry<T>(
+  path: string,
+  options?: RequestInit & { skip401Handling?: boolean; signal?: AbortSignal },
+  retryOptions?: RetryOptions
+): Promise<T> {
+  const retries = retryOptions?.retries ?? DEFAULT_RETRY_COUNT;
+  const retryDelay = retryOptions?.retryDelay ?? DEFAULT_RETRY_DELAY;
+  const signal = retryOptions?.signal ?? options?.signal;
+  const shouldRetry = retryOptions?.retryOn ?? ((err: ApiError) => err.isNetworkError);
+
+  let lastError: ApiError;
+
+  for (let i = 0; i <= retries; i++) {
+    if (signal?.aborted) {
+      throw new ApiError('Request was cancelled', undefined, false, true);
+    }
+
+    try {
+      return await fetchApi<T>(path, { ...options, signal });
+    } catch (error) {
+      if (error instanceof ApiError && error.isAbortError) throw error;
+      if (!(error instanceof ApiError)) {
+        lastError = new ApiError(error instanceof Error ? error.message : String(error), undefined, isNetworkError(error));
+      } else {
+        lastError = error;
+      }
+
+      if (i === retries || !shouldRetry(lastError)) {
+        throw lastError;
+      }
+
+      const delay = retryDelay * Math.pow(2, i);
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => resolve(), delay);
+        signal?.addEventListener('abort', () => {
+          clearTimeout(timeout);
+          reject(new ApiError('Request was cancelled', undefined, false, true));
+        });
+      });
+    }
+  }
+
+  throw lastError!;
+}
+
+export interface CancellableRequest<T> {
+  promise: Promise<T>;
+  abort: () => void;
+}
+
+export function createApiRequest<T>(
+  path: string,
+  options?: RequestInit & { skip401Handling?: boolean },
+  retryOptions?: RetryOptions
+): CancellableRequest<T> {
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const promise = fetchApiWithRetry<T>(path, { ...options, signal }, { ...retryOptions, signal });
+
+  return {
+    promise,
+    abort: () => controller.abort(),
+  };
 }
 
 // Boards API
@@ -87,7 +191,9 @@ export const boardsApi = {
   },
   copy: (id: string) =>
     fetchApi<Board>(`/api/boards/${id}/copy`, { method: 'POST' }),
-  import: (data: { data: Record<string, unknown>; boardId?: string }) =>
+  reset: (id: string) =>
+    fetchApi<Board>(`/api/boards/${id}/reset`, { method: 'POST' }),
+  import: (data: { data: Record<string, unknown>; boardId?: string; reset?: boolean }) =>
     fetchApi<Board>('/api/boards/import', {
       method: 'POST',
       body: JSON.stringify(data),

@@ -5,7 +5,8 @@ import "time"
 // User represents a user in the system
 type User struct {
 	ID           string     `json:"id"`
-	Nickname     string     `json:"nickname"`
+	Username     string     `json:"username"` // 登录名
+	Nickname     string     `json:"nickname"` // 昵称
 	Avatar       string     `json:"avatar"`
 	Type         string     `json:"type"` // HUMAN, AGENT
 	Role         string     `json:"role"` // ADMIN, MEMBER, VIEWER

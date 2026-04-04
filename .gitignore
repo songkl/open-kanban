@@ -2,6 +2,7 @@
 release/
 backend/kanban-server
 backend/kanban-server-*
+backend/main
 backend/web/assets/
 backend/uploads/
 frontend/dist/

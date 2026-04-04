@@ -28,7 +28,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 	schema := `
 	CREATE TABLE users (
 		id TEXT PRIMARY KEY,
-		nickname TEXT UNIQUE NOT NULL,
+		username TEXT UNIQUE NOT NULL,
+		nickname TEXT NOT NULL,
 		password TEXT,
 		avatar TEXT,
 		type TEXT DEFAULT 'HUMAN' CHECK(type IN ('HUMAN', 'AGENT')),
@@ -196,8 +197,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 func setupTestUser(t *testing.T, db *sql.DB, nickname, password, role string) (userID string) {
 	userID = fmt.Sprintf("user-%s", nickname)
 	_, err := db.Exec(
-		`INSERT INTO users (id, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, ?, 'HUMAN', ?, 1)`,
-		userID, nickname, password, "😊", role,
+		`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, 1)`,
+		userID, nickname, nickname, password, "😊", role,
 	)
 	if err != nil {
 		t.Fatalf("failed to insert test user: %v", err)
@@ -216,7 +217,7 @@ func setupTestToken(t *testing.T, db *sql.DB, userID, tokenKey string) {
 }
 
 func TestInitHandler(t *testing.T) {
-	t.Run("init without nickname returns bad request", func(t *testing.T) {
+	t.Run("init without username returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
 		defer db.Close()
 
@@ -238,8 +239,8 @@ func TestInitHandler(t *testing.T) {
 
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
-		if resp["error"] != "昵称不能为空" {
-			t.Errorf("expected error '昵称不能为空', got %v", resp["error"])
+		if resp["error"] != "登录名不能为空" {
+			t.Errorf("expected error '登录名不能为空', got %v", resp["error"])
 		}
 	})
 
@@ -251,7 +252,7 @@ func TestInitHandler(t *testing.T) {
 		router.POST("/api/init", handlers.Init(db))
 
 		body := map[string]interface{}{
-			"nickname": "admin",
+			"username": "admin",
 			"avatar":   "😊",
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -316,7 +317,7 @@ func TestInitHandler(t *testing.T) {
 		router.POST("/api/init", handlers.Init(db))
 
 		body := map[string]interface{}{
-			"nickname":          "admin",
+			"username":          "admin",
 			"allowRegistration": false,
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -333,8 +334,8 @@ func TestInitHandler(t *testing.T) {
 
 		var allowReg string
 		err := db.QueryRow("SELECT value FROM app_config WHERE key = 'allowRegistration'").Scan(&allowReg)
-		if err != nil || allowReg != "false" {
-			t.Errorf("expected allowRegistration to be 'false', got %v", allowReg)
+		if err != nil || allowReg != "0" {
+			t.Errorf("expected allowRegistration to be '0', got %v", allowReg)
 		}
 	})
 }
@@ -361,7 +362,7 @@ func TestLoginHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("login with empty nickname returns bad request", func(t *testing.T) {
+	t.Run("login with empty username returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
 		defer db.Close()
 
@@ -369,7 +370,7 @@ func TestLoginHandler(t *testing.T) {
 		router.POST("/api/auth/login", handlers.Login(db))
 
 		body := map[string]interface{}{
-			"nickname": "",
+			"username": "",
 		}
 		jsonBody, _ := json.Marshal(body)
 
@@ -394,7 +395,7 @@ func TestLoginHandler(t *testing.T) {
 		db.Exec("DELETE FROM users")
 
 		body := map[string]interface{}{
-			"nickname": "newuser",
+			"username": "newuser",
 			"avatar":   "😊",
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -419,8 +420,8 @@ func TestLoginHandler(t *testing.T) {
 			t.Errorf("expected token in response")
 		}
 		user := resp["user"].(map[string]interface{})
-		if user["nickname"] != "newuser" {
-			t.Errorf("expected nickname 'newuser', got %v", user["nickname"])
+		if user["username"] != "newuser" {
+			t.Errorf("expected username 'newuser', got %v", user["username"])
 		}
 		if user["role"] != "ADMIN" {
 			t.Errorf("expected first user to be ADMIN, got %v", user["role"])
@@ -438,7 +439,7 @@ func TestLoginHandler(t *testing.T) {
 		setupTestUser(t, db, "testuser", "", "MEMBER")
 
 		body := map[string]interface{}{
-			"nickname": "testuser",
+			"username": "testuser",
 		}
 		jsonBody, _ := json.Marshal(body)
 
@@ -472,10 +473,10 @@ func TestLoginHandler(t *testing.T) {
 
 		db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "existing", "", "ADMIN")
-		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', 'false')")
+		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', '0')")
 
 		body := map[string]interface{}{
-			"nickname": "newuser",
+			"username": "newuser",
 		}
 		jsonBody, _ := json.Marshal(body)
 
@@ -550,8 +551,8 @@ func TestGetMeHandler(t *testing.T) {
 			t.Errorf("expected user with valid token")
 		} else {
 			user := resp["user"].(map[string]interface{})
-			if user["nickname"] != "testuser" {
-				t.Errorf("expected nickname 'testuser', got %v", user["nickname"])
+			if user["username"] != "testuser" {
+				t.Errorf("expected username 'testuser', got %v", user["username"])
 			}
 		}
 	})
@@ -767,8 +768,8 @@ func TestGetAppConfigHandler(t *testing.T) {
 		router := gin.New()
 		router.GET("/api/auth/config", handlers.GetAppConfig(db))
 
-		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', 'false')")
-		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('requirePassword', 'true')")
+		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', '0')")
+		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('requirePassword', '1')")
 
 		req, _ := http.NewRequest("GET", "/api/auth/config", nil)
 

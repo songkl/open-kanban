@@ -357,50 +357,18 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// ServeFile serves uploaded files
+// ServeFile serves uploaded files (public endpoint)
 func ServeFile(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user := getCurrentUser(c, db)
-		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
-			return
-		}
-
 		fileID := c.Param("id")
 
-		var taskID, storagePath, mimeType string
-		var commentID sql.NullString
-		err := db.QueryRow("SELECT task_id, comment_id, storage_path, mime_type FROM attachments WHERE id = ?", fileID).Scan(&taskID, &commentID, &storagePath, &mimeType)
+		var storagePath, mimeType string
+		err := db.QueryRow("SELECT storage_path, mime_type FROM attachments WHERE id = ?", fileID).Scan(&storagePath, &mimeType)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询文件失败"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
 			return
 		}
 
-		if taskID != "" {
-			boardID, err := getBoardIDForTask(db, taskID)
-			if err == nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该文件"})
-				return
-			}
-		}
-
-		if commentID.Valid && taskID == "" {
-			var cTaskID string
-			err := db.QueryRow("SELECT task_id FROM comments WHERE id = ?", commentID.String).Scan(&cTaskID)
-			if err == nil {
-				boardID, err := getBoardIDForTask(db, cTaskID)
-				if err == nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-					c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该文件"})
-					return
-				}
-			}
-		}
-
-		// Security: Validate storage path is within upload directory to prevent path traversal
 		absUploadDir, err := filepath.Abs(UploadDir)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "服务器配置错误"})
@@ -416,8 +384,7 @@ func ServeFile(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Check if file exists
-		if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
+		if _, err := os.Stat(absFilePath); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "文件不存在"})
 			return
 		}

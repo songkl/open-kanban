@@ -105,6 +105,18 @@ func ResetRateLimitMapForTest() {
 	rateLimitMap = make(map[string]*rateLimitEntry)
 }
 
+func ResetGlobalRateLimitMapForTest() {
+	globalRateLimitMux.Lock()
+	defer globalRateLimitMux.Unlock()
+	globalRateLimitMap = make(map[string]*globalRateLimitEntry)
+}
+
+func ResetTokenCacheForTest() {
+	tokenCacheMux.Lock()
+	defer tokenCacheMux.Unlock()
+	tokenCache = make(map[string]*cachedUser)
+}
+
 func cleanupGlobalRateLimitMap() {
 	for {
 		time.Sleep(5 * time.Minute)
@@ -186,7 +198,7 @@ func GlobalRateLimitMiddleware() gin.HandlerFunc {
 		key := "global:" + c.ClientIP()
 
 		if !checkGlobalRateLimit(key) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
 			c.Abort()
 			return
 		}
@@ -276,7 +288,7 @@ func HashPasswordWithSalt(password string) (string, error) {
 
 // LoginRequest represents login request body
 type LoginRequest struct {
-	Nickname string `json:"nickname"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 	Avatar   string `json:"avatar"`
 	Type     string `json:"type"`
@@ -284,6 +296,7 @@ type LoginRequest struct {
 
 // InitRequest represents first-time initialization request
 type InitRequest struct {
+	Username          string `json:"username"`
 	Nickname          string `json:"nickname"`
 	Password          string `json:"password"`
 	Avatar            string `json:"avatar"`
@@ -299,43 +312,48 @@ func Init(db *sql.DB) gin.HandlerFunc {
 		var userCount int
 		err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "检查用户失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check user"})
 			return
 		}
 
 		if userCount > 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "系统已初始化，无法再次设置"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "System already initialized, cannot set up again"})
 			return
 		}
 
 		var req InitRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 			return
 		}
 
-		if req.Nickname == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "昵称不能为空"})
+		if req.Username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
 			return
+		}
+
+		nickname := req.Nickname
+		if nickname == "" {
+			nickname = req.Username
 		}
 
 		// Save app config
 		_, err = db.Exec(
 			"INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', ?)",
-			map[bool]string{true: "true", false: "false"}[req.AllowRegistration],
+			map[bool]string{true: "1", false: "0"}[req.AllowRegistration],
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
 			return
 		}
 
 		requirePassword := req.Password != ""
 		_, err = db.Exec(
 			"INSERT OR REPLACE INTO app_config (key, value) VALUES ('requirePassword', ?)",
-			map[bool]string{true: "true", false: "false"}[requirePassword],
+			map[bool]string{true: "1", false: "0"}[requirePassword],
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
 			return
 		}
 
@@ -345,10 +363,10 @@ func Init(db *sql.DB) gin.HandlerFunc {
 		}
 		_, err = db.Exec(
 			"INSERT OR REPLACE INTO app_config (key, value) VALUES ('authEnabled', ?)",
-			map[bool]string{true: "true", false: "false"}[authEnabled],
+			map[bool]string{true: "1", false: "0"}[authEnabled],
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
 			return
 		}
 
@@ -367,7 +385,7 @@ func Init(db *sql.DB) gin.HandlerFunc {
 		if req.Password != "" {
 			hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "密码加密失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt password"})
 				return
 			}
 			hashedPassword = new(string)
@@ -377,11 +395,11 @@ func Init(db *sql.DB) gin.HandlerFunc {
 		// Create first user as ADMIN
 		userID := generateID()
 		_, err = db.Exec(
-			"INSERT INTO users (id, nickname, password, avatar, type, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			userID, req.Nickname, hashedPassword, avatar, "HUMAN", "ADMIN", time.Now(), time.Now(),
+			"INSERT INTO users (id, username, nickname, password, avatar, type, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			userID, req.Username, nickname, hashedPassword, avatar, "HUMAN", "ADMIN", time.Now(), time.Now(),
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
 
@@ -393,7 +411,7 @@ func Init(db *sql.DB) gin.HandlerFunc {
 			tokenID, "default", tokenKey, userID, time.Now(), time.Now(),
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建会话失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 			return
 		}
 
@@ -403,7 +421,8 @@ func Init(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
 				"id":       userID,
-				"nickname": req.Nickname,
+				"username": req.Username,
+				"nickname": nickname,
 				"avatar":   avatar,
 				"type":     "HUMAN",
 				"role":     "ADMIN",
@@ -419,31 +438,32 @@ func Login(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientIP := c.ClientIP()
 		if !checkRateLimit("login:" + clientIP) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
 			return
 		}
 
 		var req LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 			return
 		}
 
-		nickname := req.Nickname
-		if nickname == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "昵称不能为空"})
+		username := req.Username
+		if username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
 			return
 		}
 
-		if !checkRateLimit("login:" + nickname) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+		if !checkRateLimit("login:" + username) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
 			return
 		}
 
-		// Check if user exists by nickname
+		// Check if user exists by username
 		var existingUser struct {
 			ID       string
 			Password string
+			Username string
 			Nickname string
 			Avatar   string
 			UserType string
@@ -451,9 +471,9 @@ func Login(db *sql.DB) gin.HandlerFunc {
 		}
 
 		err := db.QueryRow(
-			"SELECT id, password, nickname, avatar, type, role FROM users WHERE nickname = ?",
-			nickname,
-		).Scan(&existingUser.ID, &existingUser.Password, &existingUser.Nickname, &existingUser.Avatar, &existingUser.UserType, &existingUser.Role)
+			"SELECT id, password, username, nickname, avatar, type, role FROM users WHERE username = ?",
+			username,
+		).Scan(&existingUser.ID, &existingUser.Password, &existingUser.Username, &existingUser.Nickname, &existingUser.Avatar, &existingUser.UserType, &existingUser.Role)
 
 		if err == sql.ErrNoRows {
 			// User doesn't exist, create new user only if registration is allowed
@@ -461,7 +481,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			var userCount int
 			err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Login failed"})
 				return
 			}
 
@@ -469,8 +489,8 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			if userCount > 0 {
 				var allowRegistration string
 				err := db.QueryRow("SELECT value FROM app_config WHERE key = 'allowRegistration'").Scan(&allowRegistration)
-				if err == nil && allowRegistration == "false" {
-					c.JSON(http.StatusForbidden, gin.H{"error": "注册已关闭，请联系管理员添加用户"})
+				if err == nil && allowRegistration == "0" {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Registration is closed, please contact admin to add user"})
 					return
 				}
 			}
@@ -494,24 +514,24 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			if req.Password != "" {
 				hashed, err := hashWithSalt(req.Password)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "密码加密失败"})
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt password"})
 					return
 				}
 				hashedPassword = &hashed
 			}
 
-			// Create user
+			// Create user (nickname defaults to username)
 			userID := generateID()
 			_, err = db.Exec(
-				"INSERT INTO users (id, nickname, password, avatar, type, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-				userID, nickname, hashedPassword, avatar, userType, role, time.Now(), time.Now(),
+				"INSERT INTO users (id, username, nickname, password, avatar, type, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				userID, username, username, hashedPassword, avatar, userType, role, time.Now(), time.Now(),
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 				return
 			}
 
-			LogActivity(db, userID, "USER_CREATE", "USER", userID, nickname, "", c.ClientIP(), getRequestSource(c))
+			LogActivity(db, userID, "USER_CREATE", "USER", userID, username, "", c.ClientIP(), getRequestSource(c))
 
 			// Generate token
 			tokenKey := generateTokenKey()
@@ -521,7 +541,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 				tokenID, "default", tokenKey, userID, time.Now(), time.Now(),
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Login failed"})
 				return
 			}
 
@@ -549,7 +569,8 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusOK, gin.H{
 				"user": gin.H{
 					"id":       userID,
-					"nickname": nickname,
+					"username": username,
+					"nickname": username,
 					"avatar":   avatar,
 					"type":     userType,
 					"role":     role,
@@ -558,14 +579,14 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			})
 			return
 		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Login failed"})
 			return
 		}
 
 		// User exists, verify password
 		if existingUser.Password != "" && req.Password == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":           "请输入密码",
+				"error":           "Password is required",
 				"requirePassword": true,
 			})
 			return
@@ -573,7 +594,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 
 		if existingUser.Password != "" {
 			if !verifyWithSalt(req.Password, existingUser.Password) {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "密码错误"})
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect password"})
 				return
 			}
 		}
@@ -586,7 +607,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			tokenID, "default", tokenKey, existingUser.ID, time.Now(), time.Now(),
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Login failed"})
 			return
 		}
 
@@ -598,12 +619,13 @@ func Login(db *sql.DB) gin.HandlerFunc {
 		var requirePassword bool = false
 		var requirePasswordVal string
 		if err := db.QueryRow("SELECT value FROM app_config WHERE key = 'requirePassword'").Scan(&requirePasswordVal); err == nil {
-			requirePassword = requirePasswordVal == "true"
+			requirePassword = requirePasswordVal == "1"
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
 				"id":       existingUser.ID,
+				"username": existingUser.Username,
 				"nickname": existingUser.Nickname,
 				"avatar":   existingUser.Avatar,
 				"type":     existingUser.UserType,
@@ -629,7 +651,7 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 		var requirePasswordVal string
 		var isRequirePassword bool = false
 		if err := db.QueryRow("SELECT value FROM app_config WHERE key = 'requirePassword'").Scan(&requirePasswordVal); err == nil {
-			isRequirePassword = requirePasswordVal == "true"
+			isRequirePassword = requirePasswordVal == "1"
 		}
 
 		// Check if any users exist
@@ -658,9 +680,9 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 		var user models.User
 		var token models.Token
 		err = db.QueryRow(
-			"SELECT t.id, t.expires_at, u.id, u.nickname, u.avatar, u.type, u.role FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
+			"SELECT t.id, t.expires_at, u.id, u.username, u.nickname, u.avatar, u.type, u.role FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
 			tokenKey,
-		).Scan(&token.ID, &token.ExpiresAt, &user.ID, &user.Nickname, &user.Avatar, &user.Type, &user.Role)
+		).Scan(&token.ID, &token.ExpiresAt, &user.ID, &user.Username, &user.Nickname, &user.Avatar, &user.Type, &user.Role)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"user":            nil,
@@ -674,7 +696,7 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 		if token.ExpiresAt != nil && token.ExpiresAt.Before(time.Now()) {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"user":            nil,
-				"error":           "Token 已过期",
+				"error":           "Token has expired",
 				"needsSetup":      false,
 				"requirePassword": isRequirePassword,
 			})
@@ -687,7 +709,7 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 			user.ID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
 			return
 		}
 		defer rows.Close()
@@ -715,6 +737,7 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
 				"id":       user.ID,
+				"username": user.Username,
 				"nickname": user.Nickname,
 				"avatar":   user.Avatar,
 				"type":     user.Type,
@@ -734,7 +757,7 @@ func GetTokens(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -743,7 +766,7 @@ func GetTokens(db *sql.DB) gin.HandlerFunc {
 			user.ID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
 		defer rows.Close()
@@ -783,18 +806,18 @@ func CreateToken(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if !checkRateLimit("token:" + user.ID) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
 			return
 		}
 
 		var req CreateTokenRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
 			return
 		}
 
@@ -802,7 +825,7 @@ func CreateToken(db *sql.DB) gin.HandlerFunc {
 		tokenID := generateID()
 		name := req.Name
 		if name == "" {
-			name = "新 Token"
+			name = "New Token"
 		}
 
 		_, err := db.Exec(
@@ -810,7 +833,7 @@ func CreateToken(db *sql.DB) gin.HandlerFunc {
 			tokenID, name, tokenKey, user.ID, c.Request.UserAgent(), req.ExpiresAt, time.Now(), time.Now(),
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})
 			return
 		}
 
@@ -833,13 +856,13 @@ func UpdateToken(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		tokenID := c.Query("id")
 		if tokenID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Token ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Token ID is required"})
 			return
 		}
 
@@ -847,7 +870,7 @@ func UpdateToken(db *sql.DB) gin.HandlerFunc {
 			Name string `json:"name"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
 			return
 		}
 
@@ -855,13 +878,13 @@ func UpdateToken(db *sql.DB) gin.HandlerFunc {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM tokens WHERE id = ? AND user_id = ?", tokenID, user.ID).Scan(&count)
 		if err != nil || count == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Token 不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Token not found"})
 			return
 		}
 
 		_, err = db.Exec("UPDATE tokens SET name = ?, updated_at = datetime('now') WHERE id = ?", req.Name, tokenID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
 			return
 		}
 
@@ -874,13 +897,13 @@ func DeleteToken(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		tokenID := c.Query("id")
 		if tokenID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Token ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Token ID is required"})
 			return
 		}
 
@@ -888,13 +911,13 @@ func DeleteToken(db *sql.DB) gin.HandlerFunc {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM tokens WHERE id = ? AND user_id = ?", tokenID, user.ID).Scan(&count)
 		if err != nil || count == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Token 不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Token not found"})
 			return
 		}
 
 		_, err = db.Exec("DELETE FROM tokens WHERE id = ?", tokenID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
@@ -907,23 +930,23 @@ func GetUsers(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以查看"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can view"})
 			return
 		}
 
 		rows, err := db.Query(`
-			SELECT u.id, u.nickname, u.avatar, u.type, u.role, u.enabled, u.created_at,
+			SELECT u.id, u.username, u.nickname, u.avatar, u.type, u.role, u.enabled, u.created_at,
 				(SELECT COUNT(*) FROM tokens WHERE user_id = u.id) as token_count,
 				(SELECT COUNT(*) FROM comments WHERE user_id = u.id) as comment_count
 			FROM users u
 			ORDER BY u.created_at DESC
 		`)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
 		defer rows.Close()
@@ -932,7 +955,7 @@ func GetUsers(db *sql.DB) gin.HandlerFunc {
 		for rows.Next() {
 			var u models.User
 			var tokenCount, commentCount int
-			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &tokenCount, &commentCount); err == nil {
+			if err := rows.Scan(&u.ID, &u.Username, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &tokenCount, &commentCount); err == nil {
 				// Get permissions for user
 				permRows, _ := db.Query(
 					"SELECT bp.board_id, b.name, bp.access FROM board_permissions bp JOIN boards b ON bp.board_id = b.id WHERE bp.user_id = ?",
@@ -955,6 +978,7 @@ func GetUsers(db *sql.DB) gin.HandlerFunc {
 
 				users = append(users, gin.H{
 					"id":           u.ID,
+					"username":     u.Username,
 					"nickname":     u.Nickname,
 					"avatar":       u.Avatar,
 					"type":         u.Type,
@@ -986,18 +1010,18 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		currentUser := getCurrentUser(c, db)
 		if currentUser == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		var req UpdateUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
 			return
 		}
 
 		if req.TargetUserID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "用户 ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "User ID is required"})
 			return
 		}
 
@@ -1005,17 +1029,18 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 		isAdmin := currentUser.Role == "ADMIN"
 
 		if !isSelfUpdate && !isAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以操作其他用户"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can operate on other users"})
 			return
 		}
 
 		var oldUser struct {
+			Username string
 			Nickname string
 			Avatar   string
 			Role     string
 			Type     string
 		}
-		db.QueryRow("SELECT nickname, avatar, role, type FROM users WHERE id = ?", req.TargetUserID).Scan(&oldUser.Nickname, &oldUser.Avatar, &oldUser.Role, &oldUser.Type)
+		db.QueryRow("SELECT username, nickname, avatar, role, type FROM users WHERE id = ?", req.TargetUserID).Scan(&oldUser.Username, &oldUser.Nickname, &oldUser.Avatar, &oldUser.Role, &oldUser.Type)
 
 		var changes []string
 
@@ -1029,7 +1054,7 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 		if !isSelfUpdate || isAdmin {
 			if req.Role != "" && req.Role != oldUser.Role {
 				if req.Role != "ADMIN" && req.Role != "MEMBER" && req.Role != "VIEWER" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "无效的角色，有效值为：ADMIN, MEMBER, VIEWER"})
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role, valid values are: ADMIN, MEMBER, VIEWER"})
 					return
 				}
 				changes = append(changes, fmt.Sprintf("角色: '%s' → '%s'", oldUser.Role, req.Role))
@@ -1054,7 +1079,7 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 		if !isSelfUpdate || isAdmin {
 			if req.Role != "" {
 				if req.Role != "ADMIN" && req.Role != "MEMBER" && req.Role != "VIEWER" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "无效的角色，有效值为：ADMIN, MEMBER, VIEWER"})
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role, valid values are: ADMIN, MEMBER, VIEWER"})
 					return
 				}
 				query += ", role = ?"
@@ -1071,16 +1096,16 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 
 		_, err := db.Exec(query, updates...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
 			return
 		}
 
 		var updatedUser models.User
-		err = db.QueryRow("SELECT id, nickname, avatar, role, type FROM users WHERE id = ?", req.TargetUserID).Scan(
-			&updatedUser.ID, &updatedUser.Nickname, &updatedUser.Avatar, &updatedUser.Role, &updatedUser.Type,
+		err = db.QueryRow("SELECT id, username, nickname, avatar, role, type FROM users WHERE id = ?", req.TargetUserID).Scan(
+			&updatedUser.ID, &updatedUser.Username, &updatedUser.Nickname, &updatedUser.Avatar, &updatedUser.Role, &updatedUser.Type,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取更新后的用户信息失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get updated user info"})
 			return
 		}
 
@@ -1094,6 +1119,7 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
 				"id":       updatedUser.ID,
+				"username": updatedUser.Username,
 				"nickname": updatedUser.Nickname,
 				"avatar":   updatedUser.Avatar,
 				"role":     updatedUser.Role,
@@ -1108,7 +1134,7 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -1118,7 +1144,7 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 		if requestedUserID != "" && user.Role == "ADMIN" {
 			targetUserID = requestedUserID
 		} else if requestedUserID != "" && user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以查看其他用户的权限"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can view other users' permissions"})
 			return
 		}
 
@@ -1129,7 +1155,7 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 			WHERE bp.user_id = ?
 		`, targetUserID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
 		defer rows.Close()
@@ -1163,29 +1189,29 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以分配权限"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can assign permissions"})
 			return
 		}
 
 		var req SetPermissionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数不完整"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
 			return
 		}
 
 		if req.UserID == "" || req.BoardID == "" || req.Access == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数不完整"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
 			return
 		}
 
 		// Validate access
 		validAccesses := map[string]bool{"READ": true, "WRITE": true, "ADMIN": true}
 		if !validAccesses[req.Access] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的权限值"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid permission value"})
 			return
 		}
 
@@ -1197,7 +1223,7 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 			ON CONFLICT(user_id, board_id) DO UPDATE SET access = excluded.access
 		`, permID, req.UserID, req.BoardID, req.Access)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "设置失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
 			return
 		}
 
@@ -1222,23 +1248,23 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以删除权限"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can delete permissions"})
 			return
 		}
 
 		permID := c.Query("id")
 		if permID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "权限 ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Permission ID is required"})
 			return
 		}
 
 		_, err := db.Exec("DELETE FROM board_permissions WHERE id = ?", permID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
@@ -1276,27 +1302,27 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以修改系统配置"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can modify system configuration"})
 			return
 		}
 
 		var req UpdateAppConfigRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
 			return
 		}
 
 		if req.AllowRegistration != nil {
 			_, err := db.Exec(
 				"INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', ?)",
-				map[bool]string{true: "true", false: "false"}[*req.AllowRegistration],
+				map[bool]string{true: "1", false: "0"}[*req.AllowRegistration],
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
 				return
 			}
 		}
@@ -1304,10 +1330,10 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 		if req.RequirePassword != nil {
 			_, err := db.Exec(
 				"INSERT OR REPLACE INTO app_config (key, value) VALUES ('requirePassword', ?)",
-				map[bool]string{true: "true", false: "false"}[*req.RequirePassword],
+				map[bool]string{true: "1", false: "0"}[*req.RequirePassword],
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
 				return
 			}
 		}
@@ -1315,10 +1341,10 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 		if req.AuthEnabled != nil {
 			_, err := db.Exec(
 				"INSERT OR REPLACE INTO app_config (key, value) VALUES ('authEnabled', ?)",
-				map[bool]string{true: "true", false: "false"}[*req.AuthEnabled],
+				map[bool]string{true: "1", false: "0"}[*req.AuthEnabled],
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "保存配置失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
 				return
 			}
 		}
@@ -1332,7 +1358,9 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 // Helper functions
 func generateID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand unavailable")
+	}
 	return hex.EncodeToString(b)
 }
 
@@ -1357,7 +1385,9 @@ func sanitizeString(value string) string {
 
 func generateTokenKey() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand unavailable")
+	}
 	return hex.EncodeToString(b)
 }
 
@@ -1389,9 +1419,9 @@ func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
 	var user models.User
 	var token models.Token
 	err := db.QueryRow(
-		"SELECT t.expires_at, u.id, u.nickname, u.avatar, u.type, u.role, u.enabled FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
+		"SELECT t.expires_at, u.id, u.username, u.nickname, u.avatar, u.type, u.role, u.enabled FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
 		tokenKey,
-	).Scan(&token.ExpiresAt, &user.ID, &user.Nickname, &user.Avatar, &user.Type, &user.Role, &user.Enabled)
+	).Scan(&token.ExpiresAt, &user.ID, &user.Username, &user.Nickname, &user.Avatar, &user.Type, &user.Role, &user.Enabled)
 	if err != nil {
 		return nil
 	}
@@ -1422,7 +1452,7 @@ func RequireAuth(db *sql.DB) gin.HandlerFunc {
 		if isAuthEnabled(db) {
 			user := getCurrentUser(c, db)
 			if user == nil {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录或登录已过期"})
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in or session has expired"})
 				c.Abort()
 				return
 			}
@@ -1439,7 +1469,7 @@ func isAuthEnabled(db *sql.DB) bool {
 	if err != nil {
 		return true
 	}
-	return authEnabled != "false"
+	return authEnabled != "0"
 }
 
 // OptionalAuth middleware sets user if authenticated but doesn't require it
@@ -1577,7 +1607,7 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -1675,7 +1705,7 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取活动记录失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get activity records"})
 			return
 		}
 		defer rows.Close()
@@ -1698,7 +1728,7 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -1710,7 +1740,7 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 			ORDER BY u.created_at DESC
 		`)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
 		defer rows.Close()
@@ -1755,22 +1785,22 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以创建 Agent"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can create Agent"})
 			return
 		}
 
 		var req CreateAgentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
 			return
 		}
 
 		if req.Nickname == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "昵称不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nickname is required"})
 			return
 		}
 
@@ -1793,7 +1823,7 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 			agentID, req.Nickname, avatar, role, now, now, now,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})
 			return
 		}
 
@@ -1805,7 +1835,7 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 			tokenID, "default", tokenKey, agentID, now, now,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})
 			return
 		}
 
@@ -1851,17 +1881,17 @@ func DeleteAgent(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以删除 Agent"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can delete Agent"})
 			return
 		}
 
 		agentID := c.Query("id")
 		if agentID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Agent ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Agent ID is required"})
 			return
 		}
 
@@ -1869,13 +1899,13 @@ func DeleteAgent(db *sql.DB) gin.HandlerFunc {
 		var userType string
 		err := db.QueryRow("SELECT type FROM users WHERE id = ?", agentID).Scan(&userType)
 		if err != nil || userType != "AGENT" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Agent 不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Agent not found"})
 			return
 		}
 
 		_, err = db.Exec("DELETE FROM users WHERE id = ?", agentID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
@@ -1888,17 +1918,17 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以重置 Token"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can reset Token"})
 			return
 		}
 
 		agentID := c.Query("id")
 		if agentID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Agent ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Agent ID is required"})
 			return
 		}
 
@@ -1906,7 +1936,7 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 		var userType string
 		err := db.QueryRow("SELECT type FROM users WHERE id = ?", agentID).Scan(&userType)
 		if err != nil || userType != "AGENT" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Agent 不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Agent not found"})
 			return
 		}
 
@@ -1924,7 +1954,7 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 			tokenID, "default", tokenKey, agentID, now, now,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "重置失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset"})
 			return
 		}
 
@@ -1945,28 +1975,28 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		currentUser := getCurrentUser(c, db)
 		if currentUser == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if currentUser.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以启用/禁用用户"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can enable/disable users"})
 			return
 		}
 
 		var req SetUserEnabledRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
 			return
 		}
 
 		if req.UserID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "用户 ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "User ID is required"})
 			return
 		}
 
 		// Cannot disable yourself
 		if req.UserID == currentUser.ID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无法启用/禁用自己"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot enable/disable yourself"})
 			return
 		}
 
@@ -1974,7 +2004,7 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 		var exists bool
 		db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", req.UserID).Scan(&exists)
 		if !exists {
-			c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
 		}
 
@@ -1984,7 +2014,7 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 			req.Enabled, now, req.UserID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "操作失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Operation failed"})
 			return
 		}
 
@@ -2034,7 +2064,7 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -2045,7 +2075,7 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 		if requestedUserID != "" && user.Role == "ADMIN" {
 			targetUserID = requestedUserID
 		} else if requestedUserID != "" && user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以查看其他用户的权限"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can view other users' permissions"})
 			return
 		}
 
@@ -2070,7 +2100,7 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 			`, targetUserID)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
 		defer rows.Close()
@@ -2098,28 +2128,28 @@ func SetColumnPermission(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以分配权限"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can assign permissions"})
 			return
 		}
 
 		var req SetColumnPermissionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数不完整"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
 			return
 		}
 
 		if req.UserID == "" || req.ColumnID == "" || req.Access == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数不完整"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
 			return
 		}
 
 		validAccesses := map[string]bool{"READ": true, "WRITE": true, "ADMIN": true}
 		if !validAccesses[req.Access] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的权限值"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid permission value"})
 			return
 		}
 
@@ -2130,7 +2160,7 @@ func SetColumnPermission(db *sql.DB) gin.HandlerFunc {
 			ON CONFLICT(user_id, column_id) DO UPDATE SET access = excluded.access
 		`, permID, req.UserID, req.ColumnID, req.Access)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "设置失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
 			return
 		}
 
@@ -2153,23 +2183,23 @@ func DeleteColumnPermission(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以删除权限"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can delete permissions"})
 			return
 		}
 
 		permID := c.Query("id")
 		if permID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "权限 ID 必填"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Permission ID is required"})
 			return
 		}
 
 		_, err := db.Exec("DELETE FROM column_permissions WHERE id = ?", permID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 

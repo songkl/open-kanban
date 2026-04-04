@@ -23,7 +23,8 @@ func setupTasksDB(t *testing.T) *sql.DB {
 	schema := `
 	CREATE TABLE users (
 		id TEXT PRIMARY KEY,
-		nickname TEXT UNIQUE NOT NULL,
+		username TEXT UNIQUE NOT NULL,
+		nickname TEXT NOT NULL,
 		password TEXT,
 		avatar TEXT,
 		type TEXT DEFAULT 'HUMAN',
@@ -147,7 +148,7 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
-	_, err = db.Exec(`INSERT INTO users (id, nickname, password, role, enabled, avatar) VALUES ('u1', 'admin', 'pass', 'ADMIN', 1, '')`)
+	_, err = db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar) VALUES ('u1', 'admin', 'admin', 'pass', 'ADMIN', 1, '')`)
 	if err != nil {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
@@ -260,6 +261,7 @@ func TestCreateTaskHandler(t *testing.T) {
 
 func TestCreateTaskHandlerWithPriority(t *testing.T) {
 	handlers.ResetRateLimitMapForTest()
+	handlers.ResetGlobalRateLimitMapForTest()
 	db := setupTasksDB(t)
 	defer db.Close()
 

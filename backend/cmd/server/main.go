@@ -117,6 +117,7 @@ func main() {
 
 	// Health check endpoint (public, no auth required)
 	r.GET("/api/health", handlers.HealthCheck)
+	r.GET("/api/status", handlers.HealthCheck)
 
 	authProtected := r.Group("/api/auth")
 	authProtected.Use(handlers.RequireAuth(db))
@@ -154,6 +155,7 @@ func main() {
 		boards.DELETE("/:id", handlers.DeleteBoard(db))
 		boards.GET("/:id/export", handlers.ExportBoard(db))
 		boards.POST("/:id/copy", handlers.CopyBoard(db))
+		boards.POST("/:id/reset", handlers.ResetBoard(db))
 		boards.POST("/import", handlers.ImportBoard(db))
 	}
 
@@ -231,7 +233,7 @@ func main() {
 
 	// Upload routes - require auth for upload and delete
 	r.POST("/api/upload", handlers.RequireAuth(db), handlers.UploadFile(db))
-	r.GET("/uploads/:id", handlers.RequireAuth(db), handlers.ServeFile(db))
+	r.GET("/uploads/:id", handlers.ServeFile(db))
 	r.DELETE("/api/attachments/:id", handlers.RequireAuth(db), handlers.DeleteAttachment(db))
 
 	// WebSocket route (same port)
@@ -240,37 +242,48 @@ func main() {
 	// Static files - serve embedded frontend by default, or from WEB_DIR if set
 	webDir := os.Getenv("WEB_DIR")
 
-	if webDir == "" {
-		// Use embedded web
+	if webDir != "" {
+		if _, err := os.Stat(webDir); err != nil {
+			log.Printf("Warning: Web directory not found at %s, falling back to embedded web", webDir)
+			webDir = ""
+		}
+	}
+
+	useEmbedded := webDir == ""
+	if useEmbedded {
+		log.Println("Serving embedded web assets")
+	} else {
+		log.Printf("Serving static files from: %s", webDir)
+	}
+
+	mimeTypes := map[string]string{
+		".js":    "application/javascript",
+		".css":   "text/css",
+		".html":  "text/html",
+		".json":  "application/json",
+		".png":   "image/png",
+		".jpg":   "image/jpeg",
+		".svg":   "image/svg+xml",
+		".ico":   "image/x-icon",
+		".woff":  "font/woff",
+		".woff2": "font/woff2",
+	}
+
+	getMimeType := func(path string) string {
+		ext := ""
+		if i := strings.LastIndex(path, "."); i > 0 {
+			ext = path[i:]
+		}
+		if mime, ok := mimeTypes[ext]; ok {
+			return mime
+		}
+		return "application/octet-stream"
+	}
+
+	if useEmbedded {
 		subFS, err := fs.Sub(embeddedWeb, "web")
 		if err != nil {
 			log.Fatal("Failed to access embedded web filesystem:", err)
-		}
-
-		log.Println("Serving embedded web assets")
-
-		mimeTypes := map[string]string{
-			".js":    "application/javascript",
-			".css":   "text/css",
-			".html":  "text/html",
-			".json":  "application/json",
-			".png":   "image/png",
-			".jpg":   "image/jpeg",
-			".svg":   "image/svg+xml",
-			".ico":   "image/x-icon",
-			".woff":  "font/woff",
-			".woff2": "font/woff2",
-		}
-
-		getMimeType := func(path string) string {
-			ext := ""
-			if i := strings.LastIndex(path, "."); i > 0 {
-				ext = path[i:]
-			}
-			if mime, ok := mimeTypes[ext]; ok {
-				return mime
-			}
-			return "application/octet-stream"
 		}
 
 		r.GET("/", func(c *gin.Context) {
@@ -287,6 +300,14 @@ func main() {
 
 		r.GET("/assets/*path", func(c *gin.Context) {
 			path := strings.TrimPrefix(c.Param("path"), "/")
+			ext := ""
+			if i := strings.LastIndex(path, "."); i > 0 {
+				ext = path[i:]
+			}
+			if ext != ".js" && ext != ".css" && ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".svg" && ext != ".ico" && ext != ".woff" && ext != ".woff2" && ext != ".ttf" && ext != ".eot" && ext != ".otf" && ext != ".webp" && ext != ".gif" && ext != ".webm" && ext != ".mp4" && ext != ".wav" && ext != ".mp3" {
+				c.JSON(404, gin.H{"error": "Not found"})
+				return
+			}
 			f, err := subFS.Open("assets/" + path)
 			if err != nil {
 				c.String(404, "file not found")
@@ -314,30 +335,31 @@ func main() {
 			io.Copy(c.Writer, f)
 		})
 	} else {
-		// Use external web directory
-		if _, err := os.Stat(webDir); err == nil {
-			log.Printf("Serving static files from: %s", webDir)
+		r.GET("/", func(c *gin.Context) {
+			c.File(webDir + "/index.html")
+		})
 
-			r.GET("/", func(c *gin.Context) {
-				c.File(webDir + "/index.html")
-			})
+		r.GET("/assets/*path", func(c *gin.Context) {
+			path := c.Param("path")
+			ext := ""
+			if i := strings.LastIndex(path, "."); i > 0 {
+				ext = path[i:]
+			}
+			if ext != ".js" && ext != ".css" && ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".svg" && ext != ".ico" && ext != ".woff" && ext != ".woff2" && ext != ".ttf" && ext != ".eot" && ext != ".otf" && ext != ".webp" && ext != ".gif" && ext != ".webm" && ext != ".mp4" && ext != ".wav" && ext != ".mp3" {
+				c.JSON(404, gin.H{"error": "Not found"})
+				return
+			}
+			c.File(webDir + "/assets/" + path)
+		})
 
-			r.GET("/assets/*path", func(c *gin.Context) {
-				path := c.Param("path")
-				c.File(webDir + "/assets/" + path)
-			})
-
-			r.NoRoute(func(c *gin.Context) {
-				path := c.Request.URL.Path
-				if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
-					c.JSON(404, gin.H{"error": "Not found"})
-					return
-				}
-				c.File(webDir + "/index.html")
-			})
-		} else {
-			log.Printf("Warning: Web directory not found at %s, serving API only", webDir)
-		}
+		r.NoRoute(func(c *gin.Context) {
+			path := c.Request.URL.Path
+			if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
+				c.JSON(404, gin.H{"error": "Not found"})
+				return
+			}
+			c.File(webDir + "/index.html")
+		})
 	}
 
 	// Get port from env

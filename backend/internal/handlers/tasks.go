@@ -4,24 +4,20 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"open-kanban/internal/models"
+	"open-kanban/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
-// broadcast sends a refresh message to WebSocket server
 func broadcast() {
-	// Broadcast refresh to all connected WebSocket clients
 	BroadcastRefresh()
 }
 
-// GetTasks returns tasks with optional filtering by columnId, boardId, or status
 func GetTasks(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -51,170 +47,24 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 				pageSize = parsed
 			}
 		}
-		offset := (page - 1) * pageSize
 
-		var columnIDs []string
-		if boardID != "" || status != "" {
-			query := "SELECT c.id FROM columns c"
-			var args []interface{}
-			var conditions []string
-			if boardID != "" {
-				conditions = append(conditions, "c.board_id = ?")
-				args = append(args, boardID)
-			}
-			if status != "" {
-				conditions = append(conditions, "c.status = ?")
-				args = append(args, status)
-			}
-			if len(conditions) > 0 {
-				query += " WHERE " + strings.Join(conditions, " AND ")
-			}
-			rows, err := db.Query(query, args...)
-			if err == nil {
-				defer rows.Close()
-				for rows.Next() {
-					var colID string
-					if err := rows.Scan(&colID); err == nil {
-						columnIDs = append(columnIDs, colID)
-					}
-				}
-			}
-		}
-
-		if columnID != "" && len(columnIDs) == 0 {
-			columnIDs = append(columnIDs, columnID)
-		}
-
-		var total int
-		var countQuery string
-		var countArgs []interface{}
-		if len(columnIDs) > 0 {
-			placeholders := make([]string, len(columnIDs))
-			for i := range columnIDs {
-				placeholders[i] = "?"
-			}
-			countQuery = fmt.Sprintf("SELECT COUNT(*) FROM tasks WHERE column_id IN (%s)", strings.Join(placeholders, ","))
-			countArgs = make([]interface{}, len(columnIDs))
-			for i, id := range columnIDs {
-				countArgs[i] = id
-			}
-		} else {
-			countQuery = "SELECT COUNT(*) FROM tasks"
-			countArgs = []interface{}{}
-		}
-		if err := db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
-			return
-		}
-
-		var rows *sql.Rows
-		var err error
-		if len(columnIDs) > 0 {
-			placeholders := make([]string, len(columnIDs))
-			args := make([]interface{}, 0, len(columnIDs)+2)
-			for i, id := range columnIDs {
-				placeholders[i] = "?"
-				args = append(args, id)
-			}
-			query := fmt.Sprintf(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
-					(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-					(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
-				FROM tasks t
-				JOIN columns c ON t.column_id = c.id
-				WHERE t.column_id IN (%s)
-				ORDER BY c.position ASC, t.position ASC
-				LIMIT ? OFFSET ?
-			`, strings.Join(placeholders, ","))
-			args = append(args, pageSize, offset)
-			rows, err = db.Query(query, args...)
-		} else {
-			rows, err = db.Query(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
-					(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-					(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
-				FROM tasks t
-				JOIN columns c ON t.column_id = c.id
-				ORDER BY c.position ASC, t.position ASC
-				LIMIT ? OFFSET ?
-			`, pageSize, offset)
-		}
+		taskService := services.NewTaskService(db)
+		result, err := taskService.GetTasks(user.ID, user.Role, columnID, boardID, status, page, pageSize)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败: " + err.Error()})
 			return
-		}
-		defer rows.Close()
-
-		var tasks []gin.H
-		for rows.Next() {
-			var task models.Task
-			var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
-			var archivedAt sql.NullTime
-			var commentCount, subtaskCount int
-			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount); err == nil {
-				if desc.Valid {
-					task.Description = &desc.String
-				}
-				if assignee.Valid {
-					task.Assignee = &assignee.String
-				}
-				if meta.Valid {
-					task.Meta = &meta.String
-				}
-				if archivedAt.Valid {
-					task.ArchivedAt = &archivedAt.Time
-				}
-				if agentID.Valid {
-					task.AgentID = &agentID.String
-				}
-				if agentPrompt.Valid {
-					task.AgentPrompt = &agentPrompt.String
-				}
-				if createdBy.Valid {
-					task.CreatedBy = createdBy.String
-				}
-
-				tasks = append(tasks, gin.H{
-					"id":          task.ID,
-					"title":       task.Title,
-					"description": task.Description,
-					"priority":    task.Priority,
-					"assignee":    task.Assignee,
-					"meta":        task.Meta,
-					"columnId":    task.ColumnID,
-					"position":    task.Position,
-					"published":   task.Published,
-					"archived":    task.Archived,
-					"archivedAt":  task.ArchivedAt,
-					"agentId":     task.AgentID,
-					"agentPrompt": task.AgentPrompt,
-					"createdBy":   task.CreatedBy,
-					"createdAt":   task.CreatedAt,
-					"updatedAt":   task.UpdatedAt,
-					"_count": gin.H{
-						"comments": commentCount,
-						"subtasks": subtaskCount,
-					},
-				})
-			}
-		}
-
-		pageCount := total / pageSize
-		if total%pageSize != 0 {
-			pageCount++
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"data":      tasks,
-			"total":     total,
-			"page":      page,
-			"pageSize":  pageSize,
-			"pageCount": pageCount,
+			"data":      result.Tasks,
+			"total":     result.Total,
+			"page":      result.Page,
+			"pageSize":  result.PageSize,
+			"pageCount": result.PageCount,
 		})
 	}
 }
 
-// CreateTaskRequest represents task creation request
 type CreateTaskRequest struct {
 	Title       string      `json:"title"`
 	Description *string     `json:"description"`
@@ -228,7 +78,6 @@ type CreateTaskRequest struct {
 	AgentPrompt *string     `json:"agentPrompt"`
 }
 
-// CreateTask creates a new task
 func CreateTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -237,7 +86,6 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// VIEWER cannot create tasks
 		if user.Role == "VIEWER" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法创建任务"})
 			return
@@ -259,122 +107,64 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		boardID, err := getBoardIDForColumn(db, req.ColumnID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
-			return
-		}
-
 		if !checkColumnAccessWithBoardFallback(db, user.ID, req.ColumnID, "WRITE", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权在该列创建任务"})
 			return
 		}
 
-		taskID, err := generateTaskID(db, boardID)
-		if err != nil {
-			log.Printf("generateTaskID error: boardID=%s, err=%v", boardID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "生成任务ID失败: " + err.Error()})
-			return
-		}
-		now := time.Now()
-		priority := req.Priority
-		if priority == "" {
-			priority = "medium"
-		}
-
-		position := req.Position
-		if position == 0 {
-			switch priority {
-			case "high":
-				var maxHighPos sql.NullInt64
-				err := db.QueryRow("SELECT MAX(position) FROM tasks WHERE column_id = ? AND priority = 'high'", req.ColumnID).Scan(&maxHighPos)
-				if err != nil && err != sql.ErrNoRows {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "计算任务位置失败"})
-					return
-				}
-				if maxHighPos.Valid && maxHighPos.Int64 > 0 {
-					position = int(maxHighPos.Int64) + 1000
-				} else {
-					position = 1000
-				}
-			case "medium":
-				var maxHighPos, minLowPos sql.NullInt64
-				db.QueryRow("SELECT MAX(position) FROM tasks WHERE column_id = ? AND priority = 'high'", req.ColumnID).Scan(&maxHighPos)
-				db.QueryRow("SELECT MIN(position) FROM tasks WHERE column_id = ? AND priority = 'low'", req.ColumnID).Scan(&minLowPos)
-				if maxHighPos.Valid && minLowPos.Valid {
-					position = (int(maxHighPos.Int64) + int(minLowPos.Int64)) / 2
-				} else if maxHighPos.Valid {
-					position = int(maxHighPos.Int64) + 1000
-				} else {
-					position = 2000
-				}
-			case "low":
-				var maxPos sql.NullInt64
-				err := db.QueryRow("SELECT MAX(position) FROM tasks WHERE column_id = ?", req.ColumnID).Scan(&maxPos)
-				if err != nil && err != sql.ErrNoRows {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "计算任务位置失败"})
-					return
-				}
-				if maxPos.Valid {
-					position = int(maxPos.Int64) + 1
-				}
-			default:
-				position = 3000
-			}
-		}
-
-		// Handle meta
-		var metaStr *string
-		if req.Meta != nil {
-			metaJSON, _ := json.Marshal(req.Meta)
-			s := string(metaJSON)
-			metaStr = &s
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO tasks (id, title, description, priority, assignee, meta, column_id, position, published, archived, agent_id, agent_prompt, created_by, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, taskID, req.Title, req.Description, priority, req.Assignee, metaStr, req.ColumnID, position, req.Published, false, req.AgentID, req.AgentPrompt, user.ID, now, now)
+		taskService := services.NewTaskService(db)
+		task, err := taskService.CreateTask(services.CreateTaskInput{
+			Title:       req.Title,
+			Description: req.Description,
+			Priority:    req.Priority,
+			Assignee:    req.Assignee,
+			Meta:        req.Meta,
+			ColumnID:    req.ColumnID,
+			Position:    req.Position,
+			Published:   req.Published,
+			AgentID:     req.AgentID,
+			AgentPrompt: req.AgentPrompt,
+			CreatedBy:   user.ID,
+		})
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败: " + err.Error()})
 			return
 		}
 
-		LogActivity(db, user.ID, "CREATE_TASK", "TASK", taskID, req.Title, "", c.ClientIP(), getRequestSource(c))
+		LogActivity(db, user.ID, "CREATE_TASK", "TASK", task.ID, task.Title, "", c.ClientIP(), getRequestSource(c))
 
 		broadcast()
 
-		if req.Published && req.AgentID != nil && *req.AgentID != "" {
+		if task.Published && task.AgentID != nil && *task.AgentID != "" {
 			agentPrompt := ""
-			if req.AgentPrompt != nil {
-				agentPrompt = *req.AgentPrompt
+			if task.AgentPrompt != nil {
+				agentPrompt = *task.AgentPrompt
 			}
-			triggerAgentForTask(taskID, *req.AgentID, agentPrompt, req.Title)
+			taskService.TriggerAgentForTask(task.ID, *task.AgentID, agentPrompt, task.Title)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"id":          taskID,
-			"title":       req.Title,
-			"description": req.Description,
-			"priority":    priority,
-			"assignee":    req.Assignee,
-			"meta":        metaStr,
-			"columnId":    req.ColumnID,
-			"position":    position,
-			"published":   req.Published,
+			"id":          task.ID,
+			"title":       task.Title,
+			"description": task.Description,
+			"priority":    task.Priority,
+			"assignee":    task.Assignee,
+			"meta":        task.Meta,
+			"columnId":    task.ColumnID,
+			"position":    task.Position,
+			"published":   task.Published,
 			"archived":    false,
-			"agentId":     req.AgentID,
-			"agentPrompt": req.AgentPrompt,
+			"agentId":     task.AgentID,
+			"agentPrompt": task.AgentPrompt,
 			"createdBy":   user.ID,
-			"createdAt":   now,
-			"updatedAt":   now,
+			"createdAt":   task.CreatedAt,
+			"updatedAt":   task.UpdatedAt,
 			"comments":    []gin.H{},
 		})
 	}
 }
 
-// GetTask returns a single task
 func GetTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -389,14 +179,9 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var columnID string
-		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
+		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 			return
 		}
 
@@ -407,47 +192,11 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 
 		include := c.Query("include")
 
-		var task models.Task
-		var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
-		var archivedAt sql.NullTime
-		var commentCount, subtaskCount int
-		err = db.QueryRow(`
-			SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
-				(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-				(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
-			FROM tasks t
-			WHERE t.id = ?
-		`, id).Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount)
-
+		taskService := services.NewTaskService(db)
+		task, commentCount, subtaskCount, err := taskService.GetTask(id, user.ID, user.Role)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 			return
-		}
-
-		if desc.Valid {
-			task.Description = &desc.String
-		}
-		if assignee.Valid {
-			task.Assignee = &assignee.String
-		}
-		if meta.Valid {
-			task.Meta = &meta.String
-		}
-		if archivedAt.Valid {
-			task.ArchivedAt = &archivedAt.Time
-		}
-		if agentID.Valid {
-			task.AgentID = &agentID.String
-		}
-		if agentPrompt.Valid {
-			task.AgentPrompt = &agentPrompt.String
-		}
-		if createdBy.Valid {
-			task.CreatedBy = createdBy.String
 		}
 
 		response := gin.H{
@@ -489,7 +238,6 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// UpdateTaskRequest represents task update request
 type UpdateTaskRequest struct {
 	Title       string      `json:"title"`
 	Description *string     `json:"description"`
@@ -503,7 +251,6 @@ type UpdateTaskRequest struct {
 	AgentPrompt *string     `json:"agentPrompt"`
 }
 
-// UpdateTask updates a task
 func UpdateTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -512,7 +259,6 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// VIEWER cannot update tasks
 		if user.Role == "VIEWER" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法修改任务"})
 			return
@@ -524,14 +270,9 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var columnID string
-		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
+		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 			return
 		}
 
@@ -540,7 +281,6 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// For MEMBER role, check if they own the task
 		if user.Role == "MEMBER" {
 			var createdBy string
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
@@ -556,229 +296,56 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var oldTask struct {
-			Title       string
-			Description *string
-			Priority    string
-			Assignee    *string
-			Meta        *string
-			ColumnID    string
-			Position    int
-			Published   bool
-			AgentID     *string
-			AgentPrompt *string
-		}
-		db.QueryRow("SELECT title, description, priority, assignee, meta, column_id, position, published, agent_id, agent_prompt FROM tasks WHERE id = ?", id).Scan(&oldTask.Title, &oldTask.Description, &oldTask.Priority, &oldTask.Assignee, &oldTask.Meta, &oldTask.ColumnID, &oldTask.Position, &oldTask.Published, &oldTask.AgentID, &oldTask.AgentPrompt)
+		taskService := services.NewTaskService(db)
+		task, changes, err := taskService.UpdateTask(id, user.ID, user.Role, services.UpdateTaskInput{
+			Title:       req.Title,
+			Description: req.Description,
+			Priority:    req.Priority,
+			Assignee:    req.Assignee,
+			Meta:        req.Meta,
+			ColumnID:    req.ColumnID,
+			Position:    req.Position,
+			Published:   req.Published,
+			AgentID:     req.AgentID,
+			AgentPrompt: req.AgentPrompt,
+		})
 
-		var changes []string
-
-		if req.Title != "" && req.Title != oldTask.Title {
-			changes = append(changes, fmt.Sprintf("标题: '%s' → '%s'", oldTask.Title, req.Title))
-		}
-		if req.Description != nil {
-			oldDesc := ""
-			if oldTask.Description != nil {
-				oldDesc = *oldTask.Description
-			}
-			if *req.Description != oldDesc {
-				changes = append(changes, fmt.Sprintf("描述: '%s' → '%s'", oldDesc, *req.Description))
-			}
-		}
-		if req.Priority != "" && req.Priority != oldTask.Priority {
-			changes = append(changes, fmt.Sprintf("优先级: '%s' → '%s'", oldTask.Priority, req.Priority))
-		}
-		if req.Assignee != nil {
-			oldAssignee := ""
-			if oldTask.Assignee != nil {
-				oldAssignee = *oldTask.Assignee
-			}
-			if *req.Assignee != oldAssignee {
-				changes = append(changes, fmt.Sprintf("负责人: '%s' → '%s'", oldAssignee, *req.Assignee))
-			}
-		}
-		if req.Meta != nil {
-			oldMeta := ""
-			if oldTask.Meta != nil {
-				oldMeta = *oldTask.Meta
-			}
-			newMeta, _ := json.Marshal(req.Meta)
-			if string(newMeta) != oldMeta {
-				changes = append(changes, fmt.Sprintf("元数据: '%s' → '%s'", oldMeta, string(newMeta)))
-			}
-		}
-		if req.ColumnID != "" && req.ColumnID != oldTask.ColumnID {
-			var oldStatus, newStatus sql.NullString
-			db.QueryRow("SELECT status FROM columns WHERE id = ?", oldTask.ColumnID).Scan(&oldStatus)
-			db.QueryRow("SELECT status FROM columns WHERE id = ?", req.ColumnID).Scan(&newStatus)
-			oldStatusVal := ""
-			if oldStatus.Valid {
-				oldStatusVal = oldStatus.String
-			}
-			newStatusVal := ""
-			if newStatus.Valid {
-				newStatusVal = newStatus.String
-			}
-			if oldStatusVal != "" || newStatusVal != "" {
-				changes = append(changes, fmt.Sprintf("状态: '%s' → '%s'", oldStatusVal, newStatusVal))
-			}
-		}
-		if req.Position != nil && *req.Position != oldTask.Position {
-			changes = append(changes, fmt.Sprintf("位置: %d → %d", oldTask.Position, *req.Position))
-			targetColumnID := req.ColumnID
-			if targetColumnID == "" {
-				targetColumnID = oldTask.ColumnID
-			}
-			newPos := *req.Position
-			oldPos := oldTask.Position
-			isSameColumn := targetColumnID == oldTask.ColumnID
-			if isSameColumn {
-				if newPos < oldPos {
-					_, err = db.Exec(`
-						UPDATE tasks 
-						SET position = position + 1, updated_at = NOW()
-						WHERE column_id = ? AND position >= ? AND position < ? AND id != ?
-					`, targetColumnID, newPos, oldPos, id)
-				} else if newPos > oldPos {
-					_, err = db.Exec(`
-						UPDATE tasks 
-						SET position = position - 1, updated_at = NOW()
-						WHERE column_id = ? AND position > ? AND position <= ? AND id != ?
-					`, targetColumnID, oldPos, newPos, id)
-				}
-			} else {
-				_, err = db.Exec(`
-					UPDATE tasks 
-					SET position = position - 1, updated_at = NOW()
-					WHERE column_id = ? AND position > ?
-				`, oldTask.ColumnID, oldPos)
-				if err == nil {
-					_, err = db.Exec(`
-						UPDATE tasks 
-						SET position = position + 1, updated_at = NOW()
-						WHERE column_id = ? AND position >= ? AND id != ?
-					`, targetColumnID, newPos, id)
-				}
-			}
-		}
-		if req.Published != nil && *req.Published != oldTask.Published {
-			oldPub := "否"
-			if oldTask.Published {
-				oldPub = "是"
-			}
-			newPub := "否"
-			if *req.Published {
-				newPub = "是"
-			}
-			changes = append(changes, fmt.Sprintf("发布: %s → %s", oldPub, newPub))
-		}
-		if req.AgentID != nil {
-			oldAgentID := ""
-			if oldTask.AgentID != nil {
-				oldAgentID = *oldTask.AgentID
-			}
-			if *req.AgentID != oldAgentID {
-				changes = append(changes, fmt.Sprintf("Agent: '%s' → '%s'", oldAgentID, *req.AgentID))
-			}
-		}
-		if req.AgentPrompt != nil {
-			oldAgentPrompt := ""
-			if oldTask.AgentPrompt != nil {
-				oldAgentPrompt = *oldTask.AgentPrompt
-			}
-			if *req.AgentPrompt != oldAgentPrompt {
-				changes = append(changes, fmt.Sprintf("Agent Prompt: '%s' → '%s'", oldAgentPrompt, *req.AgentPrompt))
-			}
-		}
-
-		details := ""
-		if len(changes) > 0 {
-			details = strings.Join(changes, ", ")
-		}
-
-		updates := []interface{}{time.Now()}
-		query := "UPDATE tasks SET updated_at = ?"
-
-		if req.Title != "" {
-			query += ", title = ?"
-			updates = append(updates, req.Title)
-		}
-		if req.Description != nil {
-			query += ", description = ?"
-			updates = append(updates, *req.Description)
-		}
-		if req.Priority != "" {
-			query += ", priority = ?"
-			updates = append(updates, req.Priority)
-		}
-		if req.Assignee != nil {
-			query += ", assignee = ?"
-			updates = append(updates, *req.Assignee)
-		}
-		if req.Meta != nil {
-			metaJSON, _ := json.Marshal(req.Meta)
-			query += ", meta = ?"
-			updates = append(updates, string(metaJSON))
-		}
-		if req.ColumnID != "" {
-			query += ", column_id = ?"
-			updates = append(updates, req.ColumnID)
-		}
-		if req.Position != nil {
-			query += ", position = ?"
-			updates = append(updates, *req.Position)
-		}
-		if req.Published != nil {
-			query += ", published = ?"
-			updates = append(updates, *req.Published)
-		}
-		if req.AgentID != nil {
-			query += ", agent_id = ?"
-			updates = append(updates, *req.AgentID)
-		}
-		if req.AgentPrompt != nil {
-			query += ", agent_prompt = ?"
-			updates = append(updates, *req.AgentPrompt)
-		}
-
-		query += " WHERE id = ?"
-		updates = append(updates, id)
-
-		_, err = db.Exec(query, updates...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
 			return
 		}
 
-		var taskTitle string
-		db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle)
-		LogActivity(db, user.ID, "UPDATE_TASK", "TASK", id, taskTitle, details, c.ClientIP(), getRequestSource(c))
+		details := ""
+		if changes != nil && len(changes.Changes) > 0 {
+			details = strings.Join(changes.Changes, ", ")
+		}
+
+		LogActivity(db, user.ID, "UPDATE_TASK", "TASK", id, task.Title, details, c.ClientIP(), getRequestSource(c))
 
 		broadcast()
 
-		if req.Published != nil && *req.Published && !oldTask.Published {
+		if req.Published != nil && *req.Published {
 			currentAgentID := ""
 			if req.AgentID != nil {
 				currentAgentID = *req.AgentID
-			} else if oldTask.AgentID != nil {
-				currentAgentID = *oldTask.AgentID
+			} else if task.AgentID != nil {
+				currentAgentID = *task.AgentID
 			}
 			if currentAgentID != "" {
 				currentAgentPrompt := ""
 				if req.AgentPrompt != nil {
 					currentAgentPrompt = *req.AgentPrompt
-				} else if oldTask.AgentPrompt != nil {
-					currentAgentPrompt = *oldTask.AgentPrompt
+				} else if task.AgentPrompt != nil {
+					currentAgentPrompt = *task.AgentPrompt
 				}
-				triggerAgentForTask(id, currentAgentID, currentAgentPrompt, taskTitle)
+				taskService.TriggerAgentForTask(id, currentAgentID, currentAgentPrompt, task.Title)
 			}
 		}
 
-		// Get updated task
 		GetTask(db)(c)
 	}
 }
 
-// DeleteTask deletes a task
 func DeleteTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -787,7 +354,6 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// VIEWER cannot delete tasks
 		if user.Role == "VIEWER" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法删除任务"})
 			return
@@ -799,14 +365,9 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var columnID string
-		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
+		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 			return
 		}
 
@@ -834,8 +395,8 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 		db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle)
 		LogActivity(db, user.ID, "DELETE_TASK", "TASK", id, taskTitle, "", c.ClientIP(), getRequestSource(c))
 
-		_, err = db.Exec("DELETE FROM tasks WHERE id = ?", id)
-		if err != nil {
+		taskService := services.NewTaskService(db)
+		if err := taskService.DeleteTask(id); err != nil {
 			errMsg := fmt.Sprintf("删除任务失败: %v", err)
 			LogActivity(db, user.ID, "DELETE_TASK", "TASK", id, taskTitle, errMsg, c.ClientIP(), getRequestSource(c))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
@@ -847,12 +408,10 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// ArchiveTaskRequest represents archive request
 type ArchiveTaskRequest struct {
 	Archived *bool `json:"archived"`
 }
 
-// ArchiveTask archives or unarchives a task
 func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -861,7 +420,6 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// VIEWER cannot archive tasks
 		if user.Role == "VIEWER" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法归档任务"})
 			return
@@ -873,14 +431,9 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var columnID string
-		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
+		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 			return
 		}
 
@@ -889,7 +442,6 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// For MEMBER role, check if they own the task
 		if user.Role == "MEMBER" {
 			var createdBy string
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
@@ -910,18 +462,8 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			archived = *req.Archived
 		}
 
-		var archivedAt interface{}
-		if archived {
-			archivedAt = time.Now()
-		} else {
-			archivedAt = nil
-		}
-
-		now := time.Now()
-		_, err = db.Exec(
-			"UPDATE tasks SET archived = ?, archived_at = ?, updated_at = ? WHERE id = ?",
-			archived, archivedAt, now, id,
-		)
+		taskService := services.NewTaskService(db)
+		_, err = taskService.ArchiveTask(id, archived)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "归档失败"})
 			return
@@ -934,13 +476,10 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		broadcast()
-
-		// Get updated task
 		GetTask(db)(c)
 	}
 }
 
-// GetMyTasks returns tasks assigned to the current agent or in columns configured for the agent's type
 func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -949,7 +488,6 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Get the token's userAgent (agent type)
 		var tokenKey string
 		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
 			if strings.HasPrefix(authHeader, "Bearer ") {
@@ -963,11 +501,9 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 		var userAgent string
 		err := db.QueryRow("SELECT user_agent FROM tokens WHERE `key` = ?", tokenKey).Scan(&userAgent)
 		if err != nil {
-			// Fallback: use user's nickname as assignee identifier
 			userAgent = ""
 		}
 
-		// Get all columns with their agent configs
 		rows, err := db.Query(`
 			SELECT c.id, c.name, c.board_id, COALESCE(ca.agent_types, '[]') as agent_types
 			FROM columns c
@@ -979,7 +515,6 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		// Build a map of column IDs that this agent can handle
 		columnIDs := make(map[string]bool)
 		for rows.Next() {
 			var colID, colName, boardID, agentTypesStr string
@@ -997,12 +532,10 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Get tasks where assignee matches user's nickname OR column is in the allowed list
 		var tasks []gin.H
 		var taskRows *sql.Rows
 
 		if userAgent != "" && len(columnIDs) > 0 {
-			// Build placeholders for IN clause
 			placeholders := make([]string, len(columnIDs))
 			args := make([]interface{}, 0, len(columnIDs)+1)
 			i := 0
@@ -1026,7 +559,6 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 
 			taskRows, err = db.Query(query, args...)
 		} else if userAgent != "" {
-			// Only assignee match, no column configs
 			taskRows, err = db.Query(`
 				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
@@ -1038,7 +570,6 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
 			`, user.Nickname)
 		} else if len(columnIDs) > 0 {
-			// Only column match, no userAgent
 			placeholders := make([]string, len(columnIDs))
 			args := make([]interface{}, 0, len(columnIDs))
 			i := 0
@@ -1061,7 +592,6 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 
 			taskRows, err = db.Query(query, args...)
 		} else {
-			// No userAgent and no column configs - return empty
 			tasks = []gin.H{}
 		}
 
@@ -1135,7 +665,6 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// CompleteTask moves a task to the next column (for workflow progression)
 func CompleteTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -1144,7 +673,6 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// VIEWER cannot complete tasks
 		if user.Role == "VIEWER" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法完成任务"})
 			return
@@ -1156,15 +684,9 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Get task's current column
-		var columnID string
-		err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&columnID)
+		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 			return
 		}
 
@@ -1173,7 +695,6 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// For MEMBER role, check if they own the task
 		if user.Role == "MEMBER" {
 			var createdBy string
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
@@ -1183,68 +704,21 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Get task's current column
-		var currentColumnID string
-		err = db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", id).Scan(&currentColumnID)
+		taskService := services.NewTaskService(db)
+		_, err = taskService.CompleteTask(id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		// Get current column's position and board_id
-		var currentPosition int
-		var boardID string
-		err = db.QueryRow("SELECT position, board_id FROM columns WHERE id = ?", currentColumnID).Scan(&currentPosition, &boardID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取列信息失败"})
-			return
-		}
-
-		// Get all columns for this board ordered by position
-		rows, err := db.Query(
-			"SELECT id, position FROM columns WHERE board_id = ? ORDER BY position ASC",
-			boardID,
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取列信息失败"})
-			return
-		}
-		defer rows.Close()
-
-		var nextColumnID string
-		for rows.Next() {
-			var colID string
-			var position int
-			if err := rows.Scan(&colID, &position); err == nil {
-				if position > currentPosition {
-					nextColumnID = colID
-					break
-				}
-			}
-		}
-
-		if nextColumnID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务已在最后一列"})
-			return
-		}
-
-		// Update task to next column
-		now := time.Now()
-		_, err = db.Exec(
-			"UPDATE tasks SET column_id = ?, updated_at = ? WHERE id = ?",
-			nextColumnID, now, id,
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新任务失败"})
-			return
-		}
-
-		// Log activity
 		var taskTitle string
 		db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle)
 		var oldStatus, newStatus sql.NullString
-		db.QueryRow("SELECT status FROM columns WHERE id = ?", currentColumnID).Scan(&oldStatus)
-		db.QueryRow("SELECT status FROM columns WHERE id = ?", nextColumnID).Scan(&newStatus)
+		db.QueryRow("SELECT status FROM columns WHERE id = ?", columnID).Scan(&oldStatus)
+
+		newColumnID, _ := getColumnIDForTask(db, id)
+		db.QueryRow("SELECT status FROM columns WHERE id = ?", newColumnID).Scan(&newStatus)
+
 		oldStatusVal := ""
 		if oldStatus.Valid {
 			oldStatusVal = oldStatus.String
@@ -1257,81 +731,12 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		LogActivity(db, user.ID, "UPDATE_TASK", "TASK", id, taskTitle, details, c.ClientIP(), getRequestSource(c))
 
 		broadcast()
-
-		// Get updated task
 		GetTask(db)(c)
 	}
 }
 
-func generateTaskID(db *sql.DB, boardID string) (string, error) {
-	var shortAlias string
-	err := db.QueryRow("SELECT COALESCE(short_alias, '') FROM boards WHERE id = ?", boardID).Scan(&shortAlias)
-	if err != nil {
-		return "", err
-	}
-
-	if shortAlias == "" {
-		shortAlias = "T"
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-
-	var counter int
-	err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ?", boardID).Scan(&counter)
-	if err != nil {
-		return "", err
-	}
-
-	counter++
-	_, err = tx.Exec("UPDATE boards SET task_counter = ? WHERE id = ?", counter, boardID)
-	if err != nil {
-		return "", err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return "", err
-	}
-
-	digits := 4
-	if counter >= 10000 {
-		digits = 6
-	}
-	if counter >= 1000000 {
-		digits = 8
-	}
-
-	taskID := fmt.Sprintf("%s-%0*d", shortAlias, digits, counter)
-	return taskID, nil
-}
-
-func triggerAgentForTask(taskID, agentID, agentPrompt, taskTitle string) {
-	if agentID == "" {
-		return
-	}
-
-	log.Printf("[Agent Trigger] Task %s (%s) triggered for agent %s", taskID, taskTitle, agentID)
-
-	go func() {
-		payload := map[string]interface{}{
-			"event":       "task.published",
-			"taskId":      taskID,
-			"agentId":     agentID,
-			"agentPrompt": agentPrompt,
-			"taskTitle":   taskTitle,
-			"timestamp":   time.Now().UTC().Format(time.RFC3339),
-		}
-
-		payloadBytes, err := json.Marshal(payload)
-		if err != nil {
-			log.Printf("[Agent Trigger] Failed to marshal payload for task %s: %v", taskID, err)
-			return
-		}
-
-		log.Printf("[Agent Trigger] Task %s triggered for agent %s. Payload: %s", taskID, agentID, string(payloadBytes))
-	}()
+func getColumnIDForTask(db *sql.DB, taskID string) (string, error) {
+	var columnID string
+	err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", taskID).Scan(&columnID)
+	return columnID, err
 }

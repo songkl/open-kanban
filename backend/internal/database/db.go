@@ -76,6 +76,10 @@ func initSQLite(config *DBConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to ping SQLite database: %w", err)
 	}
 
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
 	// Run migrations
 	if err := runSQLiteMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run SQLite migrations: %w", err)

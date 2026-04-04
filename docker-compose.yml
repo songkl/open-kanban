@@ -1,0 +1,50 @@
+services:
+  kanban:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=kanban.db
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8080
+    volumes:
+      - kanban-data:/app/data
+    restart: unless-stopped
+
+  kanban-mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: kanban_root
+      MYSQL_DATABASE: kanban
+      MYSQL_USER: kanban
+      MYSQL_PASSWORD: kanban_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  kanban-with-mysql:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_TYPE=mysql
+      - DB_HOST=kanban-mysql
+      - DB_NAME=kanban
+      - DB_USER=kanban
+      - DB_PASSWORD=kanban_pass
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8080
+    depends_on:
+      kanban-mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  kanban-data:
+  mysql-data:

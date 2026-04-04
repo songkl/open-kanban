@@ -37,6 +37,14 @@ func isOriginAllowed(origin string) bool {
 	return false
 }
 
+func SplitOriginsForTest(origins string) []string {
+	return splitOrigins(origins)
+}
+
+func IsOriginAllowedForTest(origin string) bool {
+	return isOriginAllowed(origin)
+}
+
 const (
 	pingInterval = 30 * time.Second
 	pongTimeout  = 10 * time.Second
