@@ -3,8 +3,10 @@ package handlers
 import (
 	"database/sql"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -46,9 +48,9 @@ func IsOriginAllowedForTest(origin string) bool {
 }
 
 const (
-	pingInterval = 30 * time.Second
-	pongTimeout  = 10 * time.Second
-	readDeadline = pongTimeout + pingInterval
+	pingInterval      = 30 * time.Second
+	pingWriteDeadline = 10 * time.Second
+	readDeadline      = pingInterval + pingWriteDeadline
 )
 
 var (
@@ -61,9 +63,69 @@ var (
 			return isOriginAllowed(origin)
 		},
 	}
-	clients    = make(map[*websocket.Conn]bool)
-	clientsMux sync.RWMutex
+	clients          = make(map[*websocket.Conn]bool)
+	clientsMux       sync.RWMutex
+	maxConns         = 100
+	maxConnsPerUser  = 5
+	userConnCount    = make(map[string]int)
+	userConnCountMux sync.Mutex
 )
+
+func init() {
+	if envMax := os.Getenv("WS_MAX_CONNECTIONS"); envMax != "" {
+		if val, err := strconv.Atoi(envMax); err == nil && val > 0 {
+			maxConns = val
+		}
+	}
+	if envMaxPer := os.Getenv("WS_MAX_CONNECTIONS_PER_USER"); envMaxPer != "" {
+		if val, err := strconv.Atoi(envMaxPer); err == nil && val > 0 {
+			maxConnsPerUser = val
+		}
+	}
+}
+
+func getConnectionCount() int {
+	clientsMux.RLock()
+	defer clientsMux.RUnlock()
+	return len(clients)
+}
+
+func GetConnectionCount() int {
+	return getConnectionCount()
+}
+
+func GetMaxConnections() int {
+	return maxConns
+}
+
+func isConnectionAllowed() bool {
+	clientsMux.RLock()
+	allowed := len(clients) < maxConns
+	clientsMux.RUnlock()
+	return allowed
+}
+
+func isUserConnectionAllowed(userID string) bool {
+	userConnCountMux.Lock()
+	defer userConnCountMux.Unlock()
+	count := userConnCount[userID]
+	return count < maxConnsPerUser
+}
+
+func incrementUserConnCount(userID string) {
+	userConnCountMux.Lock()
+	defer userConnCountMux.Unlock()
+	userConnCount[userID]++
+}
+
+func decrementUserConnCount(userID string) {
+	userConnCountMux.Lock()
+	defer userConnCountMux.Unlock()
+	userConnCount[userID]--
+	if userConnCount[userID] <= 0 {
+		delete(userConnCount, userID)
+	}
+}
 
 // WebSocketHandler handles WebSocket connections
 func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
@@ -95,59 +157,90 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		if !isConnectionAllowed() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Server at capacity"})
+			return
+		}
+
+		if !isUserConnectionAllowed(userID) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Too many connections for this user"})
+			return
+		}
+
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			log.Printf("WebSocket upgrade failed: %v", err)
 			return
 		}
-		defer conn.Close()
 
-		// Set initial read deadline for authentication/initial connection
-		conn.SetReadDeadline(time.Now().Add(readDeadline))
 		conn.SetPongHandler(func(appData string) error {
 			conn.SetReadDeadline(time.Now().Add(readDeadline))
 			return nil
 		})
 
-		// Register client with user info
 		clientsMux.Lock()
 		clients[conn] = true
 		clientsMux.Unlock()
+		incrementUserConnCount(userID)
 
-		log.Printf("WebSocket client connected (user: %s), total clients: %d", userID, len(clients))
+		log.Printf("WebSocket client connected (user: %s), total clients: %d, user connections: %d", userID, getConnectionCount(), userConnCount[userID])
 
-		// Start ping ticker for this connection
-		pingTicker := time.NewTicker(pingInterval)
-		defer pingTicker.Stop()
+		var wg sync.WaitGroup
+		wg.Add(1)
+		done := make(chan struct{})
 
-		// Keep connection alive and handle disconnect
-		for {
-			select {
-			case <-pingTicker.C:
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					log.Printf("Failed to send ping to client (user: %s): %v", userID, err)
-					goto cleanup
-				}
-			default:
-				conn.SetReadDeadline(time.Now().Add(readDeadline))
-				_, _, err := conn.ReadMessage()
-				if err != nil {
-					if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == websocket.CloseProtocolError {
-						log.Printf("WebSocket client sent invalid data (user: %s): %v", userID, err)
-					} else if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-						log.Printf("WebSocket read error (user: %s): %v", userID, err)
+		go func() {
+			defer wg.Done()
+			pingTicker := time.NewTicker(pingInterval)
+			defer pingTicker.Stop()
+
+			for {
+				select {
+				case <-done:
+					return
+				case <-pingTicker.C:
+					conn.SetWriteDeadline(time.Now().Add(pingWriteDeadline))
+					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+						log.Printf("Failed to send ping to client (user: %s): %v", userID, err)
+						return
 					}
-					goto cleanup
+				}
+			}
+		}()
+
+		for {
+			conn.SetReadDeadline(time.Now().Add(readDeadline))
+			_, msgType, err := conn.ReadMessage()
+			if err != nil {
+				if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == websocket.CloseProtocolError {
+					log.Printf("WebSocket client sent invalid data (user: %s): %v", userID, err)
+				} else if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("WebSocket read error (user: %s): %v", userID, err)
+				} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					log.Printf("WebSocket connection timeout (user: %s): no activity detected", userID)
+				}
+				break
+			}
+			if msgType == websocket.TextMessage {
+				_, _, _ = conn.ReadMessage()
+				conn.SetWriteDeadline(time.Now().Add(pingWriteDeadline))
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`)); err != nil {
+					log.Printf("Failed to send heartbeat_ack to client (user: %s): %v", userID, err)
+					break
 				}
 			}
 		}
 
-	cleanup:
-		pingTicker.Stop()
+		close(done)
+		wg.Wait()
+
 		clientsMux.Lock()
 		delete(clients, conn)
 		clientsMux.Unlock()
-		log.Printf("WebSocket client disconnected (user: %s), total clients: %d", userID, len(clients))
+		decrementUserConnCount(userID)
+
+		conn.Close()
+		log.Printf("WebSocket client disconnected (user: %s), total clients: %d, user connections: %d", userID, getConnectionCount(), userConnCount[userID])
 	}
 }
 

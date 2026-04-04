@@ -19,10 +19,6 @@ import (
 func GetColumns(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
-		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
-			return
-		}
 
 		boardID := c.Query("boardId")
 
@@ -37,8 +33,8 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Verify board access
-		if boardID != "" {
+		// Verify board access (skip for public boards or unauthenticated users on public read)
+		if boardID != "" && user != nil {
 			if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
 				c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this board"})
 				return

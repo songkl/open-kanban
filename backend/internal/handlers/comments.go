@@ -12,10 +12,6 @@ import (
 func GetComments(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
-		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
-			return
-		}
 
 		taskID := c.Query("taskId")
 		if taskID == "" {
@@ -29,7 +25,7 @@ func GetComments(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+		if user != nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to view comments of this task"})
 			return
 		}
@@ -74,10 +70,6 @@ func GetComments(db *sql.DB) gin.HandlerFunc {
 func GetComment(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
-		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
-			return
-		}
 
 		commentID := c.Param("id")
 		if commentID == "" {
@@ -107,7 +99,7 @@ func GetComment(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+		if user != nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to view this comment"})
 			return
 		}

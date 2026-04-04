@@ -425,11 +425,25 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
       }
     };
 
+    const HEARTBEAT_INTERVAL = 15000;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+    const sendHeartbeat = () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'heartbeat' }));
+      }
+    };
+
+    heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'ping') {
           ws.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
+        if (message.type === 'heartbeat_ack') {
           return;
         }
         if (message.type === 'refresh') {
@@ -462,6 +476,10 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
 
     ws.onclose = () => {
       console.log('WebSocket disconnected');
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
       const attempt = reconnectAttemptRef.current;
       if (attempt < MAX_RECONNECT_ATTEMPTS) {
         setWsStatus('disconnected');
