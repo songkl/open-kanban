@@ -132,7 +132,9 @@ func Init(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.SetCookie("kanban-token", tokenKey, 60*60*24*30, "/", "", false, true)
+		isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+		c.SetCookie("kanban-token", tokenKey, 60*60*24*30, "/", "", isSecure, true)
+		c.SetSameSite(http.SameSiteLaxMode)
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
@@ -269,7 +271,9 @@ func Login(db *sql.DB) gin.HandlerFunc {
 				}
 			}
 
-			c.SetCookie("kanban-token", tokenKey, 60*60*24*30, "/", "", false, true)
+			isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+			c.SetCookie("kanban-token", tokenKey, 60*60*24*30, "/", "", isSecure, true)
+			c.SetSameSite(http.SameSiteLaxMode)
 
 			c.JSON(http.StatusOK, gin.H{
 				"user": gin.H{
@@ -314,7 +318,9 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.SetCookie("kanban-token", tokenKey, 60*60*24*30, "/", "", false, true)
+		isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+		c.SetCookie("kanban-token", tokenKey, 60*60*24*30, "/", "", isSecure, true)
+		c.SetSameSite(http.SameSiteLaxMode)
 
 		LogActivity(db, existingUser.ID, "LOGIN", "USER", existingUser.ID, existingUser.Nickname, "", c.ClientIP(), getRequestSource(c))
 
