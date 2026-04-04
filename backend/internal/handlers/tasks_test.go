@@ -497,6 +497,28 @@ func TestUpdateTaskHandler(t *testing.T) {
 			t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("update task columnId succeeds with non-UUID column ID", func(t *testing.T) {
+		body := map[string]interface{}{"columnId": "c2"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("PUT", "/api/tasks/task1", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		if response["columnId"] != "c2" {
+			t.Errorf("expected columnId to be c2, got %v", response["columnId"])
+		}
+	})
 }
 
 func TestArchiveTaskHandler(t *testing.T) {

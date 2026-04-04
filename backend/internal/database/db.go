@@ -3,8 +3,10 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
@@ -18,13 +20,16 @@ import (
 
 // DBConfig holds database configuration
 type DBConfig struct {
-	Type     string // "sqlite" or "mysql"
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Database string
-	Path     string // For SQLite
+	Type            string // "sqlite" or "mysql"
+	Host            string
+	Port            string
+	User            string
+	Password        string
+	Database        string
+	Path            string // For SQLite
+	MaxOpenConns    int    // Maximum number of open connections to the database
+	MaxIdleConns    int    // Maximum number of connections in the idle connection pool
+	ConnMaxLifetime int    // Maximum amount of time (seconds) a connection can be reused
 }
 
 // GetDBConfig returns database configuration from environment
@@ -35,14 +40,27 @@ func GetDBConfig() *DBConfig {
 	}
 
 	return &DBConfig{
-		Type:     dbType,
-		Host:     getEnvOrDefault("DB_HOST", "localhost"),
-		Port:     getEnvOrDefault("DB_PORT", "3306"),
-		User:     getEnvOrDefault("DB_USER", "root"),
-		Password: os.Getenv("DB_PASSWORD"),
-		Database: getEnvOrDefault("DB_NAME", "kanban"),
-		Path:     getEnvOrDefault("DATABASE_URL", "kanban.db"),
+		Type:            dbType,
+		Host:            getEnvOrDefault("DB_HOST", "localhost"),
+		Port:            getEnvOrDefault("DB_PORT", "3306"),
+		User:            getEnvOrDefault("DB_USER", "root"),
+		Password:        os.Getenv("DB_PASSWORD"),
+		Database:        getEnvOrDefault("DB_NAME", "kanban"),
+		Path:            getEnvOrDefault("DATABASE_URL", "kanban.db"),
+		MaxOpenConns:    getEnvOrDefaultInt("DB_MAX_OPEN_CONNS", 25),
+		MaxIdleConns:    getEnvOrDefaultInt("DB_MAX_IDLE_CONNS", 5),
+		ConnMaxLifetime: getEnvOrDefaultInt("DB_CONN_MAX_LIFETIME", 300),
 	}
+}
+
+func getEnvOrDefaultInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		var intValue int
+		if _, err := fmt.Sscanf(value, "%d", &intValue); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -117,6 +135,15 @@ func initMySQL(config *DBConfig) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open MySQL database: %w", err)
 	}
+
+	// Configure connection pool
+	db.SetMaxOpenConns(config.MaxOpenConns)
+	db.SetMaxIdleConns(config.MaxIdleConns)
+	db.SetConnMaxLifetime(time.Duration(config.ConnMaxLifetime) * time.Second)
+
+	// Log connection pool configuration
+	log.Printf("[MySQL] Connection pool configured: MaxOpenConns=%d, MaxIdleConns=%d, ConnMaxLifetime=%ds",
+		config.MaxOpenConns, config.MaxIdleConns, config.ConnMaxLifetime)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping MySQL database: %w", err)

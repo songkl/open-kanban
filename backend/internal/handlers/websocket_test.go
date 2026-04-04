@@ -119,3 +119,29 @@ func TestWebSocketHandler(t *testing.T) {
 		}
 	})
 }
+
+func TestIsConnectionAllowed(t *testing.T) {
+	t.Run("connection allowed when under limit", func(t *testing.T) {
+		t.Setenv("WS_MAX_CONNECTIONS", "10")
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		router.GET("/ws", handlers.WebSocketHandler(nil))
+
+		req, _ := http.NewRequest("GET", "/ws", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401 (no auth), got %d", w.Code)
+		}
+	})
+}
+
+func TestGetMaxConnections(t *testing.T) {
+	t.Run("get max connections returns positive value", func(t *testing.T) {
+		maxConns := handlers.GetMaxConnections()
+		if maxConns <= 0 {
+			t.Errorf("expected positive value, got %d", maxConns)
+		}
+	})
+}

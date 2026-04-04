@@ -490,6 +490,125 @@ func TestLoginHandler(t *testing.T) {
 			t.Errorf("expected status 403, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("login with user that has password but no password provided returns unauthorized", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.POST("/api/auth/login", handlers.Login(db))
+
+		db.Exec("DELETE FROM users")
+
+		hashedPw := "$2a$10$EsMrLjGrWt.cFHRnqUcnauqTOXPSTR8dTBZkUHfQbQPWKDlKvYl1y"
+		_, err := db.Exec(
+			`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, 1)`,
+			"user-with-pw", "secureuser", "Secure User", hashedPw, "😊", "MEMBER",
+		)
+		if err != nil {
+			t.Fatalf("failed to insert test user: %v", err)
+		}
+
+		body := map[string]interface{}{
+			"username": "secureuser",
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401 when user with password doesn't provide password, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if resp["requirePassword"] != true {
+			t.Errorf("expected requirePassword=true in response, got %v", resp["requirePassword"])
+		}
+	})
+
+	t.Run("login with user that has password but wrong password returns unauthorized", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.POST("/api/auth/login", handlers.Login(db))
+
+		db.Exec("DELETE FROM users")
+
+		hashedPw := "$2a$10$EsMrLjGrWt.cFHRnqUcnauqTOXPSTR8dTBZkUHfQbQPWKDlKvYl1y"
+		_, err := db.Exec(
+			`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, 1)`,
+			"user-with-pw", "secureuser", "Secure User", hashedPw, "😊", "MEMBER",
+		)
+		if err != nil {
+			t.Fatalf("failed to insert test user: %v", err)
+		}
+
+		body := map[string]interface{}{
+			"username": "secureuser",
+			"password": "wrongpassword",
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401 when wrong password provided, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("login with user that has password and correct password succeeds", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.POST("/api/auth/login", handlers.Login(db))
+
+		db.Exec("DELETE FROM users")
+
+		hashedPw := "$2a$10$NTQfTVahX9xnA7dHVWUfwOiLysipkUINVl7u811cAw1z/TskgnSbu"
+		_, err := db.Exec(
+			`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, 1)`,
+			"user-with-pw", "secureuser", "Secure User", hashedPw, "😊", "MEMBER",
+		)
+		if err != nil {
+			t.Fatalf("failed to insert test user: %v", err)
+		}
+
+		body := map[string]interface{}{
+			"username": "secureuser",
+			"password": "correctpassword",
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200 when correct password provided, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if resp["token"] == nil {
+			t.Errorf("expected token in response")
+		}
+	})
 }
 
 func TestGetMeHandler(t *testing.T) {
