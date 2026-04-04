@@ -60,7 +60,7 @@ var (
 // WebSocketHandler handles WebSocket connections
 func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Authenticate WebSocket connection - prefer Header or Cookie over URL parameter
+		// Authenticate WebSocket connection - prefer Header or Cookie (URL parameter is insecure and deprecated)
 		tokenKey := ""
 
 		// Try Authorization header first (Bearer token)
@@ -77,10 +77,8 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Fall back to URL parameter only if no header or cookie provided (deprecated - kept for backwards compatibility)
-		if tokenKey == "" {
-			tokenKey = c.Query("token")
-		}
+		// Note: URL query parameter token is no longer supported for security reasons
+		// Token should be provided via Authorization header or Cookie
 
 		if tokenKey == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
@@ -132,7 +130,9 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				conn.SetReadDeadline(time.Now().Add(readDeadline))
 				_, _, err := conn.ReadMessage()
 				if err != nil {
-					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == websocket.CloseProtocolError {
+						log.Printf("WebSocket client sent invalid data (user: %s): %v", userID, err)
+					} else if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 						log.Printf("WebSocket read error (user: %s): %v", userID, err)
 					}
 					goto cleanup

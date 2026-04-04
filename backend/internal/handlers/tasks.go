@@ -116,7 +116,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 				args = append(args, id)
 			}
 			query := fmt.Sprintf(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 					(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
 					(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
 				FROM tasks t
@@ -129,7 +129,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 			rows, err = db.Query(query, args...)
 		} else {
 			rows, err = db.Query(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 					(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
 					(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
 				FROM tasks t
@@ -147,10 +147,10 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		var tasks []gin.H
 		for rows.Next() {
 			var task models.Task
-			var desc, assignee, meta, createdBy sql.NullString
+			var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
 			var archivedAt sql.NullTime
 			var commentCount, subtaskCount int
-			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount); err == nil {
+			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount); err == nil {
 				if desc.Valid {
 					task.Description = &desc.String
 				}
@@ -162,6 +162,12 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 				}
 				if archivedAt.Valid {
 					task.ArchivedAt = &archivedAt.Time
+				}
+				if agentID.Valid {
+					task.AgentID = &agentID.String
+				}
+				if agentPrompt.Valid {
+					task.AgentPrompt = &agentPrompt.String
 				}
 				if createdBy.Valid {
 					task.CreatedBy = createdBy.String
@@ -179,6 +185,8 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 					"published":    task.Published,
 					"archived":     task.Archived,
 					"archivedAt":   task.ArchivedAt,
+					"agentId":      task.AgentID,
+					"agentPrompt":  task.AgentPrompt,
 					"createdBy":    task.CreatedBy,
 					"createdAt":    task.CreatedAt,
 					"updatedAt":    task.UpdatedAt,
@@ -213,6 +221,8 @@ type CreateTaskRequest struct {
 	ColumnID    string      `json:"columnId"`
 	Position    int         `json:"position"`
 	Published   bool        `json:"published"`
+	AgentID     *string     `json:"agentId"`
+	AgentPrompt *string     `json:"agentPrompt"`
 }
 
 // CreateTask creates a new task
@@ -269,6 +279,47 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			priority = "medium"
 		}
 
+		position := req.Position
+		if position == 0 {
+			switch priority {
+			case "high":
+				var maxHighPos sql.NullInt64
+				err := db.QueryRow("SELECT MAX(position) FROM tasks WHERE column_id = ? AND priority = 'high'", req.ColumnID).Scan(&maxHighPos)
+				if err != nil && err != sql.ErrNoRows {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "计算任务位置失败"})
+					return
+				}
+				if maxHighPos.Valid && maxHighPos.Int64 > 0 {
+					position = int(maxHighPos.Int64) + 1000
+				} else {
+					position = 1000
+				}
+			case "medium":
+				var maxHighPos, minLowPos sql.NullInt64
+				db.QueryRow("SELECT MAX(position) FROM tasks WHERE column_id = ? AND priority = 'high'", req.ColumnID).Scan(&maxHighPos)
+				db.QueryRow("SELECT MIN(position) FROM tasks WHERE column_id = ? AND priority = 'low'", req.ColumnID).Scan(&minLowPos)
+				if maxHighPos.Valid && minLowPos.Valid {
+					position = (int(maxHighPos.Int64) + int(minLowPos.Int64)) / 2
+				} else if maxHighPos.Valid {
+					position = int(maxHighPos.Int64) + 1000
+				} else {
+					position = 2000
+				}
+			case "low":
+				var maxPos sql.NullInt64
+				err := db.QueryRow("SELECT MAX(position) FROM tasks WHERE column_id = ?", req.ColumnID).Scan(&maxPos)
+				if err != nil && err != sql.ErrNoRows {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "计算任务位置失败"})
+					return
+				}
+				if maxPos.Valid {
+					position = int(maxPos.Int64) + 1
+				}
+			default:
+				position = 3000
+			}
+		}
+
 		// Handle meta
 		var metaStr *string
 		if req.Meta != nil {
@@ -278,9 +329,9 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		_, err = db.Exec(`
-			INSERT INTO tasks (id, title, description, priority, assignee, meta, column_id, position, published, archived, created_by, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, taskID, req.Title, req.Description, priority, req.Assignee, metaStr, req.ColumnID, req.Position, req.Published, false, user.ID, now, now)
+			INSERT INTO tasks (id, title, description, priority, assignee, meta, column_id, position, published, archived, agent_id, agent_prompt, created_by, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, taskID, req.Title, req.Description, priority, req.Assignee, metaStr, req.ColumnID, position, req.Published, false, req.AgentID, req.AgentPrompt, user.ID, now, now)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败"})
@@ -291,6 +342,14 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 
+		if req.Published && req.AgentID != nil && *req.AgentID != "" {
+			agentPrompt := ""
+			if req.AgentPrompt != nil {
+				agentPrompt = *req.AgentPrompt
+			}
+			triggerAgentForTask(taskID, *req.AgentID, agentPrompt, req.Title)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"id":          taskID,
 			"title":       req.Title,
@@ -299,9 +358,11 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			"assignee":    req.Assignee,
 			"meta":        metaStr,
 			"columnId":    req.ColumnID,
-			"position":    req.Position,
+			"position":    position,
 			"published":   req.Published,
 			"archived":    false,
+			"agentId":     req.AgentID,
+			"agentPrompt": req.AgentPrompt,
 			"createdBy":   user.ID,
 			"createdAt":   now,
 			"updatedAt":   now,
@@ -344,16 +405,16 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 		include := c.Query("include")
 
 		var task models.Task
-		var desc, assignee, meta, createdBy sql.NullString
+		var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
 		var archivedAt sql.NullTime
 		var commentCount, subtaskCount int
 		err = db.QueryRow(`
-			SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+			SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
 				(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
 			FROM tasks t
 			WHERE t.id = ?
-		`, id).Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount)
+		`, id).Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount)
 
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -376,6 +437,12 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 		if archivedAt.Valid {
 			task.ArchivedAt = &archivedAt.Time
 		}
+		if agentID.Valid {
+			task.AgentID = &agentID.String
+		}
+		if agentPrompt.Valid {
+			task.AgentPrompt = &agentPrompt.String
+		}
 		if createdBy.Valid {
 			task.CreatedBy = createdBy.String
 		}
@@ -392,6 +459,8 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			"published":    task.Published,
 			"archived":     task.Archived,
 			"archivedAt":   task.ArchivedAt,
+			"agentId":      task.AgentID,
+			"agentPrompt":  task.AgentPrompt,
 			"createdBy":    task.CreatedBy,
 			"createdAt":    task.CreatedAt,
 			"updatedAt":    task.UpdatedAt,
@@ -427,6 +496,8 @@ type UpdateTaskRequest struct {
 	ColumnID    string      `json:"columnId"`
 	Position    *int        `json:"position"`
 	Published   *bool       `json:"published"`
+	AgentID     *string     `json:"agentId"`
+	AgentPrompt *string     `json:"agentPrompt"`
 }
 
 // UpdateTask updates a task
@@ -491,8 +562,10 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			ColumnID    string
 			Position    int
 			Published   bool
+			AgentID     *string
+			AgentPrompt *string
 		}
-		db.QueryRow("SELECT title, description, priority, assignee, meta, column_id, position, published FROM tasks WHERE id = ?", id).Scan(&oldTask.Title, &oldTask.Description, &oldTask.Priority, &oldTask.Assignee, &oldTask.Meta, &oldTask.ColumnID, &oldTask.Position, &oldTask.Published)
+		db.QueryRow("SELECT title, description, priority, assignee, meta, column_id, position, published, agent_id, agent_prompt FROM tasks WHERE id = ?", id).Scan(&oldTask.Title, &oldTask.Description, &oldTask.Priority, &oldTask.Assignee, &oldTask.Meta, &oldTask.ColumnID, &oldTask.Position, &oldTask.Published, &oldTask.AgentID, &oldTask.AgentPrompt)
 
 		var changes []string
 
@@ -595,6 +668,24 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			}
 			changes = append(changes, fmt.Sprintf("发布: %s → %s", oldPub, newPub))
 		}
+		if req.AgentID != nil {
+			oldAgentID := ""
+			if oldTask.AgentID != nil {
+				oldAgentID = *oldTask.AgentID
+			}
+			if *req.AgentID != oldAgentID {
+				changes = append(changes, fmt.Sprintf("Agent: '%s' → '%s'", oldAgentID, *req.AgentID))
+			}
+		}
+		if req.AgentPrompt != nil {
+			oldAgentPrompt := ""
+			if oldTask.AgentPrompt != nil {
+				oldAgentPrompt = *oldTask.AgentPrompt
+			}
+			if *req.AgentPrompt != oldAgentPrompt {
+				changes = append(changes, fmt.Sprintf("Agent Prompt: '%s' → '%s'", oldAgentPrompt, *req.AgentPrompt))
+			}
+		}
 
 		details := ""
 		if len(changes) > 0 {
@@ -637,6 +728,14 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			query += ", published = ?"
 			updates = append(updates, *req.Published)
 		}
+		if req.AgentID != nil {
+			query += ", agent_id = ?"
+			updates = append(updates, *req.AgentID)
+		}
+		if req.AgentPrompt != nil {
+			query += ", agent_prompt = ?"
+			updates = append(updates, *req.AgentPrompt)
+		}
 
 		query += " WHERE id = ?"
 		updates = append(updates, id)
@@ -652,6 +751,24 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 		LogActivity(db, user.ID, "UPDATE_TASK", "TASK", id, taskTitle, details, c.ClientIP(), getRequestSource(c))
 
 		broadcast()
+
+		if req.Published != nil && *req.Published && !oldTask.Published {
+			currentAgentID := ""
+			if req.AgentID != nil {
+				currentAgentID = *req.AgentID
+			} else if oldTask.AgentID != nil {
+				currentAgentID = *oldTask.AgentID
+			}
+			if currentAgentID != "" {
+				currentAgentPrompt := ""
+				if req.AgentPrompt != nil {
+					currentAgentPrompt = *req.AgentPrompt
+				} else if oldTask.AgentPrompt != nil {
+					currentAgentPrompt = *oldTask.AgentPrompt
+				}
+				triggerAgentForTask(id, currentAgentID, currentAgentPrompt, taskTitle)
+			}
+		}
 
 		// Get updated task
 		GetTask(db)(c)
@@ -895,7 +1012,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 
 			query := fmt.Sprintf(`
 				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
-				       t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
@@ -909,7 +1026,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			// Only assignee match, no column configs
 			taskRows, err = db.Query(`
 				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
-				       t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
@@ -930,7 +1047,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 
 			query := fmt.Sprintf(`
 				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
-				       t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
@@ -954,9 +1071,9 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			defer taskRows.Close()
 			for taskRows.Next() {
 				var task models.Task
-				var desc, assignee, meta, createdBy, columnName sql.NullString
+				var desc, assignee, meta, createdBy, columnName, agentID, agentPrompt sql.NullString
 				var archivedAt sql.NullTime
-				if err := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &columnName); err == nil {
+				if err := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &columnName); err == nil {
 					if desc.Valid {
 						task.Description = &desc.String
 					}
@@ -968,6 +1085,12 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 					}
 					if archivedAt.Valid {
 						task.ArchivedAt = &archivedAt.Time
+					}
+					if agentID.Valid {
+						task.AgentID = &agentID.String
+					}
+					if agentPrompt.Valid {
+						task.AgentPrompt = &agentPrompt.String
 					}
 					if createdBy.Valid {
 						task.CreatedBy = createdBy.String
@@ -987,6 +1110,8 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 						"columnName":  columnName.String,
 						"position":    task.Position,
 						"published":   task.Published,
+						"agentId":     task.AgentID,
+						"agentPrompt": task.AgentPrompt,
 						"archived":    task.Archived,
 						"archivedAt":  task.ArchivedAt,
 						"createdBy":   task.CreatedBy,
@@ -1179,4 +1304,31 @@ func generateTaskID(db *sql.DB, boardID string) (string, error) {
 
 	taskID := fmt.Sprintf("%s-%0*d", shortAlias, digits, counter)
 	return taskID, nil
+}
+
+func triggerAgentForTask(taskID, agentID, agentPrompt, taskTitle string) {
+	if agentID == "" {
+		return
+	}
+
+	log.Printf("[Agent Trigger] Task %s (%s) triggered for agent %s", taskID, taskTitle, agentID)
+
+	go func() {
+		payload := map[string]interface{}{
+			"event":       "task.published",
+			"taskId":      taskID,
+			"agentId":     agentID,
+			"agentPrompt": agentPrompt,
+			"taskTitle":   taskTitle,
+			"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		}
+
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			log.Printf("[Agent Trigger] Failed to marshal payload for task %s: %v", taskID, err)
+			return
+		}
+
+		log.Printf("[Agent Trigger] Task %s triggered for agent %s. Payload: %s", taskID, agentID, string(payloadBytes))
+	}()
 }
