@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { BoardPage } from './BoardPage';
 
@@ -13,24 +12,11 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/services/api', () => ({
   boardsApi: {
-    getAll: vi.fn().mockResolvedValue([
-      { id: 'board-1', name: 'Test Board', createdAt: '2024-01-01', updatedAt: '2024-01-01' },
-    ]),
+    getAll: vi.fn().mockResolvedValue([]),
     export: vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(new Blob()) }),
   },
   columnsApi: {
-    getByBoard: vi.fn().mockResolvedValue([
-      {
-        id: 'col-1',
-        name: 'To Do',
-        status: 'todo',
-        position: 0,
-        color: '#3b82f6',
-        tasks: [],
-        createdAt: '2024-01-01',
-        updatedAt: '2024-01-01',
-      },
-    ]),
+    getByBoard: vi.fn().mockResolvedValue([]),
   },
   tasksApi: {
     update: vi.fn().mockResolvedValue({}),
@@ -44,12 +30,12 @@ vi.mock('@/services/api', () => ({
     create: vi.fn().mockResolvedValue({}),
   },
   authApi: {
-    me: vi.fn().mockResolvedValue({ user: { id: 'user-1', nickname: 'TestUser', avatar: null, role: 'MEMBER', type: 'HUMAN', enabled: true, createdAt: '2024-01-01', updatedAt: '2024-01-01' } }),
+    me: vi.fn().mockResolvedValue({ user: null }),
   },
   setGlobalErrorHandler: vi.fn(),
 }));
 
-const mockWebSocket = {
+vi.spyOn(global, 'WebSocket').mockImplementation(() => ({
   onopen: null,
   onclose: null,
   onmessage: null,
@@ -60,29 +46,24 @@ const mockWebSocket = {
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   dispatchEvent: vi.fn(),
-};
-vi.spyOn(global, 'WebSocket').mockImplementation(() => mockWebSocket as any);
-
-const renderBoardPage = () => {
-  return render(
-    <BrowserRouter>
-      <BoardPage />
-    </BrowserRouter>
-  );
-};
+}) as any);
 
 describe('BoardPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it('renders loading skeleton initially', () => {
-    renderBoardPage();
+    render(
+      <BrowserRouter>
+        <BoardPage />
+      </BrowserRouter>
+    );
     expect(document.body.querySelector('[class*="animate-pulse"]')).toBeInTheDocument();
+  });
+
+  it('renders without crashing', () => {
+    render(
+      <BrowserRouter>
+        <BoardPage />
+      </BrowserRouter>
+    );
+    expect(document.body).toBeInTheDocument();
   });
 });

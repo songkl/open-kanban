@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -66,13 +68,27 @@ jobs:
           mkdir -p release/skill
           cp mcp/MCP_SETUP.md release/skill/ 2>/dev/null || true
 
+      - name: Determine Release Type
+        id: release_type
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "type=tag" >> $GITHUB_OUTPUT
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "type=merge" >> $GITHUB_OUTPUT
+            commit_hash=$(git rev-parse --short HEAD)
+            echo "tag=main-${commit_hash}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*
+          tag: ${{ steps.release_type.outputs.tag }}
           draft: false
+          prerelease: ${{ steps.release_type.outputs.type == 'merge' }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
