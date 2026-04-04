@@ -329,3 +329,156 @@ func TestSignatureIntegration(t *testing.T) {
 	data.BodyHash = HashBody([]byte(`{"title":"Modified"}`))
 	assert.False(t, VerifySignature(data, signature, secret))
 }
+
+func TestOptionalSignatureVerification_Disabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	SetSignatureEnabled(false)
+
+	r.POST("/test", OptionalSignatureVerification(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	body := []byte(`{"test":"data"}`)
+	req, _ := http.NewRequest("POST", "/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestOptionalSignatureVerification_Enabled_NoHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	SetSignatureSecrets(map[string]string{"test-key": "my-secret-key"})
+	SetSignatureEnabled(true)
+
+	r.POST("/test", OptionalSignatureVerification(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	body := []byte(`{"test":"data"}`)
+	req, _ := http.NewRequest("POST", "/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestOptionalSignatureVerification_Enabled_ValidSignature(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	SetSignatureSecrets(map[string]string{"test-key": "my-secret-key"})
+	SetSignatureEnabled(true)
+
+	r.POST("/test", OptionalSignatureVerification(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	body := []byte(`{"test":"data"}`)
+	timestamp := time.Now().Unix()
+
+	data := SignatureData{
+		Timestamp: timestamp,
+		Method:    "POST",
+		Path:      "/test",
+		BodyHash:  HashBody(body),
+	}
+	signature := GenerateSignature(data, "my-secret-key")
+
+	req, _ := http.NewRequest("POST", "/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(SignatureHeader, signature)
+	req.Header.Set(TimestampHeader, strconv.FormatInt(timestamp, 10))
+	req.Header.Set(AccessKeyHeader, "test-key")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestOptionalSignatureVerification_Enabled_InvalidSignature(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	SetSignatureSecrets(map[string]string{"test-key": "my-secret-key"})
+	SetSignatureEnabled(true)
+
+	r.POST("/test", OptionalSignatureVerification(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	body := []byte(`{"test":"data"}`)
+	timestamp := time.Now().Unix()
+
+	req, _ := http.NewRequest("POST", "/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(SignatureHeader, "invalid-signature")
+	req.Header.Set(TimestampHeader, strconv.FormatInt(timestamp, 10))
+	req.Header.Set(AccessKeyHeader, "test-key")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestOptionalSignatureVerification_Enabled_ExpiredTimestamp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	SetSignatureSecrets(map[string]string{"test-key": "my-secret-key"})
+	SetSignatureEnabled(true)
+
+	r.POST("/test", OptionalSignatureVerification(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	body := []byte(`{"test":"data"}`)
+	expiredTimestamp := time.Now().Add(-10 * time.Minute).Unix()
+
+	data := SignatureData{
+		Timestamp: expiredTimestamp,
+		Method:    "POST",
+		Path:      "/test",
+		BodyHash:  HashBody(body),
+	}
+	signature := GenerateSignature(data, "my-secret-key")
+
+	req, _ := http.NewRequest("POST", "/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(SignatureHeader, signature)
+	req.Header.Set(TimestampHeader, strconv.FormatInt(expiredTimestamp, 10))
+	req.Header.Set(AccessKeyHeader, "test-key")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestOptionalSignatureVerification_OptionsRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	SetSignatureSecrets(map[string]string{"test-key": "my-secret-key"})
+	SetSignatureEnabled(true)
+
+	r.POST("/test", OptionalSignatureVerification(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	req, _ := http.NewRequest("OPTIONS", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}

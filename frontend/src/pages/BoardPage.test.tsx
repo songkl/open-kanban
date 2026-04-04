@@ -3,6 +3,13 @@ import { render } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { BoardPage } from './BoardPage';
 
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+window.ResizeObserver = MockResizeObserver;
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
