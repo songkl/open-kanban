@@ -251,33 +251,33 @@ func (r *TaskRepository) GetMinPositionForHighPriority(columnID string) (int, er
 
 func (r *TaskRepository) ShiftPositionsUp(columnID string, fromPos, toPos int, excludeID string) error {
 	_, err := r.db.Exec(`
-		UPDATE tasks SET position = position + 1, updated_at = NOW()
+		UPDATE tasks SET position = position + 1, updated_at = ?
 		WHERE column_id = ? AND position >= ? AND position < ? AND id != ?
-	`, columnID, fromPos, toPos, excludeID)
+	`, time.Now(), columnID, fromPos, toPos, excludeID)
 	return err
 }
 
 func (r *TaskRepository) ShiftPositionsDown(columnID string, fromPos, toPos int, excludeID string) error {
 	_, err := r.db.Exec(`
-		UPDATE tasks SET position = position - 1, updated_at = NOW()
+		UPDATE tasks SET position = position - 1, updated_at = ?
 		WHERE column_id = ? AND position > ? AND position <= ? AND id != ?
-	`, columnID, fromPos, toPos, excludeID)
+	`, time.Now(), columnID, fromPos, toPos, excludeID)
 	return err
 }
 
 func (r *TaskRepository) ShiftPositionsLeft(columnID string, fromPos int) error {
 	_, err := r.db.Exec(`
-		UPDATE tasks SET position = position - 1, updated_at = NOW()
+		UPDATE tasks SET position = position - 1, updated_at = ?
 		WHERE column_id = ? AND position > ?
-	`, columnID, fromPos)
+	`, time.Now(), columnID, fromPos)
 	return err
 }
 
 func (r *TaskRepository) ShiftPositionsRight(columnID string, fromPos int, excludeID string) error {
 	_, err := r.db.Exec(`
-		UPDATE tasks SET position = position + 1, updated_at = NOW()
+		UPDATE tasks SET position = position + 1, updated_at = ?
 		WHERE column_id = ? AND position >= ? AND id != ?
-	`, columnID, fromPos, excludeID)
+	`, time.Now(), columnID, fromPos, excludeID)
 	return err
 }
 

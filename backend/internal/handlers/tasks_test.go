@@ -627,7 +627,15 @@ func TestCompleteTaskHandler(t *testing.T) {
 	})
 
 	t.Run("complete task with valid data returns 200", func(t *testing.T) {
-		t.Skip("CompleteTask handler UPDATE fails with '更新任务失败' - likely needs investigation into column position ordering or database state")
+		req, _ := http.NewRequest("POST", "/api/tasks/task1/complete", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
 	})
 
 	t.Run("complete non-existent task returns 404", func(t *testing.T) {
