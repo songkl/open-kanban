@@ -115,6 +115,24 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		source TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE comments (
+		id TEXT PRIMARY KEY,
+		content TEXT NOT NULL,
+		author TEXT,
+		task_id TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
+	CREATE TABLE subtasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		completed BOOLEAN DEFAULT 0,
+		task_id TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
 	CREATE TABLE app_config (
 		key TEXT PRIMARY KEY,
 		value TEXT
@@ -464,6 +482,149 @@ func TestCompleteTaskHandler(t *testing.T) {
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestGetTaskHandler(t *testing.T) {
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Test Task', 'c1', 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO comments (id, content, author, task_id) VALUES ('cm1', 'Test Comment', 'admin', 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test comment: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO subtasks (id, title, completed, task_id) VALUES ('st1', 'Test Subtask', 0, 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test subtask: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.GET("/api/tasks/:id", handlers.GetTask(db))
+
+	t.Run("get task without auth returns 401", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/task1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("get non-existent task returns 404", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/nonexistent", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("get task without include returns counts only", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/task1", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		if response["commentCount"] != float64(1) {
+			t.Errorf("expected commentCount 1, got %v", response["commentCount"])
+		}
+		if response["subtaskCount"] != float64(1) {
+			t.Errorf("expected subtaskCount 1, got %v", response["subtaskCount"])
+		}
+		if response["comments"] != nil {
+			t.Errorf("expected no comments field, got %v", response["comments"])
+		}
+		if response["subtasks"] != nil {
+			t.Errorf("expected no subtasks field, got %v", response["subtasks"])
+		}
+	})
+
+	t.Run("get task with include=comments returns full comments array", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/task1?include=comments", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		if response["commentCount"] != float64(1) {
+			t.Errorf("expected commentCount 1, got %v", response["commentCount"])
+		}
+		comments, ok := response["comments"].([]interface{})
+		if !ok {
+			t.Errorf("expected comments to be array, got %v", response["comments"])
+		}
+		if len(comments) != 1 {
+			t.Errorf("expected 1 comment, got %d", len(comments))
+		}
+	})
+
+	t.Run("get task with include=subtasks returns full subtasks array", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/task1?include=subtasks", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		if response["subtaskCount"] != float64(1) {
+			t.Errorf("expected subtaskCount 1, got %v", response["subtaskCount"])
+		}
+		subtasks, ok := response["subtasks"].([]interface{})
+		if !ok {
+			t.Errorf("expected subtasks to be array, got %v", response["subtasks"])
+		}
+		if len(subtasks) != 1 {
+			t.Errorf("expected 1 subtask, got %d", len(subtasks))
+		}
+	})
+
+	t.Run("get task with include=comments,subtasks returns both arrays", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/task1?include=comments,subtasks", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		comments, _ := response["comments"].([]interface{})
+		if len(comments) != 1 {
+			t.Errorf("expected 1 comment, got %d", len(comments))
+		}
+		subtasks, _ := response["subtasks"].([]interface{})
+		if len(subtasks) != 1 {
+			t.Errorf("expected 1 subtask, got %d", len(subtasks))
 		}
 	})
 }

@@ -34,8 +34,9 @@ func setupBoardsDB(t *testing.T) *sql.DB {
 	);
 	CREATE TABLE tokens (
 		id TEXT PRIMARY KEY,
-		user_id TEXT NOT NULL,
+		name TEXT NOT NULL,
 		key TEXT UNIQUE NOT NULL,
+		user_id TEXT NOT NULL,
 		expires_at DATETIME,
 		user_agent TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -120,7 +121,7 @@ func setupBoardsDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
-	_, err = db.Exec(`INSERT INTO tokens (id, user_id, key, expires_at) VALUES ('t1', 'u1', 'test-token', NULL)`)
+	_, err = db.Exec(`INSERT INTO tokens (id, name, key, user_id, expires_at) VALUES ('t1', 'default', 'test-token', 'u1', NULL)`)
 	if err != nil {
 		t.Fatalf("failed to insert test token: %v", err)
 	}
