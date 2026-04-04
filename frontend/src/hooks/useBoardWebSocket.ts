@@ -52,7 +52,7 @@ export function useBoardWebSocket({
     };
     const wsUrl = getWsUrl();
     const ws = new WebSocket(wsUrl);
-    const MAX_RECONNECT_ATTEMPTS = 10;
+    const MAX_RECONNECT_ATTEMPTS = 5;
     const MAX_RECONNECT_DELAY = 30000;
 
     const getReconnectDelay = (attempt: number) => {
