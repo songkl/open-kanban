@@ -1,0 +1,2194 @@
+openapi: 3.0.3
+info:
+  title: Open-Kanban API
+  description: |
+    Open-Kanban is a self-hosted kanban board API server.
+    
+    ## Authentication
+    
+    This API uses Bearer token authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your-token>
+    ```
+    
+    Some endpoints (marked as public) do not require authentication.
+    
+    ## Signature Verification (IMPORTANT SECURITY INFORMATION)
+    
+    Protected endpoints support HMAC-SHA256 signature verification for enhanced security. However, **signature verification is DISABLED by default**.
+    
+    ### Security Warning
+    
+    When signature verification is disabled (the default), protected endpoints will accept requests without signature verification, even if they are marked as requiring signature verification in this documentation.
+    
+    ### To Enable Signature Verification
+    
+    Set the following environment variables:
+    
+    1. `SIGNATURE_ENABLED=1` - Enable signature verification
+    2. `SIGNATURE_SECRETS=access-key-1:secret-key-1,access-key-2:secret-key-2` - Configure access keys and their corresponding secrets (comma-separated key:value pairs)
+    
+    ### How Signature Verification Works
+    
+    When enabled, protected endpoints require the following headers:
+    
+    - `X-Signature`: HMAC-SHA256 signature (hex-encoded)
+    - `X-Timestamp`: Unix timestamp of the request (must be within 5 minutes of server time)
+    - `X-Access-Key`: The access key identifier
+    
+    ### Signature Generation
+    
+    The signature is computed as:
+    ```
+    HMAC-SHA256(timestamp + method + path + bodyHash, secretKey)
+    ```
+    
+    Where:
+    - `timestamp`: Unix timestamp as string
+    - `method`: HTTP method (GET, POST, etc.)
+    - `path`: Request path (e.g., /api/v1/tasks)
+    - `bodyHash`: SHA256 hash of the request body (empty string hash for no body)
+    
+    ### Example
+    
+    ```bash
+    # Generate signature (pseudo-code)
+    TIMESTAMP=$(date +%s)
+    METHOD="POST"
+    PATH="/api/v1/tasks"
+    BODY='{"title":"New Task"}'
+    BODY_HASH=$(echo -n "$BODY" | sha256sum | cut -d' ' -f1)
+    SIGNATURE=$(echo -n "${TIMESTAMP}${METHOD}${PATH}${BODY_HASH}" | openssl dgst -sha256 -hmac "your-secret-key" | cut -d' ' -f2)
+    
+    curl -X POST http://localhost:8080/api/v1/tasks \
+      -H "Authorization: Bearer <your-token>" \
+      -H "X-Signature: $SIGNATURE" \
+      -H "X-Timestamp: $TIMESTAMP" \
+      -H "X-Access-Key: your-access-key" \
+      -H "Content-Type: application/json" \
+      -d "$BODY"
+    ```
+  version: 1.0.0
+  contact:
+    name: Open-Kanban
+    url: https://github.com/songkl/open-kanban
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Public endpoint to check if the server is running
+      operationId: healthCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /status:
+    get:
+      summary: Status check
+      description: Public endpoint to check server status
+      operationId: statusCheck
+      tags:
+        - System
+      responses:
+        '200':
+          description: Server is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /boards:
+    get:
+      summary: List all boards
+      description: Public endpoint to get all boards
+      operationId: getBoards
+      tags:
+        - Boards
+      responses:
+        '200':
+          description: List of boards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Board'
+    post:
+      summary: Create a new board
+      description: Create a new board with default columns
+      operationId: createBoard
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBoardRequest'
+      responses:
+        '200':
+          description: Board created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /boards/{id}:
+    get:
+      summary: Get a board by ID
+      description: Public endpoint to get board details
+      operationId: getBoard
+      tags:
+        - Boards
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Board details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Board'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update a board
+      description: Update board name and description
+      operationId: updateBoard
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBoardRequest'
+      responses:
+        '200':
+          description: Board updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete a board
+      description: Soft delete a board
+      operationId: deleteBoard
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Board deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /boards/{id}/export:
+    get:
+      summary: Export board
+      description: Export board data as JSON or CSV
+      operationId: exportBoard
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: Exported board data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportData'
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /boards/{id}/reset:
+    post:
+      summary: Reset board
+      description: Clear all tasks from a board
+      operationId: resetBoard
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Board reset
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /boards/{id}/copy:
+    post:
+      summary: Copy board
+      description: Create a copy of an existing board
+      operationId: copyBoard
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Board copied
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /boards/from-template:
+    post:
+      summary: Create board from template
+      description: Create a new board using a predefined template
+      operationId: createBoardFromTemplate
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                templateId:
+                  type: string
+      responses:
+        '200':
+          description: Board created from template
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /boards/import:
+    post:
+      summary: Import board
+      description: Import board data from JSON
+      operationId: importBoard
+      tags:
+        - Boards
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportBoardRequest'
+      responses:
+        '200':
+          description: Board imported
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Board already exists
+
+  /columns:
+    get:
+      summary: Get columns
+      description: Public endpoint to get columns, optionally filtered by board
+      operationId: getColumns
+      tags:
+        - Columns
+      parameters:
+        - name: boardId
+          in: query
+          schema:
+            type: string
+        - name: positions
+          in: query
+          description: Comma-separated list of positions
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of columns with tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Column'
+    post:
+      summary: Create a column
+      description: Create a new column in a board
+      operationId: createColumn
+      tags:
+        - Columns
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateColumnRequest'
+      responses:
+        '200':
+          description: Column created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Column'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      summary: Update a column
+      description: Update column properties
+      operationId: updateColumn
+      tags:
+        - Columns
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateColumnRequest'
+      responses:
+        '200':
+          description: Column updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      summary: Delete a column
+      description: Delete a column by ID
+      operationId: deleteColumn
+      tags:
+        - Columns
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Column deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /columns/reorder:
+    put:
+      summary: Reorder columns
+      description: Update the position of multiple columns
+      operationId: reorderColumns
+      tags:
+        - Columns
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderColumnsRequest'
+      responses:
+        '200':
+          description: Columns reordered
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /columns/{columnId}/agent:
+    get:
+      summary: Get column agent config
+      description: Get the agent configuration for a column
+      operationId: getColumnAgent
+      tags:
+        - Columns
+      parameters:
+        - name: columnId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agentTypes:
+                    type: array
+                    items:
+                      type: string
+    post:
+      summary: Set column agent config
+      description: Configure which agent types can work on a column
+      operationId: setColumnAgent
+      tags:
+        - Columns
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: columnId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetColumnAgentRequest'
+      responses:
+        '200':
+          description: Agent config set
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      summary: Delete column agent config
+      description: Remove agent configuration from a column
+      operationId: deleteColumnAgent
+      tags:
+        - Columns
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: columnId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent config deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tasks:
+    get:
+      summary: Get tasks
+      description: Public endpoint to get tasks with optional filters
+      operationId: getTasks
+      tags:
+        - Tasks
+      parameters:
+        - name: columnId
+          in: query
+          schema:
+            type: string
+        - name: boardId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: List of tasks with pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  pageCount:
+                    type: integer
+    post:
+      summary: Create a task
+      description: Create a new task in a column
+      operationId: createTask
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '200':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          description: Rate limit exceeded
+
+  /tasks/{id}:
+    get:
+      summary: Get a task by ID
+      description: Public endpoint to get task details
+      operationId: getTask
+      tags:
+        - Tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: include
+          in: query
+          description: Include additional data (comments, subtasks)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update a task
+      description: Update task properties
+      operationId: updateTask
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: Task updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete a task
+      description: Delete a task
+      operationId: deleteTask
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tasks/{id}/archive:
+    post:
+      summary: Archive a task
+      description: Archive or unarchive a task
+      operationId: archiveTask
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        '200':
+          description: Task archived
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tasks/{id}/complete:
+    post:
+      summary: Complete a task
+      description: Mark a task as complete and move it to the next column
+      operationId: completeTask
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task completed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tasks/{id}/attachments:
+    get:
+      summary: Get task attachments
+      description: Get all attachments for a task
+      operationId: getTaskAttachments
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Attachment'
+
+  /comments:
+    get:
+      summary: Get comments
+      description: Public endpoint to get comments for a task
+      operationId: getComments
+      tags:
+        - Comments
+      parameters:
+        - name: taskId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Comment'
+    post:
+      summary: Create a comment
+      description: Add a comment to a task
+      operationId: createComment
+      tags:
+        - Comments
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+      responses:
+        '200':
+          description: Comment created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /comments/{id}:
+    get:
+      summary: Get a comment by ID
+      description: Public endpoint to get a single comment
+      operationId: getComment
+      tags:
+        - Comments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /subtasks:
+    get:
+      summary: Get subtasks
+      description: Get subtasks for a task
+      operationId: getSubtasks
+      tags:
+        - Subtasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: taskId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of subtasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subtask'
+    post:
+      summary: Create a subtask
+      description: Add a subtask to a task
+      operationId: createSubtask
+      tags:
+        - Subtasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubtaskRequest'
+      responses:
+        '200':
+          description: Subtask created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /subtasks/{id}:
+    put:
+      summary: Update a subtask
+      description: Update subtask title or completion status
+      operationId: updateSubtask
+      tags:
+        - Subtasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubtaskRequest'
+      responses:
+        '200':
+          description: Subtask updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Delete a subtask
+      description: Delete a subtask
+      operationId: deleteSubtask
+      tags:
+        - Subtasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subtask deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /archived:
+    get:
+      summary: Get archived tasks
+      description: Get all archived tasks
+      operationId: getArchivedTasks
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: boardId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of archived tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /drafts:
+    get:
+      summary: Get draft tasks
+      description: Get unpublished (draft) tasks
+      operationId: getDrafts
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: boardId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of draft tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /templates:
+    get:
+      summary: Get templates
+      description: Public endpoint to get board templates
+      operationId: getTemplates
+      tags:
+        - Templates
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Template'
+    post:
+      summary: Save a template
+      description: Save current board as a template
+      operationId: saveTemplate
+      tags:
+        - Templates
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveTemplateRequest'
+      responses:
+        '200':
+          description: Template saved
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /templates/{id}:
+    delete:
+      summary: Delete a template
+      description: Delete a board template
+      operationId: deleteTemplate
+      tags:
+        - Templates
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dashboard/stats:
+    get:
+      summary: Get dashboard statistics
+      description: Get board statistics for dashboard
+      operationId: getDashboardStats
+      tags:
+        - Dashboard
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /upload:
+    post:
+      summary: Upload a file
+      description: Upload a file attachment
+      operationId: uploadFile
+      tags:
+        - Files
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                taskId:
+                  type: string
+      responses:
+        '200':
+          description: File uploaded
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /attachments/{id}:
+    delete:
+      summary: Delete an attachment
+      description: Delete a file attachment
+      operationId: deleteAttachment
+      tags:
+        - Files
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Attachment deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /webhook/notify:
+    post:
+      summary: Send webhook notification
+      description: Trigger webhook notifications
+      operationId: webhookNotify
+      tags:
+        - Webhooks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook notified
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /mcp/my-tasks:
+    get:
+      summary: Get agent's tasks
+      description: Get tasks assigned to the current agent
+      operationId: getMyTasks
+      tags:
+        - MCP
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Agent's tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  total:
+                    type: integer
+                  userAgent:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/login:
+    post:
+      summary: Login
+      description: Authenticate user and get token
+      operationId: login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/init:
+    post:
+      summary: Initialize
+      description: Initialize the server with admin user
+      operationId: init
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitRequest'
+      responses:
+        '200':
+          description: Initialization successful
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      summary: Get current user
+      description: Get information about the currently authenticated user
+      operationId: getMe
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/config:
+    get:
+      summary: Get app configuration
+      description: Get public application configuration
+      operationId: getAppConfig
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: App configuration
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /auth/token:
+    get:
+      summary: Get tokens
+      description: Get all tokens for current user
+      operationId: getTokens
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: List of tokens
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Create token
+      description: Create a new API token
+      operationId: createToken
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Token created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      summary: Update token
+      description: Update token name or enabled status
+      operationId: updateToken
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Token updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      summary: Delete token
+      description: Delete an API token
+      operationId: deleteToken
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Token deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/activities:
+    get:
+      summary: Get activities
+      description: Get activity log
+      operationId: getActivities
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Activity log
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/agents:
+    get:
+      summary: Get agents
+      description: Get all configured agents
+      operationId: getAgents
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: List of agents
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Create agent
+      description: Create a new agent
+      operationId: createAgent
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                agentType:
+                  type: string
+      responses:
+        '200':
+          description: Agent created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      summary: Delete agent
+      description: Delete an agent
+      operationId: deleteAgent
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Agent deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/agents/reset-token:
+    post:
+      summary: Reset agent token
+      description: Reset an agent's API token
+      operationId: resetAgentToken
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+      responses:
+        '200':
+          description: Token reset
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/users:
+    get:
+      summary: Get users
+      description: Get all users
+      operationId: getUsers
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: List of users
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      summary: Update user
+      description: Update user information or role
+      operationId: updateUser
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: User updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/users/enabled:
+    post:
+      summary: Set user enabled
+      description: Enable or disable a user
+      operationId: setUserEnabled
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: User status updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/permissions:
+    get:
+      summary: Get permissions
+      description: Get all permissions
+      operationId: getPermissions
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: List of permissions
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Set permission
+      description: Create or update a permission
+      operationId: setPermission
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Permission set
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      summary: Delete permission
+      description: Delete a permission
+      operationId: deletePermission
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Permission deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/permissions/columns:
+    get:
+      summary: Get column permissions
+      description: Get permissions for columns
+      operationId: getColumnPermissions
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Column permissions
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Set column permission
+      description: Create or update column permission
+      operationId: setColumnPermission
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Column permission set
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      summary: Delete column permission
+      description: Delete a column permission
+      operationId: deleteColumnPermission
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Column permission deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/config:
+    put:
+      summary: Update app config
+      description: Update application configuration
+      operationId: updateAppConfig
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Config updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    SignatureAuth:
+      type: apiKey
+      in: header
+      name: X-Signature
+
+  schemas:
+    Board:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        shortAlias:
+          type: string
+        deleted:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        _count:
+          type: object
+          properties:
+            columns:
+              type: integer
+
+    CreateBoardRequest:
+      type: object
+      required:
+        - name
+      properties:
+        id:
+          type: string
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        shortAlias:
+          type: string
+          maxLength: 50
+
+    UpdateBoardRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+
+    Column:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        position:
+          type: integer
+        color:
+          type: string
+        description:
+          type: string
+        ownerAgentId:
+          type: string
+        boardId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        agentConfig:
+          type: object
+          properties:
+            agentTypes:
+              type: array
+              items:
+                type: string
+
+    CreateColumnRequest:
+      type: object
+      required:
+        - name
+        - boardId
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          maxLength: 50
+        position:
+          type: integer
+        color:
+          type: string
+          maxLength: 20
+        boardId:
+          type: string
+
+    UpdateColumnRequest:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          maxLength: 50
+        position:
+          type: integer
+        color:
+          type: string
+          maxLength: 20
+        description:
+          type: string
+          maxLength: 500
+        ownerAgentId:
+          type: string
+
+    ReorderColumnsRequest:
+      type: object
+      properties:
+        boardId:
+          type: string
+        columns:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              position:
+                type: integer
+
+    SetColumnAgentRequest:
+      type: object
+      properties:
+        agentTypes:
+          type: array
+          items:
+            type: string
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [low, medium, high]
+        assignee:
+          type: string
+        meta:
+          type: object
+        columnId:
+          type: string
+        position:
+          type: integer
+        published:
+          type: boolean
+        archived:
+          type: boolean
+        archivedAt:
+          type: string
+          format: date-time
+        agentId:
+          type: string
+        agentPrompt:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        commentCount:
+          type: integer
+        subtaskCount:
+          type: integer
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        subtasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subtask'
+
+    CreateTaskRequest:
+      type: object
+      required:
+        - title
+        - columnId
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 5000
+        priority:
+          type: string
+          enum: [low, medium, high]
+        assignee:
+          type: string
+          maxLength: 100
+        meta:
+          type: object
+        columnId:
+          type: string
+        position:
+          type: integer
+        published:
+          type: boolean
+        agentId:
+          type: string
+        agentPrompt:
+          type: string
+          maxLength: 2000
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+          maxLength: 5000
+        priority:
+          type: string
+          enum: [low, medium, high]
+        assignee:
+          type: string
+          maxLength: 100
+        meta:
+          type: object
+        columnId:
+          type: string
+        position:
+          type: integer
+        published:
+          type: boolean
+        agentId:
+          type: string
+        agentPrompt:
+          type: string
+          maxLength: 2000
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        author:
+          type: string
+        taskId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateCommentRequest:
+      type: object
+      required:
+        - taskId
+        - content
+      properties:
+        taskId:
+          type: string
+        content:
+          type: string
+
+    Subtask:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        completed:
+          type: boolean
+        taskId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateSubtaskRequest:
+      type: object
+      required:
+        - taskId
+        - title
+      properties:
+        taskId:
+          type: string
+        title:
+          type: string
+
+    UpdateSubtaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        completed:
+          type: boolean
+
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+        taskId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        data:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    SaveTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        boardId:
+          type: string
+
+    ExportData:
+      type: object
+      properties:
+        boardId:
+          type: string
+        boardName:
+          type: string
+        exportedAt:
+          type: string
+          format: date-time
+        columns:
+          type: array
+          items:
+            type: object
+
+    ImportBoardRequest:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ImportData'
+        boardId:
+          type: string
+        reset:
+          type: boolean
+
+    ImportData:
+      type: object
+      properties:
+        boardName:
+          type: string
+        columns:
+          type: array
+          items:
+            type: object
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        nickname:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, MEMBER, VIEWER]
+        avatar:
+          type: string
+        enabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      required:
+        - nickname
+        - password
+      properties:
+        nickname:
+          type: string
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+
+    InitRequest:
+      type: object
+      required:
+        - nickname
+        - password
+      properties:
+        nickname:
+          type: string
+        password:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - Invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Not logged in
+
+    Forbidden:
+      description: Forbidden - User does not have permission
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: No permission
+
+    NotFound:
+      description: Not Found - Resource does not exist
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Resource not found
+
+tags:
+  - name: System
+    description: System endpoints
+  - name: Boards
+    description: Board management
+  - name: Columns
+    description: Column management
+  - name: Tasks
+    description: Task management
+  - name: Comments
+    description: Comment management
+  - name: Subtasks
+    description: Subtask management
+  - name: Templates
+    description: Board templates
+  - name: Dashboard
+    description: Dashboard statistics
+  - name: Files
+    description: File uploads and attachments
+  - name: Webhooks
+    description: Webhook management
+  - name: MCP
+    description: MCP server endpoints
+  - name: Authentication
+    description: Authentication and user management

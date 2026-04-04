@@ -1,0 +1,23 @@
+# Code Owners for kl-kanban
+
+# Default owner for everything
+* @kl
+
+# Backend
+/backend/ @kl
+
+# Frontend
+/frontend/ @kl
+
+# MCP Server
+/mcp-server/ @kl
+
+# GitHub workflows and configurations
+/.github/ @kl
+
+# Root level files
+/*.yml @kl
+/*.yaml @kl
+/go.* @kl
+/package.json @kl
+/tsconfig.json @kl

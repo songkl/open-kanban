@@ -1,0 +1,119 @@
+name: Changelog
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          set -e
+
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
+
+          echo "Previous tag: $PREV_TAG"
+          echo "Current tag: $CURRENT_TAG"
+
+          # Generate changelog content
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log $PREV_TAG..HEAD --pretty=format:"%s" 2>/dev/null || echo "")
+          else
+            COMMITS=$(git log --pretty=format:"%s" 2>/dev/null || echo "")
+          fi
+
+          # Create CHANGELOG header
+          {
+            echo "# Changelog"
+            echo ""
+            echo "All notable changes to this project will be documented in this file."
+            echo ""
+            echo "## [Unreleased]"
+            echo ""
+            echo "### Features"
+            echo ""
+            echo "### Bug Fixes"
+            echo ""
+            echo "### Improvements"
+            echo ""
+            echo "### Documentation"
+            echo ""
+          } > CHANGELOG.md.tmp
+
+          # Group commits by type using conventional commit format
+          FEATURES=$(echo "$COMMITS" | grep -E "^feat(\(.+\))?:" || true)
+          FIXES=$(echo "$COMMITS" | grep -E "^fix(\(.+\))?:" || true)
+          IMPROVEMENTS=$(echo "$COMMITS" | grep -E "^improvement(\(.+\))?:" || true)
+          DOCS=$(echo "$COMMITS" | grep -E "^docs(\(.+\))?:" || true)
+
+          if [ -n "$FEATURES" ]; then
+            echo "#### Added" >> CHANGELOG.md.tmp
+            echo "$FEATURES" | sed 's/^/  - /' >> CHANGELOG.md.tmp
+            echo "" >> CHANGELOG.md.tmp
+          fi
+
+          if [ -n "$FIXES" ]; then
+            echo "#### Fixed" >> CHANGELOG.md.tmp
+            echo "$FIXES" | sed 's/^/  - /' >> CHANGELOG.md.tmp
+            echo "" >> CHANGELOG.md.tmp
+          fi
+
+          if [ -n "$IMPROVEMENTS" ]; then
+            echo "#### Improved" >> CHANGELOG.md.tmp
+            echo "$IMPROVEMENTS" | sed 's/^/  - /' >> CHANGELOG.md.tmp
+            echo "" >> CHANGELOG.md.tmp
+          fi
+
+          if [ -n "$DOCS" ]; then
+            echo "#### Documentation" >> CHANGELOG.md.tmp
+            echo "$DOCS" | sed 's/^/  - /' >> CHANGELOG.md.tmp
+            echo "" >> CHANGELOG.md.tmp
+          fi
+
+          # Add version sections if we have a tag
+          if [ -n "$CURRENT_TAG" ]; then
+            echo "## [$CURRENT_TAG]" >> CHANGELOG.md.tmp
+            echo "" >> CHANGELOG.md.tmp
+          fi
+
+          # Append existing CHANGELOG if it exists
+          if [ -f CHANGELOG.md ] && [ -s CHANGELOG.md ]; then
+            # Skip the header we just added and append
+            tail -n +7 CHANGELOG.md >> CHANGELOG.md.tmp 2>/dev/null || true
+          fi
+
+          mv CHANGELOG.md.tmp CHANGELOG.md
+
+          echo "Generated changelog:"
+          cat CHANGELOG.md
+
+      - name: Commit changelog
+        run: |
+          if [[ $(git status --porcelain) ]]; then
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add CHANGELOG.md
+            git commit -m "docs: update changelog [skip ci]" || echo "Nothing to commit"
+            git push || echo "Push failed, will continue"
+          else
+            echo "No changes to commit"
+          fi
