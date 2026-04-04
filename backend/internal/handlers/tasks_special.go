@@ -145,5 +145,32 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 		GetTask(db)(c)
+
+		go func() {
+			webhookSvc := services.GetWebhookService()
+			columnName := getColumnName(db, newColumnID)
+			var priority, assignee string
+			var assigneePtr *string
+			db.QueryRow("SELECT priority, assignee FROM tasks WHERE id = ?", id).Scan(&priority, &assigneePtr)
+			assignee = derefString(assigneePtr)
+			webhookSvc.NotifyTaskMoved(services.WebhookTask{
+				ID:         id,
+				Title:      taskTitle,
+				ColumnID:   newColumnID,
+				ColumnName: columnName,
+				Priority:   priority,
+				Assignee:   assignee,
+			})
+			if newStatusVal == "done" {
+				webhookSvc.NotifyTaskCompleted(services.WebhookTask{
+					ID:         id,
+					Title:      taskTitle,
+					ColumnID:   newColumnID,
+					ColumnName: columnName,
+					Priority:   priority,
+					Assignee:   assignee,
+				})
+			}
+		}()
 	}
 }

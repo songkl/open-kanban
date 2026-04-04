@@ -289,7 +289,7 @@ type UpdateColumnRequest struct {
 	ID           string  `json:"id" validate:"required"`
 	Name         string  `json:"name" validate:"omitempty,required,max=100"`
 	Status       string  `json:"status" validate:"omitempty,max=50"`
-	Position     int     `json:"position"`
+	Position     *int    `json:"position"`
 	Color        string  `json:"color" validate:"omitempty,max=20"`
 	Description  string  `json:"description" validate:"omitempty,max=500"`
 	OwnerAgentId *string `json:"ownerAgentId" validate:"omitempty,uuid"`
@@ -354,8 +354,8 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 				changes = append(changes, fmt.Sprintf("Status: '%s' → '%s'", oldStatus, req.Status))
 			}
 		}
-		if req.Position >= 0 && req.Position != oldColumn.Position {
-			changes = append(changes, fmt.Sprintf("Position: %d → %d", oldColumn.Position, req.Position))
+		if req.Position != nil && *req.Position != oldColumn.Position {
+			changes = append(changes, fmt.Sprintf("Position: %d → %d", oldColumn.Position, *req.Position))
 		}
 		if req.Color != "" && req.Color != oldColumn.Color {
 			changes = append(changes, fmt.Sprintf("Color: '%s' → '%s'", oldColumn.Color, req.Color))
@@ -384,9 +384,9 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 			query += ", status = ?"
 			updates = append(updates, req.Status)
 		}
-		if req.Position >= 0 {
+		if req.Position != nil {
 			query += ", position = ?"
-			updates = append(updates, req.Position)
+			updates = append(updates, *req.Position)
 		}
 		if req.Color != "" {
 			query += ", color = ?"

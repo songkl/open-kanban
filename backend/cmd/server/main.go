@@ -12,6 +12,7 @@ import (
 
 	"open-kanban/internal/database"
 	"open-kanban/internal/handlers"
+	"open-kanban/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,15 +29,6 @@ func splitOrigins(origins string) []string {
 		}
 	}
 	return result
-}
-
-func deprecationMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("Deprecation", "true")
-		c.Header("Sunset", "Sat, 01 Jan 2028 00:00:00 GMT")
-		c.Header("Link", "</api/v1/>; rel=\"successor-version\"")
-		c.Next()
-	}
 }
 
 func main() {
@@ -68,6 +60,9 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
+
+	// Initialize webhook service
+	services.InitWebhookService()
 
 	// Create Gin router
 	r := gin.New()
@@ -128,22 +123,6 @@ func main() {
 	r.GET("/api/v1/health", handlers.HealthCheck)
 	r.GET("/api/v1/status", handlers.HealthCheck)
 
-	// Auth routes (deprecated)
-	authDeprecated := r.Group("/api/auth")
-	authDeprecated.Use(deprecationMiddleware())
-	{
-		authDeprecated.POST("/login", handlers.Login(db))
-		authDeprecated.POST("/init", handlers.Init(db))
-		authDeprecated.GET("/login", handlers.GetAvatars())
-		authDeprecated.GET("/avatars", handlers.GetAvatars())
-		authDeprecated.GET("/me", handlers.GetMe(db))
-		authDeprecated.GET("/config", handlers.GetAppConfig(db))
-	}
-
-	// Health check endpoint (deprecated)
-	r.GET("/api/health", deprecationMiddleware(), handlers.HealthCheck)
-	r.GET("/api/status", deprecationMiddleware(), handlers.HealthCheck)
-
 	authProtected := r.Group("/api/v1/auth")
 	authProtected.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 	{
@@ -168,31 +147,6 @@ func main() {
 		authProtected.PUT("/config", handlers.UpdateAppConfig(db))
 	}
 
-	// Auth protected routes (deprecated)
-	authProtectedDeprecated := r.Group("/api/auth")
-	authProtectedDeprecated.Use(deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-	{
-		authProtectedDeprecated.GET("/token", handlers.GetTokens(db))
-		authProtectedDeprecated.POST("/token", handlers.CreateToken(db))
-		authProtectedDeprecated.PUT("/token", handlers.UpdateToken(db))
-		authProtectedDeprecated.DELETE("/token", handlers.DeleteToken(db))
-		authProtectedDeprecated.GET("/activities", handlers.GetActivities(db))
-		authProtectedDeprecated.GET("/agents", handlers.GetAgents(db))
-		authProtectedDeprecated.POST("/agents", handlers.CreateAgent(db))
-		authProtectedDeprecated.POST("/agents/reset-token", handlers.ResetAgentToken(db))
-		authProtectedDeprecated.DELETE("/agents", handlers.DeleteAgent(db))
-		authProtectedDeprecated.GET("/users", handlers.GetUsers(db))
-		authProtectedDeprecated.PUT("/users", handlers.UpdateUser(db))
-		authProtectedDeprecated.POST("/users/enabled", handlers.SetUserEnabled(db))
-		authProtectedDeprecated.GET("/permissions", handlers.GetPermissions(db))
-		authProtectedDeprecated.POST("/permissions", handlers.SetPermission(db))
-		authProtectedDeprecated.DELETE("/permissions", handlers.DeletePermission(db))
-		authProtectedDeprecated.GET("/permissions/columns", handlers.GetColumnPermissions(db))
-		authProtectedDeprecated.POST("/permissions/columns", handlers.SetColumnPermission(db))
-		authProtectedDeprecated.DELETE("/permissions/columns", handlers.DeleteColumnPermission(db))
-		authProtectedDeprecated.PUT("/config", handlers.UpdateAppConfig(db))
-	}
-
 	// Boards routes - GET is public (for setup flow), others require auth
 	boards := r.Group("/api/v1/boards")
 	{
@@ -209,23 +163,6 @@ func main() {
 		boards.POST("/import", handlers.ImportBoard(db))
 	}
 
-	// Boards routes (deprecated)
-	boardsDeprecated := r.Group("/api/boards")
-	boardsDeprecated.Use(deprecationMiddleware())
-	{
-		boardsDeprecated.GET("", handlers.GetBoards(db))
-		boardsDeprecated.GET("/:id", handlers.GetBoard(db))
-		boardsDeprecated.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-		boardsDeprecated.POST("", handlers.CreateBoard(db))
-		boardsDeprecated.POST("/from-template", handlers.CreateBoardFromTemplate(db))
-		boardsDeprecated.PUT("/:id", handlers.UpdateBoard(db))
-		boardsDeprecated.DELETE("/:id", handlers.DeleteBoard(db))
-		boardsDeprecated.GET("/:id/export", handlers.ExportBoard(db))
-		boardsDeprecated.POST("/:id/copy", handlers.CopyBoard(db))
-		boardsDeprecated.POST("/:id/reset", handlers.ResetBoard(db))
-		boardsDeprecated.POST("/import", handlers.ImportBoard(db))
-	}
-
 	// Templates routes
 	templates := r.Group("/api/v1/templates")
 	templates.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
@@ -233,15 +170,6 @@ func main() {
 		templates.GET("", handlers.GetTemplates(db))
 		templates.POST("", handlers.SaveTemplate(db))
 		templates.DELETE("/:id", handlers.DeleteTemplate(db))
-	}
-
-	// Templates routes (deprecated)
-	templatesDeprecated := r.Group("/api/templates")
-	templatesDeprecated.Use(deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-	{
-		templatesDeprecated.GET("", handlers.GetTemplates(db))
-		templatesDeprecated.POST("", handlers.SaveTemplate(db))
-		templatesDeprecated.DELETE("/:id", handlers.DeleteTemplate(db))
 	}
 
 	// Columns routes - require auth for write operations, GET is public
@@ -258,21 +186,6 @@ func main() {
 		columns.DELETE("/:columnId/agent", handlers.DeleteColumnAgent(db))
 	}
 
-	// Columns routes (deprecated)
-	columnsDeprecated := r.Group("/api/columns")
-	columnsDeprecated.Use(deprecationMiddleware())
-	{
-		columnsDeprecated.GET("", handlers.GetColumns(db))
-		columnsDeprecated.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-		columnsDeprecated.POST("", handlers.CreateColumn(db))
-		columnsDeprecated.PUT("", handlers.UpdateColumn(db))
-		columnsDeprecated.PUT("/reorder", handlers.ReorderColumns(db))
-		columnsDeprecated.DELETE("", handlers.DeleteColumn(db))
-		columnsDeprecated.GET("/:columnId/agent", handlers.GetColumnAgent(db))
-		columnsDeprecated.POST("/:columnId/agent", handlers.SetColumnAgent(db))
-		columnsDeprecated.DELETE("/:columnId/agent", handlers.DeleteColumnAgent(db))
-	}
-
 	// Tasks routes - require auth for write operations, GET is public
 	tasks := r.Group("/api/v1/tasks")
 	{
@@ -287,26 +200,8 @@ func main() {
 		tasks.GET("/:id/attachments", handlers.GetTaskAttachments(db))
 	}
 
-	// Tasks routes (deprecated)
-	tasksDeprecated := r.Group("/api/tasks")
-	tasksDeprecated.Use(deprecationMiddleware())
-	{
-		tasksDeprecated.GET("", handlers.GetTasks(db))
-		tasksDeprecated.GET("/:id", handlers.GetTask(db))
-		tasksDeprecated.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-		tasksDeprecated.POST("", handlers.CreateTask(db))
-		tasksDeprecated.PUT("/:id", handlers.UpdateTask(db))
-		tasksDeprecated.DELETE("/:id", handlers.DeleteTask(db))
-		tasksDeprecated.POST("/:id/archive", handlers.ArchiveTask(db))
-		tasksDeprecated.POST("/:id/complete", handlers.CompleteTask(db))
-		tasksDeprecated.GET("/:id/attachments", handlers.GetTaskAttachments(db))
-	}
-
 	// MCP routes - for MCP server to get agent-specific tasks
 	r.GET("/api/v1/mcp/my-tasks", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetMyTasks(db))
-
-	// MCP routes (deprecated)
-	r.GET("/api/mcp/my-tasks", deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetMyTasks(db))
 
 	// Comments routes - require auth for POST, GET is public
 	comments := r.Group("/api/v1/comments")
@@ -315,16 +210,6 @@ func main() {
 		comments.GET("/:id", handlers.GetComment(db))
 		comments.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 		comments.POST("", handlers.CreateComment(db))
-	}
-
-	// Comments routes (deprecated)
-	commentsDeprecated := r.Group("/api/comments")
-	commentsDeprecated.Use(deprecationMiddleware())
-	{
-		commentsDeprecated.GET("", handlers.GetComments(db))
-		commentsDeprecated.GET("/:id", handlers.GetComment(db))
-		commentsDeprecated.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-		commentsDeprecated.POST("", handlers.CreateComment(db))
 	}
 
 	// Subtasks routes - require auth for all operations
@@ -337,27 +222,11 @@ func main() {
 		subtasks.DELETE("/:id", handlers.DeleteSubtask(db))
 	}
 
-	// Subtasks routes (deprecated)
-	subtasksDeprecated := r.Group("/api/subtasks")
-	subtasksDeprecated.Use(deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-	{
-		subtasksDeprecated.GET("", handlers.GetSubtasks(db))
-		subtasksDeprecated.POST("", handlers.CreateSubtask(db))
-		subtasksDeprecated.PUT("/:id", handlers.UpdateSubtask(db))
-		subtasksDeprecated.DELETE("/:id", handlers.DeleteSubtask(db))
-	}
-
 	// Archived routes - require auth
 	r.GET("/api/v1/archived", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetArchivedTasks(db))
 
-	// Archived routes (deprecated)
-	r.GET("/api/archived", deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetArchivedTasks(db))
-
 	// Drafts routes - require auth
 	r.GET("/api/v1/drafts", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetDrafts(db))
-
-	// Drafts routes (deprecated)
-	r.GET("/api/drafts", deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetDrafts(db))
 
 	// Dashboard routes - require auth
 	dashboard := r.Group("/api/v1/dashboard")
@@ -366,21 +235,17 @@ func main() {
 		dashboard.GET("/stats", handlers.GetDashboardStats(db))
 	}
 
-	// Dashboard routes (deprecated)
-	dashboardDeprecated := r.Group("/api/dashboard")
-	dashboardDeprecated.Use(deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	// Webhook routes - require auth
+	webhook := r.Group("/api/v1/webhook")
+	webhook.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 	{
-		dashboardDeprecated.GET("/stats", handlers.GetDashboardStats(db))
+		webhook.POST("/notify", handlers.WebhookNotify(db))
 	}
 
 	// Upload routes - require auth for upload and delete
 	r.POST("/api/v1/upload", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.UploadFile(db))
 	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
 	r.DELETE("/api/v1/attachments/:id", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))
-
-	// Upload routes (deprecated)
-	r.POST("/api/upload", deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.UploadFile(db))
-	r.DELETE("/api/attachments/:id", deprecationMiddleware(), handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))
 
 	// WebSocket route (same port)
 	r.GET("/ws", handlers.WebSocketHandler(db))

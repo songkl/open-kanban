@@ -64,6 +64,19 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 
+		go func() {
+			webhookSvc := services.GetWebhookService()
+			columnName := getColumnName(db, task.ColumnID)
+			webhookSvc.NotifyTaskCreated(services.WebhookTask{
+				ID:         task.ID,
+				Title:      task.Title,
+				ColumnID:   task.ColumnID,
+				ColumnName: columnName,
+				Priority:   task.Priority,
+				Assignee:   derefString(task.Assignee),
+			})
+		}()
+
 		if task.Published && task.AgentID != nil && *task.AgentID != "" {
 			agentPrompt := ""
 			if task.AgentPrompt != nil {
@@ -165,6 +178,21 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 		LogActivity(db, user.ID, "UPDATE_TASK", "TASK", id, task.Title, details, c.ClientIP(), getRequestSource(c))
 
 		broadcast()
+
+		if req.ColumnID != "" && req.ColumnID != columnID {
+			go func() {
+				webhookSvc := services.GetWebhookService()
+				columnName := getColumnName(db, task.ColumnID)
+				webhookSvc.NotifyTaskMoved(services.WebhookTask{
+					ID:         task.ID,
+					Title:      task.Title,
+					ColumnID:   task.ColumnID,
+					ColumnName: columnName,
+					Priority:   task.Priority,
+					Assignee:   derefString(task.Assignee),
+				})
+			}()
+		}
 
 		if req.Published != nil && *req.Published {
 			currentAgentID := ""

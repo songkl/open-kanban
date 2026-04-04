@@ -146,3 +146,16 @@ func getColumnIDForTask(db *sql.DB, taskID string) (string, error) {
 	err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", taskID).Scan(&columnID)
 	return columnID, err
 }
+
+func getColumnName(db *sql.DB, columnID string) string {
+	var name string
+	db.QueryRow("SELECT name FROM columns WHERE id = ?", columnID).Scan(&name)
+	return name
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
