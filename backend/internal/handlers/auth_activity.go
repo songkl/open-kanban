@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -38,7 +40,7 @@ func LogActivity(db *sql.DB, userID, action, targetType, targetID, targetTitle, 
 		id, userID, action, targetType, targetID, targetTitle, details, ipAddress, source, createdAt,
 	)
 	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", userID)
-	go BroadcastActivityExternal(Activity{
+	go BroadcastActivityExternal(sanitizeActivity(Activity{
 		ID:          id,
 		UserID:      userID,
 		Action:      action,
@@ -49,7 +51,7 @@ func LogActivity(db *sql.DB, userID, action, targetType, targetID, targetTitle, 
 		IPAddress:   ipAddress,
 		Source:      source,
 		CreatedAt:   createdAt,
-	})
+	}).(Activity))
 
 	if targetType == "TASK" {
 		boardID, err := getBoardIDForTask(db, targetID)
@@ -238,10 +240,77 @@ func validateInputLength(value string, maxLength int) bool {
 	return len(value) <= maxLength
 }
 
-func sanitizeString(value string) string {
-	value = strings.TrimSpace(value)
-	value = strings.ReplaceAll(value, "\x00", "")
-	return value
+func sanitizeString(s string) string {
+	if !utf8.ValidString(s) {
+		return strings.ToValidUTF8(s, "")
+	}
+	return s
+}
+
+func sanitizeValue(v any) any {
+	if v == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr:
+		if rv.IsNil() {
+			return nil
+		}
+		elem := rv.Elem().Interface()
+		sanitized := sanitizeValue(elem)
+		if sanitized == nil {
+			return nil
+		}
+		ptr := reflect.New(reflect.TypeOf(sanitized))
+		ptr.Elem().Set(reflect.ValueOf(sanitized))
+		return ptr.Interface()
+	case reflect.Struct:
+		sanitized := reflect.New(rv.Type()).Elem()
+		for i := 0; i < rv.NumField(); i++ {
+			field := rv.Field(i)
+			fieldType := rv.Type().Field(i)
+			if fieldType.Type.Kind() == reflect.String {
+				if field.CanInterface() {
+					sanitized.Field(i).SetString(sanitizeString(field.Interface().(string)))
+				}
+			} else {
+				if field.CanInterface() {
+					sanitized.Field(i).Set(reflect.ValueOf(sanitizeValue(field.Interface())))
+				}
+			}
+		}
+		return sanitized.Interface()
+	case reflect.Map:
+		sanitized := reflect.MakeMap(rv.Type())
+		for _, key := range rv.MapKeys() {
+			mapVal := rv.MapIndex(key)
+			sanitized.SetMapIndex(key, reflect.ValueOf(sanitizeValue(mapVal.Interface())))
+		}
+		return sanitized.Interface()
+	case reflect.Slice:
+		sanitized := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Cap())
+		for i := 0; i < rv.Len(); i++ {
+			sanitized.Index(i).Set(reflect.ValueOf(sanitizeValue(rv.Index(i).Interface())))
+		}
+		return sanitized.Interface()
+	case reflect.String:
+		return sanitizeString(v.(string))
+	default:
+		return v
+	}
+}
+
+func sanitizeActivity(a any) any {
+	return sanitizeValue(a)
+}
+
+func sanitizeActivityForBroadcast(a Activity) Activity {
+	sanitized := sanitizeValue(a)
+	if s, ok := sanitized.(Activity); ok {
+		return s
+	}
+	return a
 }
 
 func checkRateLimit(key string) bool {

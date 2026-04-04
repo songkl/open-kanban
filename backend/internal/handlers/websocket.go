@@ -271,7 +271,7 @@ func BroadcastActivity(activity any) {
 	}
 	clientsMux.RUnlock()
 
-	message := ActivityMessage{Type: "new_activity", Activity: activity}
+	message := ActivityMessage{Type: "new_activity", Activity: sanitizeActivity(activity)}
 	writeDeadline := time.Now().Add(2 * time.Second)
 
 	for _, client := range clientList {
@@ -339,9 +339,9 @@ func BroadcastTaskNotification(boardID, taskID, action string) {
 
 	notification := TaskNotification{
 		Type:    "task_notification",
-		BoardID: boardID,
-		TaskID:  taskID,
-		Action:  action,
+		BoardID: sanitizeString(boardID),
+		TaskID:  sanitizeString(taskID),
+		Action:  sanitizeString(action),
 	}
 	writeDeadline := time.Now().Add(2 * time.Second)
 

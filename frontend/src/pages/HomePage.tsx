@@ -95,6 +95,15 @@ export function HomePage() {
         >
           {t('app.error.retry')}
         </button>
+        <button
+          onClick={() => {
+            localStorage.removeItem('token');
+            navigate('/login');
+          }}
+          className="rounded-md bg-red-500 px-4 py-2 text-sm text-white hover:bg-red-600"
+        >
+          {t('auth.logout')}
+        </button>
       </div>
     );
   }
@@ -166,6 +175,15 @@ export function HomePage() {
           className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
         >
           {t('board.createFirst')}
+        </button>
+        <button
+          onClick={() => {
+            localStorage.removeItem('token');
+            navigate('/login');
+          }}
+          className="rounded-md bg-red-500 px-4 py-2 text-sm text-white hover:bg-red-600"
+        >
+          {t('auth.logout')}
         </button>
       </div>
     );

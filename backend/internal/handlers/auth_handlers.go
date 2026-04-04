@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 
 	"open-kanban/internal/models"
 )
@@ -102,13 +101,12 @@ func Init(db *sql.DB) gin.HandlerFunc {
 
 		var hashedPassword *string
 		if req.Password != "" {
-			hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+			hashed, err := hashWithSalt(req.Password)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt password"})
 				return
 			}
-			hashedPassword = new(string)
-			*hashedPassword = string(hashed)
+			hashedPassword = &hashed
 		}
 
 		userID := generateID()
