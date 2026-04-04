@@ -13,24 +13,24 @@ func GetComments(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		taskID := c.Query("taskId")
 		if taskID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
 			return
 		}
 
 		boardID, err := getBoardIDForTask(db, taskID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务 ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权查看该任务的评论"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to view comments of this task"})
 			return
 		}
 
@@ -41,7 +41,7 @@ func GetComments(db *sql.DB) gin.HandlerFunc {
 			ORDER BY created_at ASC
 		`, taskID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取评论失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get comments"})
 			return
 		}
 		defer rows.Close()
@@ -75,13 +75,13 @@ func GetComment(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		commentID := c.Param("id")
 		if commentID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "评论 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Comment ID is required"})
 			return
 		}
 
@@ -94,21 +94,21 @@ func GetComment(db *sql.DB) gin.HandlerFunc {
 		`, commentID).Scan(&id, &content, &author, &taskID, &userID, &createdAt, &updatedAt)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "评论不存在"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取评论失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get comments"})
 			return
 		}
 
 		boardID, err := getBoardIDForTask(db, taskID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务 ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权查看该评论"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to view this comment"})
 			return
 		}
 
@@ -130,8 +130,8 @@ func GetComment(db *sql.DB) gin.HandlerFunc {
 
 // CreateCommentRequest represents comment creation request
 type CreateCommentRequest struct {
-	Content string `json:"content"`
-	TaskID  string `json:"taskId"`
+	Content string `json:"content" validate:"required,max=2000"`
+	TaskID  string `json:"taskId" validate:"required"`
 }
 
 // CreateComment creates a new comment
@@ -139,39 +139,34 @@ func CreateComment(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法添加评论"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot add comments"})
 			return
 		}
 
 		if !checkRateLimit("comment:" + user.ID) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
 			return
 		}
 
 		var req CreateCommentRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "评论内容不能为空"})
-			return
-		}
-
-		if req.TaskID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
 		boardID, err := getBoardIDForTask(db, req.TaskID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务 ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权在该任务添加评论"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to add comment to this task"})
 			return
 		}
 
@@ -184,7 +179,7 @@ func CreateComment(db *sql.DB) gin.HandlerFunc {
 			commentID, req.Content, author, req.TaskID, user.ID, now, now,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建评论失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
 			return
 		}
 

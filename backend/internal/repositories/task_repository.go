@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"open-kanban/internal/models"
@@ -60,13 +61,12 @@ func (r *TaskRepository) GetTaskByID(id string) (*models.Task, error) {
 func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize int) ([]models.Task, int, error) {
 	var total int
 	if len(columnIDs) > 0 {
-		placeholders := make([]string, len(columnIDs))
 		countArgs := make([]interface{}, len(columnIDs))
 		for i, id := range columnIDs {
-			placeholders[i] = "?"
 			countArgs[i] = id
 		}
-		countQuery := "SELECT COUNT(*) FROM tasks WHERE column_id IN (" + joinPlaceholders(len(columnIDs)) + ")"
+		inClause := buildInClause(len(columnIDs))
+		countQuery := "SELECT COUNT(*) FROM tasks WHERE column_id IN " + inClause
 		if err := r.db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
 			return nil, 0, err
 		}
@@ -81,24 +81,27 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 	var err error
 
 	if len(columnIDs) > 0 {
-		placeholders := make([]string, len(columnIDs))
 		args := make([]interface{}, 0, len(columnIDs)+2)
-		for i, id := range columnIDs {
-			placeholders[i] = "?"
+		for _, id := range columnIDs {
 			args = append(args, id)
 		}
+		inClause := buildInClause(len(columnIDs))
 		query := `SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
-		          t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at
+		          t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
+		          (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
+		          (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
 		          FROM tasks t
 		          JOIN columns c ON t.column_id = c.id
-		          WHERE t.column_id IN (` + joinPlaceholders(len(columnIDs)) + `)
+		          WHERE t.column_id IN ` + inClause + `
 		          ORDER BY c.position ASC, t.position ASC
 		          LIMIT ? OFFSET ?`
 		args = append(args, pageSize, offset)
 		rows, err = r.db.Query(query, args...)
 	} else {
 		rows, err = r.db.Query(`SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
-		                         t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at
+		                         t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
+		                         (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
+		                         (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
 		                         FROM tasks t
 		                         JOIN columns c ON t.column_id = c.id
 		                         ORDER BY c.position ASC, t.position ASC
@@ -115,9 +118,11 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		var task models.Task
 		var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
 		var archivedAt sql.NullTime
+		var commentCount, subtaskCount int
 
 		if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
-			&task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt); err != nil {
+			&task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt,
+			&commentCount, &subtaskCount); err != nil {
 			continue
 		}
 
@@ -142,6 +147,9 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		if createdBy.Valid {
 			task.CreatedBy = createdBy.String
 		}
+
+		task.CommentCount = &commentCount
+		task.SubtaskCount = &subtaskCount
 
 		tasks = append(tasks, task)
 	}
@@ -288,17 +296,9 @@ func (r *TaskRepository) GetColumnPositionAndBoardID(columnID string) (int, stri
 	return position, boardID, err
 }
 
-func joinPlaceholders(n int) string {
+func buildInClause(n int) string {
 	if n <= 0 {
-		return ""
+		return "(NULL)"
 	}
-	result := make([]byte, 2*n-1)
-	for i := range result {
-		if i%2 == 0 {
-			result[i] = '?'
-		} else {
-			result[i] = ','
-		}
-	}
-	return string(result)
+	return "(" + strings.Repeat("?,", n-1) + "?)"
 }

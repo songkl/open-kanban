@@ -288,18 +288,18 @@ func HashPasswordWithSalt(password string) (string, error) {
 
 // LoginRequest represents login request body
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Avatar   string `json:"avatar"`
-	Type     string `json:"type"`
+	Username string `json:"username" validate:"required,max=50"`
+	Password string `json:"password" validate:"required,max=100"`
+	Avatar   string `json:"avatar" validate:"omitempty,max=500"`
+	Type     string `json:"type" validate:"omitempty,max=20"`
 }
 
 // InitRequest represents first-time initialization request
 type InitRequest struct {
-	Username          string `json:"username"`
-	Nickname          string `json:"nickname"`
-	Password          string `json:"password"`
-	Avatar            string `json:"avatar"`
+	Username          string `json:"username" validate:"required,max=50"`
+	Nickname          string `json:"nickname" validate:"omitempty,max=50"`
+	Password          string `json:"password" validate:"required,max=100"`
+	Avatar            string `json:"avatar" validate:"omitempty,max=500"`
 	AllowRegistration bool   `json:"allowRegistration"`
 	RequirePassword   bool   `json:"requirePassword"`
 	AuthEnabled       *bool  `json:"authEnabled"`

@@ -83,7 +83,7 @@ func GetBoards(db *sql.DB) gin.HandlerFunc {
 			ORDER BY created_at ASC
 		`)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get board"})
 			return
 		}
 		defer rows.Close()
@@ -118,7 +118,7 @@ func GetBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		boardID := c.Param("id")
 		if boardID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板ID不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Board ID is required"})
 			return
 		}
 
@@ -135,11 +135,11 @@ func GetBoard(db *sql.DB) gin.HandlerFunc {
 		`, boardID).Scan(&id, &name, &description, &shortAlias, &deleted, &createdAt, &updatedAt, &columnCount)
 
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "看板不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Board not found"})
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get board"})
 			return
 		}
 
@@ -160,10 +160,10 @@ func GetBoard(db *sql.DB) gin.HandlerFunc {
 
 // CreateBoardRequest represents board creation request
 type CreateBoardRequest struct {
-	ShortAlias  string `json:"shortAlias"`
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	ShortAlias  string `json:"shortAlias" validate:"max=50"`
+	ID          string `json:"id" validate:"omitempty,max=100"`
+	Name        string `json:"name" validate:"required,max=255"`
+	Description string `json:"description" validate:"max=1000"`
 }
 
 // CreateBoard creates a new board with default columns
@@ -171,24 +171,27 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		var req CreateBoardRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板名称不能为空"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
 		boardID := req.ID
 		if boardID == "" {
-			boardID = generateID()
+			boardID = utils.ToPinyinSlug(req.Name)
+			if boardID == "" {
+				boardID = generateID()
+			}
 		}
 
 		tx, err := db.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
 			return
 		}
 		defer tx.Rollback()
@@ -206,7 +209,7 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 			boardID, req.Name, req.Description, shortAlias, 1000, false, now, now,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
 			return
 		}
 
@@ -218,13 +221,13 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 				colID, col.Name, col.Status, col.Position, col.Color, boardID, now, now,
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建列失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create column"})
 				return
 			}
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
 			return
 		}
 
@@ -248,8 +251,8 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 
 // UpdateBoardRequest represents board update request
 type UpdateBoardRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string `json:"name" validate:"required,max=255"`
+	Description string `json:"description" validate:"max=1000"`
 }
 
 // UpdateBoard updates a board
@@ -257,24 +260,24 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Board ID is required"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, id, "ADMIN", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该看板"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to modify this board"})
 			return
 		}
 
 		var req UpdateBoardRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
@@ -298,7 +301,7 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 			req.Name, req.Description, now, id,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
 			return
 		}
 
@@ -318,18 +321,18 @@ func DeleteBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Board ID is required"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, id, "ADMIN", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该看板"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete this board"})
 			return
 		}
 
@@ -339,7 +342,7 @@ func DeleteBoard(db *sql.DB) gin.HandlerFunc {
 			true, now, id,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
@@ -359,18 +362,18 @@ func ExportBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		boardID := c.Param("id")
 		if boardID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Board ID is required"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该看板"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this board"})
 			return
 		}
 
@@ -380,7 +383,7 @@ func ExportBoard(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if format != "json" && format != "csv" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的导出格式，仅支持 json 和 csv"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported export format, only json and csv are supported"})
 			return
 		}
 
@@ -388,10 +391,10 @@ func ExportBoard(db *sql.DB) gin.HandlerFunc {
 		err := db.QueryRow("SELECT name FROM boards WHERE id = ? AND deleted = false", boardID).Scan(&boardName)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "看板不存在"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Board not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get board"})
 			return
 		}
 
@@ -407,7 +410,7 @@ func ExportBoard(db *sql.DB) gin.HandlerFunc {
 			FROM columns WHERE board_id = ? ORDER BY position ASC
 		`, boardID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取列失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get column"})
 			return
 		}
 		defer colRows.Close()
@@ -642,13 +645,13 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		var req ImportBoardRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的导入数据"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid import data"})
 			return
 		}
 
@@ -666,19 +669,19 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 		if boardID != "" {
 			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM boards WHERE id = ? AND deleted = false)", boardID).Scan(&boardExists)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "检查看板失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check board"})
 				return
 			}
 		}
 
 		if boardExists && !req.Reset {
-			c.JSON(http.StatusConflict, gin.H{"error": "看板 ID 已存在，如需覆盖请确认后重试"})
+			c.JSON(http.StatusConflict, gin.H{"error": "Board ID already exists, please confirm and retry to overwrite"})
 			return
 		}
 
 		tx, err := db.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
 			return
 		}
 		defer tx.Rollback()
@@ -686,16 +689,16 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 		now := time.Now()
 		if boardExists && req.Reset {
 			if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "无权重置该看板"})
+				c.JSON(http.StatusForbidden, gin.H{"error": "No permission to reset this board"})
 				return
 			}
 			_, err = tx.Exec("UPDATE boards SET name = ?, updated_at = ? WHERE id = ?", boardName, now, boardID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "重置看板失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset board"})
 				return
 			}
 			if err := resetBoardData(tx, boardID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "清空看板数据失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear board data"})
 				return
 			}
 		} else {
@@ -704,7 +707,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 				boardID, boardName, false, now, now,
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建看板失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
 				return
 			}
 		}
@@ -730,7 +733,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 				colID, col.Name, status, col.Position, color, boardID, now, now,
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建列失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create column"})
 				return
 			}
 		}
@@ -766,7 +769,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 					taskID, task.Title, description, priority, assignee, meta, newColID, task.Position, task.Published, task.Archived, now, now,
 				)
 				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败"})
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
 					return
 				}
 
@@ -777,7 +780,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 						commentID, comment.Content, comment.Author, taskID, now, now,
 					)
 					if err != nil {
-						c.JSON(http.StatusInternalServerError, gin.H{"error": "创建评论失败"})
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
 						return
 					}
 				}
@@ -789,7 +792,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 						subtaskID, subtask.Title, subtask.Completed, taskID, now, now,
 					)
 					if err != nil {
-						c.JSON(http.StatusInternalServerError, gin.H{"error": "创建子任务失败"})
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subtask"})
 						return
 					}
 				}
@@ -797,7 +800,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "导入失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Import failed"})
 			return
 		}
 
@@ -839,18 +842,18 @@ func ResetBoard(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		boardID := c.Param("id")
 		if boardID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Board ID is required"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权重置该看板"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to reset this board"})
 			return
 		}
 
@@ -858,27 +861,27 @@ func ResetBoard(db *sql.DB) gin.HandlerFunc {
 		err := db.QueryRow("SELECT name FROM boards WHERE id = ? AND deleted = false", boardID).Scan(&boardName)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "看板不存在"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Board not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get board"})
 			return
 		}
 
 		tx, err := db.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "重置看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset board"})
 			return
 		}
 		defer tx.Rollback()
 
 		if err := resetBoardData(tx, boardID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "清空看板数据失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear board data"})
 			return
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "重置看板失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset board"})
 			return
 		}
 

@@ -80,6 +80,10 @@ func initSQLite(config *DBConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		return nil, fmt.Errorf("failed to set busy_timeout: %w", err)
+	}
+
 	// Run migrations
 	if err := runSQLiteMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run SQLite migrations: %w", err)

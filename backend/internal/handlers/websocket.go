@@ -68,28 +68,22 @@ var (
 // WebSocketHandler handles WebSocket connections
 func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Authenticate WebSocket connection - prefer Header or Cookie (URL parameter is insecure and deprecated)
 		tokenKey := ""
 
-		// Try Authorization header first (Bearer token)
 		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
 			if strings.HasPrefix(authHeader, "Bearer ") {
 				tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
 			}
 		}
 
-		// Try cookie second
 		if tokenKey == "" {
 			if cookie, err := c.Cookie("kanban-token"); err == nil && cookie != "" {
 				tokenKey = cookie
 			}
 		}
 
-		// Note: URL query parameter token is no longer supported for security reasons
-		// Token should be provided via Authorization header or Cookie
-
 		if tokenKey == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -97,7 +91,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		var userID string
 		err := db.QueryRow("SELECT user_id FROM tokens WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)", tokenKey, time.Now()).Scan(&userID)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的会话"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
 			return
 		}
 
@@ -185,8 +179,13 @@ func BroadcastActivity(activity any) {
 	clientsMux.RUnlock()
 
 	message := ActivityMessage{Type: "new_activity", Activity: activity}
+	writeDeadline := time.Now().Add(2 * time.Second)
 
 	for _, client := range clientList {
+		if err := client.SetWriteDeadline(writeDeadline); err != nil {
+			log.Printf("Failed to set write deadline: %v", err)
+			continue
+		}
 		err := client.WriteJSON(message)
 		if err != nil {
 			clientsMux.Lock()
@@ -213,8 +212,13 @@ func BroadcastRefresh() {
 	clientsMux.RUnlock()
 
 	message := map[string]string{"type": "refresh"}
+	writeDeadline := time.Now().Add(2 * time.Second)
 
 	for _, client := range clientList {
+		if err := client.SetWriteDeadline(writeDeadline); err != nil {
+			log.Printf("Failed to set write deadline: %v", err)
+			continue
+		}
 		err := client.WriteJSON(message)
 		if err != nil {
 			clientsMux.Lock()
@@ -246,8 +250,13 @@ func BroadcastTaskNotification(boardID, taskID, action string) {
 		TaskID:  taskID,
 		Action:  action,
 	}
+	writeDeadline := time.Now().Add(2 * time.Second)
 
 	for _, client := range clientList {
+		if err := client.SetWriteDeadline(writeDeadline); err != nil {
+			log.Printf("Failed to set write deadline: %v", err)
+			continue
+		}
 		err := client.WriteJSON(notification)
 		if err != nil {
 			clientsMux.Lock()

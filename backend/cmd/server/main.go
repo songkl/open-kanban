@@ -30,6 +30,15 @@ func splitOrigins(origins string) []string {
 	return result
 }
 
+func deprecationMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Deprecation", "true")
+		c.Header("Sunset", "Sat, 01 Jan 2028 00:00:00 GMT")
+		c.Header("Link", "</api/v1/>; rel=\"successor-version\"")
+		c.Next()
+	}
+}
+
 func main() {
 	// CLI commands
 	resetPasswordCmd := flag.NewFlagSet("reset-password", flag.ExitOnError)
@@ -104,8 +113,9 @@ func main() {
 		c.Next()
 	})
 
-	// Auth routes
+	// Auth routes (deprecated)
 	auth := r.Group("/api/auth")
+	auth.Use(deprecationMiddleware())
 	{
 		auth.POST("/login", handlers.Login(db))
 		auth.POST("/init", handlers.Init(db))
@@ -115,12 +125,27 @@ func main() {
 		auth.GET("/config", handlers.GetAppConfig(db))
 	}
 
-	// Health check endpoint (public, no auth required)
-	r.GET("/api/health", handlers.HealthCheck)
-	r.GET("/api/status", handlers.HealthCheck)
+	// Auth routes v1
+	authV1 := r.Group("/api/v1/auth")
+	{
+		authV1.POST("/login", handlers.Login(db))
+		authV1.POST("/init", handlers.Init(db))
+		authV1.GET("/login", handlers.GetAvatars())
+		authV1.GET("/avatars", handlers.GetAvatars())
+		authV1.GET("/me", handlers.GetMe(db))
+		authV1.GET("/config", handlers.GetAppConfig(db))
+	}
+
+	// Health check endpoint (public, no auth required) - deprecated
+	r.GET("/api/health", deprecationMiddleware(), handlers.HealthCheck)
+	r.GET("/api/status", deprecationMiddleware(), handlers.HealthCheck)
+
+	// Health check endpoint v1 (public, no auth required)
+	r.GET("/api/v1/health", handlers.HealthCheck)
+	r.GET("/api/v1/status", handlers.HealthCheck)
 
 	authProtected := r.Group("/api/auth")
-	authProtected.Use(handlers.RequireAuth(db))
+	authProtected.Use(deprecationMiddleware(), handlers.RequireAuth(db))
 	{
 		authProtected.GET("/token", handlers.GetTokens(db))
 		authProtected.POST("/token", handlers.CreateToken(db))
@@ -143,8 +168,33 @@ func main() {
 		authProtected.PUT("/config", handlers.UpdateAppConfig(db))
 	}
 
-	// Boards routes - GET is public (for setup flow), others require auth
+	authProtectedV1 := r.Group("/api/v1/auth")
+	authProtectedV1.Use(handlers.RequireAuth(db))
+	{
+		authProtectedV1.GET("/token", handlers.GetTokens(db))
+		authProtectedV1.POST("/token", handlers.CreateToken(db))
+		authProtectedV1.PUT("/token", handlers.UpdateToken(db))
+		authProtectedV1.DELETE("/token", handlers.DeleteToken(db))
+		authProtectedV1.GET("/activities", handlers.GetActivities(db))
+		authProtectedV1.GET("/agents", handlers.GetAgents(db))
+		authProtectedV1.POST("/agents", handlers.CreateAgent(db))
+		authProtectedV1.POST("/agents/reset-token", handlers.ResetAgentToken(db))
+		authProtectedV1.DELETE("/agents", handlers.DeleteAgent(db))
+		authProtectedV1.GET("/users", handlers.GetUsers(db))
+		authProtectedV1.PUT("/users", handlers.UpdateUser(db))
+		authProtectedV1.POST("/users/enabled", handlers.SetUserEnabled(db))
+		authProtectedV1.GET("/permissions", handlers.GetPermissions(db))
+		authProtectedV1.POST("/permissions", handlers.SetPermission(db))
+		authProtectedV1.DELETE("/permissions", handlers.DeletePermission(db))
+		authProtectedV1.GET("/permissions/columns", handlers.GetColumnPermissions(db))
+		authProtectedV1.POST("/permissions/columns", handlers.SetColumnPermission(db))
+		authProtectedV1.DELETE("/permissions/columns", handlers.DeleteColumnPermission(db))
+		authProtectedV1.PUT("/config", handlers.UpdateAppConfig(db))
+	}
+
+	// Boards routes - GET is public (for setup flow), others require auth (deprecated)
 	boards := r.Group("/api/boards")
+	boards.Use(deprecationMiddleware())
 	{
 		boards.GET("", handlers.GetBoards(db))
 		boards.GET("/:id", handlers.GetBoard(db))
@@ -159,18 +209,43 @@ func main() {
 		boards.POST("/import", handlers.ImportBoard(db))
 	}
 
-	// Templates routes
+	// Boards routes v1 - GET is public (for setup flow), others require auth
+	boardsV1 := r.Group("/api/v1/boards")
+	{
+		boardsV1.GET("", handlers.GetBoards(db))
+		boardsV1.GET("/:id", handlers.GetBoard(db))
+		boardsV1.Use(handlers.RequireAuth(db))
+		boardsV1.POST("", handlers.CreateBoard(db))
+		boardsV1.POST("/from-template", handlers.CreateBoardFromTemplate(db))
+		boardsV1.PUT("/:id", handlers.UpdateBoard(db))
+		boardsV1.DELETE("/:id", handlers.DeleteBoard(db))
+		boardsV1.GET("/:id/export", handlers.ExportBoard(db))
+		boardsV1.POST("/:id/copy", handlers.CopyBoard(db))
+		boardsV1.POST("/:id/reset", handlers.ResetBoard(db))
+		boardsV1.POST("/import", handlers.ImportBoard(db))
+	}
+
+	// Templates routes (deprecated)
 	templates := r.Group("/api/templates")
-	templates.Use(handlers.RequireAuth(db))
+	templates.Use(deprecationMiddleware(), handlers.RequireAuth(db))
 	{
 		templates.GET("", handlers.GetTemplates(db))
 		templates.POST("", handlers.SaveTemplate(db))
 		templates.DELETE("/:id", handlers.DeleteTemplate(db))
 	}
 
-	// Columns routes - require auth for all operations
+	// Templates routes v1
+	templatesV1 := r.Group("/api/v1/templates")
+	templatesV1.Use(handlers.RequireAuth(db))
+	{
+		templatesV1.GET("", handlers.GetTemplates(db))
+		templatesV1.POST("", handlers.SaveTemplate(db))
+		templatesV1.DELETE("/:id", handlers.DeleteTemplate(db))
+	}
+
+	// Columns routes - require auth for all operations (deprecated)
 	columns := r.Group("/api/columns")
-	columns.Use(handlers.RequireAuth(db))
+	columns.Use(deprecationMiddleware(), handlers.RequireAuth(db))
 	{
 		columns.GET("", handlers.GetColumns(db))
 		columns.POST("", handlers.CreateColumn(db))
@@ -182,9 +257,23 @@ func main() {
 		columns.DELETE("/:columnId/agent", handlers.DeleteColumnAgent(db))
 	}
 
-	// Tasks routes - require auth for all operations
+	// Columns routes v1 - require auth for all operations
+	columnsV1 := r.Group("/api/v1/columns")
+	columnsV1.Use(handlers.RequireAuth(db))
+	{
+		columnsV1.GET("", handlers.GetColumns(db))
+		columnsV1.POST("", handlers.CreateColumn(db))
+		columnsV1.PUT("", handlers.UpdateColumn(db))
+		columnsV1.PUT("/reorder", handlers.ReorderColumns(db))
+		columnsV1.DELETE("", handlers.DeleteColumn(db))
+		columnsV1.GET("/:columnId/agent", handlers.GetColumnAgent(db))
+		columnsV1.POST("/:columnId/agent", handlers.SetColumnAgent(db))
+		columnsV1.DELETE("/:columnId/agent", handlers.DeleteColumnAgent(db))
+	}
+
+	// Tasks routes - require auth for all operations (deprecated)
 	tasks := r.Group("/api/tasks")
-	tasks.Use(handlers.RequireAuth(db))
+	tasks.Use(deprecationMiddleware(), handlers.RequireAuth(db))
 	{
 		tasks.GET("", handlers.GetTasks(db))
 		tasks.POST("", handlers.CreateTask(db))
@@ -196,21 +285,47 @@ func main() {
 		tasks.GET("/:id/attachments", handlers.GetTaskAttachments(db))
 	}
 
-	// MCP routes - for MCP server to get agent-specific tasks
-	r.GET("/api/mcp/my-tasks", handlers.RequireAuth(db), handlers.GetMyTasks(db))
+	// Tasks routes v1 - require auth for all operations
+	tasksV1 := r.Group("/api/v1/tasks")
+	tasksV1.Use(handlers.RequireAuth(db))
+	{
+		tasksV1.GET("", handlers.GetTasks(db))
+		tasksV1.POST("", handlers.CreateTask(db))
+		tasksV1.GET("/:id", handlers.GetTask(db))
+		tasksV1.PUT("/:id", handlers.UpdateTask(db))
+		tasksV1.DELETE("/:id", handlers.DeleteTask(db))
+		tasksV1.POST("/:id/archive", handlers.ArchiveTask(db))
+		tasksV1.POST("/:id/complete", handlers.CompleteTask(db))
+		tasksV1.GET("/:id/attachments", handlers.GetTaskAttachments(db))
+	}
 
-	// Comments routes - require auth for POST, GET can be public for shared boards
+	// MCP routes - for MCP server to get agent-specific tasks (deprecated)
+	r.GET("/api/mcp/my-tasks", deprecationMiddleware(), handlers.RequireAuth(db), handlers.GetMyTasks(db))
+
+	// MCP routes v1 - for MCP server to get agent-specific tasks
+	r.GET("/api/v1/mcp/my-tasks", handlers.RequireAuth(db), handlers.GetMyTasks(db))
+
+	// Comments routes - require auth for POST, GET can be public for shared boards (deprecated)
 	comments := r.Group("/api/comments")
-	comments.Use(handlers.RequireAuth(db))
+	comments.Use(deprecationMiddleware(), handlers.RequireAuth(db))
 	{
 		comments.GET("", handlers.GetComments(db))
 		comments.GET("/:id", handlers.GetComment(db))
 		comments.POST("", handlers.CreateComment(db))
 	}
 
-	// Subtasks routes - require auth for all operations
+	// Comments routes v1 - require auth for POST, GET can be public for shared boards
+	commentsV1 := r.Group("/api/v1/comments")
+	commentsV1.Use(handlers.RequireAuth(db))
+	{
+		commentsV1.GET("", handlers.GetComments(db))
+		commentsV1.GET("/:id", handlers.GetComment(db))
+		commentsV1.POST("", handlers.CreateComment(db))
+	}
+
+	// Subtasks routes - require auth for all operations (deprecated)
 	subtasks := r.Group("/api/subtasks")
-	subtasks.Use(handlers.RequireAuth(db))
+	subtasks.Use(deprecationMiddleware(), handlers.RequireAuth(db))
 	{
 		subtasks.GET("", handlers.GetSubtasks(db))
 		subtasks.POST("", handlers.CreateSubtask(db))
@@ -218,23 +333,51 @@ func main() {
 		subtasks.DELETE("/:id", handlers.DeleteSubtask(db))
 	}
 
-	// Archived routes - require auth
-	r.GET("/api/archived", handlers.RequireAuth(db), handlers.GetArchivedTasks(db))
+	// Subtasks routes v1 - require auth for all operations
+	subtasksV1 := r.Group("/api/v1/subtasks")
+	subtasksV1.Use(handlers.RequireAuth(db))
+	{
+		subtasksV1.GET("", handlers.GetSubtasks(db))
+		subtasksV1.POST("", handlers.CreateSubtask(db))
+		subtasksV1.PUT("/:id", handlers.UpdateSubtask(db))
+		subtasksV1.DELETE("/:id", handlers.DeleteSubtask(db))
+	}
 
-	// Drafts routes - require auth
-	r.GET("/api/drafts", handlers.RequireAuth(db), handlers.GetDrafts(db))
+	// Archived routes - require auth (deprecated)
+	r.GET("/api/archived", deprecationMiddleware(), handlers.RequireAuth(db), handlers.GetArchivedTasks(db))
 
-	// Dashboard routes - require auth
+	// Archived routes v1 - require auth
+	r.GET("/api/v1/archived", handlers.RequireAuth(db), handlers.GetArchivedTasks(db))
+
+	// Drafts routes - require auth (deprecated)
+	r.GET("/api/drafts", deprecationMiddleware(), handlers.RequireAuth(db), handlers.GetDrafts(db))
+
+	// Drafts routes v1 - require auth
+	r.GET("/api/v1/drafts", handlers.RequireAuth(db), handlers.GetDrafts(db))
+
+	// Dashboard routes - require auth (deprecated)
 	dashboard := r.Group("/api/dashboard")
-	dashboard.Use(handlers.RequireAuth(db))
+	dashboard.Use(deprecationMiddleware(), handlers.RequireAuth(db))
 	{
 		dashboard.GET("/stats", handlers.GetDashboardStats(db))
 	}
 
-	// Upload routes - require auth for upload and delete
-	r.POST("/api/upload", handlers.RequireAuth(db), handlers.UploadFile(db))
+	// Dashboard routes v1 - require auth
+	dashboardV1 := r.Group("/api/v1/dashboard")
+	dashboardV1.Use(handlers.RequireAuth(db))
+	{
+		dashboardV1.GET("/stats", handlers.GetDashboardStats(db))
+	}
+
+	// Upload routes - require auth for upload and delete (deprecated)
+	r.POST("/api/upload", deprecationMiddleware(), handlers.RequireAuth(db), handlers.UploadFile(db))
 	r.GET("/uploads/:id", handlers.ServeFile(db))
-	r.DELETE("/api/attachments/:id", handlers.RequireAuth(db), handlers.DeleteAttachment(db))
+	r.DELETE("/api/attachments/:id", deprecationMiddleware(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))
+
+	// Upload routes v1 - require auth for upload and delete
+	r.POST("/api/v1/upload", handlers.RequireAuth(db), handlers.UploadFile(db))
+	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
+	r.DELETE("/api/v1/attachments/:id", handlers.RequireAuth(db), handlers.DeleteAttachment(db))
 
 	// WebSocket route (same port)
 	r.GET("/ws", handlers.WebSocketHandler(db))
@@ -330,6 +473,7 @@ func main() {
 				return
 			}
 			defer f.Close()
+			c.Status(200)
 			c.Header("Cache-Control", "no-cache")
 			c.Header("Content-Type", "text/html; charset=utf-8")
 			io.Copy(c.Writer, f)

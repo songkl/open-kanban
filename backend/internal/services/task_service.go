@@ -72,8 +72,14 @@ func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, p
 
 	var result []gin.H
 	for _, task := range tasks {
-		commentCount, _ := s.taskRepo.GetTaskCommentCount(task.ID)
-		subtaskCount, _ := s.taskRepo.GetTaskSubtaskCount(task.ID)
+		commentCount := 0
+		subtaskCount := 0
+		if task.CommentCount != nil {
+			commentCount = *task.CommentCount
+		}
+		if task.SubtaskCount != nil {
+			subtaskCount = *task.SubtaskCount
+		}
 
 		result = append(result, gin.H{
 			"id":          task.ID,

@@ -78,12 +78,12 @@ func ErrorHandler() gin.HandlerFunc {
 		if status >= 500 {
 			if gin.Mode() == gin.DebugMode {
 				c.JSON(status, gin.H{
-					"error":  "服务器内部错误",
+					"error":  "Internal server error",
 					"detail": err.Error(),
 				})
 			} else {
 				c.JSON(status, gin.H{
-					"error": "服务器内部错误",
+					"error": "Internal server error",
 				})
 			}
 		} else if status >= 400 {
@@ -101,12 +101,12 @@ func RecoveryWithErrorHandler() gin.HandlerFunc {
 				log.Printf("Panic recovered: %v", err)
 				if gin.Mode() == gin.DebugMode {
 					c.JSON(http.StatusInternalServerError, gin.H{
-						"error":  "服务器内部错误",
+						"error":  "Internal server error",
 						"detail": err,
 					})
 				} else {
 					c.JSON(http.StatusInternalServerError, gin.H{
-						"error": "服务器内部错误",
+						"error": "Internal server error",
 					})
 				}
 				c.Abort()
@@ -134,12 +134,12 @@ func ErrorMiddleware() gin.HandlerFunc {
 			if status >= 500 {
 				if gin.Mode() == gin.DebugMode {
 					c.JSON(status, gin.H{
-						"error":  "服务器内部错误",
+						"error":  "Internal server error",
 						"detail": err.Error(),
 					})
 				} else {
 					c.JSON(status, gin.H{
-						"error": "服务器内部错误",
+						"error": "Internal server error",
 					})
 				}
 			}

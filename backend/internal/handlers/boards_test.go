@@ -332,7 +332,7 @@ func TestCreateBoardHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("create with auth and empty body creates board with empty name", func(t *testing.T) {
+	t.Run("create with auth and empty body returns 400", func(t *testing.T) {
 		body := map[string]interface{}{}
 		jsonBody, _ := json.Marshal(body)
 
@@ -343,8 +343,8 @@ func TestCreateBoardHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 

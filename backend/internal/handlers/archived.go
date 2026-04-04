@@ -58,7 +58,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 			`)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取归档任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get archived tasks"})
 			return
 		}
 		defer rows.Close()
@@ -160,7 +160,7 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 			`)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取草稿失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get drafts"})
 			return
 		}
 		defer rows.Close()
@@ -222,23 +222,23 @@ func BatchDeleteDrafts(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法删除草稿"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete drafts"})
 			return
 		}
 
 		var req BatchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
 
 		if len(req.IDs) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs are required"})
 			return
 		}
 
@@ -252,7 +252,7 @@ func BatchDeleteDrafts(db *sql.DB) gin.HandlerFunc {
 		query := "DELETE FROM tasks WHERE id IN (" + joinPlaceholders(placeholders) + ") AND published = false AND archived = false"
 		result, err := db.Exec(query, args...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除草稿失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete drafts"})
 			return
 		}
 
@@ -265,28 +265,28 @@ func BatchPublishDrafts(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法发布草稿"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot publish drafts"})
 			return
 		}
 
 		var req BatchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
 
 		if len(req.IDs) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs are required"})
 			return
 		}
 
 		if req.ColumnID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "columnId 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "columnId is required"})
 			return
 		}
 
@@ -300,7 +300,7 @@ func BatchPublishDrafts(db *sql.DB) gin.HandlerFunc {
 		query := "UPDATE tasks SET published = true, column_id = ?, updated_at = datetime('now') WHERE id IN (" + joinPlaceholders(placeholders) + ") AND published = false AND archived = false"
 		result, err := db.Exec(query, append([]interface{}{req.ColumnID}, args...)...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "发布草稿失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish drafts"})
 			return
 		}
 
@@ -313,23 +313,23 @@ func BatchArchiveDrafts(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法归档草稿"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot archive drafts"})
 			return
 		}
 
 		var req BatchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
 
 		if len(req.IDs) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "IDs are required"})
 			return
 		}
 
@@ -343,7 +343,7 @@ func BatchArchiveDrafts(db *sql.DB) gin.HandlerFunc {
 		query := "UPDATE tasks SET archived = true, archived_at = datetime('now'), updated_at = datetime('now') WHERE id IN (" + joinPlaceholders(placeholders) + ") AND published = false AND archived = false"
 		result, err := db.Exec(query, args...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "归档草稿失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to archive drafts"})
 			return
 		}
 

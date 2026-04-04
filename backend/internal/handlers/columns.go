@@ -20,7 +20,7 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -40,7 +40,7 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 		// Verify board access
 		if boardID != "" {
 			if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该看板"})
+				c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this board"})
 				return
 			}
 		}
@@ -51,23 +51,21 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 		positionsParam := c.Query("positions")
 
 		if boardID != "" && positionsParam != "" {
-			// Both boardId and positions specified
 			positions := strings.Split(positionsParam, ",")
-			placeholders := make([]string, len(positions))
 			args := make([]interface{}, 0, len(positions)+1)
-			args = append(args, boardID) // boardID first for WHERE board_id = ?
-			for i, p := range positions {
-				placeholders[i] = "?"
+			args = append(args, boardID)
+			for _, p := range positions {
 				pos, err := strconv.Atoi(strings.TrimSpace(p))
 				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "无效的位置值"})
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid position value"})
 					return
 				}
 				args = append(args, pos)
 			}
+			inClause := buildInClause(len(positions))
 			query := fmt.Sprintf(
-				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE board_id = ? AND position IN (%s) ORDER BY position ASC",
-				strings.Join(placeholders, ","),
+				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE board_id = ? AND position IN %s ORDER BY position ASC",
+				inClause,
 			)
 			rows, err = db.Query(query, args...)
 		} else if boardID != "" {
@@ -77,22 +75,20 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 				boardID,
 			)
 		} else if positionsParam != "" {
-			// Only positions specified
 			positions := strings.Split(positionsParam, ",")
-			placeholders := make([]string, len(positions))
 			args := make([]interface{}, len(positions))
 			for i, p := range positions {
-				placeholders[i] = "?"
 				pos, err := strconv.Atoi(strings.TrimSpace(p))
 				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "无效的位置值"})
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid position value"})
 					return
 				}
 				args[i] = pos
 			}
+			inClause := buildInClause(len(positions))
 			query := fmt.Sprintf(
-				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE position IN (%s) ORDER BY position ASC",
-				strings.Join(placeholders, ","),
+				"SELECT id, name, status, position, color, description, owner_agent_id, board_id, created_at, updated_at FROM columns WHERE position IN %s ORDER BY position ASC",
+				inClause,
 			)
 			rows, err = db.Query(query, args...)
 		} else {
@@ -102,7 +98,7 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 			)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取列失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get column"})
 			return
 		}
 		defer rows.Close()
@@ -216,11 +212,11 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 
 // CreateColumnRequest represents column creation request
 type CreateColumnRequest struct {
-	Name     string `json:"name"`
-	Status   string `json:"status"`
+	Name     string `json:"name" validate:"required,max=100"`
+	Status   string `json:"status" validate:"omitempty,max=50"`
 	Position int    `json:"position"`
-	Color    string `json:"color"`
-	BoardID  string `json:"boardId"`
+	Color    string `json:"color" validate:"omitempty,max=20"`
+	BoardID  string `json:"boardId" validate:"required"`
 }
 
 // CreateColumn creates a new column
@@ -228,23 +224,18 @@ func CreateColumn(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		var req CreateColumnRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "列名称不能为空"})
-			return
-		}
-
-		if req.BoardID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, req.BoardID, "ADMIN", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权在该看板创建列"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to create column in this board"})
 			return
 		}
 
@@ -276,7 +267,7 @@ func CreateColumn(db *sql.DB) gin.HandlerFunc {
 			colID, req.Name, status, position, color, req.BoardID, now, now,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建列失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create column"})
 			return
 		}
 
@@ -299,13 +290,13 @@ func CreateColumn(db *sql.DB) gin.HandlerFunc {
 
 // UpdateColumnRequest represents column update request
 type UpdateColumnRequest struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Status       string  `json:"status"`
+	ID           string  `json:"id" validate:"required"`
+	Name         string  `json:"name" validate:"omitempty,required,max=100"`
+	Status       string  `json:"status" validate:"omitempty,max=50"`
 	Position     int     `json:"position"`
-	Color        string  `json:"color"`
-	Description  string  `json:"description"`
-	OwnerAgentId *string `json:"ownerAgentId"`
+	Color        string  `json:"color" validate:"omitempty,max=20"`
+	Description  string  `json:"description" validate:"omitempty,max=500"`
+	OwnerAgentId *string `json:"ownerAgentId" validate:"omitempty,uuid"`
 }
 
 // UpdateColumn updates a column
@@ -313,34 +304,29 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		var req UpdateColumnRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
-			return
-		}
-
-		if req.ID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
 		var exists bool
 		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM columns WHERE id = ?)", req.ID).Scan(&exists)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
 			return
 		}
 		if !exists {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid column ID"})
 			return
 		}
 
 		if !checkColumnAccessWithBoardFallback(db, user.ID, req.ID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该列"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to modify this column"})
 			return
 		}
 
@@ -354,14 +340,14 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 		}
 		err = db.QueryRow("SELECT name, status, position, color, description, owner_agent_id FROM columns WHERE id = ?", req.ID).Scan(&oldColumn.Name, &oldColumn.Status, &oldColumn.Position, &oldColumn.Color, &oldColumn.Description, &oldColumn.OwnerAgentId)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
 			return
 		}
 
 		var changes []string
 
 		if req.Name != "" && req.Name != oldColumn.Name {
-			changes = append(changes, fmt.Sprintf("名称: '%s' → '%s'", oldColumn.Name, req.Name))
+			changes = append(changes, fmt.Sprintf("Name: '%s' → '%s'", oldColumn.Name, req.Name))
 		}
 		if req.Status != "" {
 			oldStatus := ""
@@ -369,17 +355,17 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 				oldStatus = *oldColumn.Status
 			}
 			if req.Status != oldStatus {
-				changes = append(changes, fmt.Sprintf("状态: '%s' → '%s'", oldStatus, req.Status))
+				changes = append(changes, fmt.Sprintf("Status: '%s' → '%s'", oldStatus, req.Status))
 			}
 		}
 		if req.Position >= 0 && req.Position != oldColumn.Position {
-			changes = append(changes, fmt.Sprintf("位置: %d → %d", oldColumn.Position, req.Position))
+			changes = append(changes, fmt.Sprintf("Position: %d → %d", oldColumn.Position, req.Position))
 		}
 		if req.Color != "" && req.Color != oldColumn.Color {
-			changes = append(changes, fmt.Sprintf("颜色: '%s' → '%s'", oldColumn.Color, req.Color))
+			changes = append(changes, fmt.Sprintf("Color: '%s' → '%s'", oldColumn.Color, req.Color))
 		}
 		if req.Description != "" && req.Description != oldColumn.Description {
-			changes = append(changes, fmt.Sprintf("说明: '%s' → '%s'", oldColumn.Description, req.Description))
+			changes = append(changes, fmt.Sprintf("Description: '%s' → '%s'", oldColumn.Description, req.Description))
 		}
 		if req.OwnerAgentId != nil {
 			oldOwnerAgentId := ""
@@ -387,7 +373,7 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 				oldOwnerAgentId = *oldColumn.OwnerAgentId
 			}
 			if *req.OwnerAgentId != oldOwnerAgentId {
-				changes = append(changes, fmt.Sprintf("负责人: '%s' → '%s'", oldOwnerAgentId, *req.OwnerAgentId))
+				changes = append(changes, fmt.Sprintf("Owner: '%s' → '%s'", oldOwnerAgentId, *req.OwnerAgentId))
 			}
 		}
 
@@ -424,7 +410,7 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 
 		_, err = db.Exec(query, updates...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
 			return
 		}
 
@@ -446,31 +432,31 @@ func DeleteColumn(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		id := c.Query("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Column ID is required"})
 			return
 		}
 
 		var exists bool
 		db.QueryRow("SELECT EXISTS(SELECT 1 FROM columns WHERE id = ?)", id).Scan(&exists)
 		if !exists {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的列 ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid column ID"})
 			return
 		}
 
 		if !checkColumnAccessWithBoardFallback(db, user.ID, id, "ADMIN", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该列"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete this column"})
 			return
 		}
 
 		_, err := db.Exec("DELETE FROM columns WHERE id = ?", id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
@@ -487,7 +473,7 @@ func GetColumnAgent(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		columnID := c.Param("columnId")
 		if columnID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Column ID is required"})
 			return
 		}
 
@@ -530,29 +516,29 @@ func ReorderColumns(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		var req ReorderColumnsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
 
 		if req.BoardID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "看板 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Board ID is required"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, req.BoardID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该看板"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to modify this board"})
 			return
 		}
 
 		tx, err := db.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "数据库错误"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return
 		}
 		defer tx.Rollback()
@@ -564,13 +550,13 @@ func ReorderColumns(db *sql.DB) gin.HandlerFunc {
 				col.Position, now, col.ID, req.BoardID,
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "更新列排序失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update column order"})
 				return
 			}
 		}
 
 		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存排序失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save order"})
 			return
 		}
 
@@ -585,23 +571,23 @@ func SetColumnAgent(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以配置"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can configure"})
 			return
 		}
 
 		columnID := c.Param("columnId")
 		if columnID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Column ID is required"})
 			return
 		}
 
 		var req SetColumnAgentRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
 
@@ -614,7 +600,7 @@ func SetColumnAgent(db *sql.DB) gin.HandlerFunc {
 			string(agentTypesJSON), now, columnID,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "设置失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
 			return
 		}
 
@@ -627,7 +613,7 @@ func SetColumnAgent(db *sql.DB) gin.HandlerFunc {
 				agentID, columnID, string(agentTypesJSON), now, now,
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "设置失败"})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
 				return
 			}
 		}
@@ -641,23 +627,23 @@ func DeleteColumnAgent(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		if user.Role != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "只有管理员可以配置"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can configure"})
 			return
 		}
 
 		columnID := c.Param("columnId")
 		if columnID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Column ID is required"})
 			return
 		}
 
 		_, err := db.Exec("DELETE FROM column_agents WHERE column_id = ?", columnID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
@@ -742,4 +728,11 @@ func getSubtasksForTask(db *sql.DB, taskID string) ([]gin.H, error) {
 		}
 	}
 	return subtasks, nil
+}
+
+func buildInClause(n int) string {
+	if n <= 0 {
+		return "(NULL)"
+	}
+	return "(" + strings.Repeat("?,", n-1) + "?)"
 }

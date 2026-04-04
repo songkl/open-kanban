@@ -22,7 +22,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -31,7 +31,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		status := c.Query("status")
 
 		if columnID != "" && !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "READ", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该列"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this column"})
 			return
 		}
 
@@ -51,7 +51,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		taskService := services.NewTaskService(db)
 		result, err := taskService.GetTasks(user.ID, user.Role, columnID, boardID, status, page, pageSize)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get task: " + err.Error()})
 			return
 		}
 
@@ -66,49 +66,44 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 }
 
 type CreateTaskRequest struct {
-	Title       string      `json:"title"`
-	Description *string     `json:"description"`
-	Priority    string      `json:"priority"`
-	Assignee    *string     `json:"assignee"`
+	Title       string      `json:"title" validate:"required,max=500"`
+	Description *string     `json:"description" validate:"omitempty,max=5000"`
+	Priority    string      `json:"priority" validate:"omitempty,oneof=low medium high"`
+	Assignee    *string     `json:"assignee" validate:"omitempty,max=100"`
 	Meta        interface{} `json:"meta"`
-	ColumnID    string      `json:"columnId"`
+	ColumnID    string      `json:"columnId" validate:"required"`
 	Position    int         `json:"position"`
 	Published   bool        `json:"published"`
-	AgentID     *string     `json:"agentId"`
-	AgentPrompt *string     `json:"agentPrompt"`
+	AgentID     *string     `json:"agentId" validate:"omitempty,uuid"`
+	AgentPrompt *string     `json:"agentPrompt" validate:"omitempty,max=2000"`
 }
 
 func CreateTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法创建任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot create tasks"})
 			return
 		}
 
 		if !checkRateLimit("task:" + user.ID) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
 			return
 		}
 
 		var req CreateTaskRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务标题不能为空"})
-			return
-		}
-
-		if req.ColumnID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "列 ID 不能为空"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
 		if !checkColumnAccessWithBoardFallback(db, user.ID, req.ColumnID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权在该列创建任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to create task in this column"})
 			return
 		}
 
@@ -128,7 +123,7 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 		})
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建任务失败: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task: " + err.Error()})
 			return
 		}
 
@@ -169,24 +164,24 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
 			return
 		}
 
 		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
 
 		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "READ", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问该任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this task"})
 			return
 		}
 
@@ -195,7 +190,7 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 		taskService := services.NewTaskService(db)
 		task, commentCount, subtaskCount, err := taskService.GetTask(id, user.ID, user.Role)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
 
@@ -239,45 +234,45 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 }
 
 type UpdateTaskRequest struct {
-	Title       string      `json:"title"`
-	Description *string     `json:"description"`
-	Priority    string      `json:"priority"`
-	Assignee    *string     `json:"assignee"`
+	Title       string      `json:"title" validate:"omitempty,required,max=500"`
+	Description *string     `json:"description" validate:"omitempty,max=5000"`
+	Priority    string      `json:"priority" validate:"omitempty,oneof=low medium high"`
+	Assignee    *string     `json:"assignee" validate:"omitempty,max=100"`
 	Meta        interface{} `json:"meta"`
-	ColumnID    string      `json:"columnId"`
+	ColumnID    string      `json:"columnId" validate:"omitempty,uuid"`
 	Position    *int        `json:"position"`
 	Published   *bool       `json:"published"`
-	AgentID     *string     `json:"agentId"`
-	AgentPrompt *string     `json:"agentPrompt"`
+	AgentID     *string     `json:"agentId" validate:"omitempty,uuid"`
+	AgentPrompt *string     `json:"agentPrompt" validate:"omitempty,max=2000"`
 }
 
 func UpdateTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法修改任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot modify tasks"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
 			return
 		}
 
 		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
 
 		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to modify this task"})
 			return
 		}
 
@@ -285,14 +280,14 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			var createdBy string
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
 			if err != nil || createdBy != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "只能修改自己创建的任务"})
+				c.JSON(http.StatusForbidden, gin.H{"error": "Can only modify tasks you created"})
 				return
 			}
 		}
 
 		var req UpdateTaskRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
@@ -311,7 +306,7 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 		})
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
 			return
 		}
 
@@ -350,24 +345,24 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法删除任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete tasks"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
 			return
 		}
 
 		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
 
@@ -376,18 +371,18 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
 			if err != nil {
 				if err == sql.ErrNoRows {
-					c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+					c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 					return
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("查询任务失败: %v", err)})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to query task: %v", err)})
 				return
 			}
 			if !createdBy.Valid || createdBy.String != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "只能删除自己创建的任务"})
+				c.JSON(http.StatusForbidden, gin.H{"error": "Can only delete tasks you created"})
 				return
 			}
 		} else if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "ADMIN", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete this task"})
 			return
 		}
 
@@ -397,7 +392,7 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 
 		taskService := services.NewTaskService(db)
 		if err := taskService.DeleteTask(id); err != nil {
-			errMsg := fmt.Sprintf("删除任务失败: %v", err)
+			errMsg := fmt.Sprintf("Failed to delete task: %v", err)
 			LogActivity(db, user.ID, "DELETE_TASK", "TASK", id, taskTitle, errMsg, c.ClientIP(), getRequestSource(c))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": errMsg})
 			return
@@ -416,29 +411,29 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法归档任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot archive tasks"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
 			return
 		}
 
 		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
 
 		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权归档该任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to archive this task"})
 			return
 		}
 
@@ -446,14 +441,14 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			var createdBy string
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
 			if err != nil || createdBy != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "只能归档自己创建的任务"})
+				c.JSON(http.StatusForbidden, gin.H{"error": "Can only archive tasks you created"})
 				return
 			}
 		}
 
 		var req ArchiveTaskRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
 
@@ -465,7 +460,7 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 		taskService := services.NewTaskService(db)
 		_, err = taskService.ArchiveTask(id, archived)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "归档失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to archive"})
 			return
 		}
 
@@ -484,7 +479,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -510,7 +505,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			LEFT JOIN column_agents ca ON c.id = ca.column_id
 		`)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取列信息失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get column info"})
 			return
 		}
 		defer rows.Close()
@@ -536,16 +531,13 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 		var taskRows *sql.Rows
 
 		if userAgent != "" && len(columnIDs) > 0 {
-			placeholders := make([]string, len(columnIDs))
 			args := make([]interface{}, 0, len(columnIDs)+1)
-			i := 0
 			for colID := range columnIDs {
-				placeholders[i] = "?"
 				args = append(args, colID)
-				i++
 			}
 			args = append(args, user.Nickname)
 
+			inClause := buildInClause(len(columnIDs))
 			query := fmt.Sprintf(`
 				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
@@ -553,9 +545,9 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
 				WHERE t.archived = false AND t.published = true
-				  AND (t.assignee = ? OR t.column_id IN (%s))
+				  AND (t.assignee = ? OR t.column_id IN %s)
 				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
-			`, strings.Join(placeholders, ","))
+			`, inClause)
 
 			taskRows, err = db.Query(query, args...)
 		} else if userAgent != "" {
@@ -570,15 +562,12 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
 			`, user.Nickname)
 		} else if len(columnIDs) > 0 {
-			placeholders := make([]string, len(columnIDs))
 			args := make([]interface{}, 0, len(columnIDs))
-			i := 0
 			for colID := range columnIDs {
-				placeholders[i] = "?"
 				args = append(args, colID)
-				i++
 			}
 
+			inClause := buildInClause(len(columnIDs))
 			query := fmt.Sprintf(`
 				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
@@ -586,9 +575,9 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
 				WHERE t.archived = false AND t.published = true
-				  AND t.column_id IN (%s)
+				  AND t.column_id IN %s
 				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
-			`, strings.Join(placeholders, ","))
+			`, inClause)
 
 			taskRows, err = db.Query(query, args...)
 		} else {
@@ -596,7 +585,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if err != nil && tasks == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get tasks"})
 			return
 		}
 
@@ -669,29 +658,29 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法完成任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot complete tasks"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
 			return
 		}
 
 		columnID, err := getColumnIDForTask(db, id)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
 
 		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权操作该任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to operate on this task"})
 			return
 		}
 
@@ -699,7 +688,7 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			var createdBy string
 			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
 			if err != nil || createdBy != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "只能完成自己创建的任务"})
+				c.JSON(http.StatusForbidden, gin.H{"error": "Can only complete tasks you created"})
 				return
 			}
 		}
@@ -727,7 +716,7 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		if newStatus.Valid {
 			newStatusVal = newStatus.String
 		}
-		details := fmt.Sprintf("状态: '%s' → '%s'", oldStatusVal, newStatusVal)
+		details := fmt.Sprintf("Status: '%s' → '%s'", oldStatusVal, newStatusVal)
 		LogActivity(db, user.ID, "UPDATE_TASK", "TASK", id, taskTitle, details, c.ClientIP(), getRequestSource(c))
 
 		broadcast()

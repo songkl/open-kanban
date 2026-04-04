@@ -15,7 +15,7 @@ func GetSubtasks(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -24,12 +24,12 @@ func GetSubtasks(db *sql.DB) gin.HandlerFunc {
 		if taskID != "" {
 			boardID, err := getBoardIDForTask(db, taskID)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务 ID"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 				return
 			}
 
 			if !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "无权查看该任务的子任务"})
+				c.JSON(http.StatusForbidden, gin.H{"error": "No permission to view subtasks of this task"})
 				return
 			}
 		}
@@ -51,7 +51,7 @@ func GetSubtasks(db *sql.DB) gin.HandlerFunc {
 			`)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取子任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get subtasks"})
 			return
 		}
 		defer rows.Close()
@@ -77,8 +77,8 @@ func GetSubtasks(db *sql.DB) gin.HandlerFunc {
 
 // CreateSubtaskRequest represents subtask creation request
 type CreateSubtaskRequest struct {
-	Title  string `json:"title"`
-	TaskID string `json:"taskId"`
+	Title  string `json:"title" validate:"required,max=500"`
+	TaskID string `json:"taskId" validate:"required"`
 }
 
 // CreateSubtask creates a new subtask
@@ -86,34 +86,29 @@ func CreateSubtask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法创建子任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot create subtasks"})
 			return
 		}
 
 		var req CreateSubtaskRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "子任务标题不能为空"})
-			return
-		}
-
-		if req.TaskID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "任务 ID 不能为空"})
+		if err := BindAndValidate(c, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
 			return
 		}
 
 		boardID, err := getBoardIDForTask(db, req.TaskID)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务 ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权在该任务创建子任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to create subtask in this task"})
 			return
 		}
 
@@ -125,7 +120,7 @@ func CreateSubtask(db *sql.DB) gin.HandlerFunc {
 			subtaskID, req.Title, false, req.TaskID, now, now,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建子任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subtask"})
 			return
 		}
 
@@ -144,7 +139,7 @@ func CreateSubtask(db *sql.DB) gin.HandlerFunc {
 
 // UpdateSubtaskRequest represents subtask update request
 type UpdateSubtaskRequest struct {
-	Title     *string `json:"title"`
+	Title     *string `json:"title" validate:"omitempty,max=500"`
 	Completed *bool   `json:"completed"`
 }
 
@@ -153,18 +148,18 @@ func UpdateSubtask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法修改子任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot modify subtasks"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "子任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Subtask ID is required"})
 			return
 		}
 
@@ -172,27 +167,27 @@ func UpdateSubtask(db *sql.DB) gin.HandlerFunc {
 		err := db.QueryRow("SELECT task_id FROM subtasks WHERE id = ?", id).Scan(&taskID)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "子任务不存在"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Subtask not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取子任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get subtasks"})
 			return
 		}
 
 		boardID, err := getBoardIDForTask(db, taskID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get task"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权修改该子任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to modify this subtask"})
 			return
 		}
 
 		var req UpdateSubtaskRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
 
@@ -213,7 +208,7 @@ func UpdateSubtask(db *sql.DB) gin.HandlerFunc {
 
 		_, err = db.Exec(query, updates...)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "更新失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
 			return
 		}
 
@@ -228,7 +223,7 @@ func UpdateSubtask(db *sql.DB) gin.HandlerFunc {
 		`, id).Scan(&st.ID, &st.Title, &st.Completed, &st.TaskID, &st.CreatedAt, &st.UpdatedAt)
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取子任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get subtasks"})
 			return
 		}
 
@@ -248,18 +243,18 @@ func DeleteSubtask(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 
 		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "查看者角色无法删除子任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete subtasks"})
 			return
 		}
 
 		id := c.Param("id")
 		if id == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "子任务 ID 不能为空"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Subtask ID is required"})
 			return
 		}
 
@@ -267,27 +262,27 @@ func DeleteSubtask(db *sql.DB) gin.HandlerFunc {
 		err := db.QueryRow("SELECT task_id FROM subtasks WHERE id = ?", id).Scan(&taskID)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				c.JSON(http.StatusNotFound, gin.H{"error": "子任务不存在"})
+				c.JSON(http.StatusNotFound, gin.H{"error": "Subtask not found"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取子任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get subtasks"})
 			return
 		}
 
 		boardID, err := getBoardIDForTask(db, taskID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get task"})
 			return
 		}
 
 		if !checkBoardAccess(db, user.ID, boardID, "WRITE", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权删除该子任务"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete this subtask"})
 			return
 		}
 
 		_, err = db.Exec("DELETE FROM subtasks WHERE id = ?", id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
