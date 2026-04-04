@@ -210,7 +210,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 
 		for {
 			conn.SetReadDeadline(time.Now().Add(readDeadline))
-			_, msgType, err := conn.ReadMessage()
+			msgType, _, err := conn.ReadMessage()
 			if err != nil {
 				if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == websocket.CloseProtocolError {
 					log.Printf("WebSocket client sent invalid data (user: %s): %v", userID, err)
@@ -222,7 +222,6 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				break
 			}
 			if msgType == websocket.TextMessage {
-				_, _, _ = conn.ReadMessage()
 				conn.SetWriteDeadline(time.Now().Add(pingWriteDeadline))
 				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`)); err != nil {
 					log.Printf("Failed to send heartbeat_ack to client (user: %s): %v", userID, err)

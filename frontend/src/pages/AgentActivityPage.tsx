@@ -94,6 +94,17 @@ export function AgentActivityPage() {
         reconnectAttemptRef.current = 0;
       };
 
+      const HEARTBEAT_INTERVAL = 15000;
+      let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+      const sendHeartbeat = () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'heartbeat' }));
+        }
+      };
+
+      heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
+
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
@@ -116,6 +127,10 @@ export function AgentActivityPage() {
       ws.onerror = () => {};
 
       ws.onclose = () => {
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
         const attempt = reconnectAttemptRef.current;
         if (attempt < MAX_RECONNECT_ATTEMPTS) {
           const delay = getReconnectDelay(attempt);
