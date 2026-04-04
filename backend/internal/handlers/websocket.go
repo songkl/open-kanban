@@ -149,13 +149,12 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Verify token
-		var userID string
-		err := db.QueryRow("SELECT user_id FROM tokens WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)", tokenKey, time.Now()).Scan(&userID)
-		if err != nil {
+		user := getCurrentUserFromToken(db, tokenKey)
+		if user == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
 			return
 		}
+		userID := user.ID
 
 		if !isConnectionAllowed() {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Server at capacity"})
