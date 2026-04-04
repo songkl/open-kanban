@@ -274,6 +274,37 @@ func TestSetSignatureSecrets(t *testing.T) {
 	SetSignatureSecrets(make(map[string]string))
 }
 
+func TestSignatureEnabledByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+
+	os.Unsetenv("SIGNATURE_ENABLED")
+	os.Unsetenv("SIGNATURE_SECRETS")
+	loadSignatureSecrets()
+	SetSignatureEnabled(os.Getenv("SIGNATURE_ENABLED") != "0")
+
+	assert.True(t, isSignatureEnabled() == false, "Without secrets, signature should not be actually enabled even if SIGNATURE_ENABLED is default (not '0')")
+
+	SetSignatureSecrets(map[string]string{"test-key": "test-secret"})
+	assert.True(t, isSignatureEnabled(), "With secrets configured, signature should be enabled by default")
+
+	r.POST("/test", RequireSignatureVerification(), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	body := []byte(`{"test":"data"}`)
+	req, _ := http.NewRequest("POST", "/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Missing signature headers")
+
+	SetSignatureSecrets(make(map[string]string))
+}
+
 func TestSignatureIntegration(t *testing.T) {
 	accessKey := "integration-test-key"
 	secret := "integration-secret"

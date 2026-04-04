@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -24,7 +25,7 @@ const (
 )
 
 var (
-	signatureEnabled = os.Getenv("SIGNATURE_ENABLED") == "1"
+	signatureEnabled = os.Getenv("SIGNATURE_ENABLED") != "0"
 	signatureSecrets = make(map[string]string)
 )
 
@@ -35,6 +36,9 @@ func init() {
 func loadSignatureSecrets() {
 	secretsEnv := os.Getenv("SIGNATURE_SECRETS")
 	if secretsEnv == "" {
+		if os.Getenv("SIGNATURE_ENABLED") == "1" {
+			log.Printf("WARNING: SIGNATURE_ENABLED is set to '1' but SIGNATURE_SECRETS is not configured. Signature verification will be disabled until secrets are provided.")
+		}
 		return
 	}
 	pairs := strings.Split(secretsEnv, ",")
@@ -114,6 +118,7 @@ func ValidateTimestamp(timestamp int64) bool {
 func RequireSignatureVerification() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !isSignatureEnabled() {
+			log.Printf("WARNING: Signature verification is disabled. Protected endpoints are accessible without signature.")
 			c.Next()
 			return
 		}
