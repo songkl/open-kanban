@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, startTransition } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface AddSubtaskModalProps {
@@ -15,24 +15,17 @@ export function AddSubtaskModal({
   const { t } = useTranslation();
   const [title, setTitle] = useState('');
 
-  const resetForm = useCallback(() => {
-    startTransition(() => {
-      setTitle('');
-    });
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      void resetForm();
-    }
-  }, [isOpen, resetForm]);
+  const handleClose = useCallback(() => {
+    setTitle('');
+    onClose();
+  }, [onClose]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title.trim()) {
       onSubmit(title.trim());
       setTitle('');
-      onClose();
+      handleClose();
     }
   };
 
@@ -60,7 +53,7 @@ export function AddSubtaskModal({
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
             >
               {t('subtask.cancel')}

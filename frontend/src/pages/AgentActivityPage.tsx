@@ -121,9 +121,9 @@ export function AgentActivityPage() {
               setAgents(agentsData || []);
             });
           }
-        } catch (e) {
-          console.error('Failed to parse WebSocket message:', e);
-        }
+          } catch {
+            // Ignore parse errors for non-JSON messages
+          }
       };
 
       ws.onerror = () => {};

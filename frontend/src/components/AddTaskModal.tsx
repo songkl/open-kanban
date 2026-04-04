@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense, startTransition } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { columnsApi } from '@/services/api';
 
@@ -52,25 +52,22 @@ export function AddTaskModal({
   }, [selectedBoardId, isOpen, defaultColumnId]);
 
   const resetForm = useCallback(() => {
-    startTransition(() => {
-      setTitle('');
-      setDescription('');
-      setIsPublished(true);
-      setSelectedBoardId(currentBoardId || '');
-      setPriority('medium');
-    });
+    setTitle('');
+    setDescription('');
+    setIsPublished(true);
+    setSelectedBoardId(currentBoardId || '');
+    setPriority('medium');
     setTimeout(() => titleInputRef.current?.focus(), 0);
   }, [currentBoardId]);
 
-  useEffect(() => {
-    if (isOpen) {
-      resetForm();
-    }
-  }, [isOpen, resetForm]);
+  const handleClose = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [resetForm, onClose]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
-      onClose();
+      handleClose();
       return;
     }
 
@@ -91,7 +88,7 @@ export function AddTaskModal({
           setTitle('');
           setDescription('');
           setIsPublished(false);
-          onClose();
+          handleClose();
         }
         return;
       }
@@ -103,12 +100,12 @@ export function AddTaskModal({
           setTitle('');
           setDescription('');
           setIsPublished(false);
-          onClose();
+          handleClose();
         }
         return;
       }
     }
-  }, [onClose, title, description, isPublished, selectedColumnId, selectedBoardId, priority, onSubmit]);
+  }, [handleClose, title, description, isPublished, selectedColumnId, selectedBoardId, priority, onSubmit]);
 
   useEffect(() => {
     if (isOpen) {
@@ -124,7 +121,7 @@ export function AddTaskModal({
       setTitle('');
       setDescription('');
       setIsPublished(false);
-      onClose();
+      handleClose();
     }
   };
 
@@ -235,7 +232,7 @@ export function AddTaskModal({
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600"
             >
               {t('task.cancel')}

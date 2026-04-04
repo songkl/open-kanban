@@ -41,8 +41,8 @@ function highlightText(text: string, query: string): React.ReactNode {
 
 export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, searchQuery, isSelected, onSelect }: TaskCardProps) {
   const { t } = useTranslation();
-  const tempId = useId();
-  const taskId = task?.id ?? `temp-${tempId}`;
+  const randomId = useId();
+  const taskId = task?.id ?? `temp-${randomId}`;
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
