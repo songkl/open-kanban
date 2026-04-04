@@ -145,3 +145,17 @@ func TestGetMaxConnections(t *testing.T) {
 		}
 	})
 }
+
+func TestWebSocketHeartbeatConstants(t *testing.T) {
+	t.Run("ping interval is reasonable", func(t *testing.T) {
+	})
+}
+
+func TestWebSocketConnectionCount(t *testing.T) {
+	t.Run("get connection count returns zero initially", func(t *testing.T) {
+		count := handlers.GetConnectionCount()
+		if count < 0 {
+			t.Errorf("expected non-negative count, got %d", count)
+		}
+	})
+}

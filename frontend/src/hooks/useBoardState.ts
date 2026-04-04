@@ -439,10 +439,6 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.type === 'ping') {
-          ws.send(JSON.stringify({ type: 'pong' }));
-          return;
-        }
         if (message.type === 'heartbeat_ack') {
           return;
         }
