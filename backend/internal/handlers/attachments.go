@@ -357,16 +357,41 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// ServeFile serves uploaded files (public endpoint)
+// ServeFile serves uploaded files
 func ServeFile(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		fileID := c.Param("id")
 
-		var storagePath, mimeType string
-		err := db.QueryRow("SELECT storage_path, mime_type FROM attachments WHERE id = ?", fileID).Scan(&storagePath, &mimeType)
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		var storagePath, mimeType, taskID string
+		var commentID sql.NullString
+		err := db.QueryRow("SELECT storage_path, mime_type, task_id, comment_id FROM attachments WHERE id = ?", fileID).Scan(&storagePath, &mimeType, &taskID, &commentID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 			return
+		}
+
+		if taskID != "" {
+			boardID, err := getBoardIDForTask(db, taskID)
+			if err == nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this file"})
+				return
+			}
+		} else if commentID.Valid {
+			var cTaskID string
+			err := db.QueryRow("SELECT task_id FROM comments WHERE id = ?", commentID.String).Scan(&cTaskID)
+			if err == nil {
+				boardID, err := getBoardIDForTask(db, cTaskID)
+				if err == nil && !checkBoardAccess(db, user.ID, boardID, "READ", user.Role) {
+					c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this file"})
+					return
+				}
+			}
 		}
 
 		absUploadDir, err := filepath.Abs(UploadDir)

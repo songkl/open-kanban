@@ -197,7 +197,7 @@ func main() {
 		tasks.DELETE("/:id", handlers.DeleteTask(db))
 		tasks.POST("/:id/archive", handlers.ArchiveTask(db))
 		tasks.POST("/:id/complete", handlers.CompleteTask(db))
-		tasks.GET("/:id/attachments", handlers.GetTaskAttachments(db))
+		tasks.GET("/:id/attachments", handlers.RequireAuth(db), handlers.GetTaskAttachments(db))
 	}
 
 	// MCP routes - for MCP server to get agent-specific tasks
