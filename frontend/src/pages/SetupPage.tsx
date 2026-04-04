@@ -19,7 +19,7 @@ interface AdvancedConfig {
 export function SetupPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [nickname, setNickname] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -38,8 +38,8 @@ export function SetupPage() {
 
   const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nickname.trim()) {
-      setLoginError(t('login.enterNickname'));
+    if (!username.trim()) {
+      setLoginError(t('login.enterUsername'));
       return;
     }
 
@@ -52,7 +52,7 @@ export function SetupPage() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          nickname: nickname.trim(),
+          username: username.trim(),
           password: password,
           allowRegistration: true,
           requirePassword: false,
@@ -88,18 +88,18 @@ export function SetupPage() {
           <p className="mt-1 text-xs text-blue-500 dark:text-blue-400">{t('login.firstUserAdmin')}</p>
         </div>
 
-        <form onSubmit={handleSetup} className="space-y-6">
+          <form onSubmit={handleSetup} className="space-y-6">
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              {t('login.nickname')}
+              {t('login.username')}
             </label>
             <input
               type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder={t('login.enterNickname')}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder={t('login.enterUsername')}
               className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-              maxLength={20}
+              maxLength={50}
             />
           </div>
 
@@ -279,7 +279,7 @@ export function SetupPage() {
 
           <button
             type="submit"
-            disabled={loginLoading || !nickname.trim()}
+            disabled={loginLoading || !username.trim()}
             className="w-full rounded-md bg-blue-500 py-3 font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
           >
             {loginLoading ? t('login.loggingIn') : t('login.start')}

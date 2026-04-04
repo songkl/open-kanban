@@ -9,6 +9,8 @@ import { SafeMarkdown } from './SafeMarkdown';
 import { TaskCard } from './TaskCard';
 import type { Column as ColumnType, Task } from '@/types/kanban';
 
+const LARGE_COLUMN_THRESHOLD = 50;
+
 interface ColumnProps {
   column: ColumnType;
   currentBoardId?: string;
@@ -47,6 +49,7 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const tasks = column?.tasks ?? [];
+  const isLargeColumn = tasks.length > LARGE_COLUMN_THRESHOLD;
 
   useEffect(() => {
     const scrollContainer = scrollRef.current;
@@ -184,7 +187,7 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
           </div>
         )}
 
-        <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-2">
+        <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-2" style={isLargeColumn ? { contentVisibility: 'auto', containIntrinsicSize: '0 500px' } : undefined}>
           <SortableContext
             items={tasks.map((t) => t.id)}
             strategy={verticalListSortingStrategy}

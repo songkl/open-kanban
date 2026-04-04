@@ -323,10 +323,10 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ nickname, password, avatar }),
     }),
-  init: (nickname: string, password?: string, avatar?: string, allowRegistration = true, requirePassword = false, authEnabled = true) =>
+  init: (username: string, password?: string, avatar?: string, allowRegistration = true, requirePassword = false, authEnabled = true) =>
     fetchApi<{ user: User; token: string }>('/api/auth/init', {
       method: 'POST',
-      body: JSON.stringify({ nickname, password, avatar, allowRegistration, requirePassword, authEnabled }),
+      body: JSON.stringify({ username, password, avatar, allowRegistration, requirePassword, authEnabled }),
     }),
   me: async () => {
     const res = await fetch('/api/auth/me', { credentials: 'include' });

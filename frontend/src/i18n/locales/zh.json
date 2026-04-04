@@ -337,9 +337,11 @@
     "hint": "创建看板后即可开始使用"
   },
   "login": {
-    "welcome": "请输入你的昵称开始使用",
+    "welcome": "请输入你的用户名开始使用",
     "firstUserAdmin": "第一个用户将成为管理员",
     "selectAvatar": "选择头像",
+    "username": "用户名",
+    "enterUsername": "请输入你的用户名",
     "nickname": "昵称",
     "enterNickname": "请输入你的昵称",
     "password": "密码",
@@ -347,7 +349,8 @@
     "passwordHint": "不设置密码则使用昵称登录",
     "loggingIn": "登录中...",
     "start": "开始使用",
-    "failed": "登录失败，请重试"
+    "failed": "登录失败，请重试",
+    "usernameRequired": "用户名不能为空"
   },
   "filter": {
     "searchPlaceholder": "搜索任务...",

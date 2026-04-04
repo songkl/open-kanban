@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   DndContext,
@@ -14,9 +14,10 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Column } from './Column';
 import { DragLayer } from './DragLayer';
-import { TaskModal } from './TaskModal';
 import { AddTaskModal } from './AddTaskModal';
 import type { Board, Column as ColumnType, Task } from '@/types/kanban';
+
+const TaskModal = lazy(() => import('./TaskModal').then(m => ({ default: m.TaskModal })));
 
 interface ColumnBoardProps {
   columns: ColumnType[];
@@ -399,21 +400,27 @@ export function ColumnBoard({
       </DndContext>
 
       {selectedTask && (
-        <TaskModal
-          task={selectedTask}
-          columnName={columns.find((col) => col.tasks.some((t) => t.id === selectedTask.id))?.name}
-          columns={columns.map((c) => ({ id: c.id, name: c.name }))}
-          boardId={boardIdFromUrl}
-          boards={boards}
-          canEdit={true}
-          startEditing={editTaskId === selectedTask.id}
-          onClose={() => { onSetSelectedTask(null); onSetEditTaskId(null); }}
-          onUpdate={onUpdateTask}
-          onDelete={onDeleteTask}
-          onArchive={onArchiveTask}
-          onAddComment={onAddComment}
-          onEditingStarted={() => onSetEditTaskId(null)}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <TaskModal
+            task={selectedTask}
+            columnName={columns.find((col) => col.tasks.some((t) => t.id === selectedTask.id))?.name}
+            columns={columns.map((c) => ({ id: c.id, name: c.name }))}
+            boardId={boardIdFromUrl}
+            boards={boards}
+            canEdit={true}
+            startEditing={editTaskId === selectedTask.id}
+            onClose={() => { onSetSelectedTask(null); onSetEditTaskId(null); }}
+            onUpdate={onUpdateTask}
+            onDelete={onDeleteTask}
+            onArchive={onArchiveTask}
+            onAddComment={onAddComment}
+            onEditingStarted={() => onSetEditTaskId(null)}
+          />
+        </Suspense>
       )}
     </div>
   );

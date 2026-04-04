@@ -337,9 +337,11 @@
     "hint": "Create a board to get started"
   },
   "login": {
-    "welcome": "Enter your nickname to get started",
+    "welcome": "Enter your username to get started",
     "firstUserAdmin": "The first user will become admin",
     "selectAvatar": "Select Avatar",
+    "username": "Username",
+    "enterUsername": "Enter your username",
     "nickname": "Nickname",
     "enterNickname": "Enter your nickname",
     "password": "Password",
@@ -347,7 +349,8 @@
     "passwordHint": "Skip password to use nickname login",
     "loggingIn": "Logging in...",
     "start": "Get Started",
-    "failed": "Login failed, please try again"
+    "failed": "Login failed, please try again",
+    "usernameRequired": "Username is required"
   },
   "filter": {
     "searchPlaceholder": "Search tasks...",
