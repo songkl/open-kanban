@@ -341,14 +341,19 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		include := c.Query("include")
+
 		var task models.Task
 		var desc, assignee, meta, createdBy sql.NullString
 		var archivedAt sql.NullTime
+		var commentCount, subtaskCount int
 		err = db.QueryRow(`
-			SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_by, created_at, updated_at
-			FROM tasks
-			WHERE id = ?
-		`, id).Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &createdBy, &task.CreatedAt, &task.UpdatedAt)
+			SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, t.published, t.archived, t.archived_at, t.created_by, t.created_at, t.updated_at,
+				(SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
+				(SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
+			FROM tasks t
+			WHERE t.id = ?
+		`, id).Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &commentCount, &subtaskCount)
 
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -375,27 +380,40 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			task.CreatedBy = createdBy.String
 		}
 
-		comments, _ := getCommentsForTask(db, task.ID)
-		subtasks, _ := getSubtasksForTask(db, task.ID)
+		response := gin.H{
+			"id":           task.ID,
+			"title":        task.Title,
+			"description":  task.Description,
+			"priority":     task.Priority,
+			"assignee":     task.Assignee,
+			"meta":         task.Meta,
+			"columnId":     task.ColumnID,
+			"position":     task.Position,
+			"published":    task.Published,
+			"archived":     task.Archived,
+			"archivedAt":   task.ArchivedAt,
+			"createdBy":    task.CreatedBy,
+			"createdAt":    task.CreatedAt,
+			"updatedAt":    task.UpdatedAt,
+			"commentCount": commentCount,
+			"subtaskCount": subtaskCount,
+		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"id":          task.ID,
-			"title":       task.Title,
-			"description": task.Description,
-			"priority":    task.Priority,
-			"assignee":    task.Assignee,
-			"meta":        task.Meta,
-			"columnId":    task.ColumnID,
-			"position":    task.Position,
-			"published":   task.Published,
-			"archived":    task.Archived,
-			"archivedAt":  task.ArchivedAt,
-			"createdBy":   task.CreatedBy,
-			"createdAt":   task.CreatedAt,
-			"updatedAt":   task.UpdatedAt,
-			"comments":    comments,
-			"subtasks":    subtasks,
-		})
+		if include != "" {
+			includes := strings.Split(include, ",")
+			for _, inc := range includes {
+				inc = strings.TrimSpace(inc)
+				if inc == "comments" {
+					comments, _ := getCommentsForTask(db, task.ID)
+					response["comments"] = comments
+				} else if inc == "subtasks" {
+					subtasks, _ := getSubtasksForTask(db, task.ID)
+					response["subtasks"] = subtasks
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, response)
 	}
 }
 

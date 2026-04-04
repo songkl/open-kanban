@@ -190,9 +190,16 @@ func GlobalRateLimitMiddleware() gin.HandlerFunc {
 }
 
 var (
-	avatarOptions = []string{}
-	salt          string
-	saltOnce      sync.Once
+	avatarOptions = []string{
+		"😊", "😎", "🙂", "😇", "🤗",
+		"😸", "😻", "🌟", "💫", "✨",
+		"🦊", "🐱", "🐶", "🐼", "🐨",
+		"🦁", "🐯", "🦄", "🐲", "🦋",
+		"🍎", "🍊", "🍓", "🥝", "🍇",
+		"🌈", "☀️", "🌙", "⭐", "🔥",
+	}
+	salt     string
+	saltOnce sync.Once
 )
 
 // getSalt returns the application salt, generating one if it doesn't exist

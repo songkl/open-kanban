@@ -1,12 +1,16 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+const RequestIDKey = "request_id"
 
 type HealthResponse struct {
 	Status    string `json:"status"`
@@ -26,12 +30,17 @@ func RequestLoggerMiddleware() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		query := c.Request.URL.RawQuery
 
+		requestID := generateRequestID()
+		c.Set(RequestIDKey, requestID)
+		c.Header("X-Request-ID", requestID)
+
 		c.Next()
 
 		latency := time.Since(start)
 		status := c.Writer.Status()
 
 		logAttrs := []any{
+			slog.String("request_id", requestID),
 			slog.String("method", c.Request.Method),
 			slog.String("path", path),
 			slog.Int("status", status),
@@ -47,6 +56,30 @@ func RequestLoggerMiddleware() gin.HandlerFunc {
 			logAttrs = append(logAttrs, slog.String("errors", c.Errors.String()))
 		}
 
-		slog.Info("request", logAttrs...)
+		switch {
+		case status >= 500:
+			slog.Error("request completed", logAttrs...)
+		case status >= 400:
+			slog.Warn("request completed", logAttrs...)
+		case gin.Mode() == gin.DebugMode:
+			slog.Debug("request completed", logAttrs...)
+		default:
+			slog.Info("request completed", logAttrs...)
+		}
 	}
+}
+
+func generateRequestID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func GetRequestID(c *gin.Context) string {
+	if id, exists := c.Get(RequestIDKey); exists {
+		if requestID, ok := id.(string); ok {
+			return requestID
+		}
+	}
+	return ""
 }
