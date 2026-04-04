@@ -1,0 +1,20 @@
+[Unit]
+Description=Open Kanban Server
+After=network.target
+
+[Service]
+Type=simple
+User=kanban
+Group=kanban
+WorkingDirectory=/opt/kanban
+ExecStart=/opt/kanban/kanban-server
+Environment=PORT=8080
+Environment=DB_TYPE=sqlite
+Environment=DATABASE_URL=kanban.db
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
