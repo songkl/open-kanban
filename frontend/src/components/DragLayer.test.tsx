@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { DragLayer } from './DragLayer';
 import type { Task } from '../types/kanban';
-import { DndProvider } from '@dnd-kit/core';
+
+vi.mock('@dnd-kit/core', () => ({
+  DragOverlay: ({ children }: { children: React.ReactNode }) => children ? children : null,
+}));
 
 vi.mock('@/services/api', () => ({
   boardsApi: { getAll: vi.fn(), export: vi.fn() },
@@ -36,18 +39,14 @@ const mockTask: Task = {
   subtasks: [],
 };
 
-const renderWithDndProvider = (ui: React.ReactElement) => {
-  return render(<DndProvider>{ui}</DndProvider>);
-};
-
 describe('DragLayer', () => {
   it('renders nothing when activeTask is null', () => {
-    const { container } = renderWithDndProvider(<DragLayer activeTask={null} />);
-    expect(document.body.childNodes.length).toBe(0);
+    const { container } = render(<DragLayer activeTask={null} />);
+    expect(container.firstChild).toBeNull();
   });
 
   it('renders TaskCard when activeTask is provided', () => {
-    renderWithDndProvider(<DragLayer activeTask={mockTask} />);
+    render(<DragLayer activeTask={mockTask} />);
     expect(screen.getByText('Test Task')).toBeInTheDocument();
   });
 });

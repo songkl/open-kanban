@@ -2,7 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TaskList } from './TaskList';
 import type { Column as ColumnType } from '../types/kanban';
-import { DndProvider } from '@dnd-kit/core';
+
+vi.mock('@dnd-kit/core', () => ({
+  useDroppable: () => ({
+    setNodeRef: vi.fn(),
+    isOver: false,
+  }),
+  SortableContext: ({ children }: { children: React.ReactNode }) => children,
+  verticalListSortingStrategy: {},
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -26,13 +34,9 @@ const mockColumn: ColumnType = {
   updatedAt: '2024-01-01',
 };
 
-const renderWithDndProvider = (ui: React.ReactElement) => {
-  return render(<DndProvider>{ui}</DndProvider>);
-};
-
 describe('TaskList', () => {
   it('renders nothing when column is null', () => {
-    const { container } = renderWithDndProvider(
+    const { container } = render(
       <TaskList
         column={null as any}
         onTaskClick={vi.fn()}
@@ -43,7 +47,7 @@ describe('TaskList', () => {
   });
 
   it('renders empty state when tasks array is empty', () => {
-    renderWithDndProvider(
+    render(
       <TaskList
         column={mockColumn}
         onTaskClick={vi.fn()}
@@ -56,7 +60,7 @@ describe('TaskList', () => {
 
   it('calls onOpenAddTask when clicking empty state', () => {
     const onOpenAddTask = vi.fn();
-    renderWithDndProvider(
+    render(
       <TaskList
         column={mockColumn}
         onTaskClick={vi.fn()}

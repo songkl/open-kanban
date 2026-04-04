@@ -45,6 +45,7 @@ export function TaskList({
   const tasks = column?.tasks ?? [];
 
   useEffect(() => {
+    if (!column) return;
     const scrollContainer = scrollRef.current;
     if (!scrollContainer || !onLoadMore || !hasMore || isLoadingMore) return;
 
@@ -57,7 +58,7 @@ export function TaskList({
 
     scrollContainer.addEventListener('scroll', handleScroll);
     return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, [column.id, onLoadMore, hasMore, isLoadingMore]);
+  }, [column?.id, onLoadMore, hasMore, isLoadingMore]);
 
   const handleOpenAddTask = () => {
     if (onOpenAddTask && column.id) {

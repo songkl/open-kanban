@@ -98,8 +98,9 @@ describe('BatchOperationBar', () => {
         onClearSelection={vi.fn()}
       />
     );
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'col-2' } });
+    const selects = screen.getAllByRole('combobox');
+    const moveSelect = selects[0];
+    fireEvent.change(moveSelect, { target: { value: 'col-2' } });
     expect(onBatchMove).toHaveBeenCalledWith('col-2');
   });
 
