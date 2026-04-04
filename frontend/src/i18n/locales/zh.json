@@ -55,6 +55,8 @@
     "agentActivity": "Agent 活动状态"
   },
   "board": {
+    "count_one": "{{count}} 个看板",
+    "count_other": "{{count}} 个看板",
     "createdAt": "创建时间",
     "selectBoard": "选择看板",
     "noBoards": "暂无看板",
@@ -82,6 +84,7 @@
     "cancel": "取消",
     "save": "保存",
     "delete": "删除",
+    "deleteMeta": "删除元数据",
     "edit": "编辑",
     "archive": "归档",
     "enter": "进入",
@@ -597,7 +600,9 @@
     "agentId": "Agent ID",
     "agentIdPlaceholder": "例如 claude, gpt-4",
     "agentPrompt": "Agent Prompt",
-    "agentPromptPlaceholder": "给 Agent 的指令..."
+    "agentPromptPlaceholder": "给 Agent 的指令...",
+    "publishedAt": "发布日期",
+    "updatedAt": "更新日期"
   },
   "skeleton": {
     "loading": "加载中..."

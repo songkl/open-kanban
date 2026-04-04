@@ -55,6 +55,8 @@
     "agentActivity": "Agent Activity"
   },
   "board": {
+    "count_one": "{{count}} board",
+    "count_other": "{{count}} boards",
     "createdAt": "Created At",
     "selectBoard": "Select Board",
     "noBoards": "No boards available",
@@ -82,6 +84,7 @@
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
+    "deleteMeta": "Delete meta",
     "edit": "Edit",
     "archive": "Archive",
     "enter": "Enter",
@@ -597,7 +600,9 @@
     "agentId": "Agent ID",
     "agentIdPlaceholder": "e.g., claude, gpt-4",
     "agentPrompt": "Agent Prompt",
-    "agentPromptPlaceholder": "Instructions for the agent..."
+    "agentPromptPlaceholder": "Instructions for the agent...",
+    "publishedAt": "Published",
+    "updatedAt": "Updated"
   },
   "skeleton": {
     "loading": "Loading..."

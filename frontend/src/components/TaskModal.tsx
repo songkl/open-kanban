@@ -346,7 +346,15 @@ export function TaskModal({
               </span>
             )}
             {!isEditing && (
-              <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
+              <div>
+                <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
+                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500">
+                  <span>{t('taskModal.publishedAt')}: {new Date(task.createdAt).toLocaleString()}</span>
+                  {task.updatedAt !== task.createdAt && (
+                    <span>{t('taskModal.updatedAt')}: {new Date(task.updatedAt).toLocaleString()}</span>
+                  )}
+                </div>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -504,7 +512,7 @@ export function TaskModal({
                         }}
                         className="text-xs text-red-500"
                       >
-                        {t('taskModal.delete')}
+                        {t('taskModal.deleteMeta')}
                       </button>
                     )}
                   </div>

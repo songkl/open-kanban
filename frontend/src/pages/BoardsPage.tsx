@@ -328,7 +328,7 @@ export function BoardsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-zinc-800">{t('nav.boardManagement')}</h1>
-              <p className="text-sm text-zinc-500">{boards.length} {t('board.count') || 'boards'}</p>
+              <p className="text-sm text-zinc-500">{t('board.count', { count: boards.length })}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -436,7 +436,7 @@ export function BoardsPage() {
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <button
                     onClick={() => navigate(`/board/${board.id}`)}
-                    className="col-span-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-3 py-2.5 text-sm font-medium text-white hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm hover:shadow"
+                    className="col-span-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-3 py-2.5 text-sm font-medium text-white hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm hover:shadow-md"
                   >
                     {t('task.enter')}
                   </button>

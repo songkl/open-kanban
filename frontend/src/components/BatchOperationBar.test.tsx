@@ -5,7 +5,7 @@ import type { Column as ColumnType } from '../types/kanban';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: any) => {
+    t: (key: string, options?: Record<string, unknown>) => {
       if (key === 'task.selectedCount') return `Selected ${options?.count || 0} tasks`;
       if (key === 'task.moveToColumn') return 'Move to Column';
       if (key === 'task.setPriority') return 'Set Priority';

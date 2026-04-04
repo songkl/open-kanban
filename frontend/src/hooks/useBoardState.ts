@@ -618,14 +618,16 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
         }
         setSelectedTask(parsedUpdated);
       } else {
-        const boardName = boards.find(b => b.id === targetBoardId)?.name || targetBoardId;
-        console.log(boardName);
+        const board = boards.find(b => b.id === targetBoardId);
+        if (board) {
+          showErrorToast(t('board.taskPublished', { boardName: board.name }), 'info');
+        }
         setSelectedTask(null);
       }
     } catch (error) {
       console.error('Failed to update task:', error);
     }
-  }, [columns, currentBoard?.id, boards]);
+  }, [columns, currentBoard?.id, boards, t]);
 
   const deleteTask = useCallback(async (taskId: string) => {
     lastLocalUpdateRef.current = Date.now();
@@ -680,8 +682,10 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
           )
         );
       } else {
-        const boardName = boards.find(b => b.id === targetBoardId)?.name || targetBoardId;
-        console.log(boardName);
+        const board = boards.find(b => b.id === targetBoardId);
+        if (board) {
+          showErrorToast(t('board.taskCreated', { boardName: board.name }), 'info');
+        }
       }
     } catch (error) {
       console.error('Failed to create task:', error);
