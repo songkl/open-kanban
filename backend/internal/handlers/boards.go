@@ -50,18 +50,23 @@ func generateColumnIDForTx(tx *sql.Tx, name string, boardID string) string {
 		baseSlug = "column"
 	}
 
-	colID := baseSlug
+	shortBoardID := boardID
+	if len(shortBoardID) > 8 {
+		shortBoardID = shortBoardID[:8]
+	}
+
+	colID := fmt.Sprintf("%s-%s", baseSlug, shortBoardID)
 	counter := 1
 	for {
 		var count int
-		err := tx.QueryRow("SELECT COUNT(*) FROM columns WHERE id = ? AND board_id = ?", colID, boardID).Scan(&count)
+		err := tx.QueryRow("SELECT COUNT(*) FROM columns WHERE id = ?", colID).Scan(&count)
 		if err != nil {
 			break
 		}
 		if count == 0 {
 			return colID
 		}
-		colID = fmt.Sprintf("%s-%d", baseSlug, counter)
+		colID = fmt.Sprintf("%s-%s-%d", baseSlug, shortBoardID, counter)
 		counter++
 	}
 	return colID
@@ -143,7 +148,7 @@ func GetBoard(db *sql.DB) gin.HandlerFunc {
 			"name":        name,
 			"description": description,
 			"shortAlias":  shortAlias,
-			"deleted":      deleted,
+			"deleted":     deleted,
 			"createdAt":   createdAt,
 			"updatedAt":   updatedAt,
 			"_count": gin.H{
@@ -155,7 +160,7 @@ func GetBoard(db *sql.DB) gin.HandlerFunc {
 
 // CreateBoardRequest represents board creation request
 type CreateBoardRequest struct {
-	ShortAlias string `json:"shortAlias"`
+	ShortAlias  string `json:"shortAlias"`
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`

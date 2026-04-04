@@ -29,7 +29,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('@uiw/react-md-editor') || id.includes('react-markdown')) {
+            if (id.includes('react-markdown')) {
               return 'markdown';
             }
             if (id.includes('react-router')) {

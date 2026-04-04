@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { columnsApi } from '@/services/api';
-import MDEditor from '@uiw/react-md-editor';
+
+const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
 
 interface Board {
   id: string;
@@ -68,11 +69,10 @@ export function AddTaskModal({
     }
 
     const target = e.target as HTMLElement;
-    const isMDEditor = target.closest('.w-md-editor');
 
-    if (e.key === 'Tab' && !isMDEditor && target === titleInputRef.current) {
+    if (e.key === 'Tab' && target === titleInputRef.current) {
       e.preventDefault();
-      const focusTarget = descEditorRef.current?.querySelector<HTMLElement>('textarea, .w-md-editor-text-input, [contenteditable]');
+      const focusTarget = descEditorRef.current?.querySelector<HTMLElement>('textarea');
       focusTarget?.focus();
       return;
     }
@@ -146,14 +146,13 @@ export function AddTaskModal({
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700">{t('taskModal.description')}</label>
             <div ref={descEditorRef} className="overflow-hidden rounded-lg border border-zinc-200">
-              <MDEditor
-                value={description}
-                onChange={(val) => setDescription(val || '')}
-                height={250}
-                preview="edit"
-                hideToolbar={false}
-                style={{ padding: 0 }}
-              />
+              <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 250 }} disabled />}>
+                <MarkdownEditor
+                  value={description}
+                  onChange={(val) => setDescription(val || '')}
+                  height={250}
+                />
+              </Suspense>
             </div>
           </div>
 

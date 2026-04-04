@@ -40,6 +40,8 @@ export interface Task {
   archived: boolean;
   archivedAt: string | null;
   published: boolean;
+  agentId: string | null;
+  agentPrompt: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

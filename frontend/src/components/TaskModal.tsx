@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
-import MDEditor from '@uiw/react-md-editor';
 import type { Task, Attachment, Column, Agent, Subtask } from '@/types/kanban';
+
+const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
 import { columnsApi, subtasksApi, attachmentsApi, authApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
@@ -93,8 +94,8 @@ export function TaskModal({
 
       if (e.key === 'Enter' && isEditing) {
         const target = e.target as HTMLElement;
-        const isMDEditor = target.closest('.w-md-editor') || target.closest('[data-editor]');
-        if (!isMDEditor) {
+        const isTextarea = target.tagName === 'TEXTAREA' || target.closest('textarea');
+        if (!isTextarea) {
           e.preventDefault();
           handleSave();
           return;
@@ -129,6 +130,8 @@ export function TaskModal({
   const [editDesc, setEditDesc] = useState(task.description || '');
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editAssignee, setEditAssignee] = useState(task.assignee || '');
+  const [editAgentId, setEditAgentId] = useState(task.agentId || '');
+  const [editAgentPrompt, setEditAgentPrompt] = useState(task.agentPrompt || '');
   const [editMeta, setEditMeta] = useState<Record<string, string>>({});
   const [newMetaKey, setNewMetaKey] = useState('');
   const [newMetaValue, setNewMetaValue] = useState('');
@@ -231,6 +234,8 @@ export function TaskModal({
         assignee: editAssignee,
         meta: editMeta,
         columnId: editColumn,
+        agentId: editAgentId || null,
+        agentPrompt: editAgentPrompt || null,
       };
       await onUpdate(updatedTask);
       setIsEditing(false);
@@ -391,14 +396,13 @@ export function TaskModal({
                   onDrop={(e) => handleEditorDrop(e, 'desc')}
                   onDragOver={(e) => e.preventDefault()}
                 >
-                  <MDEditor
-                    value={editDesc}
-                    onChange={(val) => setEditDesc(val || '')}
-                    height={200}
-                    preview="edit"
-                    hideToolbar={false}
-                    style={{ padding: 0 }}
-                  />
+                  <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 200 }} disabled />}>
+                    <MarkdownEditor
+                      value={editDesc}
+                      onChange={(val) => setEditDesc(val || '')}
+                      height={200}
+                    />
+                  </Suspense>
                 </div>
               ) : (
                 <div className="prose prose-sm max-w-none rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-4">
@@ -457,6 +461,28 @@ export function TaskModal({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">Agent ID</label>
+                  <input
+                    type="text"
+                    value={editAgentId}
+                    onChange={(e) => setEditAgentId(e.target.value)}
+                    placeholder={t('taskModal.agentIdPlaceholder') || 'e.g., claude, gpt-4'}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">Agent Prompt</label>
+                  <textarea
+                    value={editAgentPrompt}
+                    onChange={(e) => setEditAgentPrompt(e.target.value)}
+                    placeholder={t('taskModal.agentPromptPlaceholder') || 'Instructions for the agent...'}
+                    rows={3}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 resize-none"
+                  />
                 </div>
               </div>
             )}
@@ -672,14 +698,13 @@ export function TaskModal({
                     onDrop={(e) => handleEditorDrop(e, 'comment')}
                   onDragOver={(e) => e.preventDefault()}
                 >
-                  <MDEditor
-                    value={newComment}
-                    onChange={(val) => setNewComment(val || '')}
-                    height={120}
-                    preview="edit"
-                    hideToolbar={true}
-                    style={{ padding: 0 }}
-                  />
+                  <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 120 }} disabled />}>
+                    <MarkdownEditor
+                      value={newComment}
+                      onChange={(val) => setNewComment(val || '')}
+                      height={120}
+                    />
+                  </Suspense>
                 </div>
               )}
               

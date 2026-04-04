@@ -158,6 +158,8 @@ export const tasksApi = {
     position?: number;
     priority?: string;
     published?: boolean;
+    agentId?: string;
+    agentPrompt?: string;
   }) =>
     fetchApi<Task>('/api/tasks', {
       method: 'POST',

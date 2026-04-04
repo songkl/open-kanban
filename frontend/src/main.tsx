@@ -4,7 +4,6 @@ import { BrowserRouter } from 'react-router-dom'
 import './i18n'
 import App from './App.tsx'
 import './styles/globals.css'
-import '@uiw/react-md-editor/markdown-editor.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

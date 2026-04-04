@@ -77,6 +77,8 @@ type Task struct {
 	Published   bool       `json:"published"`
 	Archived    bool       `json:"archived"`
 	ArchivedAt  *time.Time `json:"archivedAt,omitempty"`
+	AgentID     *string    `json:"agentId,omitempty"`
+	AgentPrompt *string    `json:"agentPrompt,omitempty"`
 	CreatedBy   string     `json:"createdBy"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
