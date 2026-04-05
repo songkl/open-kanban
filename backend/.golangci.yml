@@ -1,6 +1,7 @@
 run:
   timeout: 5m
   modules-download-mode: readonly
+  go: "1.23"
 
 linters:
   enable:
@@ -18,7 +19,7 @@ linters:
     - misspell
     - nakedret
     - prealloc
-    - exportloopref
+    - copyloopvar
 
 linters-settings:
   gocyclo:

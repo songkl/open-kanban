@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"open-kanban/internal/config"
 	"open-kanban/internal/database"
 	"open-kanban/internal/handlers"
 	"open-kanban/internal/services"
@@ -54,6 +55,9 @@ func main() {
 			return
 		}
 	}
+
+	// Initialize config
+	config.InitConfig()
 
 	// Initialize database
 	db, err := database.InitDB()
