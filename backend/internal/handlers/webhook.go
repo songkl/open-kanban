@@ -66,7 +66,7 @@ func WebhookNotify(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send webhook: " + err.Error()})
+			ServerError(c, "Failed to send webhook", err)
 			return
 		}
 

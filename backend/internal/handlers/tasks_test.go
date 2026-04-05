@@ -204,6 +204,7 @@ func TestGetTasksHandler(t *testing.T) {
 
 func TestCreateTaskHandler(t *testing.T) {
 	handlers.ResetRateLimitMapForTest()
+	handlers.ResetTokenCacheForTest()
 	db := setupTasksDB(t)
 	defer db.Close()
 
@@ -262,6 +263,7 @@ func TestCreateTaskHandler(t *testing.T) {
 func TestCreateTaskHandlerWithPriority(t *testing.T) {
 	handlers.ResetRateLimitMapForTest()
 	handlers.ResetGlobalRateLimitMapForTest()
+	handlers.ResetTokenCacheForTest()
 	db := setupTasksDB(t)
 	defer db.Close()
 

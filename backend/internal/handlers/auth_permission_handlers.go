@@ -24,9 +24,9 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 		targetUserID := user.ID
 		requestedUserID := c.Query("userId")
 
-		if requestedUserID != "" && user.Role == "ADMIN" {
+		if requestedUserID != "" && isAdmin(user) {
 			targetUserID = requestedUserID
-		} else if requestedUserID != "" && user.Role != "ADMIN" {
+		} else if requestedUserID != "" && !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can view other users' permissions"})
 			return
 		}
@@ -67,7 +67,7 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can assign permissions"})
 			return
 		}
@@ -122,7 +122,7 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can delete permissions"})
 			return
 		}
@@ -173,7 +173,7 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can modify system configuration"})
 			return
 		}
@@ -221,28 +221,4 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}
-}
-
-func checkBoardAccess(db *sql.DB, userID, boardID, requiredAccess string, userRole string) bool {
-	if userRole == "ADMIN" {
-		return true
-	}
-	if userID == "" || boardID == "" {
-		return false
-	}
-	var access string
-	err := db.QueryRow(
-		"SELECT access FROM board_permissions WHERE user_id = ? AND board_id = ?",
-		userID, boardID,
-	).Scan(&access)
-	if err != nil {
-		return false
-	}
-	accessLevel := map[string]int{"READ": 1, "WRITE": 2, "ADMIN": 3}
-	requiredLevel := accessLevel[requiredAccess]
-	userLevel := accessLevel[access]
-	if userLevel >= requiredLevel {
-		return true
-	}
-	return false
 }

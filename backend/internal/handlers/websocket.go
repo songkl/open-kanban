@@ -6,10 +6,11 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"open-kanban/internal/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -47,12 +48,6 @@ func IsOriginAllowedForTest(origin string) bool {
 	return isOriginAllowed(origin)
 }
 
-const (
-	pingInterval      = 30 * time.Second
-	pingWriteDeadline = 10 * time.Second
-	readDeadline      = pingInterval + pingWriteDeadline
-)
-
 var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -65,24 +60,9 @@ var (
 	}
 	clients          = make(map[*websocket.Conn]bool)
 	clientsMux       sync.RWMutex
-	maxConns         = 100
-	maxConnsPerUser  = 5
 	userConnCount    = make(map[string]int)
 	userConnCountMux sync.Mutex
 )
-
-func init() {
-	if envMax := os.Getenv("WS_MAX_CONNECTIONS"); envMax != "" {
-		if val, err := strconv.Atoi(envMax); err == nil && val > 0 {
-			maxConns = val
-		}
-	}
-	if envMaxPer := os.Getenv("WS_MAX_CONNECTIONS_PER_USER"); envMaxPer != "" {
-		if val, err := strconv.Atoi(envMaxPer); err == nil && val > 0 {
-			maxConnsPerUser = val
-		}
-	}
-}
 
 func getConnectionCount() int {
 	clientsMux.RLock()
@@ -95,12 +75,12 @@ func GetConnectionCount() int {
 }
 
 func GetMaxConnections() int {
-	return maxConns
+	return config.GetConfig().WebSocket.MaxConnections
 }
 
 func isConnectionAllowed() bool {
 	clientsMux.RLock()
-	allowed := len(clients) < maxConns
+	allowed := len(clients) < config.GetConfig().WebSocket.MaxConnections
 	clientsMux.RUnlock()
 	return allowed
 }
@@ -109,7 +89,7 @@ func isUserConnectionAllowed(userID string) bool {
 	userConnCountMux.Lock()
 	defer userConnCountMux.Unlock()
 	count := userConnCount[userID]
-	return count < maxConnsPerUser
+	return count < config.GetConfig().WebSocket.MaxConnectionsPerUser
 }
 
 func incrementUserConnCount(userID string) {
@@ -175,7 +155,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		requestID := GetRequestID(c)
 
 		conn.SetPongHandler(func(appData string) error {
-			conn.SetReadDeadline(time.Now().Add(readDeadline))
+			conn.SetReadDeadline(time.Now().Add(config.GetConfig().WebSocket.ReadDeadline))
 			return nil
 		})
 
@@ -183,6 +163,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		clients[conn] = true
 		clientsMux.Unlock()
 		incrementUserConnCount(userID)
+		initBroadcastWorker()
 
 		slog.Info("WebSocket client connected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConnCount[userID])
 
@@ -192,7 +173,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 
 		go func() {
 			defer wg.Done()
-			pingTicker := time.NewTicker(pingInterval)
+			pingTicker := time.NewTicker(config.GetConfig().WebSocket.PingInterval)
 			defer pingTicker.Stop()
 
 			for {
@@ -200,7 +181,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				case <-done:
 					return
 				case <-pingTicker.C:
-					conn.SetWriteDeadline(time.Now().Add(pingWriteDeadline))
+					conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
 					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 						slog.Warn("Failed to send ping to client", "request_id", requestID, "user_id", userID, "error", err)
 						return
@@ -210,7 +191,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		}()
 
 		for {
-			conn.SetReadDeadline(time.Now().Add(readDeadline))
+			conn.SetReadDeadline(time.Now().Add(config.GetConfig().WebSocket.ReadDeadline))
 			msgType, _, err := conn.ReadMessage()
 			if err != nil {
 				if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == websocket.CloseProtocolError {
@@ -223,7 +204,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				break
 			}
 			if msgType == websocket.TextMessage {
-				conn.SetWriteDeadline(time.Now().Add(pingWriteDeadline))
+				conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
 				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`)); err != nil {
 					slog.Warn("Failed to send heartbeat_ack to client", "request_id", requestID, "user_id", userID, "error", err)
 					break
@@ -234,128 +215,9 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		close(done)
 		wg.Wait()
 
-		clientsMux.Lock()
-		delete(clients, conn)
-		clientsMux.Unlock()
+		safeRemoveClient(conn)
 		decrementUserConnCount(userID)
 
-		conn.Close()
 		slog.Info("WebSocket client disconnected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConnCount[userID])
-	}
-}
-
-type ActivityMessage struct {
-	Type     string `json:"type"`
-	Activity any    `json:"activity"`
-}
-
-type TaskNotification struct {
-	Type    string `json:"type"`
-	BoardID string `json:"boardId"`
-	TaskID  string `json:"taskId"`
-	Action  string `json:"action"`
-}
-
-// BroadcastActivity sends a new activity to all connected WebSocket clients
-func BroadcastActivity(activity any) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("Recovered from panic in BroadcastActivity", "panic", r)
-		}
-	}()
-
-	clientsMux.RLock()
-	var clientList []*websocket.Conn
-	for client := range clients {
-		clientList = append(clientList, client)
-	}
-	clientsMux.RUnlock()
-
-	message := ActivityMessage{Type: "new_activity", Activity: sanitizeActivity(activity)}
-	writeDeadline := time.Now().Add(2 * time.Second)
-
-	for _, client := range clientList {
-		if err := client.SetWriteDeadline(writeDeadline); err != nil {
-			slog.Warn("Failed to set write deadline", "error", err)
-			continue
-		}
-		err := client.WriteJSON(message)
-		if err != nil {
-			clientsMux.Lock()
-			delete(clients, client)
-			clientsMux.Unlock()
-			client.Close()
-		}
-	}
-}
-
-// BroadcastRefresh sends a refresh message to all connected WebSocket clients
-func BroadcastRefresh() {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("Recovered from panic in BroadcastRefresh", "panic", r)
-		}
-	}()
-
-	clientsMux.RLock()
-	var clientList []*websocket.Conn
-	for client := range clients {
-		clientList = append(clientList, client)
-	}
-	clientsMux.RUnlock()
-
-	message := map[string]string{"type": "refresh"}
-	writeDeadline := time.Now().Add(2 * time.Second)
-
-	for _, client := range clientList {
-		if err := client.SetWriteDeadline(writeDeadline); err != nil {
-			slog.Warn("Failed to set write deadline", "error", err)
-			continue
-		}
-		err := client.WriteJSON(message)
-		if err != nil {
-			clientsMux.Lock()
-			delete(clients, client)
-			clientsMux.Unlock()
-			client.Close()
-		}
-	}
-}
-
-// BroadcastTaskNotification sends a minimal task notification to all connected clients
-func BroadcastTaskNotification(boardID, taskID, action string) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("Recovered from panic in BroadcastTaskNotification", "panic", r)
-		}
-	}()
-
-	clientsMux.RLock()
-	var clientList []*websocket.Conn
-	for client := range clients {
-		clientList = append(clientList, client)
-	}
-	clientsMux.RUnlock()
-
-	notification := TaskNotification{
-		Type:    "task_notification",
-		BoardID: sanitizeString(boardID),
-		TaskID:  sanitizeString(taskID),
-		Action:  sanitizeString(action),
-	}
-	writeDeadline := time.Now().Add(2 * time.Second)
-
-	for _, client := range clientList {
-		if err := client.SetWriteDeadline(writeDeadline); err != nil {
-			slog.Warn("Failed to set write deadline", "error", err)
-			continue
-		}
-		err := client.WriteJSON(notification)
-		if err != nil {
-			clientsMux.Lock()
-			delete(clients, client)
-			clientsMux.Unlock()
-			client.Close()
-		}
 	}
 }

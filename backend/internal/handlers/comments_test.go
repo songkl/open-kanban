@@ -193,6 +193,7 @@ func setupCommentsDB(t *testing.T) *sql.DB {
 }
 
 func TestGetCommentsHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
 	db := setupCommentsDB(t)
 	defer db.Close()
 
@@ -298,6 +299,7 @@ func TestGetCommentsHandler(t *testing.T) {
 }
 
 func TestGetCommentHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
 	db := setupCommentsDB(t)
 	defer db.Close()
 
@@ -359,6 +361,8 @@ func TestGetCommentHandler(t *testing.T) {
 }
 
 func TestCreateCommentHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetRateLimitMapForTest()
 	db := setupCommentsDB(t)
 	defer db.Close()
 

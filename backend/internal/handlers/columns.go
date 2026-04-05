@@ -116,21 +116,33 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 					col.OwnerAgentID = &ownerAgentId.String
 				}
 
-				// Get tasks for this column
-				var tasks []gin.H
+				tasks := []gin.H{}
 				taskRows, err := db.Query(`
-					SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_at, updated_at
-					FROM tasks
-					WHERE column_id = ? AND archived = false AND published = true
-					ORDER BY position ASC, created_at ASC
+					SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
+					       t.published, t.archived, t.archived_at, t.created_at, t.updated_at,
+					       COALESCE(cc.cnt, 0) as comment_count,
+					       COALESCE(sc.cnt, 0) as subtask_count
+					FROM tasks t
+					LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
+					LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+					WHERE t.column_id = ? AND t.archived = false AND t.published = true
+					ORDER BY t.position ASC, t.created_at ASC
 				`, col.ID)
+				fmt.Printf("DEBUG: col.ID=%s, err=%v, taskRows=%v\n", col.ID, err, taskRows)
 				if err == nil {
 					defer taskRows.Close()
+					rowCount := 0
 					for taskRows.Next() {
+						rowCount++
 						var task models.Task
 						var desc, assignee, meta sql.NullString
 						var archivedAt sql.NullTime
-						if err := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &task.CreatedAt, &task.UpdatedAt); err == nil {
+						var commentCount, subtaskCount int
+						scanErr := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
+							&task.Published, &task.Archived, &archivedAt, &task.CreatedAt, &task.UpdatedAt,
+							&commentCount, &subtaskCount)
+						fmt.Printf("DEBUG: row %d, task.ID=%s, scanErr=%v\n", rowCount, task.ID, scanErr)
+						if scanErr == nil {
 							if desc.Valid {
 								task.Description = &desc.String
 							}
@@ -144,33 +156,28 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 								task.ArchivedAt = &archivedAt.Time
 							}
 
-							// Get comments
-							comments, _ := getCommentsForTask(db, task.ID)
-							// Get subtasks
-							subtasks, _ := getSubtasksForTask(db, task.ID)
-
 							tasks = append(tasks, gin.H{
-								"id":          task.ID,
-								"title":       task.Title,
-								"description": task.Description,
-								"priority":    task.Priority,
-								"assignee":    task.Assignee,
-								"meta":        task.Meta,
-								"columnId":    task.ColumnID,
-								"position":    task.Position,
-								"published":   task.Published,
-								"archived":    task.Archived,
-								"archivedAt":  task.ArchivedAt,
-								"createdAt":   task.CreatedAt,
-								"updatedAt":   task.UpdatedAt,
-								"comments":    comments,
-								"subtasks":    subtasks,
+								"id":           task.ID,
+								"title":        task.Title,
+								"description":  task.Description,
+								"priority":     task.Priority,
+								"assignee":     task.Assignee,
+								"meta":         task.Meta,
+								"columnId":     task.ColumnID,
+								"position":     task.Position,
+								"published":    task.Published,
+								"archived":     task.Archived,
+								"archivedAt":   task.ArchivedAt,
+								"createdAt":    task.CreatedAt,
+								"updatedAt":    task.UpdatedAt,
+								"commentCount": commentCount,
+								"subtaskCount": subtaskCount,
 							})
 						}
 					}
+					fmt.Printf("DEBUG: total rows=%d, tasks len=%d\n", rowCount, len(tasks))
 				}
 
-				// Get agent config
 				var agentConfig *gin.H
 				var agentTypesStr string
 				err = db.QueryRow(

@@ -109,9 +109,9 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 		}
 
 		isSelfUpdate := currentUser.ID == req.TargetUserID
-		isAdmin := currentUser.Role == "ADMIN"
+		isAdminUser := isAdmin(currentUser)
 
-		if !isSelfUpdate && !isAdmin {
+		if !isSelfUpdate && !isAdminUser {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can operate on other users"})
 			return
 		}
@@ -134,7 +134,7 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 			changes = append(changes, fmt.Sprintf("头像: '%s' → '%s'", oldUser.Avatar, *req.Avatar))
 		}
 
-		if !isSelfUpdate || isAdmin {
+		if !isSelfUpdate || isAdminUser {
 			if req.Role != "" && req.Role != oldUser.Role {
 				if req.Role != "ADMIN" && req.Role != "MEMBER" && req.Role != "VIEWER" {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role, valid values are: ADMIN, MEMBER, VIEWER"})
@@ -159,7 +159,7 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 			updates = append(updates, *req.Avatar)
 		}
 
-		if !isSelfUpdate || isAdmin {
+		if !isSelfUpdate || isAdminUser {
 			if req.Role != "" {
 				if req.Role != "ADMIN" && req.Role != "MEMBER" && req.Role != "VIEWER" {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role, valid values are: ADMIN, MEMBER, VIEWER"})

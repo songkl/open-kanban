@@ -51,7 +51,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		taskService := services.NewTaskService(db)
 		result, err := taskService.GetTasks(userID, role, columnID, boardID, status, page, pageSize)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get task: " + err.Error()})
+			ServerError(c, "Failed to get tasks", err)
 			return
 		}
 

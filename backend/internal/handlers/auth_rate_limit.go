@@ -2,9 +2,14 @@ package handlers
 
 import (
 	"context"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
+	"open-kanban/internal/config"
+
+	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -13,7 +18,9 @@ type rateLimitEntry struct {
 	resetTime time.Time
 }
 
-const maxRateLimitEntries = 10000
+func getMaxRateLimitEntries() int {
+	return config.GetConfig().RateLimit.MaxRateLimitEntries
+}
 
 var (
 	rateLimitMap      = make(map[string]*rateLimitEntry)
@@ -33,7 +40,9 @@ type globalRateLimitEntry struct {
 	resetTime time.Time
 }
 
-const maxGlobalRateLimitEntries = 10000
+func getMaxGlobalRateLimitEntries() int {
+	return config.GetConfig().RateLimit.MaxGlobalRateLimitEntries
+}
 
 var (
 	globalRateLimitMap      = make(map[string]*globalRateLimitEntry)
@@ -62,7 +71,7 @@ func (m *memoryRateLimitStore) check(key string, maxRequests int, windowSecs int
 	entry, exists := rateLimitMap[key]
 
 	if !exists || now.After(entry.resetTime) {
-		if len(rateLimitMap) >= maxRateLimitEntries {
+		if len(rateLimitMap) >= getMaxRateLimitEntries() {
 			cleanupOldRateLimitEntriesLocked(now)
 		}
 		rateLimitMap[key] = &rateLimitEntry{
@@ -112,8 +121,8 @@ func cleanupOldRateLimitEntriesLocked(now time.Time) {
 			delete(rateLimitMap, key)
 		}
 	}
-	if len(rateLimitMap) >= maxRateLimitEntries {
-		targetSize := maxRateLimitEntries / 2
+	if len(rateLimitMap) >= getMaxRateLimitEntries() {
+		targetSize := getMaxRateLimitEntries() / 2
 		for len(rateLimitMap) > targetSize && len(rateLimitMapOrder) > 0 {
 			oldestKey := rateLimitMapOrder[0]
 			rateLimitMapOrder = rateLimitMapOrder[1:]
@@ -142,8 +151,8 @@ func cleanupOldGlobalRateLimitEntriesLocked(now time.Time) {
 			delete(globalRateLimitMap, key)
 		}
 	}
-	if len(globalRateLimitMap) >= maxGlobalRateLimitEntries {
-		targetSize := maxGlobalRateLimitEntries / 2
+	if len(globalRateLimitMap) >= getMaxGlobalRateLimitEntries() {
+		targetSize := getMaxGlobalRateLimitEntries() / 2
 		for len(globalRateLimitMap) > targetSize && len(globalRateLimitMapOrder) > 0 {
 			oldestKey := globalRateLimitMapOrder[0]
 			globalRateLimitMapOrder = globalRateLimitMapOrder[1:]
@@ -160,7 +169,7 @@ func CheckGlobalRateLimit(key string, maxRequests int, windowSecs int) bool {
 	entry, exists := globalRateLimitMap[key]
 
 	if !exists || now.After(entry.resetTime) {
-		if len(globalRateLimitMap) >= maxGlobalRateLimitEntries {
+		if len(globalRateLimitMap) >= getMaxGlobalRateLimitEntries() {
 			cleanupOldGlobalRateLimitEntriesLocked(now)
 		}
 		globalRateLimitMap[key] = &globalRateLimitEntry{
@@ -205,4 +214,72 @@ func ResetGlobalRateLimitMapForTest() {
 	defer globalRateLimitMux.Unlock()
 	globalRateLimitMap = make(map[string]*globalRateLimitEntry)
 	globalRateLimitMapOrder = nil
+}
+
+func checkRateLimit(key string) bool {
+	return rateLimitStoreInstance.check(key, rateLimitOpts.maxRequests, rateLimitOpts.windowSecs)
+}
+
+func checkGlobalRateLimit(key string) bool {
+	return rateLimitStoreInstance.check(key, globalRateLimitOpts.maxRequests, globalRateLimitOpts.windowSecs)
+}
+
+func GlobalRateLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := "global:" + c.ClientIP()
+
+		if !checkGlobalRateLimit(key) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func init() {
+	if maxReq := getEnvInt("RATE_LIMIT_MAX_REQUESTS", 5); maxReq > 0 {
+		rateLimitOpts.maxRequests = maxReq
+	}
+	if windowSec := getEnvInt("RATE_LIMIT_WINDOW_SECONDS", 60); windowSec > 0 {
+		rateLimitOpts.windowSecs = windowSec
+	}
+	if globalMaxReq := getEnvInt("GLOBAL_RATE_LIMIT_MAX_REQUESTS", 100); globalMaxReq > 0 {
+		globalRateLimitOpts.maxRequests = globalMaxReq
+	}
+	if globalWindowSec := getEnvInt("GLOBAL_RATE_LIMIT_WINDOW_SECONDS", 60); globalWindowSec > 0 {
+		globalRateLimitOpts.windowSecs = globalWindowSec
+	}
+
+	rateLimitStoreType := os.Getenv("RATE_LIMIT_STORE")
+	if rateLimitStoreType == "redis" {
+		redisAddr := os.Getenv("REDIS_URL")
+		if redisAddr == "" {
+			redisAddr = "localhost:6379"
+		}
+		redisClient = redis.NewClient(&redis.Options{
+			Addr: redisAddr,
+		})
+		ctx := context.Background()
+		_, err := redisClient.Ping(ctx).Result()
+		if err == nil {
+			rateLimitStoreInstance = &redisRateLimitStore{
+				client: redisClient,
+				ctx:    ctx,
+			}
+		} else {
+			rateLimitStoreInstance = &memoryRateLimitStore{}
+		}
+	} else {
+		rateLimitStoreInstance = &memoryRateLimitStore{}
+	}
+
+	if rateLimitStoreInstance == nil {
+		rateLimitStoreInstance = &memoryRateLimitStore{}
+	}
+
+	go cleanupRateLimitMap()
+	go cleanupGlobalRateLimitMap()
+	go cleanupTokenCache()
 }

@@ -493,6 +493,7 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("login with user that has password but no password provided returns unauthorized", func(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
+		handlers.ResetTokenCacheForTest()
 		db := setupTestDB(t)
 		defer db.Close()
 
@@ -534,6 +535,7 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("login with user that has password but wrong password returns unauthorized", func(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
+		handlers.ResetTokenCacheForTest()
 		db := setupTestDB(t)
 		defer db.Close()
 
@@ -570,6 +572,7 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("login with user that has password and correct password succeeds", func(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
+		handlers.ResetTokenCacheForTest()
 		db := setupTestDB(t)
 		defer db.Close()
 

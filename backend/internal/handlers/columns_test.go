@@ -94,6 +94,24 @@ func setupColumnsDB(t *testing.T) *sql.DB {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
 	);
+	CREATE TABLE comments (
+		id TEXT PRIMARY KEY,
+		content TEXT NOT NULL,
+		author TEXT NOT NULL,
+		task_id TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
+	CREATE TABLE subtasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		completed BOOLEAN DEFAULT 0,
+		task_id TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
 	CREATE TABLE activities (
 		id TEXT PRIMARY KEY,
 		user_id TEXT NOT NULL,
@@ -154,6 +172,34 @@ func setupColumnsDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to insert test column c5: %v", err)
 	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('task1', 'Task 1', 'c1', 0, 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert test task1: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('task2', 'Task 2', 'c1', 1, 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert test task2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO comments (id, content, author, task_id) VALUES ('com1', 'Comment 1', 'u1', 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test comment com1: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO comments (id, content, author, task_id) VALUES ('com2', 'Comment 2', 'u1', 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test comment com2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO subtasks (id, title, completed, task_id) VALUES ('sub1', 'Subtask 1', 0, 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test subtask sub1: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO subtasks (id, title, completed, task_id) VALUES ('sub2', 'Subtask 2', 1, 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test subtask sub2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO subtasks (id, title, completed, task_id) VALUES ('sub3', 'Subtask 3', 0, 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test subtask sub3: %v", err)
+	}
 
 	return db
 }
@@ -190,6 +236,71 @@ func TestGetColumnsHandler(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp == nil {
 			t.Errorf("expected array response, got nil")
+		}
+	})
+
+	t.Run("get columns returns correct commentCount and subtaskCount", func(t *testing.T) {
+		var count int
+		db.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&count)
+		t.Logf("Total tasks in DB: %d", count)
+
+		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE column_id = 'c1'").Scan(&count)
+		t.Logf("Tasks in c1: %d", count)
+
+		req, _ := http.NewRequest("GET", "/api/columns?boardId=b1", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		t.Logf("Response body: %s", w.Body.String())
+
+		var resp []map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		for _, col := range resp {
+			t.Logf("Column %v, tasks: %v", col["id"], col["tasks"])
+			if col["id"] == "c1" {
+				if col["tasks"] == nil {
+					t.Logf("DEBUG: tasks is nil for c1")
+					continue
+				}
+				tasks, ok := col["tasks"].([]interface{})
+				if !ok {
+					t.Logf("DEBUG: tasks is not []interface{} for c1, got %T", col["tasks"])
+					continue
+				}
+				if len(tasks) == 0 {
+					t.Logf("DEBUG: tasks is empty array for c1")
+				}
+				for _, task := range tasks {
+					taskMap := task.(map[string]interface{})
+					t.Logf("Task: %v", taskMap["id"])
+					if taskMap["id"] == "task1" {
+						commentCount := int(taskMap["commentCount"].(float64))
+						subtaskCount := int(taskMap["subtaskCount"].(float64))
+						if commentCount != 2 {
+							t.Errorf("expected task1 commentCount 2, got %d", commentCount)
+						}
+						if subtaskCount != 3 {
+							t.Errorf("expected task1 subtaskCount 3, got %d", subtaskCount)
+						}
+					}
+					if taskMap["id"] == "task2" {
+						commentCount := int(taskMap["commentCount"].(float64))
+						subtaskCount := int(taskMap["subtaskCount"].(float64))
+						if commentCount != 0 {
+							t.Errorf("expected task2 commentCount 0, got %d", commentCount)
+						}
+						if subtaskCount != 0 {
+							t.Errorf("expected task2 subtaskCount 0, got %d", subtaskCount)
+						}
+					}
+				}
+			}
 		}
 	})
 

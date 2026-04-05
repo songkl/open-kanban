@@ -1,20 +1,11 @@
 package handlers
 
 import (
-	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
-	"net/http"
-	"os"
-	"reflect"
 	"strconv"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 
 	"open-kanban/internal/models"
 )
@@ -95,7 +86,7 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			c.JSON(401, gin.H{"error": "Not logged in"})
 			return
 		}
 
@@ -193,7 +184,7 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get activity records"})
+			c.JSON(500, gin.H{"error": "Failed to get activity records"})
 			return
 		}
 		defer rows.Close()
@@ -207,269 +198,6 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 		}
 
 		hasMore := offset+len(activities) < total
-		c.JSON(http.StatusOK, gin.H{"activities": activities, "hasMore": hasMore, "total": total})
+		c.JSON(200, gin.H{"activities": activities, "hasMore": hasMore, "total": total})
 	}
-}
-
-func generateID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		panic("crypto/rand unavailable")
-	}
-	return hex.EncodeToString(b)
-}
-
-func generateTokenKey() string {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		panic("crypto/rand unavailable")
-	}
-	return hex.EncodeToString(b)
-}
-
-func getEnvInt(key string, defaultVal int) int {
-	if val := os.Getenv(key); val != "" {
-		if intVal, err := strconv.Atoi(val); err == nil && intVal > 0 {
-			return intVal
-		}
-	}
-	return defaultVal
-}
-
-func validateInputLength(value string, maxLength int) bool {
-	return len(value) <= maxLength
-}
-
-func sanitizeString(s string) string {
-	if !utf8.ValidString(s) {
-		return strings.ToValidUTF8(s, "")
-	}
-	return s
-}
-
-func sanitizeValue(v any) any {
-	if v == nil {
-		return nil
-	}
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Ptr:
-		if rv.IsNil() {
-			return nil
-		}
-		elem := rv.Elem().Interface()
-		sanitized := sanitizeValue(elem)
-		if sanitized == nil {
-			return nil
-		}
-		ptr := reflect.New(reflect.TypeOf(sanitized))
-		ptr.Elem().Set(reflect.ValueOf(sanitized))
-		return ptr.Interface()
-	case reflect.Struct:
-		sanitized := reflect.New(rv.Type()).Elem()
-		for i := 0; i < rv.NumField(); i++ {
-			field := rv.Field(i)
-			fieldType := rv.Type().Field(i)
-			if fieldType.Type.Kind() == reflect.String {
-				if field.CanInterface() {
-					sanitized.Field(i).SetString(sanitizeString(field.Interface().(string)))
-				}
-			} else {
-				if field.CanInterface() {
-					sanitized.Field(i).Set(reflect.ValueOf(sanitizeValue(field.Interface())))
-				}
-			}
-		}
-		return sanitized.Interface()
-	case reflect.Map:
-		sanitized := reflect.MakeMap(rv.Type())
-		for _, key := range rv.MapKeys() {
-			mapVal := rv.MapIndex(key)
-			sanitized.SetMapIndex(key, reflect.ValueOf(sanitizeValue(mapVal.Interface())))
-		}
-		return sanitized.Interface()
-	case reflect.Slice:
-		sanitized := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Cap())
-		for i := 0; i < rv.Len(); i++ {
-			sanitized.Index(i).Set(reflect.ValueOf(sanitizeValue(rv.Index(i).Interface())))
-		}
-		return sanitized.Interface()
-	case reflect.String:
-		return sanitizeString(v.(string))
-	default:
-		return v
-	}
-}
-
-func sanitizeActivity(a any) any {
-	return sanitizeValue(a)
-}
-
-func sanitizeActivityForBroadcast(a Activity) Activity {
-	sanitized := sanitizeValue(a)
-	if s, ok := sanitized.(Activity); ok {
-		return s
-	}
-	return a
-}
-
-func checkRateLimit(key string) bool {
-	return rateLimitStoreInstance.check(key, rateLimitOpts.maxRequests, rateLimitOpts.windowSecs)
-}
-
-func checkGlobalRateLimit(key string) bool {
-	return rateLimitStoreInstance.check(key, globalRateLimitOpts.maxRequests, globalRateLimitOpts.windowSecs)
-}
-
-func GlobalRateLimitMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		key := "global:" + c.ClientIP()
-
-		if !checkGlobalRateLimit(key) {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
-func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
-	var tokenKey string
-
-	if authHeader := c.GetHeader("Authorization"); authHeader != "" {
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-	}
-
-	if tokenKey == "" {
-		var err error
-		tokenKey, err = c.Cookie("kanban-token")
-		if err != nil {
-			return nil
-		}
-	}
-
-	if cached, ok := tokenCache.Load(tokenKey); ok {
-		if entry, ok := cached.(*cachedUser); ok && time.Now().Before(entry.expiresAt) && entry.user.Enabled {
-			return entry.user
-		}
-	}
-
-	var user models.User
-	var token models.Token
-	err := db.QueryRow(
-		"SELECT t.expires_at, u.id, u.username, u.nickname, u.avatar, u.type, u.role, u.enabled FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
-		tokenKey,
-	).Scan(&token.ExpiresAt, &user.ID, &user.Username, &user.Nickname, &user.Avatar, &user.Type, &user.Role, &user.Enabled)
-	if err != nil {
-		return nil
-	}
-
-	if token.ExpiresAt != nil && token.ExpiresAt.Before(time.Now()) {
-		return nil
-	}
-
-	if !user.Enabled {
-		return nil
-	}
-
-	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
-
-	tokenCache.Store(tokenKey, &cachedUser{
-		user:      &user,
-		expiresAt: time.Now().Add(tokenCacheDuration),
-	})
-
-	return &user
-}
-
-func RequireAuth(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if isAuthEnabled(db) {
-			user := getCurrentUser(c, db)
-			if user == nil {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in or session has expired"})
-				c.Abort()
-				return
-			}
-			c.Set("user", user)
-		}
-		c.Next()
-	}
-}
-
-func isAuthEnabled(db *sql.DB) bool {
-	var authEnabled string
-	err := db.QueryRow("SELECT value FROM app_config WHERE key = 'authEnabled'").Scan(&authEnabled)
-	if err != nil {
-		return true
-	}
-	return authEnabled != "0"
-}
-
-func OptionalAuth(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if user := getCurrentUser(c, db); user != nil {
-			c.Set("user", user)
-		}
-		c.Next()
-	}
-}
-
-func getUserFromContext(c *gin.Context) *models.User {
-	if user, exists := c.Get("user"); exists {
-		if u, ok := user.(*models.User); ok {
-			return u
-		}
-	}
-	return getCurrentUser(c, nil)
-}
-
-func init() {
-	if maxReq := getEnvInt("RATE_LIMIT_MAX_REQUESTS", 5); maxReq > 0 {
-		rateLimitOpts.maxRequests = maxReq
-	}
-	if windowSec := getEnvInt("RATE_LIMIT_WINDOW_SECONDS", 60); windowSec > 0 {
-		rateLimitOpts.windowSecs = windowSec
-	}
-	if globalMaxReq := getEnvInt("GLOBAL_RATE_LIMIT_MAX_REQUESTS", 100); globalMaxReq > 0 {
-		globalRateLimitOpts.maxRequests = globalMaxReq
-	}
-	if globalWindowSec := getEnvInt("GLOBAL_RATE_LIMIT_WINDOW_SECONDS", 60); globalWindowSec > 0 {
-		globalRateLimitOpts.windowSecs = globalWindowSec
-	}
-
-	rateLimitStoreType := os.Getenv("RATE_LIMIT_STORE")
-	if rateLimitStoreType == "redis" {
-		redisAddr := os.Getenv("REDIS_URL")
-		if redisAddr == "" {
-			redisAddr = "localhost:6379"
-		}
-		redisClient = redis.NewClient(&redis.Options{
-			Addr: redisAddr,
-		})
-		ctx := context.Background()
-		_, err := redisClient.Ping(ctx).Result()
-		if err == nil {
-			rateLimitStoreInstance = &redisRateLimitStore{
-				client: redisClient,
-				ctx:    ctx,
-			}
-		} else {
-			rateLimitStoreInstance = &memoryRateLimitStore{}
-		}
-	} else {
-		rateLimitStoreInstance = &memoryRateLimitStore{}
-	}
-
-	if rateLimitStoreInstance == nil {
-		rateLimitStoreInstance = &memoryRateLimitStore{}
-	}
-
-	go cleanupRateLimitMap()
-	go cleanupGlobalRateLimitMap()
-	go cleanupTokenCache()
 }

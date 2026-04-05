@@ -120,7 +120,11 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		taskService := services.NewTaskService(db)
 		_, err = taskService.CompleteTask(id)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			if gin.Mode() == gin.DebugMode {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to complete task", "detail": err.Error()})
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to complete task"})
+			}
 			return
 		}
 
