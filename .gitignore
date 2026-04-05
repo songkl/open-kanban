@@ -49,3 +49,7 @@ devDoc/
 logs/
 tmp/
 backend/cmd/server/web/
+
+# Coverage and generated types
+coverage/
+frontend/src/types/generated/
