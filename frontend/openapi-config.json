@@ -1,0 +1,14 @@
+{
+  "generatorName": "typescript",
+  "inputSpec": "../docs/openapi.yaml",
+  "outputDir": "./src/types/generated",
+  "supportsES6": "true",
+  "dedupModelInterfaces": "true",
+  "enumPropertyNaming": "PascalCase",
+  "modelPropertyNaming": "camelCase",
+  "npmName": "@openapi-generated",
+  "snakeCaseModelProperties": "false",
+  "withSeparateModelsAndApi": "false",
+  "modelPropertyNaming": "camelCase",
+  "removeEnumPrefix": "true"
+}

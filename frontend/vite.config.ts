@@ -10,6 +10,17 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: path.resolve(__dirname, './src/test/setup.ts'),
     css: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      exclude: ['node_modules/', 'src/test/'],
+      thresholds: {
+        statements: 50,
+        branches: 50,
+        functions: 50,
+        lines: 50,
+      },
+    },
   },
   resolve: {
     alias: {
@@ -19,8 +30,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-	'/api': 'http://localhost:8080',
-        '/ws': { target: 'ws://localhost:8080', ws: true }
+	'/api/v1': 'http://localhost:8081/api/v1',
+        '/ws': { target: 'ws://localhost:8081', ws: true }
     },
   },
   build: {
