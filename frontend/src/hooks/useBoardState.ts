@@ -1,29 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { setGlobalErrorHandler } from '../services/api';
 import { useBoard } from './useBoard';
 import { useColumns } from './useColumns';
 import { useTasks } from './useTasks';
 import { useBoardWebSocket } from './useBoardWebSocket';
 import { useBoardRefresh } from './useBoardRefresh';
+import { useFilters } from './useFilters';
+import type { FilterState, FilterPreset } from './useFilters';
 import type { Board, Column as ColumnType, Task, User } from '../types/kanban';
-
-const FILTER_PRESETS_KEY = 'filterPresets';
-
-export interface FilterState {
-  priority: string;
-  assignee: string;
-  searchQuery: string;
-  dateRange: string;
-  tag: string;
-}
-
-export interface FilterPreset {
-  id: string;
-  name: string;
-  filters: FilterState;
-}
 
 export interface FailedTaskCreation {
   title: string;
@@ -103,7 +88,6 @@ interface UseBoardStateReturn {
 }
 
 export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOptions = {}): UseBoardStateReturn {
-  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const {
@@ -116,7 +100,6 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
   const {
     columns,
     columnPagination,
-    loading: columnsLoading,
     boardSwitching: columnsBoardSwitching,
     loadError,
     fetchColumns,
@@ -148,24 +131,32 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     lastLocalUpdateRef,
     offlineQueueRef,
     isProcessingQueueRef,
-  } = useTasks({ currentBoardId: currentBoard?.id });
+  } = useTasks({ columns, currentBoard, onColumnsChange: setColumns, onLastLocalUpdate: () => {} });
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<FilterState>({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '' });
-  const [filterPresets, setFilterPresets] = useState<FilterPreset[]>(() => {
-    const saved = localStorage.getItem(FILTER_PRESETS_KEY);
-    return saved ? JSON.parse(saved) : [];
-  });
+  const {
+    filters,
+    filterPresets,
+    searchQuery,
+    uniqueAssignees,
+    uniqueTags,
+    isInDateRange,
+    getFilteredColumns,
+    setFilters,
+    setFilterPresets,
+    setSearchQuery,
+    saveCurrentAsPreset,
+    applyPreset,
+    deletePreset,
+    clearFilters,
+    hasActiveFilters,
+  } = useFilters({ columns });
 
   const {
     handleTaskNotificationUpdate,
     processOfflineQueue,
   } = useBoardRefresh({
     columns,
-    setColumns,
-    lastLocalUpdateRef,
-    offlineQueueRef,
-    isProcessingQueueRef,
+    onColumnsChange: setColumns,
   });
 
   const {
@@ -178,90 +169,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     handleTaskNotificationUpdate,
     processOfflineQueue,
     lastLocalUpdateRef,
-    offlineQueueRef,
-    isProcessingQueueRef,
   });
-
-  const allTasks = columns.flatMap(col => col.tasks || []);
-  const uniqueAssignees = [...new Set(allTasks.filter(task => task.assignee).map(task => task.assignee as string))];
-  const uniqueTags = [...new Set(allTasks.filter(task => task.meta && typeof task.meta === 'object' && '标签' in task.meta).map(task => (task.meta as Record<string, unknown>)['标签'] as string).filter(Boolean))];
-
-  const isInDateRange = useCallback((taskCreatedAt: string): boolean => {
-    if (!filters.dateRange) return true;
-    const created = new Date(taskCreatedAt);
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    switch (filters.dateRange) {
-      case 'today':
-        return created >= todayStart;
-      case 'thisWeek':
-        return created >= weekStart;
-      case 'thisMonth':
-        return created >= monthStart;
-      default:
-        return true;
-    }
-  }, [filters.dateRange]);
-
-  const getFilteredColumns = useCallback(() => {
-    if (!filters.searchQuery && !filters.priority && !filters.assignee && !filters.dateRange && !filters.tag) {
-      return columns;
-    }
-    return columns.map(col => ({
-      ...col,
-      tasks: (col.tasks || []).filter(task => {
-        if (filters.searchQuery) {
-          const query = filters.searchQuery.toLowerCase();
-          const titleMatch = task.title.toLowerCase().includes(query);
-          const descMatch = (task.description || '').toLowerCase().includes(query);
-          if (!titleMatch && !descMatch) return false;
-        }
-        if (filters.priority && task.priority !== filters.priority) return false;
-        if (filters.assignee && task.assignee !== filters.assignee) return false;
-        if (filters.dateRange && !isInDateRange(task.createdAt)) return false;
-        if (filters.tag) {
-          const taskTag = task.meta && typeof task.meta === 'object' ? (task.meta as Record<string, unknown>)['标签'] : null;
-          if (taskTag !== filters.tag) return false;
-        }
-        return true;
-      })
-    }));
-  }, [columns, filters, isInDateRange]);
-
-  const saveCurrentAsPreset = useCallback(() => {
-    const name = prompt(t('filter.presetName'));
-    if (!name?.trim()) return;
-    const newPreset: FilterPreset = {
-      id: Date.now().toString(),
-      name: name.trim(),
-      filters: { ...filters }
-    };
-    setFilterPresets(prev => [...prev, newPreset]);
-  }, [filters, t]);
-
-  const applyPreset = useCallback((preset: FilterPreset) => {
-    setFilters(preset.filters);
-    setSearchQuery(preset.filters.searchQuery);
-  }, []);
-
-  const deletePreset = useCallback((presetId: string) => {
-    setFilterPresets(prev => prev.filter(p => p.id !== presetId));
-  }, []);
-
-  const clearFilters = useCallback(() => {
-    setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '' });
-    setSearchQuery('');
-  }, []);
-
-  const hasActiveFilters = !!(filters.searchQuery || filters.priority || filters.assignee || filters.dateRange || filters.tag);
-
-  useEffect(() => {
-    localStorage.setItem(FILTER_PRESETS_KEY, JSON.stringify(filterPresets));
-  }, [filterPresets]);
 
   useEffect(() => {
     setGlobalErrorHandler((error) => {
@@ -305,56 +213,56 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     }
   }, [taskIdFromUrl, columns]);
 
-  const loading = columnsLoading;
+  const loading = !currentBoard;
   const boardSwitching = boardBoardSwitching || columnsBoardSwitching;
 
   const updateTask = useCallback(async (task: Task) => {
-    await taskUpdateTask(task, columns, setColumns, taskSetSelectedTask, boards);
-  }, [taskUpdateTask, columns, boards]);
+    await taskUpdateTask(task);
+  }, [taskUpdateTask]);
 
   const deleteTask = useCallback(async (taskId: string) => {
-    await taskDeleteTask(taskId, columns, setColumns, taskSetSelectedTask);
-  }, [taskDeleteTask, columns]);
+    await taskDeleteTask(taskId);
+  }, [taskDeleteTask]);
 
   const archiveTask = useCallback(async (taskId: string) => {
-    await taskArchiveTask(taskId, columns, setColumns, taskSetSelectedTask);
-  }, [taskArchiveTask, columns]);
+    await taskArchiveTask(taskId);
+  }, [taskArchiveTask]);
 
   const addTask = useCallback(async (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => {
-    await taskAddTask(columnId, title, description, published, boardId, priority, columns, setColumns, boards);
-  }, [taskAddTask, columns, boards]);
+    await taskAddTask(columnId, title, description, published, boardId, priority);
+  }, [taskAddTask]);
 
   const addComment = useCallback(async (taskId: string, content: string, author: string) => {
-    await taskAddComment(taskId, content, author, columns, setColumns, selectedTask, taskSetSelectedTask);
-  }, [taskAddComment, columns, selectedTask]);
+    await taskAddComment(taskId, content, author);
+  }, [taskAddComment]);
 
   const handleTaskSelect = useCallback((taskId: string, task: Task, e?: React.MouseEvent) => {
-    taskHandleTaskSelect(taskId, task, columns, e);
-  }, [taskHandleTaskSelect, columns]);
+    taskHandleTaskSelect(taskId, task, e);
+  }, [taskHandleTaskSelect]);
 
   const clearSelection = useCallback(() => {
     taskClearSelection();
   }, [taskClearSelection]);
 
   const batchDelete = useCallback(async () => {
-    await taskBatchDelete(columns, selectedTasks, setColumns);
-  }, [taskBatchDelete, columns, selectedTasks]);
+    await taskBatchDelete();
+  }, [taskBatchDelete]);
 
   const batchArchive = useCallback(async () => {
-    await taskBatchArchive(columns, selectedTasks, setColumns);
-  }, [taskBatchArchive, columns, selectedTasks]);
+    await taskBatchArchive();
+  }, [taskBatchArchive]);
 
   const batchMove = useCallback(async (targetColumnId: string) => {
-    await taskBatchMove(targetColumnId, columns, selectedTasks, setColumns);
-  }, [taskBatchMove, columns, selectedTasks]);
+    await taskBatchMove(targetColumnId);
+  }, [taskBatchMove]);
 
   const batchUpdatePriority = useCallback(async (priority: string) => {
-    await taskBatchUpdatePriority(priority, columns, selectedTasks, setColumns);
-  }, [taskBatchUpdatePriority, columns, selectedTasks]);
+    await taskBatchUpdatePriority(priority);
+  }, [taskBatchUpdatePriority]);
 
   const batchUpdateAssignee = useCallback(async (assignee: string) => {
-    await taskBatchUpdateAssignee(assignee, columns, selectedTasks, setColumns);
-  }, [taskBatchUpdateAssignee, columns, selectedTasks]);
+    await taskBatchUpdateAssignee(assignee);
+  }, [taskBatchUpdateAssignee]);
 
   return {
     boards,

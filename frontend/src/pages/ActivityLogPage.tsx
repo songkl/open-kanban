@@ -82,7 +82,7 @@ export function ActivityLogPage() {
       await loadActivities();
     } catch (err) {
       console.error('Failed to load data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      setError(t('app.error.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -169,7 +169,7 @@ export function ActivityLogPage() {
   if (error) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <div className="text-red-500">{error}</div>
+        <div className="text-red-500">{t('app.error.loadFailed')}</div>
         <Link to="/" className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600">
           {t('nav.back')}
         </Link>

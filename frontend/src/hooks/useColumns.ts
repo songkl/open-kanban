@@ -12,6 +12,9 @@ export interface ColumnPagination {
 interface UseColumnsReturn {
   columns: ColumnType[];
   columnPagination: Record<string, ColumnPagination>;
+  loading: boolean;
+  boardSwitching: boolean;
+  loadError: string | null;
   fetchColumns: (boardId: string, silent?: boolean) => Promise<void>;
   handleLoadMoreTasks: (columnId: string) => Promise<void>;
   handleColumnRename: (columnId: string, newName: string) => Promise<void>;
@@ -24,8 +27,13 @@ export function useColumns(): UseColumnsReturn {
 
   const [columns, setColumns] = useState<ColumnType[]>([]);
   const [columnPagination, setColumnPagination] = useState<Record<string, ColumnPagination>>({});
+  const [loading, setLoading] = useState(false);
+  const [boardSwitching] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchColumns = useCallback(async (boardId: string, _silent = false) => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const data = await columnsApi.getByBoard(boardId);
       setColumns(data.map(col => ({
@@ -39,6 +47,9 @@ export function useColumns(): UseColumnsReturn {
       setColumnPagination({});
     } catch (error) {
       console.error('Failed to fetch columns:', error);
+      setLoadError(error instanceof Error ? error.message : 'Failed to fetch columns');
+    } finally {
+      setLoading(false);
     }
   }, [t]);
 
@@ -102,6 +113,9 @@ export function useColumns(): UseColumnsReturn {
   return {
     columns,
     columnPagination,
+    loading,
+    boardSwitching,
+    loadError,
     fetchColumns,
     handleLoadMoreTasks,
     handleColumnRename,

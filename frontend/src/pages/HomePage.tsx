@@ -29,7 +29,7 @@ export function HomePage() {
       })
       .catch((err) => {
         console.error('Failed to fetch boards:', err);
-        setError(err instanceof Error ? err.message : t('app.error.connectionFailed'));
+        setError(t('app.error.connectionFailed'));
       })
       .finally(() => {
         setIsLoading(false);

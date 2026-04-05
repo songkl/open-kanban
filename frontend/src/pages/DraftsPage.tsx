@@ -84,7 +84,7 @@ export function DraftsPage() {
       setTasks(data || []);
     } catch (err) {
       console.error('Failed to fetch drafts:', err);
-      setError(err instanceof Error ? err.message : t('app.error.loadFailed'));
+      setError(t('app.error.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ export function DraftsPage() {
       setBoards(data || []);
     } catch (err) {
       console.error('Failed to fetch boards:', err);
-      setError(err instanceof Error ? err.message : t('app.error.loadFailed'));
+      setError(t('app.error.loadFailed'));
       setLoading(false);
     }
   };
@@ -180,7 +180,7 @@ export function DraftsPage() {
       setPublishTaskId(null);
     } catch (err) {
       console.error('Failed to publish task:', err);
-      showErrorToast(err instanceof Error ? err.message : t('toast.publishFailed'), 'error');
+      showErrorToast(t('toast.publishFailed'), 'error');
     }
   };
 
@@ -196,7 +196,7 @@ export function DraftsPage() {
           setTasks((prev) => prev.filter((t) => t.id !== taskId));
         } catch (err) {
           console.error('Failed to delete draft:', err);
-          showErrorToast(err instanceof Error ? err.message : t('toast.deleteFailed'), 'error');
+          showErrorToast(t('toast.deleteFailed'), 'error');
         }
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
       },
@@ -244,7 +244,6 @@ export function DraftsPage() {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <div className="text-red-500">{t('drafts.loadFailed')}</div>
-        <div className="text-sm text-zinc-400 dark:text-zinc-500">{error}</div>
         <button
           onClick={() => selectedBoard && fetchTasks(selectedBoard)}
           className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"

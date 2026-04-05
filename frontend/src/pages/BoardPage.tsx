@@ -3,16 +3,17 @@ import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnBoard } from '../components/ColumnBoard';
-import { FilterPanelContent } from '../components/FilterPanelContent';
 import { HeaderRightMenu } from '../components/HeaderRightMenu';
 import { BatchOperationBar } from '../components/BatchOperationBar';
 import { WsWarning } from '../components/WsWarning';
-import { SearchBar } from '../components/SearchBar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BoardSelector } from '../components/BoardSelector';
 import { boardsApi } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
+import { KeyboardNavigation } from '../components/KeyboardNavigation';
+import { BoardToolbar } from '../components/BoardToolbar';
+import { BoardActionsMenu } from '../components/BoardActionsMenu';
 import type { Task, Column as ColumnType } from '../types/kanban';
 
 const LAST_BOARD_KEY = 'lastSelectedBoardId';
@@ -59,9 +60,8 @@ export function BoardPage() {
     onConfirm: () => {},
   });
 
-  const filterPanelRef = useRef<HTMLDivElement>(null);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const preferencesMenuRef = useRef<HTMLDivElement>(null);
   const boardDropdownRef = useRef<HTMLDivElement>(null);
@@ -128,22 +128,8 @@ export function BoardPage() {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (showFilterPanel && filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
-        setShowFilterPanel(false);
-      }
-      if (showMoreMenu && moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setShowMoreMenu(false);
-        setShowExportMenu(false);
-        setShowPreferencesMenu(false);
-      }
       if (showUserMenu && userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setShowUserMenu(false);
-      }
-      if (showExportMenu && exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-        setShowExportMenu(false);
-      }
-      if (showPreferencesMenu && preferencesMenuRef.current && !preferencesMenuRef.current.contains(e.target as Node)) {
-        setShowPreferencesMenu(false);
       }
       if (showBoardDropdown && boardDropdownRef.current && !boardDropdownRef.current.contains(e.target as Node)) {
         setShowBoardDropdown(false);
@@ -151,7 +137,7 @@ export function BoardPage() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterPanel, showMoreMenu, showUserMenu, showExportMenu, showPreferencesMenu, showBoardDropdown]);
+  }, [showUserMenu, showBoardDropdown]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -251,139 +237,18 @@ export function BoardPage() {
     });
   }, [currentBoard, t]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'n') {
-        e.preventDefault();
-        setShowAddTaskModal(true);
-        return;
-      }
-
-      const target = e.target as HTMLElement;
-      const isInputFocused =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.isContentEditable;
-
-      if (e.key === '/' && !isInputFocused) {
-        e.preventDefault();
-        return;
-      }
-
-      if (e.key === 'e' && !isInputFocused && selectedTask) {
-        e.preventDefault();
-        setEditTaskId(selectedTask.id);
-        return;
-      }
-
-      if ((e.key === 'n' || e.key === 'N') && !isInputFocused) {
-        e.preventDefault();
-        setShowAddTaskModal(true);
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        if (showAddTaskModal) {
-          setShowAddTaskModal(false);
-          setDefaultColumnIdForNewTask(undefined);
-        } else if (selectedTask) {
-          setSelectedTask(null);
-          setEditTaskId(null);
-        } else if (selectedTasks.size > 0) {
-          clearSelection();
-        }
-        return;
-      }
-
-      if (isInputFocused) return;
-
-      const currentColumn = columns[focusedColumnIndex];
-      const columnTasks = currentColumn?.tasks || [];
-
-      if (e.key === 'j' || e.key === 'J') {
-        e.preventDefault();
-        if (columnTasks.length === 0) return;
-        const newIndex = Math.min(focusedTaskIndex + 1, columnTasks.length - 1);
-        setFocusedTaskIndex(newIndex);
-        const task = columnTasks[newIndex];
-        if (task) handleTaskSelect(task.id, task);
-        return;
-      }
-
-      if (e.key === 'k' || e.key === 'K') {
-        e.preventDefault();
-        if (columnTasks.length === 0) return;
-        const newIndex = Math.max(focusedTaskIndex - 1, 0);
-        setFocusedTaskIndex(newIndex);
-        const task = columnTasks[newIndex];
-        if (task) handleTaskSelect(task.id, task);
-        return;
-      }
-
-      if (e.key === 'h' || e.key === 'H') {
-        e.preventDefault();
-        if (columns.length === 0) return;
-        const newColIndex = Math.max(focusedColumnIndex - 1, 0);
-        setFocusedColumnIndex(newColIndex);
-        const col = columns[newColIndex];
-        if (col.tasks && col.tasks.length > 0) {
-          setFocusedTaskIndex(0);
-          handleTaskSelect(col.tasks[0].id, col.tasks[0]);
-        }
-        return;
-      }
-
-      if (e.key === 'l' || e.key === 'L') {
-        e.preventDefault();
-        if (columns.length === 0) return;
-        const newColIndex = Math.min(focusedColumnIndex + 1, columns.length - 1);
-        setFocusedColumnIndex(newColIndex);
-        const col = columns[newColIndex];
-        if (col.tasks && col.tasks.length > 0) {
-          setFocusedTaskIndex(0);
-          handleTaskSelect(col.tasks[0].id, col.tasks[0]);
-        }
-        return;
-      }
-
-      if ((e.key === 'd' || e.key === 'D') && selectedTask) {
-        e.preventDefault();
-        archiveTask(selectedTask.id);
-        return;
-      }
-
-      if (e.key === 'Delete' && selectedTask) {
-        e.preventDefault();
-        setConfirmDialog({
-          isOpen: true,
-          title: t('task.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
-          message: t('task.confirmDelete'),
-          variant: 'danger',
-          onConfirm: () => {
-            deleteTask(selectedTask.id);
-            setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-          },
-        });
-        return;
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [
-    selectedTask,
-    selectedTasks,
-    showAddTaskModal,
-    columns,
-    focusedColumnIndex,
-    focusedTaskIndex,
-    t,
-    handleTaskSelect,
-    clearSelection,
-    archiveTask,
-    deleteTask,
-    setSelectedTask,
-  ]);
+  const handleDeleteTask = useCallback((taskId: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: t('task.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
+      message: t('task.confirmDelete'),
+      variant: 'danger',
+      onConfirm: () => {
+        deleteTask(taskId);
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  }, [t, deleteTask]);
 
   if (loading || boardSwitching) return <BoardSkeleton />;
 
@@ -410,6 +275,24 @@ export function BoardPage() {
 
   return (
     <div className="h-screen bg-zinc-100 dark:bg-zinc-900">
+      <KeyboardNavigation
+        selectedTask={selectedTask}
+        selectedTasks={selectedTasks}
+        showAddTaskModal={showAddTaskModal}
+        columns={columns}
+        focusedColumnIndex={focusedColumnIndex}
+        focusedTaskIndex={focusedTaskIndex}
+        onSetFocusedColumnIndex={setFocusedColumnIndex}
+        onSetFocusedTaskIndex={setFocusedTaskIndex}
+        onSetShowAddTaskModal={setShowAddTaskModal}
+        onSetDefaultColumnIdForNewTask={setDefaultColumnIdForNewTask}
+        onSetEditTaskId={setEditTaskId}
+        onSetSelectedTask={setSelectedTask}
+        onHandleTaskSelect={handleTaskSelect}
+        onClearSelection={clearSelection}
+        onArchiveTask={archiveTask}
+        onDeleteTask={handleDeleteTask}
+      />
       <WsWarning
         wsStatus={wsStatus}
         reconnectCount={reconnectCount}
@@ -453,120 +336,59 @@ export function BoardPage() {
           </Link>
         </div>
 
-        <div className="flex items-center gap-3">
-          <SearchBar
-            value={searchQuery}
-            onChange={(value) => {
-              setSearchQuery(value);
-              setFilters((prev) => ({ ...prev, searchQuery: value }));
-            }}
-            onClear={() => {
-              setSearchQuery('');
-              setFilters((prev) => ({ ...prev, searchQuery: '' }));
-            }}
-          />
-
-          <div className="relative">
-            <button
-              onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm ${
-                hasActiveFilters
-                  ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                  : 'bg-zinc-200 text-zinc-700 border border-transparent'
-              } hover:bg-zinc-300`}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              {t('filter.filter')}
-              {hasActiveFilters && (
-                <span className="ml-1 rounded-full bg-blue-500 text-white text-xs w-4 h-4 flex items-center justify-center">
-                  {[filters.searchQuery, filters.priority, filters.assignee, filters.dateRange, filters.tag].filter(Boolean).length}
-                </span>
-              )}
-            </button>
-            {showFilterPanel && (
-              <div
-                ref={filterPanelRef}
-                className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg z-50"
-              >
-                <FilterPanelContent
-                  filters={filters}
-                  uniqueAssignees={uniqueAssignees}
-                  uniqueTags={uniqueTags}
-                  filterPresets={filterPresets}
-                  showPresetDropdown={showPresetDropdown}
-                  onSetFilters={setFilters}
-                  onClearFilters={clearFilters}
-                  onSaveCurrentAsPreset={saveCurrentAsPreset}
-                  onApplyPreset={applyPreset}
-                  onDeletePreset={deletePreset}
-                  onSetShowPresetDropdown={setShowPresetDropdown}
-                />
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={() => {
-              setDefaultColumnIdForNewTask(undefined);
-              setShowAddTaskModal(true);
-            }}
-            className="flex items-center gap-1.5 rounded-md bg-blue-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-600"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            {t('task.create')}
-          </button>
-        </div>
-
-        <HeaderRightMenu
-          showMoreMenu={showMoreMenu}
-          showUserMenu={showUserMenu}
-          showExportMenu={showExportMenu}
-          showPreferencesMenu={showPreferencesMenu}
-          currentUser={currentUser}
-          wsStatus={wsStatus}
-          reconnectCount={reconnectCount}
-          reconnectAttemptRef={reconnectAttemptRef}
-          onSetShowMoreMenu={setShowMoreMenu}
-          onSetShowUserMenu={setShowUserMenu}
-          onSetShowExportMenu={setShowExportMenu}
-          onSetShowPreferencesMenu={setShowPreferencesMenu}
-          onConnectWebSocket={connectWebSocket}
-          moreMenuRef={moreMenuRef}
-          userMenuRef={userMenuRef}
-          exportMenuRef={exportMenuRef}
-          preferencesMenuRef={preferencesMenuRef}
-          onExport={handleExport}
-          onReset={handleReset}
-          onSetDarkMode={setDarkMode}
-          darkMode={darkMode}
-          i18n={i18n}
-          navigate={navigate}
+        <BoardToolbar
+          searchQuery={searchQuery}
+          filters={filters}
+          filterPresets={filterPresets}
+          uniqueAssignees={uniqueAssignees}
+          uniqueTags={uniqueTags}
+          hasActiveFilters={hasActiveFilters}
+          showFilterPanel={showFilterPanel}
+          showPresetDropdown={showPresetDropdown}
+          onSetSearchQuery={setSearchQuery}
+          onSetFilters={setFilters}
+          onClearFilters={clearFilters}
+          onSaveCurrentAsPreset={saveCurrentAsPreset}
+          onApplyPreset={applyPreset}
+          onDeletePreset={deletePreset}
+          onSetShowPresetDropdown={setShowPresetDropdown}
+          onToggleFilterPanel={() => setShowFilterPanel(!showFilterPanel)}
+          onCloseFilterPanel={() => setShowFilterPanel(false)}
+          onAddTask={() => {
+            setDefaultColumnIdForNewTask(undefined);
+            setShowAddTaskModal(true);
+          }}
         />
+
+        <div className="flex items-center gap-3">
+          <BoardActionsMenu
+            showMoreMenu={showMoreMenu}
+            showExportMenu={showExportMenu}
+            showPreferencesMenu={showPreferencesMenu}
+            currentUser={currentUser}
+            onSetShowMoreMenu={setShowMoreMenu}
+            onSetShowExportMenu={setShowExportMenu}
+            onSetShowPreferencesMenu={setShowPreferencesMenu}
+            moreMenuRef={moreMenuRef}
+            exportMenuRef={exportMenuRef}
+            preferencesMenuRef={preferencesMenuRef}
+            onExport={handleExport}
+            onReset={handleReset}
+            onSetDarkMode={setDarkMode}
+            darkMode={darkMode}
+            i18n={i18n}
+          />
+          <HeaderRightMenu
+            showUserMenu={showUserMenu}
+            currentUser={currentUser}
+            wsStatus={wsStatus}
+            reconnectAttemptRef={reconnectAttemptRef}
+            onSetShowUserMenu={setShowUserMenu}
+            onConnectWebSocket={connectWebSocket}
+            userMenuRef={userMenuRef}
+            navigate={navigate}
+          />
+        </div>
       </header>
 
       <ColumnBoard

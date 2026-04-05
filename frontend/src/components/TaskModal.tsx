@@ -155,6 +155,7 @@ export function TaskModal({
   const assigneeSelectRef = useRef<HTMLSelectElement>(null);
   const metaKeyInputRef = useRef<HTMLInputElement>(null);
   const handleSaveRef = useRef<() => void>(() => {});
+  const handleSaveRefDeps = useRef<unknown[]>([]);
   const [commentsPage, setCommentsPage] = useState(1);
   const COMMENTS_PER_PAGE = 10;
 
@@ -246,8 +247,13 @@ export function TaskModal({
   }, [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate]);
 
   useEffect(() => {
-    handleSaveRef.current = handleSave;
-  }, [handleSave]);
+    const deps = [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate];
+    if (handleSaveRefDeps.current.join() !== deps.join()) {
+      // eslint-disable-next-line react-hooks/immutability
+      handleSaveRef.current = handleSave;
+      handleSaveRefDeps.current = deps;
+    }
+  });
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;

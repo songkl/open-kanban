@@ -313,7 +313,6 @@ export function BoardsPage() {
               </svg>
             </div>
             <p className="text-lg font-semibold text-zinc-800">{t('app.error.loadFailed')}</p>
-            <p className="text-sm text-zinc-400 mt-1 mb-6">{loadError}</p>
             <div className="flex flex-col gap-3 items-center">
               <p className="text-sm text-zinc-500">{t('board.noAccessHint')}</p>
               <div className="flex gap-3">

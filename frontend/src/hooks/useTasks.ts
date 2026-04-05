@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { tasksApi, commentsApi } from '../services/api';
 import { showErrorToast } from '../components/ErrorToast';
@@ -20,7 +20,7 @@ interface UseTasksOptions {
   columns: ColumnType[];
   currentBoard: Board | null;
   onColumnsChange: React.Dispatch<React.SetStateAction<ColumnType[]>>;
-  onLastLocalUpdate: () => void;
+  onLastLocalUpdate?: () => void;
 }
 
 interface UseTasksReturn {
@@ -28,6 +28,9 @@ interface UseTasksReturn {
   selectedTask: Task | null;
   selectedTasks: Set<string>;
   lastSelectedTaskId: string | null;
+  lastLocalUpdateRef: React.MutableRefObject<number>;
+  offlineQueueRef: React.MutableRefObject<Array<{ action: string; data: unknown; timestamp: number }>>;
+  isProcessingQueueRef: React.MutableRefObject<boolean>;
   updateTask: (task: Task) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   archiveTask: (taskId: string) => Promise<void>;
@@ -62,6 +65,16 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [lastSelectedTaskId, setLastSelectedTaskId] = useState<string | null>(null);
+  const lastLocalUpdateRef = useRef<number>(0);
+  const offlineQueueRef = useRef<Array<{ action: string; data: unknown; timestamp: number }>>([]);
+  const isProcessingQueueRef = useRef<boolean>(false);
+
+  const notifyLastLocalUpdate = useCallback(() => {
+    lastLocalUpdateRef.current = Date.now();
+    if (onLastLocalUpdate) {
+      onLastLocalUpdate();
+    }
+  }, [onLastLocalUpdate]);
 
   const updateTask = useCallback(async (task: Task) => {
     const targetColumnId = task.columnId;
@@ -86,7 +99,7 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       };
 
       if (isSameBoard) {
-        onLastLocalUpdate();
+        notifyLastLocalUpdate();
         const oldColumnId = columns.find(col => col.tasks.some(t => t.id === task.id))?.id;
 
         if (oldColumnId && oldColumnId !== task.columnId) {
@@ -118,10 +131,10 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     } catch (error) {
       console.error('Failed to update task:', error);
     }
-  }, [columns, currentBoard?.id, t, onColumnsChange, onLastLocalUpdate]);
+  }, [columns, currentBoard?.id, t, onColumnsChange, notifyLastLocalUpdate]);
 
   const deleteTask = useCallback(async (taskId: string) => {
-    onLastLocalUpdate();
+    notifyLastLocalUpdate();
     await tasksApi.delete(taskId);
     onColumnsChange((cols) =>
       cols.map((col) => ({
@@ -130,10 +143,10 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       }))
     );
     setSelectedTask(null);
-  }, [onColumnsChange, onLastLocalUpdate]);
+  }, [onColumnsChange, notifyLastLocalUpdate]);
 
   const archiveTask = useCallback(async (taskId: string) => {
-    onLastLocalUpdate();
+    notifyLastLocalUpdate();
     await tasksApi.archive(taskId, true);
     onColumnsChange((cols) =>
       cols.map((col) => ({
@@ -142,7 +155,7 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       }))
     );
     setSelectedTask(null);
-  }, [onColumnsChange, onLastLocalUpdate]);
+  }, [onColumnsChange, notifyLastLocalUpdate]);
 
   const addTask = useCallback(async (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => {
     const taskTitle = title || prompt(t('task.enterTitle'));
@@ -164,7 +177,7 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       });
 
       if (isSameBoard) {
-        onLastLocalUpdate();
+        notifyLastLocalUpdate();
         onColumnsChange((cols) =>
           cols.map((col) =>
             col.id === targetColumnId
@@ -188,11 +201,11 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
         createdAt: new Date().toISOString(),
       });
     }
-  }, [currentBoard?.id, t, onColumnsChange, onLastLocalUpdate]);
+  }, [currentBoard?.id, t, onColumnsChange, notifyLastLocalUpdate]);
 
   const addComment = useCallback(async (taskId: string, content: string, author: string) => {
     try {
-      onLastLocalUpdate();
+      notifyLastLocalUpdate();
       const comment = await commentsApi.create({ taskId, content, author });
       onColumnsChange((cols) =>
         cols.map((col) => ({
@@ -208,7 +221,7 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     } catch (error) {
       console.error('Failed to add comment:', error);
     }
-  }, [selectedTask, onColumnsChange, onLastLocalUpdate]);
+  }, [selectedTask, onColumnsChange, notifyLastLocalUpdate]);
 
   const handleTaskSelect = useCallback((taskId: string, _task: Task, e?: any) => {
     if (e?.shiftKey && lastSelectedTaskId) {
@@ -264,7 +277,7 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     if (selectedTasks.size === 0) return;
 
     try {
-      onLastLocalUpdate();
+      notifyLastLocalUpdate();
       await Promise.all(Array.from(selectedTasks).map(id => tasksApi.delete(id)));
       onColumnsChange(cols => cols.map(col => ({
         ...col,
@@ -274,13 +287,13 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     } catch (error) {
       console.error('Failed to batch delete:', error);
     }
-  }, [selectedTasks, clearSelection, onColumnsChange, onLastLocalUpdate]);
+  }, [selectedTasks, clearSelection, onColumnsChange, notifyLastLocalUpdate]);
 
   const batchArchive = useCallback(async () => {
     if (selectedTasks.size === 0) return;
 
     try {
-      onLastLocalUpdate();
+      notifyLastLocalUpdate();
       await Promise.all(Array.from(selectedTasks).map(id => tasksApi.archive(id, true)));
       onColumnsChange(cols => cols.map(col => ({
         ...col,
@@ -290,13 +303,13 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     } catch (error) {
       console.error('Failed to batch archive:', error);
     }
-  }, [selectedTasks, clearSelection, onColumnsChange, onLastLocalUpdate]);
+  }, [selectedTasks, clearSelection, onColumnsChange, notifyLastLocalUpdate]);
 
   const batchMove = useCallback(async (targetColumnId: string) => {
     if (selectedTasks.size === 0) return;
 
     try {
-      onLastLocalUpdate();
+      notifyLastLocalUpdate();
       await Promise.all(Array.from(selectedTasks).map(id => tasksApi.update(id, { columnId: targetColumnId })));
       const tasksToMove = columns.flatMap(col => col.tasks).filter(t => selectedTasks.has(t.id));
       
@@ -310,13 +323,13 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     } catch (error) {
       console.error('Failed to batch move:', error);
     }
-  }, [selectedTasks, columns, clearSelection, onColumnsChange, onLastLocalUpdate]);
+  }, [selectedTasks, columns, clearSelection, onColumnsChange, notifyLastLocalUpdate]);
 
   const batchUpdatePriority = useCallback(async (priority: string) => {
     if (selectedTasks.size === 0) return;
 
     try {
-      onLastLocalUpdate();
+      notifyLastLocalUpdate();
       await Promise.all(Array.from(selectedTasks).map(id => tasksApi.update(id, { priority })));
       onColumnsChange(cols => cols.map(col => ({
         ...col,
@@ -326,13 +339,13 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     } catch (error) {
       console.error('Failed to batch update priority:', error);
     }
-  }, [selectedTasks, clearSelection, onColumnsChange, onLastLocalUpdate]);
+  }, [selectedTasks, clearSelection, onColumnsChange, notifyLastLocalUpdate]);
 
   const batchUpdateAssignee = useCallback(async (assignee: string) => {
     if (selectedTasks.size === 0) return;
 
     try {
-      onLastLocalUpdate();
+      notifyLastLocalUpdate();
       await Promise.all(Array.from(selectedTasks).map(id => tasksApi.update(id, { assignee: assignee || null })));
       onColumnsChange(cols => cols.map(col => ({
         ...col,
@@ -342,13 +355,16 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     } catch (error) {
       console.error('Failed to batch update assignee:', error);
     }
-  }, [selectedTasks, clearSelection, onColumnsChange, onLastLocalUpdate]);
+  }, [selectedTasks, clearSelection, onColumnsChange, notifyLastLocalUpdate]);
 
   return {
     activeTask,
     selectedTask,
     selectedTasks,
     lastSelectedTaskId,
+    lastLocalUpdateRef,
+    offlineQueueRef,
+    isProcessingQueueRef,
     updateTask,
     deleteTask,
     archiveTask,

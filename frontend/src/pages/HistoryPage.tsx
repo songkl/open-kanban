@@ -47,7 +47,7 @@ export function HistoryPage() {
       setBoards(data || []);
     } catch (err) {
       console.error('Failed to fetch boards:', err);
-      setError(err instanceof Error ? err.message : t('history.loadFailed'));
+      setError(t('history.loadFailed'));
     }
   };
 
@@ -70,7 +70,7 @@ export function HistoryPage() {
       setTasks(data || []);
     } catch (err) {
       console.error('Failed to fetch archived tasks:', err);
-      setError(err instanceof Error ? err.message : t('history.loadFailed'));
+      setError(t('history.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -111,7 +111,6 @@ export function HistoryPage() {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <div className="text-red-500">{t('history.loadFailed')}</div>
-        <div className="text-sm text-zinc-400">{error}</div>
         <button
           onClick={() => selectedBoard && fetchTasks(selectedBoard)}
           className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"

@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { tasksApi } from '../services/api';
 import type { Column as ColumnType, Task } from '../types/kanban';
 
@@ -7,9 +7,20 @@ interface UseBoardRefreshOptions {
   onColumnsChange: React.Dispatch<React.SetStateAction<ColumnType[]>>;
 }
 
+interface OfflineQueueItem {
+  action: string;
+  data: unknown;
+  timestamp: number;
+}
+
+interface UpdateTaskData { id: string; [key: string]: unknown }
+interface DeleteTaskData { id: string }
+interface ArchiveTaskData { id: string }
+interface AddTaskData { title: string; description?: string; columnId: string; position?: number; priority?: string; published?: boolean; agentId?: string; agentPrompt?: string }
+
 interface UseBoardRefreshReturn {
   lastLocalUpdateRef: React.MutableRefObject<number>;
-  offlineQueueRef: React.MutableRefObject<Array<{ action: string; data: any; timestamp: number }>>;
+  offlineQueueRef: React.MutableRefObject<OfflineQueueItem[]>;
   isProcessingQueueRef: React.MutableRefObject<boolean>;
   processOfflineQueue: () => Promise<void>;
   handleTaskNotificationUpdate: (taskId: string) => Promise<void>;
@@ -17,8 +28,12 @@ interface UseBoardRefreshReturn {
 
 export function useBoardRefresh({ columns, onColumnsChange }: UseBoardRefreshOptions): UseBoardRefreshReturn {
   const lastLocalUpdateRef = useRef<number>(0);
-  const offlineQueueRef = useRef<Array<{ action: string; data: any; timestamp: number }>>([]);
+  const offlineQueueRef = useRef<Array<{ action: string; data: unknown; timestamp: number }>>([]);
   const isProcessingQueueRef = useRef<boolean>(false);
+  const columnsRef = useRef(columns);
+  useEffect(() => {
+    columnsRef.current = columns;
+  }, [columns]);
 
   const handleTaskNotificationUpdate = useCallback(async (taskId: string) => {
     try {
@@ -30,7 +45,8 @@ export function useBoardRefresh({ columns, onColumnsChange }: UseBoardRefreshOpt
         meta: typeof updatedTask.meta === 'string' ? JSON.parse(updatedTask.meta || '{}') : updatedTask.meta || null,
       };
 
-      const oldColumn = columns.find(col => col.tasks.some(t => t.id === taskId));
+      const currentColumns = columnsRef.current;
+      const oldColumn = currentColumns.find(col => col.tasks.some(t => t.id === taskId));
       const newColumnId = parsedTask.columnId;
 
       if (oldColumn && oldColumn.id !== newColumnId) {
@@ -48,11 +64,18 @@ export function useBoardRefresh({ columns, onColumnsChange }: UseBoardRefreshOpt
           ...col,
           tasks: col.tasks.map(t => t.id === taskId ? parsedTask : t)
         })));
+      } else if (currentColumns.some(col => col.id === newColumnId)) {
+        onColumnsChange(cols => cols.map(col => {
+          if (col.id === newColumnId) {
+            return { ...col, tasks: [...col.tasks, parsedTask] };
+          }
+          return col;
+        }));
       }
     } catch (error) {
       console.error('Failed to handle task notification update:', error);
     }
-  }, [columns, onColumnsChange]);
+  }, [onColumnsChange]);
 
   const processOfflineQueue = useCallback(async () => {
     if (isProcessingQueueRef.current || offlineQueueRef.current.length === 0) return;
@@ -63,18 +86,26 @@ export function useBoardRefresh({ columns, onColumnsChange }: UseBoardRefreshOpt
     for (const item of queue) {
       try {
         switch (item.action) {
-          case 'updateTask':
-            await tasksApi.update(item.data.id, item.data);
+          case 'updateTask': {
+            const data = item.data as UpdateTaskData;
+            await tasksApi.update(data.id, data);
             break;
-          case 'deleteTask':
-            await tasksApi.delete(item.data.id);
+          }
+          case 'deleteTask': {
+            const data = item.data as DeleteTaskData;
+            await tasksApi.delete(data.id);
             break;
-          case 'archiveTask':
-            await tasksApi.archive(item.data.id, true);
+          }
+          case 'archiveTask': {
+            const data = item.data as ArchiveTaskData;
+            await tasksApi.archive(data.id, true);
             break;
-          case 'addTask':
-            await tasksApi.create(item.data);
+          }
+          case 'addTask': {
+            const data = item.data as AddTaskData;
+            await tasksApi.create(data);
             break;
+          }
         }
       } catch (error) {
         console.error(`Failed to process offline action ${item.action}:`, error);
