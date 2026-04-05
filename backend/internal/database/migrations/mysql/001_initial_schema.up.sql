@@ -183,3 +183,5 @@ CREATE INDEX idx_activities_user ON activities(user_id);
 CREATE INDEX idx_activities_created ON activities(created_at DESC);
 CREATE INDEX idx_users_last_active ON users(last_active_at);
 CREATE INDEX idx_tasks_created_by ON tasks(created_by);
+CREATE INDEX idx_tasks_column_position ON tasks(column_id, position);
+CREATE INDEX idx_tasks_archived_published ON tasks(archived, published);
