@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"open-kanban/internal/config"
 )
 
 type WebhookService struct {
@@ -44,7 +46,7 @@ func InitWebhookService() *WebhookService {
 		url:     url,
 		secret:  secret,
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: config.GetConfig().Webhook.Timeout,
 		},
 	}
 
