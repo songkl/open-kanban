@@ -29,6 +29,7 @@ Each ADR includes:
 | [ADR-0003](ADR-0003-token-based-authentication.md) | Token-Based Authentication | Accepted |
 | [ADR-0004](ADR-0004-websocket-real-time-updates.md) | WebSocket for Real-Time Updates | Accepted |
 | [ADR-0005](ADR-0005-multi-agent-support.md) | Multi-Agent Support Architecture | Accepted |
+| [ADR-0006](ADR-0006-type-sharing-strategy.md) | Type Sharing Strategy | Proposed |
 
 ## Creating a New ADR
 

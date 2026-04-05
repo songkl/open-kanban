@@ -1287,6 +1287,26 @@ paths:
             application/json:
               schema:
                 type: object
+    put:
+      summary: Update app config
+      description: Update application configuration
+      operationId: updateAppConfig
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Config updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /auth/token:
     get:
@@ -1635,28 +1655,6 @@ paths:
       responses:
         '200':
           description: Column permission deleted
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/config:
-    put:
-      summary: Update app config
-      description: Update application configuration
-      operationId: updateAppConfig
-      tags:
-        - Authentication
-      security:
-        - BearerAuth: []
-        - SignatureAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200':
-          description: Config updated
         '401':
           $ref: '#/components/responses/Unauthorized'
 
