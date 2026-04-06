@@ -9,9 +9,9 @@ export function get_status(srv: McpServer) {
   }, async () => {
     try {
       const start = Date.now();
-      await fetch(`${API_BASE}/api/boards`);
+      await fetch(`${API_BASE}/api/v1/boards`);
       const latency = Date.now() - start;
-      const boards = await apiGet<any[]>("/api/boards");
+    const boards = await apiGet<any[]>("/api/v1/boards");
       return jsonToolResult({
         status: "online",
         apiUrl: API_BASE,
@@ -35,7 +35,7 @@ export function list_boards(srv: McpServer) {
     description: "列出所有看板（只读）",
     inputSchema: z.object({}),
   }, async () => {
-    const boards = await apiGet<any[]>("/api/boards");
+    const boards = await apiGet<any[]>("/api/v1/boards");
     const result = boards.map(({ _count, ...board }) => board);
     return jsonToolResult(result);
   });
@@ -48,7 +48,7 @@ export function get_board(srv: McpServer) {
       boardId: z.string().describe("看板ID"),
     }),
   }, async ({ boardId }) => {
-    const board = await apiGet<any>(`/api/boards/${boardId}`);
+    const board = await apiGet<any>(`/api/v1/boards/${boardId}`);
     if (!board || board.error) {
       return { content: [{ type: "text" as const, text: "Board not found" }], isError: true };
     }

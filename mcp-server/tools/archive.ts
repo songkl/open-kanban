@@ -9,7 +9,7 @@ export function list_archived_tasks(srv: McpServer) {
       boardId: z.string().optional().describe("看板ID"),
     }),
   }, async ({ boardId }) => {
-    const url = boardId ? `/api/archived?boardId=${boardId}` : "/api/archived";
+    const url = boardId ? `/api/v1/archived?boardId=${boardId}` : "/api/v1/archived";
     const archived = await apiGet<any[]>(url);
     return jsonToolResult(archived);
   });
@@ -23,7 +23,7 @@ export function archive_task(srv: McpServer) {
       archived: z.boolean().describe("true=归档, false=恢复"),
     }),
   }, async ({ id, archived }) => {
-    const task = await apiPost<any>(`/api/tasks/${id}/archive`, { archived });
+    const task = await apiPost<any>(`/api/v1/tasks/${id}/archive`, { archived });
     broadcast();
     return jsonToolResult(task);
   });

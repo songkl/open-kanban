@@ -19,7 +19,7 @@ export function list_tasks(srv: McpServer) {
     }),
   }, async (args) => {
     const boardId = args.boardId;
-    const url = boardId ? `/api/columns?boardId=${boardId}` : "/api/columns";
+    const url = boardId ? `/api/v1/columns?boardId=${boardId}` : "/api/v1/columns";
     const columns = await apiGet<any[]>(url);
 
     let columnId = args.columnId;
@@ -117,7 +117,7 @@ export function get_task(srv: McpServer) {
       id: z.string().describe("任务ID"),
     }),
   }, async ({ id }) => {
-    const task = await apiGet<any>(`/api/tasks/${id}`);
+    const task = await apiGet<any>(`/api/v1/tasks/${id}`);
     if (!task || task.error) {
       return createToolResult("Task not found", true);
     }
@@ -141,7 +141,7 @@ export function create_task(srv: McpServer) {
     }),
   }, async (args) => {
     const boardId = args.boardId;
-    const url = boardId ? `/api/columns?boardId=${boardId}` : "/api/columns";
+    const url = boardId ? `/api/v1/columns?boardId=${boardId}` : "/api/v1/columns";
     const columns = await apiGet<any[]>(url);
 
     let columnId = args.columnId;
@@ -166,7 +166,7 @@ export function create_task(srv: McpServer) {
       columnId = columns[0].id;
     }
 
-    const task = await apiPost<any>("/api/tasks", {
+    const task = await apiPost<any>("/api/v1/tasks", {
       title: args.title,
       description: args.description,
       columnId,
@@ -195,7 +195,7 @@ export function update_task(srv: McpServer) {
       status: StatusEnum.optional().describe("新状态"),
     }),
   }, async (args) => {
-    const currentTask = await apiGet<any>(`/api/tasks/${args.id}`);
+    const currentTask = await apiGet<any>(`/api/v1/tasks/${args.id}`);
     if (!currentTask || currentTask.error) {
       return createToolResult("Task not found", true);
     }
@@ -203,7 +203,7 @@ export function update_task(srv: McpServer) {
     let columnId = args.columnId;
 
     if (!columnId && args.status) {
-      const allColumns = await apiGet<any[]>("/api/columns");
+        const allColumns = await apiGet<any[]>("/api/v1/columns");
       const currentColumn = allColumns.find((c: any) => c.id === currentTask.columnId);
       const currentBoardId = currentColumn?.boardId;
 
@@ -238,7 +238,7 @@ export function update_task(srv: McpServer) {
     if (args.meta !== undefined) updateData.meta = args.meta;
     if (columnId !== undefined) updateData.columnId = columnId;
 
-    const task = await apiPut<any>(`/api/tasks/${args.id}`, updateData);
+    const task = await apiPut<any>(`/api/v1/tasks/${args.id}`, updateData);
     broadcast();
     return jsonToolResult(task);
   });
@@ -252,7 +252,7 @@ export function delete_task(srv: McpServer) {
     }),
   }, async ({ id }) => {
     const { apiDelete } = await import("./helpers.js");
-    await apiDelete(`/api/tasks/${id}`);
+    await apiDelete(`/api/v1/tasks/${id}`);
     broadcast();
     return createToolResult("Task deleted successfully");
   });
@@ -265,7 +265,7 @@ export function complete_task(srv: McpServer) {
       id: z.string().describe("任务ID"),
     }),
   }, async ({ id }) => {
-    const task = await apiPost<any>(`/api/tasks/${id}/complete`, {});
+    const task = await apiPost<any>(`/api/v1/tasks/${id}/complete`, {});
     broadcast();
     return jsonToolResult(task);
   });

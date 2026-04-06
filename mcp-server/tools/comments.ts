@@ -11,7 +11,7 @@ export function add_comment(srv: McpServer) {
       author: z.string().optional().describe("评论作者"),
     }),
   }, async (args) => {
-    const comment = await apiPost<any>("/api/comments", {
+    const comment = await apiPost<any>("/api/v1/comments", {
       taskId: args.taskId,
       content: args.content,
       author: args.author || "Anonymous",
@@ -28,7 +28,7 @@ export function list_comments(srv: McpServer) {
       taskId: z.string().describe("任务ID"),
     }),
   }, async ({ taskId }) => {
-    const task = await apiGet<any>(`/api/tasks/${taskId}`);
+    const task = await apiGet<any>(`/api/v1/tasks/${taskId}`);
     const comments = task?.comments || [];
     return jsonToolResult(comments);
   });

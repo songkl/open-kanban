@@ -10,7 +10,7 @@ export function list_columns(srv: McpServer) {
       positions: z.array(z.number()).optional().describe("列的位置列表，可多选，如 [1, 3, 5] 表示获取第1、3、5位的列"),
     }),
   }, async ({ boardId, positions }) => {
-    let url = "/api/columns";
+    let url = "/api/v1/columns";
     const params = new URLSearchParams();
     if (boardId) params.set("boardId", boardId);
     if (positions && positions.length > 0) params.set("positions", positions.join(","));
@@ -36,7 +36,7 @@ export function get_column(srv: McpServer) {
       columnId: z.string().describe("列ID"),
     }),
   }, async ({ columnId }) => {
-    const columns = await apiGet<any[]>("/api/columns");
+    const columns = await apiGet<any[]>("/api/v1/columns");
     const col = columns.find((c: any) => c.id === columnId);
     if (!col) {
       return createToolResult("Column not found", true);

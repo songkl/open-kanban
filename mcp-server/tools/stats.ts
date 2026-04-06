@@ -7,7 +7,7 @@ export function get_dashboard_stats(srv: McpServer) {
     description: "获取看板统计信息",
     inputSchema: z.object({}),
   }, async () => {
-    const stats = await apiGet<any>("/api/dashboard/stats");
+    const stats = await apiGet<any>("/api/v1/dashboard/stats");
     return jsonToolResult(stats);
   });
 }

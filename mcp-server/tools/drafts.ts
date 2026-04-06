@@ -9,7 +9,7 @@ export function list_drafts(srv: McpServer) {
       boardId: z.string().optional().describe("看板ID"),
     }),
   }, async ({ boardId }) => {
-    const url = boardId ? `/api/drafts?boardId=${boardId}` : "/api/drafts";
+    const url = boardId ? `/api/v1/drafts?boardId=${boardId}` : "/api/v1/drafts";
     const drafts = await apiGet<any[]>(url);
     return jsonToolResult(drafts);
   });
@@ -23,7 +23,7 @@ export function publish_task(srv: McpServer) {
       published: z.boolean().describe("true=发布, false=取消发布"),
     }),
   }, async ({ id, published }) => {
-    const task = await apiPut<any>(`/api/tasks/${id}`, { published });
+    const task = await apiPut<any>(`/api/v1/tasks/${id}`, { published });
     broadcast();
     return jsonToolResult(task);
   });

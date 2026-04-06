@@ -9,7 +9,7 @@ export function list_subtasks(srv: McpServer) {
       taskId: z.string().describe("任务ID"),
     }),
   }, async ({ taskId }) => {
-    const subtasks = await apiGet<any[]>(`/api/subtasks?taskId=${taskId}`);
+    const subtasks = await apiGet<any[]>(`/api/v1/subtasks?taskId=${taskId}`);
     return jsonToolResult(subtasks);
   });
 }
@@ -22,7 +22,7 @@ export function create_subtask(srv: McpServer) {
       title: z.string().describe("子任务标题"),
     }),
   }, async ({ taskId, title }) => {
-    const subtask = await apiPost<any>("/api/subtasks", { taskId, title });
+    const subtask = await apiPost<any>("/api/v1/subtasks", { taskId, title });
     broadcast();
     return jsonToolResult(subtask);
   });
@@ -37,7 +37,7 @@ export function update_subtask(srv: McpServer) {
       completed: z.boolean().optional().describe("是否完成"),
     }),
   }, async (args) => {
-    const subtask = await apiPut<any>(`/api/subtasks/${args.id}`, {
+    const subtask = await apiPut<any>(`/api/v1/subtasks/${args.id}`, {
       title: args.title,
       completed: args.completed,
     });
@@ -53,7 +53,7 @@ export function delete_subtask(srv: McpServer) {
       id: z.string().describe("子任务ID"),
     }),
   }, async ({ id }) => {
-    await apiDelete(`/api/subtasks/${id}`);
+    await apiDelete(`/api/v1/subtasks/${id}`);
     broadcast();
     return createToolResult("Subtask deleted successfully");
   });
