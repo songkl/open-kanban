@@ -38,7 +38,7 @@ describe('TaskList', () => {
   it('renders nothing when column is null', () => {
     const { container } = render(
       <TaskList
-        column={null as any}
+        column={null as unknown}
         onTaskClick={vi.fn()}
         onLoadMore={vi.fn()}
       />

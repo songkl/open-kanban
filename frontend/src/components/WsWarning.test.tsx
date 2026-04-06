@@ -4,7 +4,7 @@ import { WsWarning } from './WsWarning';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: any) => {
+    t: (key: string, options?: Record<string, unknown>) => {
       if (key === 'wsStatus.connectionLost') return 'Connection Lost';
       if (key === 'wsStatus.connectionFailed') return 'Connection Failed';
       if (key === 'wsStatus.reconnecting') return `Reconnecting (${options?.attempt}/${options?.max})`;

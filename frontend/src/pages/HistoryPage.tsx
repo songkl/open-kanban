@@ -25,6 +25,7 @@ export function HistoryPage() {
   useEffect(() => {
     fetchBoards();
     fetchCurrentUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export function HistoryPage() {
         fetchTasks(targetBoardId);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boards, boardIdFromUrl]);
 
   const fetchBoards = async () => {

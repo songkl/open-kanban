@@ -57,7 +57,7 @@ export function ProfileSettings({ currentUser, onUserUpdate }: ProfileSettingsPr
                         const { promise } = attachmentsApi.upload(file);
                         const attachment = await promise;
                         setAvatar(attachment.url);
-                      } catch (err) {
+                      } catch {
                         showErrorToast(t('settings.avatarUploadFailed'));
                       }
                     }}

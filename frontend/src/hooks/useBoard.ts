@@ -26,7 +26,9 @@ export function useBoard({ boardIdFromUrl }: UseBoardOptions = {}): UseBoardRetu
   const [boards, setBoards] = useState<Board[]>([]);
   const [currentBoard, setCurrentBoard] = useState<Board | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loading, _setLoading] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loadError, _setLoadError] = useState<string | null>(null);
 
   const boardSwitching = useMemo(() => {

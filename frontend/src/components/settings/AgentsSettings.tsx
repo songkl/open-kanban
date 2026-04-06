@@ -293,7 +293,7 @@ export function AgentsSettings() {
                                 const { promise } = attachmentsApi.upload(file);
                                 const attachment = await promise;
                                 setEditingAgentAvatar(attachment.url);
-                              } catch (err) {
+                              } catch {
                                 showErrorToast(t('settings.avatarUploadFailed'));
                               }
                             }}

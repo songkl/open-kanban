@@ -59,6 +59,7 @@ export function DraftsPage() {
 
   useEffect(() => {
     fetchBoards();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -74,6 +75,7 @@ export function DraftsPage() {
         fetchTasks(targetBoardId);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boards, boardIdFromUrl]);
 
   const fetchTasks = async (boardId: string) => {

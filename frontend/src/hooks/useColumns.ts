@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+
 import { columnsApi, tasksApi } from '../services/api';
 import type { Column as ColumnType } from '../types/kanban';
 
@@ -23,7 +23,6 @@ interface UseColumnsReturn {
 }
 
 export function useColumns(): UseColumnsReturn {
-  const { t } = useTranslation();
 
   const [columns, setColumns] = useState<ColumnType[]>([]);
   const [columnPagination, setColumnPagination] = useState<Record<string, ColumnPagination>>({});
@@ -51,7 +50,7 @@ export function useColumns(): UseColumnsReturn {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   const handleLoadMoreTasks = useCallback(async (columnId: string) => {
     const currentPagination = columnPagination[columnId] || { page: 1, hasMore: true, isLoadingMore: false };

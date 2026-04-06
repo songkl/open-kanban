@@ -100,7 +100,7 @@ describe('SafeMarkdown - Security Tests', () => {
   });
 
   it('handles null/undefined input gracefully', () => {
-    render(<SafeMarkdown>{undefined as any}</SafeMarkdown>);
+    render(<SafeMarkdown>{undefined as unknown}</SafeMarkdown>);
     expect(document.body.textContent).toBe('');
   });
 

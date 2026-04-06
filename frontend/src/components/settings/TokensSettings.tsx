@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../../services/api';
 import { showErrorToast } from '../ErrorToast';
@@ -17,11 +17,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
   const [editingTokenName, setEditingTokenName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadTokens();
-  }, []);
-
-  const loadTokens = async () => {
+  const loadTokens = useCallback(async () => {
     setLoading(true);
     try {
       const data = await onLoadTokens();
@@ -31,7 +27,11 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onLoadTokens]);
+
+  useEffect(() => {
+    loadTokens();
+  }, [loadTokens]);
 
   const handleCreateToken = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -84,6 +84,7 @@ export function ColumnsPage() {
         setSelectedBoard(boards[0]);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boards, boardIdFromUrl, selectedBoard?.id]);
 
   useEffect(() => {
@@ -93,12 +94,14 @@ export function ColumnsPage() {
         setSearchParams({ boardId: selectedBoard.id });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBoard?.id]);
 
   useEffect(() => {
     if (selectedBoard && currentUser) {
       fetchUserPermissions(selectedBoard.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBoard?.id, currentUser?.id]);
 
   useEffect(() => {

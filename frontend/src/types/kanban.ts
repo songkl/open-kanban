@@ -35,7 +35,7 @@ export interface Task {
   position: number;
   priority: string;
   assignee: string | null;
-  meta: Record<string, any> | null;
+  meta: Record<string, unknown> | null;
   columnId: string;
   archived: boolean;
   archivedAt: string | null;
