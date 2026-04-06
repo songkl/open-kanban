@@ -15,7 +15,8 @@
     "close": "关闭"
   },
   "common": {
-    "close": "关闭"
+    "close": "关闭",
+    "cancel": "取消"
   },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",
@@ -119,6 +120,7 @@
     "batchPriorityUpdated": "已更新 {{count}} 个任务的优先级",
     "batchAssigneeUpdated": "已更新 {{count}} 个任务的负责人",
     "moveToColumn": "移动到列...",
+    "moveFailed": "移动任务失败",
     "setPriority": "设置优先级...",
     "setAssignee": "设置负责人...",
     "clearAssignee": "清除负责人",
@@ -539,7 +541,19 @@
     "memberRole": "成员 (Member)",
     "memberRoleDesc": "可以创建、编辑、删除自己创建的任务，编辑自己所属看板的列",
     "viewerRole": "查看者 (Viewer)",
-    "viewerRoleDesc": "仅限查看权限，无法创建或编辑任何内容，包括任务、评论、附件等"
+    "viewerRoleDesc": "仅限查看权限，无法创建或编辑任何内容，包括任务、评论、附件等",
+    "registrationSettings": "注册设置",
+    "addUser": "添加用户",
+    "username": "用户名",
+    "usernamePlaceholder": "输入用户名",
+    "nicknamePlaceholder": "输入昵称",
+    "password": "密码",
+    "passwordPlaceholder": "输入密码",
+    "createUser": "创建用户",
+    "allowRegistration": "允许注册",
+    "allowRegistrationDesc": "开启后，新用户可以自行注册账号",
+    "requirePassword": "需要密码",
+    "requirePasswordDesc": "开启后，用户注册时必须设置密码"
   },
   "taskCard": {
     "dragToSort": "拖拽排序",

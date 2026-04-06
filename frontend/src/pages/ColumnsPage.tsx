@@ -41,6 +41,9 @@ export function ColumnsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('#6b7280');
+  const [newColumnStatus, setNewColumnStatus] = useState('');
+  const [newColumnDescription, setNewColumnDescription] = useState('');
+  const [newColumnOwnerAgent, setNewColumnOwnerAgent] = useState('');
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
   const [editColumnColor, setEditColumnColor] = useState('#6b7280');
   const [editColumnStatus, setEditColumnStatus] = useState('');
@@ -209,13 +212,17 @@ export function ColumnsPage() {
         name: newColumnName.trim(),
         boardId: selectedBoard.id,
         color: newColumnColor,
-        ownerAgentId: editColumnOwnerAgent || undefined,
+        status: newColumnStatus || undefined,
+        description: newColumnDescription || undefined,
+        ownerAgentId: newColumnOwnerAgent || undefined,
       });
 
       showToastMessage(t('column.addSuccess'));
       setNewColumnName('');
+      setNewColumnStatus('');
+      setNewColumnDescription('');
+      setNewColumnOwnerAgent('');
       setShowAddModal(false);
-      setEditColumnOwnerAgent('');
       fetchColumns(selectedBoard.id);
     } catch (err) {
       console.error('Failed to add column:', err);
@@ -459,10 +466,17 @@ export function ColumnsPage() {
         isOpen={showAddModal}
         newColumnName={newColumnName}
         newColumnColor={newColumnColor}
+        status={newColumnStatus}
+        description={newColumnDescription}
+        ownerAgent={newColumnOwnerAgent}
+        agents={agents}
         onClose={() => setShowAddModal(false)}
         onAdd={handleAddColumn}
         onNameChange={setNewColumnName}
         onColorChange={setNewColumnColor}
+        onStatusChange={setNewColumnStatus}
+        onDescriptionChange={setNewColumnDescription}
+        onOwnerAgentChange={setNewColumnOwnerAgent}
       />
 
       <EditColumnModal
@@ -518,7 +532,7 @@ export function ColumnsPage() {
       />
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white shadow-lg">
           {toast}
         </div>
       )}

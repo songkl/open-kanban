@@ -85,6 +85,7 @@ export function HeaderRightMenu({
                 <span>{t('nav.language')}</span>
                 <span className="text-xs text-zinc-500">{i18n.language === 'zh' ? t('language.en') : t('language.zh')}</span>
               </button>
+              {false && (
               <button
                 onClick={() => onSetDarkMode(!darkMode)}
                 className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
@@ -108,6 +109,7 @@ export function HeaderRightMenu({
                   </svg>
                 )}
               </button>
+              )}
               <button
                 onClick={() => {
                   localStorage.removeItem('token');

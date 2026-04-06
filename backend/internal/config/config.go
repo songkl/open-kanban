@@ -60,12 +60,12 @@ func InitConfig() *Config {
 			PingInterval:          getEnvDuration("WS_PING_INTERVAL", 30*time.Second),
 			PingWriteDeadline:     getEnvDuration("WS_PING_WRITE_DEADLINE", 10*time.Second),
 			ReadDeadline:          getEnvDuration("WS_READ_DEADLINE", 40*time.Second),
-			MaxConnections:        getEnvInt("WS_MAX_CONNECTIONS", 100),
-			MaxConnectionsPerUser: getEnvInt("WS_MAX_CONNECTIONS_PER_USER", 5),
+			MaxConnections:        getEnvInt("WS_MAX_CONNECTIONS", 0),
+			MaxConnectionsPerUser: getEnvInt("WS_MAX_CONNECTIONS_PER_USER", 0),
 		},
 		RateLimit: RateLimitConfig{
-			MaxRateLimitEntries:       getEnvInt("RATE_LIMIT_MAX_ENTRIES", 10000),
-			MaxGlobalRateLimitEntries: getEnvInt("GLOBAL_RATE_LIMIT_MAX_ENTRIES", 10000),
+			MaxRateLimitEntries:       getEnvInt("RATE_LIMIT_MAX_ENTRIES", 0),
+			MaxGlobalRateLimitEntries: getEnvInt("GLOBAL_RATE_LIMIT_MAX_ENTRIES", 0),
 		},
 		Broadcast: BroadcastConfig{
 			WriteDeadline: getEnvDuration("BROADCAST_WRITE_DEADLINE", 2*time.Second),

@@ -138,10 +138,10 @@ func TestIsConnectionAllowed(t *testing.T) {
 }
 
 func TestGetMaxConnections(t *testing.T) {
-	t.Run("get max connections returns positive value", func(t *testing.T) {
+	t.Run("get max connections returns non-negative value (0 means unlimited)", func(t *testing.T) {
 		maxConns := handlers.GetMaxConnections()
-		if maxConns <= 0 {
-			t.Errorf("expected positive value, got %d", maxConns)
+		if maxConns < 0 {
+			t.Errorf("expected non-negative value, got %d", maxConns)
 		}
 	})
 }

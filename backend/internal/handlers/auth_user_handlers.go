@@ -199,6 +199,21 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 
 		LogActivity(db, currentUser.ID, "USER_UPDATE", "USER", req.TargetUserID, updatedUser.Nickname, details, c.ClientIP(), getRequestSource(c))
 
+		var tokenKey string
+		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+		}
+		if tokenKey == "" {
+			if cookie, err := c.Cookie("kanban-token"); err == nil {
+				tokenKey = cookie
+			}
+		}
+		if tokenKey != "" {
+			tokenCache.Delete(tokenKey)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
 				"id":       updatedUser.ID,
@@ -560,16 +575,9 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 		}
 
 		avatar := req.Avatar
-		if avatar == "" {
-			if len(avatarOptions) > 0 {
-				avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
-			} else {
-				avatar = fmt.Sprintf("avatar-%d", time.Now().UnixNano()%1000)
-			}
-		}
 
 		_, err = db.Exec(
-			"INSERT INTO users (id, username, nickname, password_hash, avatar, type, role, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, true, ?, ?)",
+			"INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, true, ?, ?)",
 			userID, req.Username, req.Nickname, passwordHash, avatar, role, now, now,
 		)
 		if err != nil {

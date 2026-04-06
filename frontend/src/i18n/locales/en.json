@@ -15,7 +15,8 @@
     "close": "Close"
   },
   "common": {
-    "close": "Close"
+    "close": "Close",
+    "cancel": "Cancel"
   },
   "upload": {
     "fileTooLarge": "File too large, max 10MB",
@@ -119,6 +120,7 @@
     "batchPriorityUpdated": "Priority updated for {{count}} tasks",
     "batchAssigneeUpdated": "Assignee updated for {{count}} tasks",
     "moveToColumn": "Move to column...",
+    "moveFailed": "Failed to move task",
     "setPriority": "Set priority...",
     "setAssignee": "Set assignee...",
     "clearAssignee": "Clear assignee",
@@ -539,7 +541,19 @@
     "memberRole": "Member (Member)",
     "memberRoleDesc": "Can create, edit, delete tasks they created, edit columns on boards they belong to",
     "viewerRole": "Viewer (Viewer)",
-    "viewerRoleDesc": "View-only access, cannot create or edit any content including tasks, comments, attachments, etc."
+    "viewerRoleDesc": "View-only access, cannot create or edit any content including tasks, comments, attachments, etc.",
+    "registrationSettings": "Registration Settings",
+    "addUser": "Add User",
+    "username": "Username",
+    "usernamePlaceholder": "Enter username",
+    "nicknamePlaceholder": "Enter nickname",
+    "password": "Password",
+    "passwordPlaceholder": "Enter password",
+    "createUser": "Create User",
+    "allowRegistration": "Allow Registration",
+    "allowRegistrationDesc": "When enabled, new users can register themselves",
+    "requirePassword": "Require Password",
+    "requirePasswordDesc": "When enabled, users must set a password during registration"
   },
   "taskCard": {
     "dragToSort": "Drag to sort",

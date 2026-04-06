@@ -214,9 +214,11 @@ export function ColumnBoard({
   const handleDragEnd = async (event: DragEndEvent) => {
     isDraggingRef.current = false;
     const { active, over } = event;
-    onSetActiveTask(null);
 
-    if (!over) return;
+    if (!over) {
+      onSetActiveTask(null);
+      return;
+    }
 
     const activeId = active.id as string;
     const overId = over.id as string;
@@ -226,9 +228,13 @@ export function ColumnBoard({
       (col) => col.id === overId || col.tasks?.some((t) => t.id === overId)
     );
 
-    if (!activeColumn || !overColumn) return;
+    if (!activeColumn || !overColumn) {
+      onSetActiveTask(null);
+      return;
+    }
 
     await updateTaskPosition(activeId, overId, activeColumn, overColumn, activeTask);
+    onSetActiveTask(null);
   };
 
   const filteredColumns = getFilteredColumns();

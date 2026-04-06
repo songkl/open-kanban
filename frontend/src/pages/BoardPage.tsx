@@ -133,10 +133,13 @@ export function BoardPage() {
       if (showBoardDropdown && boardDropdownRef.current && !boardDropdownRef.current.contains(e.target as Node)) {
         setShowBoardDropdown(false);
       }
+      if (showMoreMenu && moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showUserMenu, showBoardDropdown]);
+  }, [showUserMenu, showBoardDropdown, showMoreMenu, moreMenuRef]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -152,6 +155,7 @@ export function BoardPage() {
     activeTaskLocal: Task | null
   ) => {
     const tasksApi = (await import('../services/api')).tasksApi;
+    const previousColumns = columns;
 
     if (activeColumn.id === overColumn.id) {
       const tasks = activeColumn.tasks ?? [];
@@ -165,12 +169,18 @@ export function BoardPage() {
         }));
 
         lastLocalUpdateRef.current = Date.now();
-        await tasksApi.update(activeId, { position: newTasks[newIndex].position });
         setColumns(prev => prev.map(col =>
           col.id === activeColumn.id
             ? { ...col, tasks: newTasks }
             : col
         ));
+
+        try {
+          await tasksApi.update(activeId, { position: newTasks[newIndex].position });
+        } catch {
+          setColumns(previousColumns);
+          showToastMessage(t('task.moveFailed') || 'Failed to move task');
+        }
       }
     } else {
       const overTasks = [...(overColumn.tasks ?? [])];
@@ -188,10 +198,6 @@ export function BoardPage() {
       const sourceTasks = (activeColumn.tasks ?? []).filter(t => t.id !== activeId).map((t, i) => ({ ...t, position: i }));
 
       lastLocalUpdateRef.current = Date.now();
-      await tasksApi.update(activeId, {
-        position: movedTaskNewIndex,
-        columnId: overColumn.id,
-      });
       setColumns(prev => prev.map(col => {
         if (col.id === activeColumn.id) {
           return { ...col, tasks: sourceTasks };
@@ -201,8 +207,18 @@ export function BoardPage() {
         }
         return col;
       }));
+
+      try {
+        await tasksApi.update(activeId, {
+          position: movedTaskNewIndex,
+          columnId: overColumn.id,
+        });
+      } catch {
+        setColumns(previousColumns);
+        showToastMessage(t('task.moveFailed') || 'Failed to move task');
+      }
     }
-  }, [lastLocalUpdateRef, setColumns]);
+  }, [columns, lastLocalUpdateRef, setColumns, showToastMessage, t]);
 
   const connectWebSocket = useCallback(() => {
     reconnectAttemptRef.current = 0;
@@ -345,8 +361,9 @@ export function BoardPage() {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+              <rect x="3" y="3" width="5" height="18" rx="1" />
+              <rect x="10" y="3" width="5" height="18" rx="1" />
+              <rect x="17" y="3" width="5" height="18" rx="1" />
             </svg>
           </Link>
         </div>
@@ -449,7 +466,7 @@ export function BoardPage() {
       )}
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white shadow-lg">
           {toast}
         </div>
       )}

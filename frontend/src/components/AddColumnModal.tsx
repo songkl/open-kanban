@@ -1,23 +1,38 @@
 import { useTranslation } from 'react-i18next';
+import type { Agent } from '@/types/kanban';
 
 interface AddColumnModalProps {
   isOpen: boolean;
   newColumnName: string;
   newColumnColor: string;
+  status: string;
+  description: string;
+  ownerAgent: string;
+  agents: Agent[];
   onClose: () => void;
   onAdd: () => void;
   onNameChange: (name: string) => void;
   onColorChange: (color: string) => void;
+  onStatusChange: (status: string) => void;
+  onDescriptionChange: (description: string) => void;
+  onOwnerAgentChange: (ownerAgent: string) => void;
 }
 
 export function AddColumnModal({
   isOpen,
   newColumnName,
   newColumnColor,
+  status,
+  description,
+  ownerAgent,
+  agents,
   onClose,
   onAdd,
   onNameChange,
   onColorChange,
+  onStatusChange,
+  onDescriptionChange,
+  onOwnerAgentChange,
 }: AddColumnModalProps) {
   const { t } = useTranslation();
 
@@ -58,6 +73,20 @@ export function AddColumnModal({
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-zinc-700">
+              {t('column.statusCode')}
+            </label>
+            <input
+              type="text"
+              value={status}
+              onChange={(e) => onStatusChange(e.target.value)}
+              placeholder={t('column.statusPlaceholder')}
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+            <p className="mt-1.5 text-xs text-zinc-400">{t('column.statusCodeHint')}</p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-zinc-700">
               {t('column.color')}
             </label>
             <div className="flex gap-3">
@@ -83,6 +112,39 @@ export function AddColumnModal({
                 />
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+              {t('column.description')}
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              placeholder={t('column.descriptionPlaceholder')}
+              rows={3}
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+            />
+            <p className="mt-1.5 text-xs text-zinc-400">{t('column.descriptionHint')}</p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+              {t('column.ownerAgent')}
+            </label>
+            <select
+              value={ownerAgent}
+              onChange={(e) => onOwnerAgentChange(e.target.value)}
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="">{t('column.noOwnerAgent')}</option>
+              {agents.filter(a => a.type === 'AGENT').map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.nickname}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-xs text-zinc-400">{t('column.ownerAgentHint')}</p>
           </div>
         </div>
 

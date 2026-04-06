@@ -79,17 +79,25 @@ func GetMaxConnections() int {
 }
 
 func isConnectionAllowed() bool {
+	maxConns := config.GetConfig().WebSocket.MaxConnections
+	if maxConns == 0 {
+		return true
+	}
 	clientsMux.RLock()
-	allowed := len(clients) < config.GetConfig().WebSocket.MaxConnections
+	allowed := len(clients) < maxConns
 	clientsMux.RUnlock()
 	return allowed
 }
 
 func isUserConnectionAllowed(userID string) bool {
+	maxConnsPerUser := config.GetConfig().WebSocket.MaxConnectionsPerUser
+	if maxConnsPerUser == 0 {
+		return true
+	}
 	userConnCountMux.Lock()
 	defer userConnCountMux.Unlock()
 	count := userConnCount[userID]
-	return count < config.GetConfig().WebSocket.MaxConnectionsPerUser
+	return count < maxConnsPerUser
 }
 
 func incrementUserConnCount(userID string) {

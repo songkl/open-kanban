@@ -71,7 +71,7 @@ func (m *memoryRateLimitStore) check(key string, maxRequests int, windowSecs int
 	entry, exists := rateLimitMap[key]
 
 	if !exists || now.After(entry.resetTime) {
-		if len(rateLimitMap) >= getMaxRateLimitEntries() {
+		if maxEntries := getMaxRateLimitEntries(); maxEntries > 0 && len(rateLimitMap) >= maxEntries {
 			cleanupOldRateLimitEntriesLocked(now)
 		}
 		rateLimitMap[key] = &rateLimitEntry{
@@ -121,8 +121,8 @@ func cleanupOldRateLimitEntriesLocked(now time.Time) {
 			delete(rateLimitMap, key)
 		}
 	}
-	if len(rateLimitMap) >= getMaxRateLimitEntries() {
-		targetSize := getMaxRateLimitEntries() / 2
+	if maxEntries := getMaxRateLimitEntries(); maxEntries > 0 && len(rateLimitMap) >= maxEntries {
+		targetSize := maxEntries / 2
 		for len(rateLimitMap) > targetSize && len(rateLimitMapOrder) > 0 {
 			oldestKey := rateLimitMapOrder[0]
 			rateLimitMapOrder = rateLimitMapOrder[1:]
@@ -151,8 +151,8 @@ func cleanupOldGlobalRateLimitEntriesLocked(now time.Time) {
 			delete(globalRateLimitMap, key)
 		}
 	}
-	if len(globalRateLimitMap) >= getMaxGlobalRateLimitEntries() {
-		targetSize := getMaxGlobalRateLimitEntries() / 2
+	if maxEntries := getMaxGlobalRateLimitEntries(); maxEntries > 0 && len(globalRateLimitMap) >= maxEntries {
+		targetSize := maxEntries / 2
 		for len(globalRateLimitMap) > targetSize && len(globalRateLimitMapOrder) > 0 {
 			oldestKey := globalRateLimitMapOrder[0]
 			globalRateLimitMapOrder = globalRateLimitMapOrder[1:]
@@ -169,7 +169,7 @@ func CheckGlobalRateLimit(key string, maxRequests int, windowSecs int) bool {
 	entry, exists := globalRateLimitMap[key]
 
 	if !exists || now.After(entry.resetTime) {
-		if len(globalRateLimitMap) >= getMaxGlobalRateLimitEntries() {
+		if maxEntries := getMaxGlobalRateLimitEntries(); maxEntries > 0 && len(globalRateLimitMap) >= maxEntries {
 			cleanupOldGlobalRateLimitEntriesLocked(now)
 		}
 		globalRateLimitMap[key] = &globalRateLimitEntry{

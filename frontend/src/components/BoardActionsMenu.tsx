@@ -28,7 +28,7 @@ export function BoardActionsMenu({
   const { t } = useTranslation();
 
   return (
-    <div className="relative">
+    <div ref={moreMenuRef} className="relative">
       <button
         onClick={() => onSetShowMoreMenu(!showMoreMenu)}
         className="flex items-center gap-1 rounded-md bg-zinc-100 px-2.5 py-1.5 text-sm hover:bg-zinc-200"
@@ -50,7 +50,7 @@ export function BoardActionsMenu({
         </svg>
       </button>
       {showMoreMenu && (
-        <div ref={moreMenuRef} className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg z-50">
+        <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg z-50">
           <Link to="/boards" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
             {t('nav.manageBoards')}
           </Link>

@@ -232,7 +232,7 @@ export const columnsApi = {
   getAll: () => fetchApi<Column[]>('columns'),
   getByBoard: (boardId: string) =>
     fetchApi<Column[]>(`columns?boardId=${boardId}`),
-  create: (data: { name: string; boardId: string; color?: string; description?: string; ownerAgentId?: string }) =>
+  create: (data: { name: string; boardId: string; color?: string; description?: string; ownerAgentId?: string; status?: string }) =>
     fetchApi<Column>('columns', {
       method: 'POST',
       body: JSON.stringify(data),
