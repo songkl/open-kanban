@@ -11,7 +11,7 @@ export function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [hasBoards, setHasBoards] = useState(false);
   const [showInitModal, setShowInitModal] = useState(false);
-  const [nickname, setNickname] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -34,11 +34,11 @@ export function HomePage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [navigate]);
+  }, [navigate, t]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nickname.trim()) {
+    if (!username.trim()) {
       setLoginError(t('login.enterNickname'));
       return;
     }
@@ -47,11 +47,11 @@ export function HomePage() {
     setLoginError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nickname: nickname.trim(),
+          username: username.trim(),
           password: password,
         }),
       });
@@ -121,12 +121,12 @@ export function HomePage() {
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label className="mb-2 block text-sm font-medium text-zinc-700">
-                {t('login.nickname')}
+                {t('login.username')}
               </label>
               <input
                 type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 placeholder={t('login.enterNickname')}
                 className="w-full rounded-md border border-zinc-300 px-4 py-3 focus:border-blue-500 focus:outline-none"
                 maxLength={20}
@@ -155,7 +155,7 @@ export function HomePage() {
 
             <button
               type="submit"
-              disabled={loginLoading || !nickname.trim()}
+              disabled={loginLoading || !username.trim()}
               className="w-full rounded-md bg-blue-500 py-3 font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
               {loginLoading ? t('login.loggingIn') : t('login.start')}

@@ -6,7 +6,7 @@ import { boardsApi, authApi } from '../services/api';
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [nickname, setNickname] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -26,7 +26,7 @@ export function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nickname.trim()) {
+    if (!username.trim()) {
       setLoginError(t('login.enterNickname'));
       return;
     }
@@ -35,11 +35,11 @@ export function LoginPage() {
     setLoginError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nickname: nickname.trim(),
+          username: username.trim(),
           password: password,
         }),
       });
@@ -81,12 +81,12 @@ export function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              {t('login.nickname')}
+              {t('login.username')}
             </label>
             <input
               type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               placeholder={t('login.enterNickname')}
               className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
               maxLength={20}
@@ -116,7 +116,7 @@ export function LoginPage() {
 
           <button
             type="submit"
-            disabled={loginLoading || !nickname.trim()}
+            disabled={loginLoading || !username.trim()}
             className="w-full rounded-md bg-blue-500 py-3 font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
           >
             {loginLoading ? t('login.loggingIn') : t('login.start')}

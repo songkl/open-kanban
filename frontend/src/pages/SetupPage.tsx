@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { authApi } from '@/services/api';
 
 type DbType = 'sqlite' | 'mysql';
 
@@ -47,27 +48,10 @@ export function SetupPage() {
     setLoginError('');
 
     try {
-      const res = await fetch('/api/auth/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          username: username.trim(),
-          password: password,
-          allowRegistration: true,
-          requirePassword: false,
-        }),
-      });
+      const data = await authApi.init(username.trim(), password);
 
-      if (res.status === 302 || res.status === 301 || res.redirected) {
+      if (data.token) {
         window.location.href = '/';
-        return;
-      }
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setLoginError(data.error || t('login.failed'));
         return;
       }
 

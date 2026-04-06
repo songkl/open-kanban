@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi, tasksApi, commentsApi, activitiesApi } from '../services/api';
@@ -57,11 +57,7 @@ export function ActivityLogPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const meData = await authApi.me();
       if (!meData.user) {
@@ -86,7 +82,11 @@ export function ActivityLogPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const loadActivities = async (filters?: { action?: string; startTime?: string; endTime?: string }) => {
     try {
