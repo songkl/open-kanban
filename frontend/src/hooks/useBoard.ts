@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { boardsApi, authApi } from '../services/api';
 import type { Board, User } from '../types/kanban';
@@ -27,8 +27,12 @@ export function useBoard({ boardIdFromUrl }: UseBoardOptions = {}): UseBoardRetu
   const [currentBoard, setCurrentBoard] = useState<Board | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, _setLoading] = useState(true);
-  const [boardSwitching, setBoardSwitching] = useState(false);
   const [loadError, _setLoadError] = useState<string | null>(null);
+
+  const boardSwitching = useMemo(() => {
+    if (!currentBoard || !boardIdFromUrl) return false;
+    return boardIdFromUrl !== currentBoard.id;
+  }, [currentBoard, boardIdFromUrl]);
 
   const currentBoardRef = useRef<Board | null>(null);
 
@@ -69,7 +73,6 @@ export function useBoard({ boardIdFromUrl }: UseBoardOptions = {}): UseBoardRetu
     if (board) {
       if (currentBoard?.id !== board.id) {
         startTransition(() => {
-          setBoardSwitching(true);
           setCurrentBoard(board);
         });
       }

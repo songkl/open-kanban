@@ -155,7 +155,7 @@ export function useBoardWebSocket({
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [connectWebSocket]);
 
   return {
     wsStatus,

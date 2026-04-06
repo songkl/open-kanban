@@ -194,13 +194,13 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     };
 
     loadInitialData();
-  }, []);
+  }, [fetchBoards, connectWebSocket]);
 
   useEffect(() => {
     if (currentBoard) {
       fetchColumns(currentBoard.id);
     }
-  }, [currentBoard?.id]);
+  }, [currentBoard, fetchColumns]);
 
   useEffect(() => {
     if (taskIdFromUrl && columns.length > 0) {
@@ -211,7 +211,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
         navigate('', { replace: true });
       }
     }
-  }, [taskIdFromUrl, columns]);
+  }, [taskIdFromUrl, columns, taskSetSelectedTask, navigate]);
 
   const loading = !currentBoard;
   const boardSwitching = boardBoardSwitching || columnsBoardSwitching;

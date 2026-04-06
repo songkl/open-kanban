@@ -17,7 +17,7 @@ interface BoardState {
   reconnectCount: number;
   currentUser: User | null;
   columnPagination: Record<string, { page: number; hasMore: boolean; isLoadingMore: boolean }>;
-  offlineQueue: Array<{ action: string; data: any; timestamp: number }>;
+  offlineQueue: Array<{ action: string; data: unknown; timestamp: number }>;
   isProcessingQueue: boolean;
   lastLocalUpdate: number;
   REFRESH_DEBOUNCE_MS: number;

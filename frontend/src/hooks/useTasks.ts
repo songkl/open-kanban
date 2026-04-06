@@ -36,7 +36,7 @@ interface UseTasksReturn {
   archiveTask: (taskId: string) => Promise<void>;
   addTask: (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => Promise<void>;
   addComment: (taskId: string, content: string, author: string) => Promise<void>;
-  handleTaskSelect: (taskId: string, task: Task, e?: any) => void;
+  handleTaskSelect: (taskId: string, task: Task, e?: React.MouseEvent) => void;
   clearSelection: () => void;
   batchDelete: () => Promise<void>;
   batchArchive: () => Promise<void>;
@@ -223,7 +223,7 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     }
   }, [selectedTask, onColumnsChange, notifyLastLocalUpdate]);
 
-  const handleTaskSelect = useCallback((taskId: string, _task: Task, e?: any) => {
+  const handleTaskSelect = useCallback((taskId: string, _task: Task, e?: React.MouseEvent) => {
     if (e?.shiftKey && lastSelectedTaskId) {
       const allTasks = columns.flatMap(col => col.tasks || []);
       const lastIndex = allTasks.findIndex(t => t.id === lastSelectedTaskId);
@@ -242,10 +242,10 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       }
     }
     
-    if (e?.target?.checked !== undefined) {
+    if ((e?.target as HTMLInputElement)?.checked !== undefined) {
       setSelectedTasks(prev => {
         const newSet = new Set(prev);
-        if (e.target.checked) {
+        if (e && (e.target as HTMLInputElement).checked) {
           newSet.add(taskId);
         } else {
           newSet.delete(taskId);
