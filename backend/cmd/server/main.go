@@ -77,6 +77,9 @@ func main() {
 	// Global rate limiting middleware
 	r.Use(handlers.GlobalRateLimitMiddleware())
 
+	// Compression middleware for API responses
+	r.Use(handlers.CompressionMiddleware())
+
 	// CORS middleware
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
@@ -194,6 +197,7 @@ func main() {
 	tasks := r.Group("/api/v1/tasks")
 	{
 		tasks.GET("", handlers.GetTasks(db))
+		tasks.GET("/search", handlers.SearchTasks(db))
 		tasks.GET("/:id", handlers.GetTask(db))
 		tasks.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 		tasks.POST("", handlers.CreateTask(db))

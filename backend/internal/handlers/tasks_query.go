@@ -159,3 +159,53 @@ func derefString(s *string) string {
 	}
 	return *s
 }
+
+func SearchTasks(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		query := c.Query("q")
+		priority := c.Query("priority")
+		status := c.Query("status")
+		boardID := c.Query("boardId")
+		assignee := c.Query("assignee")
+		dateRange := c.Query("dateRange")
+
+		page := 1
+		pageSize := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+				page = parsed
+			}
+		}
+		if ps := c.Query("pageSize"); ps != "" {
+			if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
+				pageSize = parsed
+			}
+		}
+
+		input := services.SearchTasksInput{
+			Query:     query,
+			Priority:  priority,
+			Status:    status,
+			BoardID:   boardID,
+			Assignee:  assignee,
+			DateRange: dateRange,
+			Page:      page,
+			PageSize:  pageSize,
+		}
+
+		taskService := services.NewTaskService(db)
+		result, err := taskService.SearchTasks(input)
+		if err != nil {
+			ServerError(c, "Failed to search tasks", err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data":      result.Tasks,
+			"total":     result.Total,
+			"page":      result.Page,
+			"pageSize":  result.PageSize,
+			"pageCount": result.PageCount,
+		})
+	}
+}

@@ -69,7 +69,9 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 
 		if archived {
 			var taskTitle string
-			db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle)
+			if err := db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle); err != nil {
+				taskTitle = ""
+			}
 			LogActivity(db, user.ID, "COMPLETE_TASK", "TASK", id, taskTitle, "", c.ClientIP(), getRequestSource(c))
 		}
 
@@ -129,12 +131,23 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var taskTitle string
-		db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle)
+		if err := db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle); err != nil {
+			taskTitle = ""
+		}
 		var oldStatus, newStatus sql.NullString
-		db.QueryRow("SELECT status FROM columns WHERE id = ?", columnID).Scan(&oldStatus)
+		if err := db.QueryRow("SELECT status FROM columns WHERE id = ?", columnID).Scan(&oldStatus); err != nil {
+			oldStatus = sql.NullString{Valid: false}
+		}
 
-		newColumnID, _ := getColumnIDForTask(db, id)
-		db.QueryRow("SELECT status FROM columns WHERE id = ?", newColumnID).Scan(&newStatus)
+		newColumnID, err := getColumnIDForTask(db, id)
+		if err != nil {
+			newColumnID = ""
+		}
+		if newColumnID != "" {
+			if err := db.QueryRow("SELECT status FROM columns WHERE id = ?", newColumnID).Scan(&newStatus); err != nil {
+				newStatus = sql.NullString{Valid: false}
+			}
+		}
 
 		oldStatusVal := ""
 		if oldStatus.Valid {
@@ -153,10 +166,13 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		go func() {
 			webhookSvc := services.GetWebhookService()
 			columnName := getColumnName(db, newColumnID)
-			var priority, assignee string
+			var priority string
 			var assigneePtr *string
-			db.QueryRow("SELECT priority, assignee FROM tasks WHERE id = ?", id).Scan(&priority, &assigneePtr)
-			assignee = derefString(assigneePtr)
+			if err := db.QueryRow("SELECT priority, assignee FROM tasks WHERE id = ?", id).Scan(&priority, &assigneePtr); err != nil {
+				priority = ""
+				assigneePtr = nil
+			}
+			assignee := derefString(assigneePtr)
 			webhookSvc.NotifyTaskMoved(services.WebhookTask{
 				ID:         id,
 				Title:      taskTitle,

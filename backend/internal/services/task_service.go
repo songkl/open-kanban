@@ -410,7 +410,12 @@ func (s *TaskService) CompleteTask(taskID string) (*models.Task, error) {
 		return nil, fmt.Errorf("task is already in the last column")
 	}
 
-	if err := s.taskRepo.MoveTaskToColumn(taskID, nextColumnID); err != nil {
+	maxPos, err := s.taskRepo.GetMaxPosition(nextColumnID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get max position: %w", err)
+	}
+
+	if err := s.taskRepo.MoveTaskToColumn(taskID, nextColumnID, maxPos+1); err != nil {
 		return nil, fmt.Errorf("failed to move task: %w", err)
 	}
 
@@ -556,6 +561,93 @@ func (s *TaskService) TriggerAgentForTask(taskID, agentID, agentPrompt, taskTitl
 
 		slog.Info("Agent trigger payload", "task_id", taskID, "agent_id", agentID, "payload", string(payloadBytes))
 	}()
+}
+
+type SearchTasksInput struct {
+	Query     string
+	Priority  string
+	Status    string
+	BoardID   string
+	Assignee  string
+	DateRange string
+	Page      int
+	PageSize  int
+}
+
+func (s *TaskService) SearchTasks(input SearchTasksInput) (*TaskListResult, error) {
+	if input.Page <= 0 {
+		input.Page = 1
+	}
+	if input.PageSize <= 0 {
+		input.PageSize = 20
+	}
+	if input.PageSize > 100 {
+		input.PageSize = 100
+	}
+
+	params := repositories.TaskSearchParams{
+		Query:     input.Query,
+		Priority:  input.Priority,
+		Status:    input.Status,
+		BoardID:   input.BoardID,
+		Assignee:  input.Assignee,
+		DateRange: input.DateRange,
+		Page:      input.Page,
+		PageSize:  input.PageSize,
+	}
+
+	tasks, total, err := s.taskRepo.SearchTasks(params)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []gin.H
+	for _, task := range tasks {
+		commentCount := 0
+		subtaskCount := 0
+		if task.CommentCount != nil {
+			commentCount = *task.CommentCount
+		}
+		if task.SubtaskCount != nil {
+			subtaskCount = *task.SubtaskCount
+		}
+
+		result = append(result, gin.H{
+			"id":          task.ID,
+			"title":       task.Title,
+			"description": task.Description,
+			"priority":    task.Priority,
+			"assignee":    task.Assignee,
+			"meta":        task.Meta,
+			"columnId":    task.ColumnID,
+			"position":    task.Position,
+			"published":   task.Published,
+			"archived":    task.Archived,
+			"archivedAt":  task.ArchivedAt,
+			"agentId":     task.AgentID,
+			"agentPrompt": task.AgentPrompt,
+			"createdBy":   task.CreatedBy,
+			"createdAt":   task.CreatedAt,
+			"updatedAt":   task.UpdatedAt,
+			"_count": gin.H{
+				"comments": commentCount,
+				"subtasks": subtaskCount,
+			},
+		})
+	}
+
+	pageCount := total / input.PageSize
+	if total%input.PageSize != 0 {
+		pageCount++
+	}
+
+	return &TaskListResult{
+		Tasks:     result,
+		Total:     total,
+		Page:      input.Page,
+		PageSize:  input.PageSize,
+		PageCount: pageCount,
+	}, nil
 }
 
 func joinConditions(conditions []string) string {

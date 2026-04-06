@@ -795,3 +795,180 @@ func TestGetTaskHandler(t *testing.T) {
 		}
 	})
 }
+
+func TestSearchTasksHandler(t *testing.T) {
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO tasks (id, title, description, priority, column_id, position, published, archived, created_by) VALUES ('task1', 'Bug Report', 'Something is broken', 'high', 'c1', 100, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, description, priority, column_id, position, published, archived, created_by) VALUES ('task2', 'Feature Request', 'Add new feature', 'medium', 'c1', 200, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO comments (id, content, task_id) VALUES ('cm1', 'This is about bug', 'task1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test comment: %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/api/tasks/search", handlers.SearchTasks(db))
+
+	t.Run("search without query returns all tasks", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 2 {
+			t.Errorf("expected 2 tasks, got %d", len(data))
+		}
+	})
+
+	t.Run("search by title keyword", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search?q=Bug", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 1 {
+			t.Errorf("expected 1 task, got %d", len(data))
+		}
+	})
+
+	t.Run("search by description keyword", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search?q=broken", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 1 {
+			t.Errorf("expected 1 task, got %d", len(data))
+		}
+	})
+
+	t.Run("search by comment content", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search?q=about", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 1 {
+			t.Errorf("expected 1 task, got %d", len(data))
+		}
+	})
+
+	t.Run("filter by priority", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search?priority=high", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 1 {
+			t.Errorf("expected 1 task, got %d", len(data))
+		}
+	})
+
+	t.Run("pagination parameters", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search?page=1&pageSize=1", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 1 {
+			t.Errorf("expected 1 task, got %d", len(data))
+		}
+		if response["page"].(float64) != 1 {
+			t.Errorf("expected page 1, got %v", response["page"])
+		}
+		if response["pageSize"].(float64) != 1 {
+			t.Errorf("expected pageSize 1, got %v", response["pageSize"])
+		}
+		if response["total"].(float64) != 2 {
+			t.Errorf("expected total 2, got %v", response["total"])
+		}
+	})
+
+	t.Run("combined query and filter", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search?q=Bug&priority=high", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 1 {
+			t.Errorf("expected 1 task, got %d", len(data))
+		}
+	})
+}

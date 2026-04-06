@@ -666,7 +666,7 @@ func TestMoveTaskToColumn(t *testing.T) {
 
 	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id) VALUES ('t1', 'Task', 'c1')`)
 
-	err := repo.MoveTaskToColumn("t1", "c2")
+	err := repo.MoveTaskToColumn("t1", "c2", 1000)
 	if err != nil {
 		t.Fatalf("MoveTaskToColumn() error = %v", err)
 	}
@@ -677,6 +677,14 @@ func TestMoveTaskToColumn(t *testing.T) {
 	}
 	if columnID != "c2" {
 		t.Errorf("task column_id = %v, want c2", columnID)
+	}
+
+	task, err := repo.GetTaskByID("t1")
+	if err != nil {
+		t.Fatalf("GetTaskByID() error = %v", err)
+	}
+	if task.Position != 1000 {
+		t.Errorf("task position = %v, want 1000", task.Position)
 	}
 }
 
@@ -811,6 +819,120 @@ func TestShiftPositionsRight(t *testing.T) {
 	task, _ := repo.GetTaskByID("t3")
 	if task.Position != 3001 {
 		t.Errorf("t3 position = %d, want 3001", task.Position)
+	}
+}
+
+func TestSearchTasks(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	repo := repositories.NewTaskRepository(db)
+
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, description, priority, column_id, position, published, archived, created_by) VALUES ('t1', 'Bug Report', 'Something is broken', 'high', 'c1', 100, 1, 0, 'u1')`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, description, priority, column_id, position, published, archived, created_by) VALUES ('t2', 'Feature Request', 'Add new feature', 'medium', 'c1', 200, 1, 0, 'u1')`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, description, priority, column_id, position, published, archived, created_by) VALUES ('t3', 'Task Three', 'Description for task three', 'low', 'c2', 100, 1, 0, 'u1')`)
+	_, _ = db.Exec(`INSERT INTO comments (id, content, task_id) VALUES ('cm1', 'This is a comment about the bug', 't1')`)
+	_, _ = db.Exec(`INSERT INTO subtasks (id, title, task_id) VALUES ('st1', 'Subtask 1', 't1')`)
+
+	tests := []struct {
+		name       string
+		params     repositories.TaskSearchParams
+		wantCount  int
+		wantTotal  int
+		wantTitles []string
+	}{
+		{
+			name:       "search by title keyword",
+			params:     repositories.TaskSearchParams{Query: "Bug", Page: 1, PageSize: 10},
+			wantCount:  1,
+			wantTotal:  1,
+			wantTitles: []string{"Bug Report"},
+		},
+		{
+			name:       "search by description keyword",
+			params:     repositories.TaskSearchParams{Query: "broken", Page: 1, PageSize: 10},
+			wantCount:  1,
+			wantTotal:  1,
+			wantTitles: []string{"Bug Report"},
+		},
+		{
+			name:       "search by comment content",
+			params:     repositories.TaskSearchParams{Query: "comment", Page: 1, PageSize: 10},
+			wantCount:  1,
+			wantTotal:  1,
+			wantTitles: []string{"Bug Report"},
+		},
+		{
+			name:       "search by meta keyword",
+			params:     repositories.TaskSearchParams{Query: "meta", Page: 1, PageSize: 10},
+			wantCount:  0,
+			wantTotal:  0,
+			wantTitles: []string{},
+		},
+		{
+			name:       "search with no query returns all tasks",
+			params:     repositories.TaskSearchParams{Page: 1, PageSize: 10},
+			wantCount:  3,
+			wantTotal:  3,
+			wantTitles: []string{},
+		},
+		{
+			name:       "filter by priority",
+			params:     repositories.TaskSearchParams{Priority: "high", Page: 1, PageSize: 10},
+			wantCount:  1,
+			wantTotal:  1,
+			wantTitles: []string{"Bug Report"},
+		},
+		{
+			name:       "filter by status (column status)",
+			params:     repositories.TaskSearchParams{Status: "done", Page: 1, PageSize: 10},
+			wantCount:  1,
+			wantTotal:  1,
+			wantTitles: []string{"Task Three"},
+		},
+		{
+			name:       "filter by board_id",
+			params:     repositories.TaskSearchParams{BoardID: "b1", Page: 1, PageSize: 10},
+			wantCount:  3,
+			wantTotal:  3,
+			wantTitles: []string{},
+		},
+		{
+			name:       "pagination",
+			params:     repositories.TaskSearchParams{Page: 1, PageSize: 2},
+			wantCount:  2,
+			wantTotal:  3,
+			wantTitles: []string{},
+		},
+		{
+			name:       "pagination page 2",
+			params:     repositories.TaskSearchParams{Page: 2, PageSize: 2},
+			wantCount:  1,
+			wantTotal:  3,
+			wantTitles: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tasks, total, err := repo.SearchTasks(tt.params)
+			if err != nil {
+				t.Fatalf("SearchTasks() error = %v", err)
+			}
+			if len(tasks) != tt.wantCount {
+				t.Errorf("got %d tasks, want %d", len(tasks), tt.wantCount)
+			}
+			if total != tt.wantTotal {
+				t.Errorf("got total %d, want %d", total, tt.wantTotal)
+			}
+			if len(tt.wantTitles) > 0 {
+				for i, wantTitle := range tt.wantTitles {
+					if i < len(tasks) && tasks[i].Title != wantTitle {
+						t.Errorf("task[%d].title = %v, want %v", i, tasks[i].Title, wantTitle)
+					}
+				}
+			}
+		})
 	}
 }
 

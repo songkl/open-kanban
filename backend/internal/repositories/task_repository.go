@@ -312,8 +312,8 @@ func (r *TaskRepository) GetNextColumn(boardID string, currentPosition int) (str
 	return nextColumnID, nil
 }
 
-func (r *TaskRepository) MoveTaskToColumn(taskID, columnID string) error {
-	_, err := r.db.Exec("UPDATE tasks SET column_id = ?, updated_at = ? WHERE id = ?", columnID, time.Now(), taskID)
+func (r *TaskRepository) MoveTaskToColumn(taskID, columnID string, position int) error {
+	_, err := r.db.Exec("UPDATE tasks SET column_id = ?, position = ?, updated_at = ? WHERE id = ?", columnID, position, time.Now(), taskID)
 	return err
 }
 
@@ -329,4 +329,155 @@ func buildInClause(n int) string {
 		return "(NULL)"
 	}
 	return "(" + strings.Repeat("?,", n-1) + "?)"
+}
+
+type TaskSearchParams struct {
+	Query     string
+	Priority  string
+	Status    string
+	BoardID   string
+	Assignee  string
+	DateRange string
+	Page      int
+	PageSize  int
+}
+
+func (r *TaskRepository) SearchTasks(params TaskSearchParams) ([]models.Task, int, error) {
+	baseQuery := `
+		SELECT DISTINCT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
+		       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
+		       COALESCE(cc.cnt, 0) as comment_count,
+		       COALESCE(sc.cnt, 0) as subtask_count
+		FROM tasks t
+		JOIN columns col ON t.column_id = col.id
+		LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
+		LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+	`
+
+	countQuery := `
+		SELECT COUNT(DISTINCT t.id)
+		FROM tasks t
+		JOIN columns col ON t.column_id = col.id
+	`
+
+	var conditions []string
+	var args []interface{}
+
+	if params.Query != "" {
+		q := "%" + params.Query + "%"
+		titleCond := "t.title LIKE ?"
+		descCond := "t.description LIKE ?"
+		metaCond := "t.meta LIKE ?"
+		commentCond := "EXISTS (SELECT 1 FROM comments c WHERE c.task_id = t.id AND c.content LIKE ?)"
+		conditions = append(conditions, "("+titleCond+" OR "+descCond+" OR "+metaCond+" OR "+commentCond+")")
+		args = append(args, q, q, q, q)
+	}
+
+	if params.Priority != "" {
+		conditions = append(conditions, "t.priority = ?")
+		args = append(args, params.Priority)
+	}
+
+	if params.Status != "" {
+		conditions = append(conditions, "col.status = ?")
+		args = append(args, params.Status)
+	}
+
+	if params.BoardID != "" {
+		conditions = append(conditions, "col.board_id = ?")
+		args = append(args, params.BoardID)
+	}
+
+	if params.Assignee != "" {
+		conditions = append(conditions, "t.assignee = ?")
+		args = append(args, params.Assignee)
+	}
+
+	if params.DateRange != "" {
+		now := time.Now()
+		switch params.DateRange {
+		case "today":
+			startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+			conditions = append(conditions, "t.created_at >= ?")
+			args = append(args, startOfDay)
+		case "thisWeek":
+			startOfWeek := now.AddDate(0, 0, -int(now.Weekday()))
+			conditions = append(conditions, "t.created_at >= ?")
+			args = append(args, startOfWeek)
+		case "thisMonth":
+			startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+			conditions = append(conditions, "t.created_at >= ?")
+			args = append(args, startOfMonth)
+		}
+	}
+
+	conditions = append(conditions, "t.archived = 0")
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQueryFull := countQuery + whereClause
+	var total int
+	countArgs := make([]interface{}, len(args))
+	copy(countArgs, args)
+	if err := r.db.QueryRow(countQueryFull, countArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (params.Page - 1) * params.PageSize
+	limitClause := " ORDER BY t.updated_at DESC LIMIT ? OFFSET ?"
+
+	query := baseQuery + whereClause + limitClause
+	queryArgs := append(args, params.PageSize, offset)
+
+	rows, err := r.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		var task models.Task
+		var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
+		var archivedAt sql.NullTime
+		var commentCount, subtaskCount int
+
+		if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
+			&task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt,
+			&commentCount, &subtaskCount); err != nil {
+			continue
+		}
+
+		if desc.Valid {
+			task.Description = &desc.String
+		}
+		if assignee.Valid {
+			task.Assignee = &assignee.String
+		}
+		if meta.Valid {
+			task.Meta = &meta.String
+		}
+		if archivedAt.Valid {
+			task.ArchivedAt = &archivedAt.Time
+		}
+		if agentID.Valid {
+			task.AgentID = &agentID.String
+		}
+		if agentPrompt.Valid {
+			task.AgentPrompt = &agentPrompt.String
+		}
+		if createdBy.Valid {
+			task.CreatedBy = createdBy.String
+		}
+
+		task.CommentCount = &commentCount
+		task.SubtaskCount = &subtaskCount
+
+		tasks = append(tasks, task)
+	}
+
+	return tasks, total, nil
 }
