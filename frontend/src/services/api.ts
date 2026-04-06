@@ -18,7 +18,11 @@ declare global {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.host}`;
+const API_BASE = (() => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim() !== '') return envUrl;
+  return '/api/v1/';
+})();
 
 const DEFAULT_RETRY_COUNT = 3;
 const DEFAULT_RETRY_DELAY = 1000;
@@ -167,34 +171,34 @@ export function createApiRequest<T>(
 
 // Boards API
 export const boardsApi = {
-  getAll: () => fetchApi<Board[]>('/api/v1/boards'),
+  getAll: () => fetchApi<Board[]>('boards'),
   create: (data: { id?: string; name: string; description?: string }) =>
-    fetchApi<Board>('/api/v1/boards', {
+    fetchApi<Board>('boards', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   createFromTemplate: (data: { name: string; templateId?: string; boardId?: string }) =>
-    fetchApi<Board>('/api/v1/boards/from-template', {
+    fetchApi<Board>('boards/from-template', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   update: (id: string, data: { name?: string; description?: string }) =>
-    fetchApi<Board>(`/api/v1/boards/${id}`, {
+    fetchApi<Board>(`boards/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   delete: (id: string) =>
-    fetchApi<void>(`/api/v1/boards/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`boards/${id}`, { method: 'DELETE' }),
   export: (id: string, format: 'json' | 'csv') => {
-    const url = `${API_BASE}/api/v1/boards/${id}/export?format=${format}`;
+    const url = `${API_BASE}boards/${id}/export?format=${format}`;
     return fetch(url, { credentials: 'include' });
   },
   copy: (id: string) =>
-    fetchApi<Board>(`/api/v1/boards/${id}/copy`, { method: 'POST' }),
+    fetchApi<Board>(`boards/${id}/copy`, { method: 'POST' }),
   reset: (id: string) =>
-    fetchApi<Board>(`/api/v1/boards/${id}/reset`, { method: 'POST' }),
+    fetchApi<Board>(`boards/${id}/reset`, { method: 'POST' }),
   import: (data: { data: Record<string, unknown>; boardId?: string; reset?: boolean }) =>
-    fetchApi<Board>('/api/v1/boards/import', {
+    fetchApi<Board>('boards/import', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -213,35 +217,35 @@ interface Template {
 }
 
 export const templatesApi = {
-  getAll: () => fetchApi<Template[]>('/api/v1/templates'),
+  getAll: () => fetchApi<Template[]>('templates'),
   create: (data: { name: string; boardId?: string; includeTasks?: boolean }) =>
-    fetchApi<Template>('/api/v1/templates', {
+    fetchApi<Template>('templates', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   delete: (id: string) =>
-    fetchApi<void>(`/api/v1/templates/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`templates/${id}`, { method: 'DELETE' }),
 };
 
 // Columns API
 export const columnsApi = {
-  getAll: () => fetchApi<Column[]>('/api/v1/columns'),
+  getAll: () => fetchApi<Column[]>('columns'),
   getByBoard: (boardId: string) =>
-    fetchApi<Column[]>(`/api/v1/columns?boardId=${boardId}`),
+    fetchApi<Column[]>(`columns?boardId=${boardId}`),
   create: (data: { name: string; boardId: string; color?: string; description?: string; ownerAgentId?: string }) =>
-    fetchApi<Column>('/api/v1/columns', {
+    fetchApi<Column>('columns', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   update: (id: string, data: { name?: string; color?: string; position?: number; status?: string; description?: string; ownerAgentId?: string }) =>
-    fetchApi<Column>('/api/v1/columns', {
+    fetchApi<Column>('columns', {
       method: 'PUT',
       body: JSON.stringify({ id, ...data }),
     }),
   delete: (id: string) =>
-    fetchApi<void>(`/api/v1/columns?id=${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`columns?id=${id}`, { method: 'DELETE' }),
   reorder: (boardId: string, columns: { id: string; position: number }[]) =>
-    fetchApi<void>('/api/v1/columns/reorder', {
+    fetchApi<void>('columns/reorder', {
       method: 'PUT',
       body: JSON.stringify({ boardId, columns }),
     }),
@@ -251,12 +255,12 @@ export const columnsApi = {
 export const tasksApi = {
   getByColumn: (columnId: string, page = 1, pageSize = 20) =>
     fetchApi<{ data: Task[]; total: number; page: number; pageSize: number; pageCount: number }>(
-      `/api/v1/tasks?columnId=${columnId}&page=${page}&pageSize=${pageSize}`
+      `tasks?columnId=${columnId}&page=${page}&pageSize=${pageSize}`
     ),
-  getById: (id: string) => fetchApi<Task>(`/api/v1/tasks/${id}`),
-  getDrafts: () => fetchApi<Task[]>('/api/v1/drafts'),
-  getArchived: () => fetchApi<Task[]>('/api/v1/archived'),
-  getCompleted: () => fetchApi<Task[]>('/api/v1/tasks?status=done'),
+  getById: (id: string) => fetchApi<Task>(`tasks/${id}`),
+  getDrafts: () => fetchApi<Task[]>('drafts'),
+  getArchived: () => fetchApi<Task[]>('archived'),
+  getCompleted: () => fetchApi<Task[]>('tasks?status=done'),
   create: (data: {
     title: string;
     description?: string;
@@ -267,19 +271,19 @@ export const tasksApi = {
     agentId?: string;
     agentPrompt?: string;
   }) =>
-    fetchApi<Task>('/api/v1/tasks', {
+    fetchApi<Task>('tasks', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   update: (id: string, data: Partial<Task>) =>
-    fetchApi<Task>(`/api/v1/tasks/${id}`, {
+    fetchApi<Task>(`tasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   delete: (id: string) =>
-    fetchApi<void>(`/api/v1/tasks/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`tasks/${id}`, { method: 'DELETE' }),
   archive: (id: string, archived: boolean) =>
-    fetchApi<Task>(`/api/v1/tasks/${id}/archive`, {
+    fetchApi<Task>(`tasks/${id}/archive`, {
       method: 'POST',
       body: JSON.stringify({ archived }),
     }),
@@ -288,11 +292,11 @@ export const tasksApi = {
 // Comments API
 export const commentsApi = {
   getByTask: (taskId: string) =>
-    fetchApi<Comment[]>(`/api/v1/comments?taskId=${taskId}`),
+    fetchApi<Comment[]>(`comments?taskId=${taskId}`),
   getById: (id: string) =>
-    fetchApi<Comment>(`/api/v1/comments/${id}`),
+    fetchApi<Comment>(`comments/${id}`),
   create: (data: { taskId: string; content: string; author: string }) =>
-    fetchApi<Comment>('/api/v1/comments', {
+    fetchApi<Comment>('comments', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -301,35 +305,35 @@ export const commentsApi = {
 // Subtasks API
 export const subtasksApi = {
   getByTask: (taskId: string) =>
-    fetchApi<Subtask[]>(`/api/v1/subtasks?taskId=${taskId}`),
+    fetchApi<Subtask[]>(`subtasks?taskId=${taskId}`),
   create: (data: { taskId: string; title: string }) =>
-    fetchApi<Subtask>('/api/v1/subtasks', {
+    fetchApi<Subtask>('subtasks', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   update: (id: string, data: { title?: string; completed?: boolean }) =>
-    fetchApi<Subtask>(`/api/v1/subtasks/${id}`, {
+    fetchApi<Subtask>(`subtasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   delete: (id: string) =>
-    fetchApi<void>(`/api/v1/subtasks/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`subtasks/${id}`, { method: 'DELETE' }),
 };
 
 // Auth API
 export const authApi = {
   login: (nickname: string, password?: string, avatar?: string) =>
-    fetchApi<{ user: User; token: string }>('/api/v1/auth/login', {
+    fetchApi<{ user: User; token: string }>('auth/login', {
       method: 'POST',
       body: JSON.stringify({ nickname, password, avatar }),
     }),
   init: (username: string, password?: string, avatar?: string, allowRegistration = true, requirePassword = false, authEnabled = true) =>
-    fetchApi<{ user: User; token: string }>('/api/v1/auth/init', {
+    fetchApi<{ user: User; token: string }>('auth/init', {
       method: 'POST',
       body: JSON.stringify({ username, password, avatar, allowRegistration, requirePassword, authEnabled }),
     }),
   me: async () => {
-    const res = await fetch('/api/v1/auth/me', { credentials: 'include' });
+    const res = await fetch(`${API_BASE}auth/me`, { credentials: 'include' });
     const data = await res.json();
     if (!res.ok && res.status === 401) {
       return data as { user: null; needsSetup: boolean; allowRegistration?: boolean; requirePassword?: boolean; authEnabled?: boolean };
@@ -346,67 +350,67 @@ export const authApi = {
       permissions?: Permission[];
     };
   },
-  getConfig: () => fetchApi<{ allowRegistration: boolean; requirePassword: boolean; authEnabled: boolean }>('/api/v1/auth/config'),
+  getConfig: () => fetchApi<{ allowRegistration: boolean; requirePassword: boolean; authEnabled: boolean }>('auth/config'),
   updateConfig: (data: { allowRegistration?: boolean; requirePassword?: boolean; authEnabled?: boolean }) =>
-    fetchApi<void>('/api/v1/auth/config', {
+    fetchApi<void>('auth/config', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  getAvatars: () => fetchApi<{ avatars: string[] }>('/api/v1/auth/avatars'),
-  getTokens: () => fetchApi<{ tokens: Token[] }>('/api/v1/auth/token'),
+  getAvatars: () => fetchApi<{ avatars: string[] }>('auth/avatars'),
+  getTokens: () => fetchApi<{ tokens: Token[] }>('auth/token'),
   createToken: (name: string, expiresAt?: string) =>
-    fetchApi<{ token: Token }>('/api/v1/auth/token', {
+    fetchApi<{ token: Token }>('auth/token', {
       method: 'POST',
       body: JSON.stringify({ name, expiresAt }),
     }),
   updateToken: (id: string, name: string) =>
-    fetchApi<{ token: Token }>(`/api/v1/auth/token?id=${id}`, {
+    fetchApi<{ token: Token }>(`auth/token?id=${id}`, {
       method: 'PUT',
       body: JSON.stringify({ name }),
     }),
   deleteToken: (id: string) =>
-    fetchApi<void>(`/api/v1/auth/token?id=${id}`, { method: 'DELETE' }),
-  getUsers: () => fetchApi<{ users: User[] }>('/api/v1/auth/users').then(res => res.users),
+    fetchApi<void>(`auth/token?id=${id}`, { method: 'DELETE' }),
+  getUsers: () => fetchApi<{ users: User[] }>('auth/users').then(res => res.users),
   updateUser: (id: string, data: { nickname?: string; avatar?: string | null; role?: 'ADMIN' | 'MEMBER' | 'VIEWER' }) =>
-    fetchApi<User>('/api/v1/auth/users', {
+    fetchApi<User>('auth/users', {
       method: 'PUT',
       body: JSON.stringify({ targetUserId: id, ...data }),
     }),
-  getAgents: () => fetchApi<{ agents: Agent[] }>('/api/v1/auth/agents').then(res => res.agents || []),
+  getAgents: () => fetchApi<{ agents: Agent[] }>('auth/agents').then(res => res.agents || []),
   createAgent: (nickname: string, avatar?: string, role?: 'ADMIN' | 'MEMBER' | 'VIEWER') =>
-    fetchApi<{ agent: Agent & { token: string } }>('/api/v1/auth/agents', {
+    fetchApi<{ agent: Agent & { token: string } }>('auth/agents', {
       method: 'POST',
       body: JSON.stringify({ nickname, avatar, role }),
     }),
   resetAgentToken: (id: string) =>
-    fetchApi<{ token: string }>(`/api/v1/auth/agents/reset-token?id=${id}`, {
+    fetchApi<{ token: string }>(`auth/agents/reset-token?id=${id}`, {
       method: 'POST',
     }),
   deleteAgent: (id: string) =>
-    fetchApi<void>(`/api/v1/auth/agents?id=${id}`, { method: 'DELETE' }),
-  getBoards: () => fetchApi<{ boards: Board[] }>('/api/v1/boards').then(res => res.boards),
+    fetchApi<void>(`auth/agents?id=${id}`, { method: 'DELETE' }),
+  getBoards: () => fetchApi<Board[]>('boards'),
   getPermissions: (userId: string) =>
-    fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string }> }>(`/api/v1/auth/permissions?userId=${userId}`),
+    fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string }> }>(`auth/permissions?userId=${userId}`),
   setPermission: (userId: string, boardId: string, access: string) =>
-    fetchApi<{ permission: { id: string; userId: string; boardId: string; boardName: string; access: string } }>('/api/v1/auth/permissions', {
+    fetchApi<{ permission: { id: string; userId: string; boardId: string; boardName: string; access: string } }>('auth/permissions', {
       method: 'POST',
       body: JSON.stringify({ userId, boardId, access }),
     }),
   deletePermission: (id: string) =>
-    fetchApi<void>(`/api/v1/auth/permissions?id=${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`auth/permissions?id=${id}`, { method: 'DELETE' }),
   getColumnPermissions: (userId?: string, columnId?: string) =>
     fetchApi<{ permissions: Array<{ id: string; columnId: string; columnName: string; access: string; userId: string; userNickname: string }> }>(
-      `/api/v1/auth/permissions/columns${userId ? `?userId=${userId}` : columnId ? `?columnId=${columnId}` : ''}`
+      `auth/permissions/columns${userId ? `?userId=${userId}` : columnId ? `?columnId=${columnId}` : ''}`
     ),
   setColumnPermission: (userId: string, columnId: string, access: string) =>
-    fetchApi<{ permission: { id: string; userId: string; columnId: string; columnName: string; access: string } }>('/api/v1/auth/permissions/columns', {
+    fetchApi<{ permission: { id: string; userId: string; columnId: string; columnName: string; access: string } }>('auth/permissions/columns', {
       method: 'POST',
       body: JSON.stringify({ userId, columnId, access }),
     }),
   deleteColumnPermission: (id: string) =>
-    fetchApi<void>(`/api/v1/auth/permissions/columns?id=${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`auth/permissions/columns?id=${id}`, { method: 'DELETE' }),
   setUserEnabled: (userId: string, enabled: boolean) =>
-    fetchApi<void>('/api/v1/auth/users/enabled', {
+    fetchApi<void>('auth/users/enabled', {
       method: 'POST',
       body: JSON.stringify({ userId, enabled }),
     }),
@@ -435,7 +439,7 @@ export const activitiesApi = {
     if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
     const queryString = params.toString();
     return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
-      `/api/v1/auth/activities${queryString ? '?' + queryString : ''}`,
+      `auth/activities${queryString ? '?' + queryString : ''}`,
       { skip401Handling: true }
     );
   },
@@ -446,7 +450,7 @@ export const activitiesApi = {
     params.append('limit', String(limit));
     params.append('offset', String(offset));
     return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
-      `/api/v1/auth/activities?${params.toString()}`,
+      `auth/activities?${params.toString()}`,
       { skip401Handling: true }
     );
   },
@@ -456,7 +460,7 @@ export const activitiesApi = {
     params.append('limit', String(limit));
     params.append('offset', String(offset));
     return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
-      `/api/v1/auth/activities?${params.toString()}`,
+      `auth/activities?${params.toString()}`,
       { skip401Handling: true }
     );
   },
@@ -465,14 +469,14 @@ export const activitiesApi = {
 // Archived & Drafts API
 export const archivedApi = {
   getByBoard: (boardId: string) =>
-    fetchApi<Task[]>(`/api/v1/archived?boardId=${boardId}`),
-  getAll: () => fetchApi<Task[]>('/api/v1/archived'),
+    fetchApi<Task[]>(`archived?boardId=${boardId}`),
+  getAll: () => fetchApi<Task[]>('archived'),
 };
 
 export const draftsApi = {
   getByBoard: (boardId: string) =>
-    fetchApi<Task[]>(`/api/v1/drafts?boardId=${boardId}`),
-  getAll: () => fetchApi<Task[]>('/api/v1/drafts'),
+    fetchApi<Task[]>(`drafts?boardId=${boardId}`),
+  getAll: () => fetchApi<Task[]>('drafts'),
 };
 
 interface UploadResult {
@@ -496,7 +500,7 @@ export const attachmentsApi = {
 
     const promise = new Promise<Attachment>((resolve, reject) => {
       xhr = new XMLHttpRequest();
-      xhr.open('POST', `${API_BASE}/api/v1/upload`, true);
+      xhr.open('POST', `${API_BASE}/upload`, true);
       xhr.withCredentials = true;
 
       xhr.upload.onprogress = (event) => {
@@ -523,8 +527,8 @@ export const attachmentsApi = {
   },
 
   getByTask: (taskId: string) =>
-    fetchApi<Attachment[]>(`/api/v1/tasks/${taskId}/attachments`),
+    fetchApi<Attachment[]>(`tasks/${taskId}/attachments`),
 
   delete: (id: string) =>
-    fetchApi<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`attachments/${id}`, { method: 'DELETE' }),
 };

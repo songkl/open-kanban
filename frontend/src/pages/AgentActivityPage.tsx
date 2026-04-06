@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi, activitiesApi } from '../services/api';
@@ -59,9 +59,59 @@ export function AgentActivityPage() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
 
+  const loadActivities = useCallback(async (agentId?: string, offset = 0) => {
+    try {
+      const data = await activitiesApi.getByAgent(agentId, offset, 50);
+      const newActivities = data.activities || [];
+      if (offset === 0) {
+        setActivities(newActivities);
+      } else {
+        setActivities((prev) => [...prev, ...newActivities]);
+      }
+      setHasMore(data.hasMore ?? false);
+      setTotal(data.total ?? 0);
+    } catch (err) {
+      console.error('Failed to load activities:', err);
+    }
+  }, []);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [agentsData, meData] = await Promise.all([
+        authApi.getAgents(),
+        authApi.me(),
+      ]);
+      if (!meData.user) {
+        return;
+      }
+      setAgents(agentsData || []);
+      await loadActivities();
+    } catch (err) {
+      console.error('Failed to load data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadActivities]);
+
+  const syncActivities = useCallback(async (agentId?: string) => {
+    try {
+      const data = await activitiesApi.getByAgent(agentId, 0, 50);
+      const fetched = data.activities || [];
+      setActivities((prev) => {
+        const existingIds = new Set(prev.map((a) => a.id));
+        const newItems = fetched.filter((a: Activity) => !existingIds.has(a.id));
+        if (newItems.length === 0) return prev;
+        return [...newItems, ...prev];
+      });
+    } catch (err) {
+      console.error('Failed to sync activities:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     const MAX_RECONNECT_ATTEMPTS = 10;
@@ -160,48 +210,13 @@ export function AgentActivityPage() {
       syncActivities(selectedAgentId || undefined);
     }, 5000);
     return () => clearInterval(interval);
-  }, [autoRefresh, selectedAgentId]);
+  }, [autoRefresh, selectedAgentId, syncActivities]);
 
   useEffect(() => {
     if (isAtBottom && logContainerRef.current) {
       logContainerRef.current.scrollTop = 0;
     }
-  }, [activities]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [agentsData, meData] = await Promise.all([
-        authApi.getAgents(),
-        authApi.me(),
-      ]);
-      if (!meData.user) {
-        return;
-      }
-      setAgents(agentsData || []);
-      await loadActivities();
-    } catch (err) {
-      console.error('Failed to load data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadActivities = async (agentId?: string, offset = 0) => {
-    try {
-      const data = await activitiesApi.getByAgent(agentId, offset, 50);
-      const newActivities = data.activities || [];
-      if (offset === 0) {
-        setActivities(newActivities);
-      } else {
-        setActivities((prev) => [...prev, ...newActivities]);
-      }
-      setHasMore(data.hasMore ?? false);
-      setTotal(data.total ?? 0);
-    } catch (err) {
-      console.error('Failed to load activities:', err);
-    }
-  };
+  }, [activities, isAtBottom]);
 
   const loadMore = async () => {
     if (isLoadingMore || !hasMore) return;
@@ -211,21 +226,6 @@ export function AgentActivityPage() {
       await loadActivities(selectedAgentId || undefined, nextOffset);
     } finally {
       setIsLoadingMore(false);
-    }
-  };
-
-  const syncActivities = async (agentId?: string) => {
-    try {
-      const data = await activitiesApi.getByAgent(agentId, 0, 50);
-      const fetched = data.activities || [];
-      setActivities((prev) => {
-        const existingIds = new Set(prev.map((a) => a.id));
-        const newItems = fetched.filter((a: Activity) => !existingIds.has(a.id));
-        if (newItems.length === 0) return prev;
-        return [...newItems, ...prev];
-      });
-    } catch (err) {
-      console.error('Failed to sync activities:', err);
     }
   };
 
