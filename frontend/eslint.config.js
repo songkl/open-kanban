@@ -4,7 +4,10 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import react from 'eslint-plugin-react';
 
 export default tseslint.config(
-  { ignores: ['*.cjs'] },
+  { ignores: [
+    '*.cjs',
+    'src/types/generated/**/*', // Auto-generated OpenAPI client - do not lint
+  ] },
   {
     extends: [eslint.configs.recommended, ...tseslint.configs.recommended],
     plugins: {

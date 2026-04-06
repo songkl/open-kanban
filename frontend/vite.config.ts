@@ -30,8 +30,24 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-	'/api/v1': 'http://localhost:8081/api/v1',
-        '/ws': { target: 'ws://localhost:8081', ws: true }
+      '/api/v1': 'http://localhost:8081/api/v1',
+      '/boards': 'http://localhost:8081/boards',
+      '/columns': 'http://localhost:8081/columns',
+      '/tasks': 'http://localhost:8081/tasks',
+      '/templates': 'http://localhost:8081/templates',
+      '/drafts': 'http://localhost:8081/drafts',
+      '/archived': 'http://localhost:8081/archived',
+      '/comments': 'http://localhost:8081/comments',
+      '/subtasks': 'http://localhost:8081/subtasks',
+      '/attachments': 'http://localhost:8081/attachments',
+      '/upload': 'http://localhost:8081/upload',
+      '/auth': 'http://localhost:8081/auth',
+      '/users': 'http://localhost:8081/users',
+      '/agents': 'http://localhost:8081/agents',
+      '/activities': 'http://localhost:8081/activities',
+      '/permissions': 'http://localhost:8081/permissions',
+      '/config': 'http://localhost:8081/config',
+      '/ws': { target: 'ws://localhost:8081', ws: true }
     },
   },
   build: {
