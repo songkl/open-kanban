@@ -44,10 +44,15 @@ export function TaskList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const tasks = column?.tasks ?? [];
 
+  const setRef = (node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    scrollRef.current = node;
+  };
+
   useEffect(() => {
-    if (!column) return;
+    if (!column || !scrollRef.current || !onLoadMore || !hasMore || isLoadingMore) return;
+
     const scrollContainer = scrollRef.current;
-    if (!scrollContainer || !onLoadMore || !hasMore || isLoadingMore) return;
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
@@ -58,7 +63,7 @@ export function TaskList({
 
     scrollContainer.addEventListener('scroll', handleScroll);
     return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, [column?.id, onLoadMore, hasMore, isLoadingMore]);
+  }, [column, onLoadMore, hasMore, isLoadingMore]);
 
   const handleOpenAddTask = () => {
     if (onOpenAddTask && column.id) {
@@ -72,7 +77,7 @@ export function TaskList({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRef}
       className={`flex-1 space-y-2 overflow-y-auto p-2 rounded-b-lg ${
         isOver ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''
       }`}
