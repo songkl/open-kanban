@@ -44,7 +44,6 @@ export function BoardPage() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showBoardDropdown, setShowBoardDropdown] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showPreferencesMenu, setShowPreferencesMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPresetDropdown, setShowPresetDropdown] = useState(false);
   const [focusedColumnIndex, setFocusedColumnIndex] = useState(0);
@@ -63,7 +62,6 @@ export function BoardPage() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
-  const preferencesMenuRef = useRef<HTMLDivElement>(null);
   const boardDropdownRef = useRef<HTMLDivElement>(null);
   const reconnectAttemptRef = useRef(0);
 
@@ -110,6 +108,7 @@ export function BoardPage() {
     clearFilters,
     hasActiveFilters,
     lastLocalUpdateRef,
+    setColumns,
   } = useBoardState({ boardIdFromUrl, taskIdFromUrl });
 
   const showToastMessage = (message: string) => {
@@ -167,6 +166,11 @@ export function BoardPage() {
 
         lastLocalUpdateRef.current = Date.now();
         await tasksApi.update(activeId, { position: newTasks[newIndex].position });
+        setColumns(prev => prev.map(col =>
+          col.id === activeColumn.id
+            ? { ...col, tasks: newTasks }
+            : col
+        ));
       }
     } else {
       const overTasks = [...(overColumn.tasks ?? [])];
@@ -181,13 +185,24 @@ export function BoardPage() {
       const updatedTasks = overTasks.map((t, i) => ({ ...t, position: i }));
       const movedTaskNewIndex = updatedTasks.findIndex((t) => t.id === activeId);
 
+      const sourceTasks = (activeColumn.tasks ?? []).filter(t => t.id !== activeId).map((t, i) => ({ ...t, position: i }));
+
       lastLocalUpdateRef.current = Date.now();
       await tasksApi.update(activeId, {
         position: movedTaskNewIndex,
         columnId: overColumn.id,
       });
+      setColumns(prev => prev.map(col => {
+        if (col.id === activeColumn.id) {
+          return { ...col, tasks: sourceTasks };
+        }
+        if (col.id === overColumn.id) {
+          return { ...col, tasks: updatedTasks };
+        }
+        return col;
+      }));
     }
-  }, [lastLocalUpdateRef]);
+  }, [lastLocalUpdateRef, setColumns]);
 
   const connectWebSocket = useCallback(() => {
     reconnectAttemptRef.current = 0;
@@ -364,19 +379,13 @@ export function BoardPage() {
           <BoardActionsMenu
             showMoreMenu={showMoreMenu}
             showExportMenu={showExportMenu}
-            showPreferencesMenu={showPreferencesMenu}
             currentUser={currentUser}
             onSetShowMoreMenu={setShowMoreMenu}
             onSetShowExportMenu={setShowExportMenu}
-            onSetShowPreferencesMenu={setShowPreferencesMenu}
             moreMenuRef={moreMenuRef}
             exportMenuRef={exportMenuRef}
-            preferencesMenuRef={preferencesMenuRef}
             onExport={handleExport}
             onReset={handleReset}
-            onSetDarkMode={setDarkMode}
-            darkMode={darkMode}
-            i18n={i18n}
           />
           <HeaderRightMenu
             showUserMenu={showUserMenu}
@@ -387,6 +396,9 @@ export function BoardPage() {
             onConnectWebSocket={connectWebSocket}
             userMenuRef={userMenuRef}
             navigate={navigate}
+            darkMode={darkMode}
+            onSetDarkMode={setDarkMode}
+            i18n={i18n}
           />
         </div>
       </header>

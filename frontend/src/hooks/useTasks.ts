@@ -158,10 +158,14 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
   }, [onColumnsChange, notifyLastLocalUpdate]);
 
   const addTask = useCallback(async (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => {
+    if (!columnId) {
+      console.error('addTask called without columnId');
+      return;
+    }
     const taskTitle = title || prompt(t('task.enterTitle'));
     if (!taskTitle?.trim()) return;
 
-    const targetColumnId = columnId || currentBoard?.id + '_todo';
+    const targetColumnId = columnId;
     const targetBoardId = boardId || currentBoard?.id || '';
     const currentBoardId = currentBoard?.id || '';
     const isSameBoard = targetBoardId === currentBoardId;

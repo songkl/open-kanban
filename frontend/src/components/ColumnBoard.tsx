@@ -389,8 +389,8 @@ export function ColumnBoard({
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}
-          onSubmit={(title, description, published, _columnId, boardId, priority) => {
-            onAddTask(undefined, title, description, published, boardId, priority);
+          onSubmit={(title, description, published, columnId, boardId, priority) => {
+            onAddTask(columnId, title, description, published, boardId, priority);
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}

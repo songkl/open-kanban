@@ -376,6 +376,11 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify({ targetUserId: id, ...data }),
     }),
+  createUser: (data: { username: string; nickname?: string; password?: string; role?: 'ADMIN' | 'MEMBER' | 'VIEWER'; avatar?: string }) =>
+    fetchApi<{ user: User & { token?: string } }>('auth/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   getAgents: () => fetchApi<{ agents: Agent[] }>('auth/agents').then(res => res.agents || []),
   createAgent: (nickname: string, avatar?: string, role?: 'ADMIN' | 'MEMBER' | 'VIEWER') =>
     fetchApi<{ agent: Agent & { token: string } }>('auth/agents', {

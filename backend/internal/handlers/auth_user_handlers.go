@@ -500,3 +500,129 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 		})
 	}
 }
+
+type CreateUserRequest struct {
+	Username string `json:"username"`
+	Nickname string `json:"nickname"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+	Avatar   string `json:"avatar"`
+}
+
+func CreateUser(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		currentUser := getCurrentUser(c, db)
+		if currentUser == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+		if currentUser.Role != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can create users"})
+			return
+		}
+
+		var req CreateUserRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request parameters"})
+			return
+		}
+
+		if req.Username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
+			return
+		}
+		if req.Nickname == "" {
+			req.Nickname = req.Username
+		}
+
+		var existingCount int
+		err := db.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", req.Username).Scan(&existingCount)
+		if err == nil && existingCount > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
+			return
+		}
+
+		role := req.Role
+		if role == "" {
+			role = "MEMBER"
+		}
+		if role != "ADMIN" && role != "MEMBER" && role != "VIEWER" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role"})
+			return
+		}
+
+		userID := generateID()
+		now := time.Now()
+
+		var passwordHash string
+		if req.Password != "" {
+			passwordHash, _ = HashPasswordWithSalt(req.Password)
+		}
+
+		avatar := req.Avatar
+		if avatar == "" {
+			if len(avatarOptions) > 0 {
+				avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
+			} else {
+				avatar = fmt.Sprintf("avatar-%d", time.Now().UnixNano()%1000)
+			}
+		}
+
+		_, err = db.Exec(
+			"INSERT INTO users (id, username, nickname, password_hash, avatar, type, role, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, true, ?, ?)",
+			userID, req.Username, req.Nickname, passwordHash, avatar, role, now, now,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user: " + err.Error()})
+			return
+		}
+
+		tokenKey := generateTokenKey()
+		tokenID := generateID()
+		_, err = db.Exec(
+			"INSERT INTO tokens (id, name, key, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			tokenID, "default", tokenKey, userID, now, now,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create token"})
+			return
+		}
+
+		rows, _ := db.Query("SELECT id FROM boards WHERE deleted = false")
+		if rows != nil {
+			defer rows.Close()
+			var boardIDs []string
+			for rows.Next() {
+				var boardID string
+				if err := rows.Scan(&boardID); err == nil {
+					boardIDs = append(boardIDs, boardID)
+				}
+			}
+			if len(boardIDs) > 0 {
+				args := make([]interface{}, 0, len(boardIDs)*4)
+				placeholders := make([]string, len(boardIDs))
+				for i, boardID := range boardIDs {
+					permID := generateID()
+					placeholders[i] = "(?, ?, ?, ?)"
+					args = append(args, permID, userID, boardID, "WRITE")
+				}
+				query := "INSERT INTO board_permissions (id, user_id, board_id, access) VALUES " + strings.Join(placeholders, ", ")
+				db.Exec(query, args...)
+			}
+		}
+
+		LogActivity(db, currentUser.ID, "USER_CREATE", "USER", userID, req.Nickname, "", c.ClientIP(), getRequestSource(c))
+
+		c.JSON(http.StatusOK, gin.H{
+			"user": gin.H{
+				"id":       userID,
+				"username": req.Username,
+				"nickname": req.Nickname,
+				"avatar":   avatar,
+				"role":     role,
+				"type":     "HUMAN",
+				"token":    tokenKey,
+			},
+		})
+	}
+}

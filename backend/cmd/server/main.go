@@ -144,6 +144,7 @@ func main() {
 		authProtected.DELETE("/agents", handlers.DeleteAgent(db))
 		authProtected.GET("/users", handlers.GetUsers(db))
 		authProtected.PUT("/users", handlers.UpdateUser(db))
+		authProtected.POST("/users", handlers.CreateUser(db))
 		authProtected.POST("/users/enabled", handlers.SetUserEnabled(db))
 		authProtected.GET("/permissions", handlers.GetPermissions(db))
 		authProtected.POST("/permissions", handlers.SetPermission(db))

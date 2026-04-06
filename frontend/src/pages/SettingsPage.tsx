@@ -162,6 +162,17 @@ export function SettingsPage() {
               >
                 {t('settings.shortcuts')}
               </button>
+              <div className="border-t border-zinc-200 pt-2 mt-2">
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('token');
+                    navigate('/login');
+                  }}
+                  className="w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-zinc-100"
+                >
+                  {t('auth.logout')}
+                </button>
+              </div>
             </nav>
           </div>
 

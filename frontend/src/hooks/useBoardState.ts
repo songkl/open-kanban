@@ -75,6 +75,7 @@ interface UseBoardStateReturn {
   setFilterPresets: React.Dispatch<React.SetStateAction<FilterPreset[]>>;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
   setColumnPagination: React.Dispatch<React.SetStateAction<Record<string, ColumnPagination>>>;
+  setColumns: React.Dispatch<React.SetStateAction<ColumnType[]>>;
   saveCurrentAsPreset: () => void;
   applyPreset: (preset: FilterPreset) => void;
   deletePreset: (presetId: string) => void;
@@ -93,6 +94,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
   const {
     boards,
     currentBoard,
+    currentUser,
     boardSwitching: boardBoardSwitching,
     fetchBoards,
   } = useBoard({ boardIdFromUrl });
@@ -277,7 +279,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     loadError,
     wsStatus,
     reconnectCount,
-    currentUser: null,
+    currentUser,
     filters,
     filterPresets,
     columnPagination,
@@ -318,5 +320,6 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     offlineQueueRef,
     isProcessingQueueRef,
     processOfflineQueue,
+    setColumns,
   };
 }
