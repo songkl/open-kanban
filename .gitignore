@@ -45,7 +45,8 @@ logs/
 .cache/
 
 .swarm/
-devDoc/
+devDoc/*.md
+!devDoc/.gitkeep
 logs/
 tmp/
 backend/cmd/server/web/
