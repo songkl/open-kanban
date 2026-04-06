@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   DndContext,
-  rectIntersection,
+  closestCenter,
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
@@ -38,7 +38,7 @@ interface ColumnBoardProps {
   onDeleteTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
   onAddComment: (taskId: string, content: string, author: string) => void;
-  onTaskSelect: (taskId: string, task: Task, e?: any) => void;
+  onTaskSelect: (taskId: string, task: Task, e?: React.MouseEvent) => void;
   onLoadMoreTasks: (columnId: string) => void;
   onColumnRename: (columnId: string, newName: string) => void;
   onSetSelectedTask: (task: Task | null) => void;
@@ -237,7 +237,7 @@ export function ColumnBoard({
     <div className="bg-zinc-100 dark:bg-zinc-900">
       <DndContext
         sensors={sensors}
-        collisionDetection={rectIntersection}
+        collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -389,8 +389,8 @@ export function ColumnBoard({
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}
-          onSubmit={(title, description, published, columnId, boardId, priority) => {
-            onAddTask(columnId, title, description, published, boardId, priority);
+          onSubmit={(title, description, published, _columnId, boardId, priority) => {
+            onAddTask(undefined, title, description, published, boardId, priority);
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}

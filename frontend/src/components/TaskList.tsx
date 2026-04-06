@@ -55,6 +55,7 @@ export function TaskList({
     const scrollContainer = scrollRef.current;
 
     const handleScroll = () => {
+      if (!column) return;
       const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
       if (scrollHeight - scrollTop - clientHeight < 100 && !isLoadingMore) {
         onLoadMore(column.id);

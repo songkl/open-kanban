@@ -82,7 +82,7 @@ export function TaskModal({
       setIsEditing(true);
       onEditingStarted?.();
     }
-  }, [startEditing]);
+  }, [startEditing, isEditing, onEditingStarted]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

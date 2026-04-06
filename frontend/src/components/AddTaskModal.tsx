@@ -49,7 +49,7 @@ export function AddTaskModal({
         }
       });
     }
-  }, [selectedBoardId, isOpen, defaultColumnId]);
+  }, [selectedBoardId, isOpen, defaultColumnId, t]);
 
   const resetForm = useCallback(() => {
     setTitle('');
