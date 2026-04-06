@@ -15,118 +15,18 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
-  useSortable,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { boardsApi, columnsApi, authApi } from '@/services/api';
-import { AddColumnPermissionForm } from '@/components/AddColumnPermissionForm';
+import { ColumnCard } from '@/components/ColumnCard';
+import { AddColumnModal } from '@/components/AddColumnModal';
+import { EditColumnModal } from '@/components/EditColumnModal';
+import { DeleteColumnModal } from '@/components/DeleteColumnModal';
+import { ColumnPermissionsModal } from '@/components/ColumnPermissionsModal';
 import type { Agent, Column } from '@/types/kanban';
 
 interface Board {
   id: string;
   name: string;
-}
-
-function SortableColumn({
-  column,
-  onEdit,
-  onDelete,
-  onPermission,
-  t,
-  canEdit,
-  canDelete,
-  canManagePermission,
-}: {
-  column: Column;
-  onEdit: (column: Column) => void;
-  onDelete: (columnId: string) => void;
-  onPermission: (column: Column) => void;
-  t: ReturnType<typeof useTranslation>[0];
-  canEdit?: boolean;
-  canDelete?: boolean;
-  canManagePermission?: boolean;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: column.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="group flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm border border-zinc-100 hover:shadow-md hover:border-zinc-200 transition-all duration-200"
-    >
-      <button
-        {...attributes}
-        {...listeners}
-        className="cursor-grab text-zinc-300 hover:text-zinc-500 active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
-        title={t('column.dragToSort')}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 8h16M4 16h16"
-          />
-        </svg>
-      </button>
-      <div
-        className="h-6 w-6 rounded-full shadow-sm"
-        style={{ backgroundColor: column.color }}
-      />
-      <span className="flex-1 font-semibold text-zinc-800">{column.name}</span>
-      {column.status && (
-        <span className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500 border border-zinc-100">
-          {column.status}
-        </span>
-      )}
-      <span className="text-xs text-zinc-400 font-mono">#{column.position + 1}</span>
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        {canManagePermission && (
-          <button
-            onClick={() => onPermission(column)}
-            className="rounded-lg bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-100 transition-colors"
-          >
-            {t('column.permissions')}
-          </button>
-        )}
-        {canEdit && (
-          <button
-            onClick={() => onEdit(column)}
-            className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-100 transition-colors"
-          >
-            {t('column.edit')}
-          </button>
-        )}
-        {canDelete && (
-          <button
-            onClick={() => onDelete(column.id)}
-            className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors"
-          >
-            {t('column.delete')}
-          </button>
-        )}
-      </div>
-    </div>
-  );
 }
 
 export function ColumnsPage() {
@@ -172,18 +72,15 @@ export function ColumnsPage() {
 
   useEffect(() => {
     if (boards.length > 0) {
-      // If boardId is in URL and exists in boards, use it
       const targetBoard = boardIdFromUrl
         ? boards.find(b => b.id === boardIdFromUrl)
         : null;
 
       if (targetBoard) {
-        // URL has valid boardId, use it (sync selectedBoard if different)
         if (targetBoard.id !== selectedBoard?.id) {
           setSelectedBoard(targetBoard);
         }
       } else if (!selectedBoard) {
-        // No valid URL param and no current selection, default to first board
         setSelectedBoard(boards[0]);
       }
     }
@@ -532,7 +429,7 @@ export function ColumnsPage() {
           >
             <div className="space-y-2">
               {sortedColumns.map((column) => (
-                <SortableColumn
+                <ColumnCard
                   key={column.id}
                   column={column}
                   onEdit={(col) => {
@@ -545,7 +442,6 @@ export function ColumnsPage() {
                   }}
                   onDelete={handleDeleteColumn}
                   onPermission={handleOpenPermissionModal}
-                  t={t}
                   canEdit={userBoardAccess === 'WRITE' || userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
                   canDelete={userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
                   canManagePermission={currentUser?.role === 'ADMIN'}
@@ -556,344 +452,67 @@ export function ColumnsPage() {
         </DndContext>
       )}
 
-      {showAddModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowAddModal(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-              </div>
-              <h2 className="text-xl font-bold text-zinc-800">{t('modal.addColumn')}</h2>
-            </div>
+      <AddColumnModal
+        isOpen={showAddModal}
+        newColumnName={newColumnName}
+        newColumnColor={newColumnColor}
+        onClose={() => setShowAddModal(false)}
+        onAdd={handleAddColumn}
+        onNameChange={setNewColumnName}
+        onColorChange={setNewColumnColor}
+      />
 
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  {t('column.columnName')}
-                </label>
-                <input
-                  type="text"
-                  value={newColumnName}
-                  onChange={(e) => setNewColumnName(e.target.value)}
-                  placeholder={t('column.namePlaceholder')}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  autoFocus
-                />
-              </div>
+      <EditColumnModal
+        isOpen={!!editingColumn}
+        column={editingColumn}
+        name={newColumnName}
+        color={editColumnColor}
+        status={editColumnStatus}
+        description={editColumnDescription}
+        ownerAgent={editColumnOwnerAgent}
+        agents={agents}
+        onClose={() => {
+          setEditingColumn(null);
+          setNewColumnName('');
+          setEditColumnColor('#6b7280');
+          setEditColumnStatus('');
+          setEditColumnDescription('');
+          setEditColumnOwnerAgent('');
+        }}
+        onSave={handleUpdateColumn}
+        onNameChange={setNewColumnName}
+        onColorChange={setEditColumnColor}
+        onStatusChange={setEditColumnStatus}
+        onDescriptionChange={setEditColumnDescription}
+        onOwnerAgentChange={setEditColumnOwnerAgent}
+      />
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  {t('column.color')}
-                </label>
-                <div className="flex gap-3">
-                  {[
-                    { color: '#ef4444', name: t('column.colorRed') },
-                    { color: '#f59e0b', name: t('column.colorOrange') },
-                    { color: '#3b82f6', name: t('column.colorBlue') },
-                    { color: '#22c55e', name: t('column.colorGreen') },
-                    { color: '#8b5cf6', name: t('column.colorPurple') },
-                    { color: '#6b7280', name: t('column.colorGray') },
-                  ].map(({ color, name }) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setNewColumnColor(color)}
-                      className={`group relative h-10 w-10 rounded-xl transition-all hover:scale-110 ${
-                        newColumnColor === color
-                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                          : 'hover:ring-2 hover:ring-zinc-300 hover:ring-offset-1'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={name}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+      <DeleteColumnModal
+        isOpen={showDeleteModal}
+        column={columnToDelete}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setColumnToDelete(null);
+        }}
+        onConfirm={confirmDeleteColumn}
+      />
 
-            <div className="mt-8 flex gap-3">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
-              >
-                {t('column.cancel')}
-              </button>
-              <button
-                onClick={handleAddColumn}
-                disabled={!newColumnName.trim()}
-                className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 font-medium text-white hover:from-blue-600 hover:to-blue-700 disabled:from-zinc-300 disabled:to-zinc-300 transition-all shadow-sm hover:shadow"
-              >
-                {t('column.addColumn')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingColumn && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setEditingColumn(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                </svg>
-              </div>
-              <h2 className="text-xl font-bold text-zinc-800">{t('modal.editColumn')}</h2>
-            </div>
-
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  {t('column.columnName')}
-                </label>
-                <input
-                  type="text"
-                  value={newColumnName}
-                  onChange={(e) => setNewColumnName(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  {t('column.statusCode')}
-                </label>
-                <input
-                  type="text"
-                  value={editColumnStatus}
-                  onChange={(e) => setEditColumnStatus(e.target.value)}
-                  placeholder={t('column.statusPlaceholder')}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-                <p className="mt-1.5 text-xs text-zinc-400">{t('column.statusCodeHint')}</p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  {t('column.color')}
-                </label>
-                <div className="flex gap-3">
-                  {[
-                    { color: '#ef4444', name: t('column.colorRed') },
-                    { color: '#f59e0b', name: t('column.colorOrange') },
-                    { color: '#3b82f6', name: t('column.colorBlue') },
-                    { color: '#22c55e', name: t('column.colorGreen') },
-                    { color: '#8b5cf6', name: t('column.colorPurple') },
-                    { color: '#6b7280', name: t('column.colorGray') },
-                  ].map(({ color, name }) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setEditColumnColor(color)}
-                      className={`group relative h-10 w-10 rounded-xl transition-all hover:scale-110 ${
-                        editColumnColor === color
-                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                          : 'hover:ring-2 hover:ring-zinc-300 hover:ring-offset-1'
-                      }`}
-                      style={{ backgroundColor: color }}
-                      title={name}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  {t('column.description')}
-                </label>
-                <textarea
-                  value={editColumnDescription}
-                  onChange={(e) => setEditColumnDescription(e.target.value)}
-                  placeholder={t('column.descriptionPlaceholder')}
-                  rows={3}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
-                />
-                <p className="mt-1.5 text-xs text-zinc-400">{t('column.descriptionHint')}</p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-zinc-700">
-                  {t('column.ownerAgent')}
-                </label>
-                <select
-                  value={editColumnOwnerAgent}
-                  onChange={(e) => setEditColumnOwnerAgent(e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="">{t('column.noOwnerAgent')}</option>
-                  {agents.filter(a => a.type === 'AGENT').map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.nickname}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1.5 text-xs text-zinc-400">{t('column.ownerAgentHint')}</p>
-              </div>
-            </div>
-
-            <div className="mt-8 flex gap-3">
-              <button
-                onClick={() => setEditingColumn(null)}
-                className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
-              >
-                {t('column.cancel')}
-              </button>
-              <button
-                onClick={handleUpdateColumn}
-                disabled={!newColumnName.trim()}
-                className="flex-1 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 font-medium text-white hover:from-blue-600 hover:to-blue-700 disabled:from-zinc-300 disabled:to-zinc-300 transition-all shadow-sm hover:shadow"
-              >
-                {t('column.save')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showDeleteModal && columnToDelete && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowDeleteModal(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </div>
-              <h2 className="text-xl font-bold text-zinc-800">{t('modal.deleteColumn')}</h2>
-            </div>
-
-            <div className="mb-6">
-              <p className="text-zinc-600 mb-3">
-                {t('column.confirmDeleteMessage', { columnName: columnToDelete.name })}
-              </p>
-              {columnToDelete.taskCount > 0 && (
-                <div className="p-3 bg-red-50 border border-red-100 rounded-xl">
-                  <p className="text-sm text-red-600">
-                    <span className="font-semibold">{columnToDelete.taskCount}</span> {t('column.tasksWillBeDeleted')}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-8 flex gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
-              >
-                {t('column.cancel')}
-              </button>
-              <button
-                onClick={confirmDeleteColumn}
-                className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 font-medium text-white hover:from-red-600 hover:to-red-700 transition-all shadow-sm hover:shadow"
-              >
-                {t('column.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPermissionModal && permissionColumn && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-          onClick={() => setShowPermissionModal(false)}
-        >
-          <div
-            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100 max-h-[80vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-zinc-800">{t('column.columnPermissions')}</h2>
-                <p className="text-sm text-zinc-500">{permissionColumn.name}</p>
-              </div>
-            </div>
-
-              {permissionLoading ? (
-              <div className="py-8 text-center text-zinc-500">{t('common.loading')}</div>
-            ) : (
-              <>
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-zinc-700 mb-3">{t('column.currentPermissions')}</h3>
-                  {columnPermissions.length === 0 ? (
-                    <p className="text-sm text-zinc-400 py-4 text-center">{t('column.noPermissions')}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {columnPermissions.map((perm) => (
-                        <div key={perm.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-xs font-bold">
-                              {perm.userNickname.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-zinc-800">{perm.userNickname}</div>
-                              <div className="text-xs text-zinc-400">{perm.columnName} - {t('column.permission.' + perm.access)}</div>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteColumnPermission(perm.id)}
-                            className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                          >
-                            {t('column.remove')}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-zinc-100 pt-4">
-                  <h3 className="text-sm font-semibold text-zinc-700 mb-3">{t('column.addPermission')}</h3>
-                  <AddColumnPermissionForm
-                    columnId={permissionColumn.id}
-                    onPermissionAdded={() => {
-                      if (permissionColumn) {
-                        handleOpenPermissionModal(permissionColumn);
-                      }
-                    }}
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setShowPermissionModal(false)}
-                className="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
-              >
-                {t('common.close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ColumnPermissionsModal
+        isOpen={showPermissionModal}
+        column={permissionColumn}
+        permissions={columnPermissions}
+        loading={permissionLoading}
+        onClose={() => {
+          setShowPermissionModal(false);
+          setPermissionColumn(null);
+        }}
+        onDeletePermission={handleDeleteColumnPermission}
+        onPermissionAdded={() => {
+          if (permissionColumn) {
+            handleOpenPermissionModal(permissionColumn);
+          }
+        }}
+      />
 
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white">
