@@ -47,6 +47,10 @@ export interface Task {
   updatedAt: string;
   comments: Comment[];
   subtasks: Subtask[];
+  _count?: {
+    comments?: number;
+    subtasks?: number;
+  };
 }
 
 export interface Column {

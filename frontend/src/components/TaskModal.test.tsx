@@ -66,6 +66,10 @@ vi.mock('@/services/api', () => ({
     delete: vi.fn().mockResolvedValue({}),
     upload: vi.fn().mockReturnValue({ promise: Promise.resolve({ id: 'att-1', url: 'http://test.com/file.png' }) }),
   },
+  commentsApi: {
+    getByTask: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockResolvedValue({ id: 'comment-new', content: 'New comment', author: 'TestUser' }),
+  },
   authApi: {
     me: vi.fn().mockResolvedValue({ user: { nickname: 'TestUser' } }),
     getAgents: vi.fn().mockResolvedValue([

@@ -308,7 +308,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
         {task.assignee && (
           <span className="text-xs text-zinc-400 dark:text-zinc-500">{task.assignee}</span>
         )}
-        {task.comments && task.comments.length > 0 && (
+        {((task._count?.comments ?? 0) > 0 || (task.comments && task.comments.length > 0)) && (
           <span
             className="flex items-center gap-1 cursor-pointer text-xs text-zinc-400 hover:text-blue-500"
             onClick={(e) => {
@@ -324,7 +324,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
-            {task.comments.length}
+            {task._count?.comments ?? task.comments?.length ?? 0}
           </span>
         )}
       </div>

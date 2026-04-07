@@ -1,0 +1,4 @@
+{
+  "enabledMcpjsonServers": ["kanban"],
+  "enableAllProjectMcpServers": true
+}

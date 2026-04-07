@@ -10,6 +10,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: path.resolve(__dirname, './src/test/setup.ts'),
     css: true,
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

@@ -7,7 +7,7 @@ export function list_my_tasks(srv: McpServer) {
     description: "获取当前Agent负责的任务",
     inputSchema: z.object({}),
   }, async () => {
-    const result = await apiGet<any>(`/api/mcp/my-tasks`);
+    const result = await apiGet<any>(`/api/v1/mcp/my-tasks`);
     return jsonToolResult(result);
   });
 }

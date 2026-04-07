@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "kanban": {
+      "command": "npx",
+      "args": ["-y","open-kanban-mcp@1.0.2"],
+      "env": {
+        "KANBAN_API_URL": "http://localhost:8080",
+        "KANBAN_MCP_TOKEN": "4baf823622325e1d6a536568e252a817ea0d8cc25fdebbf1c9992967d0f7fe0e"
+      }
+    }
+  }
+}

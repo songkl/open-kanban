@@ -15,7 +15,8 @@ export async function apiGet<T>(path: string): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
-  return res.json() as any;
+  const text = await res.text();
+  return text ? JSON.parse(text) : ({} as T);
 }
 
 export async function apiPost<T>(path: string, body: any): Promise<T> {
@@ -31,7 +32,8 @@ export async function apiPost<T>(path: string, body: any): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
-  return res.json() as any;
+  const text = await res.text();
+  return text ? JSON.parse(text) : ({} as T);
 }
 
 export async function apiPut<T>(path: string, body: any): Promise<T> {
@@ -47,7 +49,8 @@ export async function apiPut<T>(path: string, body: any): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
-  return res.json() as any;
+  const text = await res.text();
+  return text ? JSON.parse(text) : ({} as T);
 }
 
 export async function apiDelete(path: string): Promise<void> {

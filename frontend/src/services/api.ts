@@ -232,6 +232,8 @@ export const columnsApi = {
   getAll: () => fetchApi<Column[]>('columns'),
   getByBoard: (boardId: string) =>
     fetchApi<Column[]>(`columns?boardId=${boardId}`),
+  getSlug: (name: string) =>
+    fetchApi<{ slug: string }>(`columns/slug?name=${encodeURIComponent(name)}`),
   create: (data: { name: string; boardId: string; color?: string; description?: string; ownerAgentId?: string; status?: string }) =>
     fetchApi<Column>('columns', {
       method: 'POST',

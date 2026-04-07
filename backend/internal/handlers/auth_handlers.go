@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -91,13 +90,6 @@ func Init(db *sql.DB) gin.HandlerFunc {
 		}
 
 		avatar := req.Avatar
-		if avatar == "" {
-			if len(avatarOptions) > 0 {
-				avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
-			} else {
-				avatar = fmt.Sprintf("avatar-%d", time.Now().UnixNano()%1000)
-			}
-		}
 
 		var hashedPassword *string
 		if req.Password != "" {

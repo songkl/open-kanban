@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"compress/gzip"
 	"io"
 	"net/http"
@@ -12,11 +13,28 @@ import (
 
 type gzipWriter struct {
 	gin.ResponseWriter
-	writer io.Writer
+	writer   *gzip.Writer
+	buf      *bytes.Buffer
+	notEmpty bool
 }
 
 func (g *gzipWriter) Write(data []byte) (int, error) {
+	if len(data) > 0 {
+		g.notEmpty = true
+	}
 	return g.writer.Write(data)
+}
+
+func (g *gzipWriter) Close() error {
+	if g.notEmpty {
+		if err := g.writer.Close(); err != nil {
+			return err
+		}
+		if g.buf.Len() > 0 {
+			g.ResponseWriter.Write(g.buf.Bytes())
+		}
+	}
+	return nil
 }
 
 var (
@@ -89,20 +107,24 @@ func parseEncoding(c *gin.Context) string {
 }
 
 func handleGzip(c *gin.Context) {
+	buf := &bytes.Buffer{}
 	gz := getGzipWriter()
+	gz.Reset(buf)
 	c.Writer.Header().Set("Content-Encoding", "gzip")
 	c.Writer.Header().Set("Vary", "Accept-Encoding")
+	c.Writer.Header().Del("Content-Length")
 
 	gzWriter := &gzipWriter{
 		ResponseWriter: c.Writer,
 		writer:         gz,
+		buf:            buf,
 	}
 
 	c.Writer = gzWriter
 
 	c.Next()
 
-	gz.Close()
+	gzWriter.Close()
 	putGzipWriter(gz)
 }
 
@@ -113,10 +135,11 @@ func ServeCompressed(filename string, contentType string, data []byte, c *gin.Co
 		c.Header("Content-Encoding", "gzip")
 		c.Header("Vary", "Accept-Encoding")
 
+		buf := &bytes.Buffer{}
 		gz := getGzipWriter()
 		defer putGzipWriter(gz)
 
-		gz.Reset(io.Discard)
+		gz.Reset(buf)
 		if _, err := gz.Write(data); err != nil {
 			c.Data(http.StatusInternalServerError, contentType, data)
 			return
@@ -126,12 +149,7 @@ func ServeCompressed(filename string, contentType string, data []byte, c *gin.Co
 			return
 		}
 
-		buf := new(strings.Builder)
-		gz.Reset(buf)
-		gz.Write(data)
-		gz.Close()
-
-		c.Data(http.StatusOK, contentType, []byte(buf.String()))
+		c.Data(http.StatusOK, contentType, buf.Bytes())
 	} else {
 		c.Data(http.StatusOK, contentType, data)
 	}

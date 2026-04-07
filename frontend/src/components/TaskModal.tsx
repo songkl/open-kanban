@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
-import type { Task, Attachment, Column, Agent, Subtask } from '@/types/kanban';
+import type { Task, Attachment, Column, Agent, Subtask, Comment } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
-import { columnsApi, subtasksApi, attachmentsApi, authApi } from '@/services/api';
+import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
 
@@ -157,6 +157,7 @@ export function TaskModal({
   const handleSaveRef = useRef<() => void>(() => {});
   const handleSaveRefDeps = useRef<unknown[]>([]);
   const [commentsPage, setCommentsPage] = useState(1);
+  const [taskComments, setTaskComments] = useState<Comment[]>(task.comments ?? []);
   const COMMENTS_PER_PAGE = 10;
 
   const parseMeta = (metaStr: string | Record<string, unknown> | null): Record<string, string> => {
@@ -212,10 +213,20 @@ export function TaskModal({
   }, [task.id]);
 
   useEffect(() => {
+    if (task.id && (!task.comments || task.comments.length === 0)) {
+      commentsApi.getByTask(task.id)
+        .then((data) => setTaskComments(data || []))
+        .catch(console.error);
+    } else if (task.comments) {
+      setTaskComments(task.comments);
+    }
+  }, [task.id, task.comments]);
+
+  useEffect(() => {
     if (commentsRef.current) {
       commentsRef.current.scrollTop = commentsRef.current.scrollHeight;
     }
-  }, [task.comments]);
+  }, [taskComments]);
 
   useEffect(() => {
     authApi.getAgents().then(setAgents).catch(console.error);
@@ -647,15 +658,15 @@ export function TaskModal({
           {/* Comments Sidebar - 1/3 width */}
           <div className="w-1/3 min-w-80 border-l border-zinc-100 dark:border-zinc-700 flex flex-col">
             <div className="flex-shrink-0 p-4 pb-2 border-b border-zinc-100 dark:border-zinc-700 flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.comments')} ({task.comments?.length || 0})</h4>
-              {task.comments && task.comments.length > COMMENTS_PER_PAGE && (
+              <h4 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.comments')} ({taskComments?.length || 0})</h4>
+              {taskComments && taskComments.length > COMMENTS_PER_PAGE && (
                 <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                  {commentsPage} / {Math.ceil(task.comments.length / COMMENTS_PER_PAGE)}
+                  {commentsPage} / {Math.ceil(taskComments.length / COMMENTS_PER_PAGE)}
                 </span>
               )}
             </div>
             <div ref={commentsRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-              {(task.comments || []).slice((commentsPage - 1) * COMMENTS_PER_PAGE, commentsPage * COMMENTS_PER_PAGE).map((comment) => (
+              {(taskComments || []).slice((commentsPage - 1) * COMMENTS_PER_PAGE, commentsPage * COMMENTS_PER_PAGE).map((comment) => (
                 <div key={comment.id} className="rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-3">
                   <div className="mb-1 flex items-center justify-between">
                     <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200">{comment.author}</span>
@@ -676,7 +687,7 @@ export function TaskModal({
                   )}
                 </div>
               ))}
-              {task.comments && task.comments.length > COMMENTS_PER_PAGE && (
+              {taskComments && taskComments.length > COMMENTS_PER_PAGE && (
                 <div className="flex justify-center gap-2 pt-2">
                   <button
                     onClick={() => { setCommentsPage(p => Math.max(1, p - 1)); commentsRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
@@ -686,8 +697,8 @@ export function TaskModal({
                     {t('taskModal.previousPage')}
                   </button>
                   <button
-                    onClick={() => { setCommentsPage(p => Math.min(Math.ceil(task.comments!.length / COMMENTS_PER_PAGE), p + 1)); commentsRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                    disabled={commentsPage >= Math.ceil(task.comments.length / COMMENTS_PER_PAGE)}
+                    onClick={() => { setCommentsPage(p => Math.min(Math.ceil(taskComments!.length / COMMENTS_PER_PAGE), p + 1)); commentsRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                    disabled={commentsPage >= Math.ceil(taskComments.length / COMMENTS_PER_PAGE)}
                     className="px-3 py-1 text-xs rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('taskModal.nextPage')}

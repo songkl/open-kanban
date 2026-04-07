@@ -98,7 +98,12 @@ export function list_tasks(srv: McpServer) {
     if (args.tag) {
       tasks = tasks.filter((task: any) => {
         if (!task.meta) return false;
-        const meta = typeof task.meta === 'string' ? JSON.parse(task.meta) : task.meta;
+        let meta: any;
+        try {
+          meta = typeof task.meta === 'string' ? JSON.parse(task.meta) : task.meta;
+        } catch {
+          return false;
+        }
         return Object.values(meta).some((v: any) =>
           String(v).toLowerCase().includes(args.tag!.toLowerCase())
         );

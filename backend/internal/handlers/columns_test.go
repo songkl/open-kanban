@@ -536,3 +536,73 @@ func TestDeleteColumnHandler(t *testing.T) {
 		}
 	})
 }
+
+func TestGetColumnSlugHandler(t *testing.T) {
+	db := setupColumnsDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.GET("/api/columns/slug", handlers.GetColumnSlug(db))
+
+	t.Run("get slug with valid name returns slug", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/columns/slug?name=开发", nil)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+
+		if response["slug"] != "kaifa" {
+			t.Errorf("expected slug 'kaifa', got '%s'", response["slug"])
+		}
+	})
+
+	t.Run("get slug with mixed chinese and english returns combined slug", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/columns/slug?name=Test开发", nil)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+
+		if response["slug"] != "testkaifa" {
+			t.Errorf("expected slug 'testkaifa', got '%s'", response["slug"])
+		}
+	})
+
+	t.Run("get slug without name returns 400", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/columns/slug", nil)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("get slug with empty name returns 400", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/columns/slug?name=", nil)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}

@@ -184,6 +184,7 @@ func main() {
 	columns := r.Group("/api/v1/columns")
 	{
 		columns.GET("", handlers.GetColumns(db))
+		columns.GET("/slug", handlers.GetColumnSlug(db))
 		columns.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 		columns.POST("", handlers.CreateColumn(db))
 		columns.PUT("", handlers.UpdateColumn(db))

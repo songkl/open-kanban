@@ -581,8 +581,12 @@ func TestLoginHandler(t *testing.T) {
 
 		db.Exec("DELETE FROM users")
 
-		hashedPw := "$2a$10$NTQfTVahX9xnA7dHVWUfwOiLysipkUINVl7u811cAw1z/TskgnSbu"
-		_, err := db.Exec(
+		handlers.SetSaltForTest("test-salt-for-password-hashing-32ch")
+		hashedPw, err := handlers.HashPasswordWithSalt("correctpassword")
+		if err != nil {
+			t.Fatalf("failed to hash password: %v", err)
+		}
+		_, err = db.Exec(
 			`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, ?, ?, 'HUMAN', ?, 1)`,
 			"user-with-pw", "secureuser", "Secure User", hashedPw, "😊", "MEMBER",
 		)

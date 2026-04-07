@@ -213,6 +213,19 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// GetColumnSlug returns a pinyin slug for a given name
+func GetColumnSlug(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Query("name")
+		if name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name parameter is required"})
+			return
+		}
+		slug := utils.ToPinyinSlug(name)
+		c.JSON(http.StatusOK, gin.H{"slug": slug})
+	}
+}
+
 // CreateColumnRequest represents column creation request
 type CreateColumnRequest struct {
 	Name     string `json:"name" validate:"required,max=100"`

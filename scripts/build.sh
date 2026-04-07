@@ -43,8 +43,7 @@ OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}"
 if [ "$GOOS" = "windows" ]; then
   OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}.exe"
 fi
-
-go build -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server/main.go
+CGO_ENABLED=1 go build -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server/main.go
 
 echo ""
 echo "=== Build Complete ==="

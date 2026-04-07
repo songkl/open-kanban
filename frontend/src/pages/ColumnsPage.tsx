@@ -172,6 +172,18 @@ export function ColumnsPage() {
     }
   };
 
+  const handleNewColumnNameChange = async (name: string) => {
+    setNewColumnName(name);
+    if (name.trim()) {
+      try {
+        const data = await columnsApi.getSlug(name);
+        setNewColumnStatus(data.slug);
+      } catch (err) {
+        console.error('Failed to get column slug:', err);
+      }
+    }
+  };
+
   const showToastMessage = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 2000);
@@ -472,7 +484,7 @@ export function ColumnsPage() {
         agents={agents}
         onClose={() => setShowAddModal(false)}
         onAdd={handleAddColumn}
-        onNameChange={setNewColumnName}
+        onNameChange={handleNewColumnNameChange}
         onColorChange={setNewColumnColor}
         onStatusChange={setNewColumnStatus}
         onDescriptionChange={setNewColumnDescription}

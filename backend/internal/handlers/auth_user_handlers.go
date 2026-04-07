@@ -360,13 +360,6 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 		}
 
 		avatar := req.Avatar
-		if avatar == "" {
-			if len(avatarOptions) > 0 {
-				avatar = avatarOptions[time.Now().UnixNano()%int64(len(avatarOptions))]
-			} else {
-				avatar = fmt.Sprintf("avatar-%d", time.Now().UnixNano()%1000)
-			}
-		}
 
 		agentID := generateID()
 		now := time.Now()
@@ -380,8 +373,8 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 		}
 
 		_, err := db.Exec(
-			"INSERT INTO users (id, nickname, avatar, type, role, created_at, updated_at, last_active_at) VALUES (?, ?, ?, 'AGENT', ?, ?, ?, ?)",
-			agentID, req.Nickname, avatar, role, now, now, now,
+			"INSERT INTO users (id, username, nickname, avatar, type, role, created_at, updated_at, last_active_at) VALUES (?, ?, ?, ?, 'AGENT', ?, ?, ?, ?)",
+			agentID, req.Nickname, req.Nickname, avatar, role, now, now, now,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})

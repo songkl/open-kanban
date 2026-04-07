@@ -30,7 +30,7 @@ var (
 		maxRequests int
 		windowSecs  int
 	}{
-		maxRequests: 5,
+		maxRequests: 0, // 0 means disabled by default
 		windowSecs:  60,
 	}
 )
@@ -52,7 +52,7 @@ var (
 		maxRequests int
 		windowSecs  int
 	}{
-		maxRequests: 100,
+		maxRequests: 0, // 0 means disabled by default
 		windowSecs:  60,
 	}
 )
@@ -217,10 +217,16 @@ func ResetGlobalRateLimitMapForTest() {
 }
 
 func checkRateLimit(key string) bool {
+	if rateLimitOpts.maxRequests == 0 {
+		return true
+	}
 	return rateLimitStoreInstance.check(key, rateLimitOpts.maxRequests, rateLimitOpts.windowSecs)
 }
 
 func checkGlobalRateLimit(key string) bool {
+	if globalRateLimitOpts.maxRequests == 0 {
+		return true
+	}
 	return rateLimitStoreInstance.check(key, globalRateLimitOpts.maxRequests, globalRateLimitOpts.windowSecs)
 }
 
@@ -239,13 +245,13 @@ func GlobalRateLimitMiddleware() gin.HandlerFunc {
 }
 
 func init() {
-	if maxReq := getEnvInt("RATE_LIMIT_MAX_REQUESTS", 5); maxReq > 0 {
+	if maxReq := getEnvInt("RATE_LIMIT_MAX_REQUESTS", 0); maxReq >= 0 {
 		rateLimitOpts.maxRequests = maxReq
 	}
 	if windowSec := getEnvInt("RATE_LIMIT_WINDOW_SECONDS", 60); windowSec > 0 {
 		rateLimitOpts.windowSecs = windowSec
 	}
-	if globalMaxReq := getEnvInt("GLOBAL_RATE_LIMIT_MAX_REQUESTS", 100); globalMaxReq > 0 {
+	if globalMaxReq := getEnvInt("GLOBAL_RATE_LIMIT_MAX_REQUESTS", 0); globalMaxReq >= 0 {
 		globalRateLimitOpts.maxRequests = globalMaxReq
 	}
 	if globalWindowSec := getEnvInt("GLOBAL_RATE_LIMIT_WINDOW_SECONDS", 60); globalWindowSec > 0 {

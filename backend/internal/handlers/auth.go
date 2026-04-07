@@ -40,11 +40,21 @@ var (
 )
 
 func getSalt() (string, error) {
+	if salt != "" {
+		return salt, nil
+	}
 	var err error
 	saltOnce.Do(func() {
+		if salt != "" {
+			return
+		}
 		salt, err = loadOrGenerateSalt()
 	})
 	return salt, err
+}
+
+func SetSaltForTest(saltValue string) {
+	salt = saltValue
 }
 
 func loadOrGenerateSalt() (string, error) {

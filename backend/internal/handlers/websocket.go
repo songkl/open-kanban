@@ -58,11 +58,27 @@ var (
 			return isOriginAllowed(origin)
 		},
 	}
-	clients          = make(map[*websocket.Conn]bool)
+	clients          = make(map[*websocket.Conn]*Client)
 	clientsMux       sync.RWMutex
 	userConnCount    = make(map[string]int)
 	userConnCountMux sync.Mutex
 )
+
+type Client struct {
+	conn *websocket.Conn
+}
+
+func NewClient(conn *websocket.Conn) *Client {
+	return &Client{conn: conn}
+}
+
+func (c *Client) WriteMessage(data []byte) bool {
+	return c.conn.WriteMessage(websocket.TextMessage, data) == nil
+}
+
+func (c *Client) Close() {
+	c.conn.Close()
+}
 
 func getConnectionCount() int {
 	clientsMux.RLock()
@@ -167,8 +183,10 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			return nil
 		})
 
+		client := NewClient(conn)
+
 		clientsMux.Lock()
-		clients[conn] = true
+		clients[conn] = client
 		clientsMux.Unlock()
 		incrementUserConnCount(userID)
 		initBroadcastWorker()
@@ -189,9 +207,8 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				case <-done:
 					return
 				case <-pingTicker.C:
-					conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
-					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-						slog.Warn("Failed to send ping to client", "request_id", requestID, "user_id", userID, "error", err)
+					if !client.WriteMessage([]byte(`{"type":"ping"}`)) {
+						slog.Warn("Failed to send ping to client", "request_id", requestID, "user_id", userID)
 						return
 					}
 				}
@@ -212,9 +229,8 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				break
 			}
 			if msgType == websocket.TextMessage {
-				conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
-				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`)); err != nil {
-					slog.Warn("Failed to send heartbeat_ack to client", "request_id", requestID, "user_id", userID, "error", err)
+				if !client.WriteMessage([]byte(`{"type":"heartbeat_ack"}`)) {
+					slog.Warn("Failed to send heartbeat_ack to client", "request_id", requestID, "user_id", userID)
 					break
 				}
 			}

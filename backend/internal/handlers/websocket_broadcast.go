@@ -1,11 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
 	"log/slog"
 	"sync"
-	"time"
-
-	"open-kanban/internal/config"
 
 	"github.com/gorilla/websocket"
 )
@@ -68,31 +66,31 @@ func enqueueBroadcast(msgType int, data any) bool {
 
 func processBroadcast(msg broadcastMessage) {
 	clientsMux.RLock()
-	clientList := make([]*websocket.Conn, 0, len(clients))
-	for client := range clients {
+	clientList := make([]*Client, 0, len(clients))
+	for _, client := range clients {
 		clientList = append(clientList, client)
 	}
 	clientsMux.RUnlock()
 
-	writeDeadline := time.Now().Add(config.GetConfig().Broadcast.WriteDeadline)
+	data, err := json.Marshal(msg.data)
+	if err != nil {
+		slog.Error("Failed to marshal broadcast message", "error", err)
+		return
+	}
 
 	for _, client := range clientList {
-		if err := client.SetWriteDeadline(writeDeadline); err != nil {
-			continue
-		}
-		err := client.WriteJSON(msg.data)
-		if err != nil {
-			safeRemoveClient(client)
+		if !client.WriteMessage(data) {
+			safeRemoveClient(client.conn)
 		}
 	}
 }
 
 func safeRemoveClient(conn *websocket.Conn) {
 	clientsMux.Lock()
-	if _, ok := clients[conn]; ok {
+	if client, ok := clients[conn]; ok {
 		delete(clients, conn)
 		clientsMux.Unlock()
-		conn.Close()
+		client.Close()
 	} else {
 		clientsMux.Unlock()
 	}
