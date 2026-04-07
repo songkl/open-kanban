@@ -37,6 +37,7 @@ interface UseTasksReturn {
   addTask: (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => Promise<void>;
   addComment: (taskId: string, content: string, author: string) => Promise<void>;
   handleTaskSelect: (taskId: string, task: Task, e?: React.MouseEvent) => void;
+  selectAllInColumn: (columnId: string, taskIds: string[]) => void;
   clearSelection: () => void;
   batchDelete: () => Promise<void>;
   batchArchive: () => Promise<void>;
@@ -272,6 +273,23 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     setLastSelectedTaskId(taskId);
   }, [lastSelectedTaskId, columns]);
 
+  const selectAllInColumn = useCallback((columnId: string, taskIds: string[]) => {
+    const column = columns.find(col => col.id === columnId);
+    if (!column) return;
+    
+    const allSelected = taskIds.length > 0 && taskIds.every(id => selectedTasks.has(id));
+    
+    setSelectedTasks(prev => {
+      const newSet = new Set(prev);
+      if (allSelected) {
+        taskIds.forEach(id => newSet.delete(id));
+      } else {
+        taskIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
+  }, [columns, selectedTasks]);
+
   const clearSelection = useCallback(() => {
     setSelectedTasks(new Set());
     setLastSelectedTaskId(null);
@@ -375,6 +393,7 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     addTask,
     addComment,
     handleTaskSelect,
+    selectAllInColumn,
     clearSelection,
     batchDelete,
     batchArchive,

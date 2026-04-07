@@ -62,6 +62,7 @@ interface UseBoardStateReturn {
   addTask: (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => Promise<void>;
   addComment: (taskId: string, content: string, author: string) => Promise<void>;
   handleTaskSelect: (taskId: string, task: Task, e?: React.MouseEvent) => void;
+  selectAllInColumn: (columnId: string, taskIds: string[]) => void;
   clearSelection: () => void;
   batchDelete: () => Promise<void>;
   batchArchive: () => Promise<void>;
@@ -122,6 +123,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     addTask: taskAddTask,
     addComment: taskAddComment,
     handleTaskSelect: taskHandleTaskSelect,
+    selectAllInColumn: taskSelectAllInColumn,
     clearSelection: taskClearSelection,
     batchDelete: taskBatchDelete,
     batchArchive: taskBatchArchive,
@@ -242,6 +244,10 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     taskHandleTaskSelect(taskId, task, e);
   }, [taskHandleTaskSelect]);
 
+  const selectAllInColumn = useCallback((columnId: string, taskIds: string[]) => {
+    taskSelectAllInColumn(columnId, taskIds);
+  }, [taskSelectAllInColumn]);
+
   const clearSelection = useCallback(() => {
     taskClearSelection();
   }, [taskClearSelection]);
@@ -297,6 +303,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     addTask,
     addComment,
     handleTaskSelect,
+    selectAllInColumn,
     clearSelection,
     batchDelete,
     batchArchive,

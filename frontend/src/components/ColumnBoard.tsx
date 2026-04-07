@@ -40,6 +40,7 @@ interface ColumnBoardProps {
   onMoveToColumn: (taskId: string, toColumnId: string) => void;
   onAddComment: (taskId: string, content: string, author: string) => void;
   onTaskSelect: (taskId: string, task: Task, e?: React.MouseEvent) => void;
+  onSelectAllTasks: (columnId: string, taskIds: string[]) => void;
   onLoadMoreTasks: (columnId: string) => void;
   onColumnRename: (columnId: string, newName: string) => void;
   onSetSelectedTask: (task: Task | null) => void;
@@ -72,6 +73,7 @@ export function ColumnBoard({
   onMoveToColumn,
   onAddComment,
   onTaskSelect,
+  onSelectAllTasks,
   onLoadMoreTasks,
   onColumnRename,
   onSetSelectedTask,
@@ -311,6 +313,7 @@ export function ColumnBoard({
                     searchQuery={filters.searchQuery}
                     selectedTasks={selectedTasks}
                     onSelectTask={onTaskSelect}
+                    onSelectAllTasks={onSelectAllTasks}
                     onLoadMore={onLoadMoreTasks}
                     hasMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.hasMore}
                     isLoadingMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.isLoadingMore}
@@ -342,6 +345,7 @@ export function ColumnBoard({
                       searchQuery={filters.searchQuery}
                       selectedTasks={selectedTasks}
                       onSelectTask={onTaskSelect}
+                      onSelectAllTasks={onSelectAllTasks}
                       onLoadMore={onLoadMoreTasks}
                       hasMore={columnPagination[column.id]?.hasMore}
                       isLoadingMore={columnPagination[column.id]?.isLoadingMore}
@@ -380,6 +384,7 @@ export function ColumnBoard({
                   searchQuery={filters.searchQuery}
                   selectedTasks={selectedTasks}
                   onSelectTask={onTaskSelect}
+                  onSelectAllTasks={onSelectAllTasks}
                   onLoadMore={onLoadMoreTasks}
                   hasMore={columnPagination[column.id]?.hasMore}
                   isLoadingMore={columnPagination[column.id]?.isLoadingMore}

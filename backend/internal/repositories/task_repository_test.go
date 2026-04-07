@@ -286,9 +286,9 @@ func TestGetTasksByColumnIDs(t *testing.T) {
 
 	repo := repositories.NewTaskRepository(db)
 
-	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position) VALUES ('t1', 'Task 1', 'c1', 100)`)
-	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position) VALUES ('t2', 'Task 2', 'c1', 200)`)
-	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position) VALUES ('t3', 'Task 3', 'c2', 100)`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t1', 'Task 1', 'c1', 100, 1)`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t2', 'Task 2', 'c1', 200, 1)`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t3', 'Task 3', 'c2', 100, 1)`)
 
 	tests := []struct {
 		name       string
@@ -348,7 +348,7 @@ func TestGetTasksByColumnIDs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tasks, total, err := repo.GetTasksByColumnIDs(tt.columnIDs, tt.page, tt.pageSize)
+			tasks, total, err := repo.GetTasksByColumnIDs(tt.columnIDs, tt.page, tt.pageSize, false, false)
 			if err != nil {
 				t.Fatalf("GetTasksByColumnIDs() error = %v", err)
 			}

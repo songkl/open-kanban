@@ -22,6 +22,8 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		columnID := c.Query("columnId")
 		boardID := c.Query("boardId")
 		status := c.Query("status")
+		includeDrafts := c.Query("includeDrafts") == "true"
+		includeArchived := c.Query("includeArchived") == "true"
 
 		if columnID != "" && user != nil && !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "READ", user.Role) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to access this column"})
@@ -49,7 +51,7 @@ func GetTasks(db *sql.DB) gin.HandlerFunc {
 		}
 
 		taskService := services.NewTaskService(db)
-		result, err := taskService.GetTasks(userID, role, columnID, boardID, status, page, pageSize)
+		result, err := taskService.GetTasks(userID, role, columnID, boardID, status, page, pageSize, includeDrafts, includeArchived)
 		if err != nil {
 			ServerError(c, "Failed to get tasks", err)
 			return

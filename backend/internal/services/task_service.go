@@ -32,7 +32,7 @@ type TaskListResult struct {
 	PageCount int
 }
 
-func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, page, pageSize int) (*TaskListResult, error) {
+func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, page, pageSize int, includeDrafts, includeArchived bool) (*TaskListResult, error) {
 	columnIDs := []string{}
 	if boardID != "" || status != "" {
 		query := "SELECT c.id FROM columns c"
@@ -65,7 +65,7 @@ func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, p
 		columnIDs = append(columnIDs, columnID)
 	}
 
-	tasks, total, err := s.taskRepo.GetTasksByColumnIDs(columnIDs, page, pageSize)
+	tasks, total, err := s.taskRepo.GetTasksByColumnIDs(columnIDs, page, pageSize, includeDrafts, includeArchived)
 	if err != nil {
 		return nil, err
 	}

@@ -58,7 +58,7 @@ func (r *TaskRepository) GetTaskByID(id string) (*models.Task, error) {
 	return &task, nil
 }
 
-func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize int) ([]models.Task, int, error) {
+func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize int, includeDrafts, includeArchived bool) ([]models.Task, int, error) {
 	var total int
 	if len(columnIDs) > 0 {
 		countArgs := make([]interface{}, len(columnIDs))
@@ -67,11 +67,28 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		}
 		inClause := buildInClause(len(columnIDs))
 		countQuery := "SELECT COUNT(*) FROM tasks WHERE column_id IN " + inClause
+		if !includeDrafts {
+			countQuery += " AND published = 1"
+		}
+		if !includeArchived {
+			countQuery += " AND archived = 0"
+		}
 		if err := r.db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
 			return nil, 0, err
 		}
 	} else {
-		if err := r.db.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&total); err != nil {
+		countQuery := "SELECT COUNT(*) FROM tasks"
+		if !includeDrafts {
+			countQuery += " WHERE published = 1"
+		}
+		if !includeArchived {
+			if !includeDrafts {
+				countQuery += " AND archived = 0"
+			} else {
+				countQuery += " WHERE archived = 0"
+			}
+		}
+		if err := r.db.QueryRow(countQuery).Scan(&total); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -86,6 +103,13 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 			args = append(args, id)
 		}
 		inClause := buildInClause(len(columnIDs))
+		whereClause := "WHERE t.column_id IN " + inClause
+		if !includeDrafts {
+			whereClause += " AND t.published = 1"
+		}
+		if !includeArchived {
+			whereClause += " AND t.archived = 0"
+		}
 		query := `SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 		          t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 		          COALESCE(cc.cnt, 0) as comment_count,
@@ -94,12 +118,23 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		          JOIN columns col ON t.column_id = col.id
 		          LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
 		          LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
-		          WHERE t.column_id IN ` + inClause + `
+		          ` + whereClause + `
 		          ORDER BY col.position ASC, t.position ASC
 		          LIMIT ? OFFSET ?`
 		args = append(args, pageSize, offset)
 		rows, err = r.db.Query(query, args...)
 	} else {
+		whereClause := ""
+		if !includeDrafts {
+			whereClause += " WHERE t.published = 1"
+		}
+		if !includeArchived {
+			if whereClause == "" {
+				whereClause += " WHERE t.archived = 0"
+			} else {
+				whereClause += " AND t.archived = 0"
+			}
+		}
 		rows, err = r.db.Query(`SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 		                         t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 		                         COALESCE(cc.cnt, 0) as comment_count,
@@ -108,6 +143,7 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		                         JOIN columns col ON t.column_id = col.id
 		                         LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
 		                         LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+		                         `+whereClause+`
 		                         ORDER BY col.position ASC, t.position ASC
 		                         LIMIT ? OFFSET ?`, pageSize, offset)
 	}

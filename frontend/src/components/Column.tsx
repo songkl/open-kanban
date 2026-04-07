@@ -28,6 +28,7 @@ interface ColumnProps {
   searchQuery?: string;
   selectedTasks?: Set<string>;
   onSelectTask?: (taskId: string, task: Task, e?: React.MouseEvent) => void;
+  onSelectAllTasks?: (columnId: string, taskIds: string[]) => void;
   onLoadMore?: (columnId: string) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
@@ -38,7 +39,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
+export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
   const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({
     id: column?.id ?? 'null',
@@ -165,8 +166,22 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
               )}
             </h2>
           )}
-          <span className="ml-auto text-sm text-zinc-500">
-            {tasks.length}
+          <span className="ml-auto text-sm text-zinc-500 flex items-center gap-2">
+            {onSelectAllTasks && tasks.length > 0 && (
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-blue-500 focus:ring-blue-500 cursor-pointer"
+                checked={selectedTasks && tasks.length > 0 && tasks.every(t => selectedTasks.has(t.id))}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  if (onSelectAllTasks) {
+                    onSelectAllTasks(column.id, tasks.map(t => t.id));
+                  }
+                }}
+                title={t('column.selectAll')}
+              />
+            )}
+            <span>{tasks.length}</span>
           </span>
         </div>
 

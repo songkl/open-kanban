@@ -91,6 +91,7 @@ export function BoardPage() {
     addTask,
     addComment,
     handleTaskSelect,
+    selectAllInColumn,
     clearSelection,
     batchDelete,
     batchArchive,
@@ -508,6 +509,7 @@ export function BoardPage() {
         onArchiveTask={archiveTask}
         onAddComment={addComment}
         onTaskSelect={handleTaskSelect}
+        onSelectAllTasks={selectAllInColumn}
         onLoadMoreTasks={() => {}}
         onColumnRename={handleColumnRename}
         onSetSelectedTask={setSelectedTask}

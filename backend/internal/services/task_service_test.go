@@ -179,7 +179,7 @@ func TestGetTasks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := svc.GetTasks("", "", tt.columnID, tt.boardID, tt.status, tt.page, tt.pageSize)
+			result, err := svc.GetTasks("", "", tt.columnID, tt.boardID, tt.status, tt.page, tt.pageSize, false, false)
 			if err != nil {
 				t.Fatalf("GetTasks() error = %v", err)
 			}
@@ -810,7 +810,7 @@ func TestGetTasksByStatus(t *testing.T) {
 	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t1', 'Todo Task', 'c1', 1000, 1)`)
 	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t2', 'Done Task', 'c3', 1000, 1)`)
 
-	result, err := svc.GetTasks("", "", "", "", "done", 1, 10)
+	result, err := svc.GetTasks("", "", "", "", "done", 1, 10, false, false)
 	if err != nil {
 		t.Fatalf("GetTasks() error = %v", err)
 	}
@@ -828,7 +828,7 @@ func TestGetTasksByBoardAndStatus(t *testing.T) {
 	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t1', 'Todo Task', 'c1', 1000, 1)`)
 	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t2', 'Done Task', 'c3', 1000, 1)`)
 
-	result, err := svc.GetTasks("", "", "", "b1", "todo", 1, 10)
+	result, err := svc.GetTasks("", "", "", "b1", "todo", 1, 10, false, false)
 	if err != nil {
 		t.Fatalf("GetTasks() error = %v", err)
 	}
