@@ -152,6 +152,9 @@ export function useBoardWebSocket({
 
     return () => {
       if (wsRef.current) {
+        if (wsRef.current.readyState === WebSocket.CONNECTING) {
+          wsRef.current.onclose = null;
+        }
         wsRef.current.close();
       }
     };

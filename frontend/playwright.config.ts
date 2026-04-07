@@ -12,7 +12,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
-  globalSetup: './global-setup.ts',
+  globalSetup: './e2e/global-setup.ts',
   projects: [
     {
       name: 'chromium',

@@ -35,6 +35,8 @@ export function FilterPanelContent({
       <div className="mb-3">
         <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
         <select
+          id="filter-priority"
+          name="filter-priority"
           value={filters.priority}
           onChange={(e) => onSetFilters((prev) => ({ ...prev, priority: e.target.value }))}
           className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
@@ -48,6 +50,8 @@ export function FilterPanelContent({
       <div className="mb-3">
         <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
         <select
+          id="filter-assignee"
+          name="filter-assignee"
           value={filters.assignee}
           onChange={(e) => onSetFilters((prev) => ({ ...prev, assignee: e.target.value }))}
           className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
@@ -63,6 +67,8 @@ export function FilterPanelContent({
       <div className="mb-3">
         <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
         <select
+          id="filter-date-range"
+          name="filter-date-range"
           value={filters.dateRange}
           onChange={(e) => onSetFilters((prev) => ({ ...prev, dateRange: e.target.value }))}
           className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
@@ -77,6 +83,8 @@ export function FilterPanelContent({
         <div className="mb-3">
           <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
           <select
+            id="filter-tag"
+            name="filter-tag"
             value={filters.tag}
             onChange={(e) => onSetFilters((prev) => ({ ...prev, tag: e.target.value }))}
             className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"

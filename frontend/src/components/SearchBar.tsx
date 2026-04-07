@@ -13,6 +13,8 @@ export function SearchBar({ value, onChange, onClear }: SearchBarProps) {
     <div className="relative flex items-center">
       <input
         type="text"
+        id="search-input"
+        name="search-input"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={t('filter.searchPlaceholder')}

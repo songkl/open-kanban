@@ -21,6 +21,8 @@ interface ColumnProps {
   onTaskCommentsClick?: (task: Task) => void;
   onTaskArchive?: (taskId: string) => void;
   onTaskDelete?: (taskId: string) => void;
+  onTaskMoveToColumn?: (taskId: string, toColumnId: string) => void;
+  allColumns?: Array<{ id: string; name: string }>;
   onOpenAddTask?: (columnId: string) => void;
   onColumnRename?: (columnId: string, newName: string) => void;
   searchQuery?: string;
@@ -36,7 +38,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
+export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
   const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({
     id: column?.id ?? 'null',
@@ -217,6 +219,8 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
                   onCommentsClick={() => onTaskCommentsClick ? onTaskCommentsClick(task) : onTaskClick(task)}
                   onArchive={onTaskArchive}
                   onDelete={onTaskDelete}
+                  onMoveToColumn={onTaskMoveToColumn}
+                  columns={allColumns}
                   searchQuery={searchQuery}
                   isSelected={selectedTasks?.has(task.id)}
                   onSelect={onSelectTask ? (id, e) => onSelectTask(id, task, e as unknown as React.MouseEvent) : undefined}

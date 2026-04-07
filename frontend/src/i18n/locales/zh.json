@@ -560,6 +560,7 @@
     "moreActions": "更多操作",
     "archiveTask": "归档任务",
     "deleteTask": "删除任务",
+    "moveToColumn": "移动到列",
     "viewDetails": "查看详情",
     "clickToCollapse": "点击收起",
     "clickToExpand": "点击展开",

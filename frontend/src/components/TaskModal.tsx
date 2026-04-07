@@ -395,6 +395,8 @@ export function TaskModal({
             {isEditing && (
               <input
                 ref={titleInputRef}
+                id="task-title-input"
+                name="task-title-input"
                 type="text"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
@@ -729,6 +731,8 @@ export function TaskModal({
               
               {!isEditing && (
                 <textarea
+                  id="task-comment-input"
+                  name="task-comment-input"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   placeholder={`${t('taskModal.addComment')} ${t('taskModal.commentHint')}`}

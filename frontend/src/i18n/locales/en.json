@@ -560,6 +560,7 @@
     "moreActions": "More actions",
     "archiveTask": "Archive task",
     "deleteTask": "Delete task",
+    "moveToColumn": "Move to column",
     "viewDetails": "View details",
     "clickToCollapse": "Click to collapse",
     "clickToExpand": "Click to expand",

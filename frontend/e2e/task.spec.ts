@@ -140,15 +140,15 @@ test.describe('Task Creation, Movement, and Completion', () => {
     }
   });
 
-  test('should filter tasks by status', async ({ page }) => {
+  test('should filter tasks by priority', async ({ page }) => {
     await createTask(page, `Filter Task 1 ${Date.now()}`);
     await createTask(page, `Filter Task 2 ${Date.now()}`);
     
     const filterButton = page.getByRole('button', { name: /filter/i });
     await filterButton.click();
     
-    const filterOption = page.getByRole('option', { name: /todo|in progress|done/i }).first();
-    await filterOption.click();
+    const prioritySelect = page.locator('select').first();
+    await prioritySelect.selectOption('high');
     
     await page.waitForTimeout(500);
   });

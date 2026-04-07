@@ -12,6 +12,8 @@ interface TaskCardProps {
   onCommentsClick?: () => void;
   onArchive?: (taskId: string) => void;
   onDelete?: (taskId: string) => void;
+  onMoveToColumn?: (taskId: string, toColumnId: string) => void;
+  columns?: Array<{ id: string; name: string }>;
   searchQuery?: string;
   isSelected?: boolean;
   onSelect?: (taskId: string, e?: React.ChangeEvent<HTMLInputElement>) => void;
@@ -39,12 +41,13 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
-export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, searchQuery, isSelected, onSelect }: TaskCardProps) {
+export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
   const taskId = task?.id ?? `temp-${randomId}`;
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -127,7 +130,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           </h3>
         </div>
         <div className="flex items-center gap-1 relative">
-          {(onArchive || onDelete) && (
+          {(onArchive || onDelete || onMoveToColumn) && (
             <button
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
@@ -149,9 +152,43 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
           {showMoreMenu && (
             <div
-              className="absolute right-0 top-full mt-1 w-28 rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 z-20"
+              className="absolute right-0 top-full mt-1 w-40 rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 z-20"
               onMouseDown={(e) => e.stopPropagation()}
             >
+              {onMoveToColumn && columns && (
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMoveSubmenu(!showMoveSubmenu);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-blue-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 rounded-t-md flex items-center justify-between"
+                  >
+                    <span>{t('taskCard.moveToColumn')}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={showMoveSubmenu ? 'rotate-90' : ''}>
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </button>
+                  {showMoveSubmenu && (
+                    <div className="absolute left-full top-0 ml-1 w-36 rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 z-30">
+                      {columns.filter(col => col.id !== task.columnId).map(col => (
+                        <button
+                          key={col.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMoveToColumn(task.id, col.id);
+                            setShowMoreMenu(false);
+                            setShowMoveSubmenu(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-600 first:rounded-t-md last:rounded-b-md"
+                        >
+                          {col.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {onArchive && (
                 <button
                   onClick={(e) => {

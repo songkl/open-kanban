@@ -37,6 +37,7 @@ interface ColumnBoardProps {
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
+  onMoveToColumn: (taskId: string, toColumnId: string) => void;
   onAddComment: (taskId: string, content: string, author: string) => void;
   onTaskSelect: (taskId: string, task: Task, e?: React.MouseEvent) => void;
   onLoadMoreTasks: (columnId: string) => void;
@@ -68,6 +69,7 @@ export function ColumnBoard({
   onUpdateTask,
   onDeleteTask,
   onArchiveTask,
+  onMoveToColumn,
   onAddComment,
   onTaskSelect,
   onLoadMoreTasks,
@@ -299,6 +301,8 @@ export function ColumnBoard({
                     onTaskCommentsClick={onSetSelectedTask}
                     onTaskArchive={onArchiveTask}
                     onTaskDelete={onDeleteTask}
+                    onTaskMoveToColumn={onMoveToColumn}
+                    allColumns={columns.map(c => ({ id: c.id, name: c.name }))}
                     onOpenAddTask={(columnId) => {
                       onSetDefaultColumnIdForNewTask(columnId);
                       onSetShowAddTaskModal(true);
@@ -328,6 +332,8 @@ export function ColumnBoard({
                       onTaskCommentsClick={onSetSelectedTask}
                       onTaskArchive={onArchiveTask}
                       onTaskDelete={onDeleteTask}
+                      onTaskMoveToColumn={onMoveToColumn}
+                      allColumns={columns.map(c => ({ id: c.id, name: c.name }))}
                       onOpenAddTask={(columnId) => {
                         onSetDefaultColumnIdForNewTask(columnId);
                         onSetShowAddTaskModal(true);
@@ -364,6 +370,8 @@ export function ColumnBoard({
                   onTaskCommentsClick={onSetSelectedTask}
                   onTaskArchive={onArchiveTask}
                   onTaskDelete={onDeleteTask}
+                  onTaskMoveToColumn={onMoveToColumn}
+                  allColumns={columns.map(c => ({ id: c.id, name: c.name }))}
                   onOpenAddTask={(columnId) => {
                     onSetDefaultColumnIdForNewTask(columnId);
                     onSetShowAddTaskModal(true);

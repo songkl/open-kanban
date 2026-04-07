@@ -38,14 +38,11 @@ test.describe('Batch Operations', () => {
     const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar');
     await batchBar.waitFor({ state: 'visible', timeout: 2000 });
     
-    const moveButton = batchBar.getByRole('button', { name: /move|transfer/i });
-    await moveButton.click();
+    const moveSelect = batchBar.locator('select').first();
+    await moveSelect.selectOption({ label: 'Target Column' });
     
-    const targetColumn = page.locator('.column, [data-testid="column"]').filter({ hasText: 'Target Column' });
-    await targetColumn.click();
-    
-    await expect(targetColumn.locator('text=/Move Task 1/i')).toBeVisible({ timeout: 3000 });
-    await expect(targetColumn.locator('text=/Move Task 2/i')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.column, [data-testid="column"]').filter({ hasText: 'Target Column' }).locator('text=/Move Task 1/i')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.column, [data-testid="column"]').filter({ hasText: 'Target Column' }).locator('text=/Move Task 2/i')).toBeVisible({ timeout: 3000 });
   });
 
   test('should batch delete selected tasks', async ({ page }) => {
