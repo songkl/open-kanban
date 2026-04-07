@@ -361,8 +361,11 @@ export function BoardPage() {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+              <rect x="3" y="11" width="18" height="10" rx="2" />
+              <circle cx="12" cy="5" r="2" />
+              <path d="M12 7v4" />
+              <line x1="8" y1="16" x2="8" y2="16" />
+              <line x1="16" y1="16" x2="16" y2="16" />
             </svg>
           </Link>
           <Link
