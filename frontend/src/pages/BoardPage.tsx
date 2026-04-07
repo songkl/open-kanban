@@ -224,6 +224,47 @@ export function BoardPage() {
     reconnectAttemptRef.current = 0;
   }, []);
 
+  const handleMoveToColumn = useCallback(async (taskId: string, toColumnId: string) => {
+    const tasksApi = (await import('../services/api')).tasksApi;
+    const previousColumns = columns;
+
+    const sourceColumn = columns.find(col => col.tasks?.some(t => t.id === taskId));
+    const destColumn = columns.find(col => col.id === toColumnId);
+
+    if (!sourceColumn || !destColumn || sourceColumn.id === destColumn.id) {
+      return;
+    }
+
+    const taskToMove = sourceColumn.tasks?.find(t => t.id === taskId);
+    if (!taskToMove) return;
+
+    const destTasks = [...(destColumn.tasks ?? [])];
+    destTasks.push({ ...taskToMove, columnId: destColumn.id });
+
+    const sourceTasks = (sourceColumn.tasks ?? []).filter(t => t.id !== taskId).map((t, i) => ({ ...t, position: i }));
+    const updatedDestTasks = destTasks.map((t, i) => ({ ...t, position: i }));
+
+    lastLocalUpdateRef.current = Date.now();
+    setColumns(prev => prev.map(col => {
+      if (col.id === sourceColumn.id) {
+        return { ...col, tasks: sourceTasks };
+      }
+      if (col.id === destColumn.id) {
+        return { ...col, tasks: updatedDestTasks };
+      }
+      return col;
+    }));
+
+    try {
+      await tasksApi.update(taskId, {
+        columnId: destColumn.id,
+      });
+    } catch {
+      setColumns(previousColumns);
+      showToastMessage(t('task.moveFailed') || 'Failed to move task');
+    }
+  }, [columns, lastLocalUpdateRef, setColumns, showToastMessage, t]);
+
   const handleExport = useCallback(async (format: 'json' | 'csv') => {
     if (!currentBoard) return;
     try {
@@ -345,29 +386,7 @@ export function BoardPage() {
               if (id !== boardIdFromUrl) navigate(`/board/${id}`);
             }}
           />
-          <Link
-            to="/agent-activity"
-            className="flex items-center rounded-md border border-zinc-200 bg-white p-1.5 text-zinc-600 hover:bg-zinc-50"
-            title={t('agentActivity')}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="11" width="18" height="10" rx="2" />
-              <circle cx="12" cy="5" r="2" />
-              <path d="M12 7v4" />
-              <line x1="8" y1="16" x2="8" y2="16" />
-              <line x1="16" y1="16" x2="16" y2="16" />
-            </svg>
-          </Link>
+          
           <Link
             to={`/columns?boardId=${boardIdFromUrl}`}
             className="flex items-center rounded-md border border-zinc-200 bg-white p-1.5 text-zinc-600 hover:bg-zinc-50"
@@ -402,7 +421,10 @@ export function BoardPage() {
           showPresetDropdown={showPresetDropdown}
           onSetSearchQuery={setSearchQuery}
           onSetFilters={setFilters}
-          onClearFilters={clearFilters}
+          onClearFilters={() => {
+            clearFilters();
+            setShowFilterPanel(false);
+          }}
           onSaveCurrentAsPreset={saveCurrentAsPreset}
           onApplyPreset={applyPreset}
           onDeletePreset={deletePreset}
@@ -416,6 +438,29 @@ export function BoardPage() {
         />
 
         <div className="flex items-center gap-3">
+          <Link
+            to="/agent-activity"
+            className="flex items-center rounded-md border border-zinc-200 bg-white p-1.5 text-zinc-600 hover:bg-zinc-50"
+            title={t('agentActivity')}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="11" width="18" height="10" rx="2" />
+              <circle cx="12" cy="5" r="2" />
+              <path d="M12 7v4" />
+              <line x1="8" y1="16" x2="8" y2="16" />
+              <line x1="16" y1="16" x2="16" y2="16" />
+            </svg>
+          </Link>
           <BoardActionsMenu
             showMoreMenu={showMoreMenu}
             showExportMenu={showExportMenu}
@@ -470,6 +515,7 @@ export function BoardPage() {
         onSetShowAddTaskModal={setShowAddTaskModal}
         onSetDefaultColumnIdForNewTask={setDefaultColumnIdForNewTask}
         onSetEditTaskId={setEditTaskId}
+        onMoveToColumn={handleMoveToColumn}
         getFilteredColumns={getFilteredColumns}
         updateTaskPosition={updateTaskPosition}
       />
