@@ -78,8 +78,8 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       style={style}
       {...attributes}
       {...listeners}
-      className={`group relative cursor-grab rounded-lg bg-white dark:bg-zinc-800 p-3 shadow-sm transition-all hover:shadow-md active:cursor-grabbing max-w-full ${
-        isDragging ? 'opacity-60 ring-2 ring-blue-400 scale-105 z-50' : ''
+      className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/95 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
+        isDragging ? 'opacity-60 ring-2 ring-blue-400 scale-105 z-50 shadow-blue-200 dark:shadow-blue-900/50' : ''
       } ${priorityBorderColors[task.priority] || priorityBorderColors.medium} ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
     >
       {/* Selection checkbox */}
@@ -103,29 +103,31 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
 
       {/* Drag indicator */}
       <div
-        className={`absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 ${
+        className={`absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-1 ${
           isDragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         } ${onSelect ? 'left-5' : ''}`}
         title={t('taskCard.dragToSort')}
       >
-        <span className="h-0.5 w-1 rounded-full bg-zinc-400" />
-        <span className="h-0.5 w-1 rounded-full bg-zinc-400" />
-        <span className="h-0.5 w-1 rounded-full bg-zinc-400" />
+        <span className="h-0.5 w-1.5 rounded-full bg-zinc-400" />
+        <span className="h-0.5 w-1.5 rounded-full bg-zinc-400" />
+        <span className="h-0.5 w-1.5 rounded-full bg-zinc-400" />
       </div>
 
-        <div className={`flex items-start justify-between gap-2 ${onSelect ? 'pl-6' : 'pl-3'}`}>
-        <div className="flex-1">
-          <span className="mb-1 flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 font-mono">
+        <div className={`flex items-start justify-between gap-3 ${onSelect ? 'pl-6' : 'pl-3'}`}>
+        <div className="flex-1 min-w-0">
+          <div className="mb-1.5 flex items-center gap-2">
             <span
-              className={`inline-block h-2 w-2 rounded-full ${
+              className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${
                 task.priority === 'high' ? 'bg-red-500 shadow-sm shadow-red-500/50' :
                 task.priority === 'medium' ? 'bg-yellow-500 shadow-sm shadow-yellow-500/50' :
                 'bg-green-500 shadow-sm shadow-green-500/50'
               }`}
             />
-            #{String(task.id || '').slice(-6)}
-          </span>
-          <h3 className="font-medium text-zinc-800 dark:text-zinc-100 break-words">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
+              #{String(task.id || '').slice(-6)}
+            </span>
+          </div>
+          <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 break-words leading-snug">
             {searchQuery ? highlightText(task.title || 'Untitled', searchQuery) : task.title || 'Untitled'}
           </h3>
         </div>
@@ -140,7 +142,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 e.stopPropagation();
                 setShowMoreMenu(!showMoreMenu);
               }}
-              className="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative"
+              className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
               title={t('taskCard.moreActions')}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -207,7 +209,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                     e.stopPropagation();
                     setConfirmDialog({
                       isOpen: true,
-                      title: t('task.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
+                      title: t('taskModal.confirmDeleteTitle'),
                       message: t('task.confirmDelete'),
                       variant: 'danger',
                       onConfirm: () => {
@@ -233,7 +235,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               e.stopPropagation();
               onClick();
             }}
-            className="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative"
+            className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
             title={t('taskCard.viewDetails')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -245,9 +247,9 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
         </div>
       </div>
       {task.description && typeof task.description === 'string' && (
-        <div className="mb-2 pl-3">
+        <div className="mb-3 pl-3">
           <p
-            className={`text-sm text-zinc-500 dark:text-zinc-400 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-all ${
+            className={`text-sm text-zinc-500 dark:text-zinc-400 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-all leading-relaxed ${
               isExpanded ? '' : 'line-clamp-2'
             }`}
             onClick={(e) => {
@@ -264,7 +266,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);
               }}
-              className="mt-1 text-xs text-blue-500 hover:text-blue-600"
+              className="mt-1 text-xs text-blue-500 hover:text-blue-600 font-medium"
             >
               {isExpanded ? t('taskCard.collapse') : t('taskCard.expand')}
             </button>
@@ -273,60 +275,62 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       )}
       {/* Subtasks preview */}
       {task.subtasks && task.subtasks.length > 0 && (
-        <div className="mb-2 space-y-1 pl-3">
+        <div className="mb-3 pl-3 space-y-1.5">
           {task.subtasks.slice(0, 3).map((subtask) => (
-            <div key={subtask.id} className="flex items-center gap-1.5 text-xs">
-              <span className={`h-1.5 w-1.5 rounded-full ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
-<span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
-                    {subtask.title}
-                  </span>
+            <div key={subtask.id} className="flex items-center gap-2 text-xs">
+              <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+              <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
+                {subtask.title}
+              </span>
             </div>
           ))}
           {task.subtasks.length > 3 && (
-            <span className="text-xs text-zinc-400">{t('taskCard.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">{t('taskCard.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
           )}
         </div>
       )}
-      <div className="flex items-center justify-between pl-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between pl-3 pt-1 border-t border-zinc-100 dark:border-zinc-700/50">
+        <div className="flex items-center gap-2.5">
           {columnName === t('task.status.done') && (
             <span className="text-green-500" title={t('taskCard.completed')}>✓</span>
           )}
           <span
-            className={`rounded px-2 py-0.5 text-xs font-medium ${
+            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
               priorityColors[task.priority] || priorityColors.medium
             }`}
           >
             {task.priority === 'high' ? t('task.priority.high') : task.priority === 'medium' ? t('task.priority.medium') : t('task.priority.low')}
           </span>
           {task.subtasks && task.subtasks.length > 0 && (
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">
               ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
             </span>
           )}
         </div>
-        {task.assignee && (
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">{task.assignee}</span>
-        )}
-        {((task._count?.comments ?? 0) > 0 || (task.comments && task.comments.length > 0)) && (
-          <span
-            className="flex items-center gap-1 cursor-pointer text-xs text-zinc-400 hover:text-blue-500"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onCommentsClick) {
-                onCommentsClick();
-              } else {
-                onClick();
-              }
-            }}
-            title={t('taskCard.viewComments')}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            {task._count?.comments ?? task.comments?.length ?? 0}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {task.assignee && (
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">{task.assignee}</span>
+          )}
+          {((task._count?.comments ?? 0) > 0 || (task.comments && task.comments.length > 0)) && (
+            <span
+              className="flex items-center gap-1 cursor-pointer text-xs text-zinc-400 hover:text-blue-500 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onCommentsClick) {
+                  onCommentsClick();
+                } else {
+                  onClick();
+                }
+              }}
+              title={t('taskCard.viewComments')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              {task._count?.comments ?? task.comments?.length ?? 0}
+            </span>
+          )}
+        </div>
       </div>
       {confirmDialog.isOpen && (
         <ConfirmDialog
