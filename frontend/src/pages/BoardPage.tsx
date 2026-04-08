@@ -313,7 +313,7 @@ export function BoardPage() {
   const handleDeleteTask = useCallback((taskId: string) => {
     setConfirmDialog({
       isOpen: true,
-      title: t('task.confirmDeleteTitle') || t('modal.deleteConfirmTitle'),
+      title: t('taskModal.confirmDeleteTitle'),
       message: t('task.confirmDelete'),
       variant: 'danger',
       onConfirm: () => {

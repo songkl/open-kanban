@@ -116,7 +116,10 @@ export function CustomDropdown({
             <button
               key={option.value}
               type="button"
-              onClick={() => handleSelect(option.value)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelect(option.value);
+              }}
               className={`w-full text-left px-3 py-2 text-sm ${
                 option.value === value
                   ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'

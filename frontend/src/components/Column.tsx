@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -39,8 +40,9 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
+export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { setNodeRef, isOver } = useDroppable({
     id: column?.id ?? 'null',
   });
@@ -48,8 +50,19 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(column.name);
   const [showDescription, setShowDescription] = useState(false);
+  const [showCopied, setShowCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleCopyStatus = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (column.status) {
+      navigator.clipboard.writeText(column.status).then(() => {
+        setShowCopied(true);
+        setTimeout(() => setShowCopied(false), 1500);
+      });
+    }
+  };
 
   const tasks = column?.tasks ?? [];
   const isLargeColumn = tasks.length > LARGE_COLUMN_THRESHOLD;
@@ -166,6 +179,15 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
               )}
             </h2>
           )}
+          {column.status && (
+            <span
+              onClick={handleCopyStatus}
+              className="ml-2 rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-600 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors relative"
+              title={t('column.clickToCopyStatus')}
+            >
+              {showCopied ? t('column.copied') : column.status}
+            </span>
+          )}
           <span className="ml-auto text-sm text-zinc-500 flex items-center gap-2">
             {onSelectAllTasks && tasks.length > 0 && (
               <input
@@ -181,7 +203,18 @@ export function Column({ column, onTaskClick, onTaskCommentsClick, onTaskArchive
                 title={t('column.selectAll')}
               />
             )}
-            <span>{tasks.length}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (currentBoardId && column.id) {
+                  navigate(`/board/${currentBoardId}/column/${column.id}`);
+                }
+              }}
+              className="hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer transition-colors"
+              title={t('column.viewColumnDetail')}
+            >
+              {tasks.length}
+            </button>
           </span>
         </div>
 
