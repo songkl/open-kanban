@@ -43,6 +43,7 @@ export interface Task {
   agentId: string | null;
   agentPrompt: string | null;
   createdBy: string;
+  createdByUsername?: string;
   createdAt: string;
   updatedAt: string;
   comments: Comment[];
