@@ -911,6 +911,20 @@ func TestSearchTasks(t *testing.T) {
 			wantTotal:  3,
 			wantTitles: []string{},
 		},
+		{
+			name:       "search by task ID",
+			params:     repositories.TaskSearchParams{TaskID: "t2", Page: 1, PageSize: 10},
+			wantCount:  1,
+			wantTotal:  1,
+			wantTitles: []string{"Feature Request"},
+		},
+		{
+			name:       "search by task ID not found",
+			params:     repositories.TaskSearchParams{TaskID: "nonexistent", Page: 1, PageSize: 10},
+			wantCount:  0,
+			wantTotal:  0,
+			wantTitles: []string{},
+		},
 	}
 
 	for _, tt := range tests {
