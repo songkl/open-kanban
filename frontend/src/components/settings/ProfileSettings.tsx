@@ -81,8 +81,9 @@ export function ProfileSettings({ currentUser, onUserUpdate }: ProfileSettingsPr
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-medium text-zinc-700">{t('settings.nickname')}</label>
+        <label htmlFor="nickname" className="mb-2 block text-sm font-medium text-zinc-700">{t('settings.nickname')}</label>
         <input
+          id="nickname"
           type="text"
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}

@@ -62,8 +62,9 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
           <h3 className="mb-3 text-sm font-medium text-zinc-700">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div>
-              <label className="mb-1 block text-xs text-zinc-500">{t('settings.operationType')}</label>
+              <label htmlFor="activityFilterAction" className="mb-1 block text-xs text-zinc-500">{t('settings.operationType')}</label>
               <select
+                id="activityFilterAction"
                 value={activityFilterAction}
                 onChange={(e) => setActivityFilterAction(e.target.value)}
                 className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -87,8 +88,9 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-zinc-500">{t('settings.startTime')}</label>
+              <label htmlFor="activityFilterStartTime" className="mb-1 block text-xs text-zinc-500">{t('settings.startTime')}</label>
               <input
+                id="activityFilterStartTime"
                 type="datetime-local"
                 value={activityFilterStartTime}
                 onChange={(e) => setActivityFilterStartTime(e.target.value)}
@@ -96,8 +98,9 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-zinc-500">{t('settings.endTime')}</label>
+              <label htmlFor="activityFilterEndTime" className="mb-1 block text-xs text-zinc-500">{t('settings.endTime')}</label>
               <input
+                id="activityFilterEndTime"
                 type="datetime-local"
                 value={activityFilterEndTime}
                 onChange={(e) => setActivityFilterEndTime(e.target.value)}

@@ -188,8 +188,9 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
           <div className="space-y-3 p-4 rounded-xl bg-zinc-50 border border-zinc-200">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.username')} *</label>
+                <label htmlFor="newUsername" className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.username')} *</label>
                 <input
+                  id="newUsername"
                   type="text"
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
@@ -198,8 +199,9 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.nickname')}</label>
+                <label htmlFor="newNickname" className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.nickname')}</label>
                 <input
+                  id="newNickname"
                   type="text"
                   value={newNickname}
                   onChange={(e) => setNewNickname(e.target.value)}
@@ -210,8 +212,9 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.password')}</label>
+                <label htmlFor="newPassword" className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.password')}</label>
                 <input
+                  id="newPassword"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -220,8 +223,9 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.role')}</label>
+                <label htmlFor="newRole" className="block text-xs font-medium text-zinc-600 mb-1">{t('settings.role')}</label>
                 <select
+                  id="newRole"
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value as 'ADMIN' | 'MEMBER' | 'VIEWER')}
                   className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"

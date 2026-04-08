@@ -97,14 +97,18 @@ export function AgentsSettings() {
       <p className="text-sm text-zinc-500">{t('settings.agentDescription')}</p>
 
       <form onSubmit={handleCreateAgent} className="flex gap-3">
+        <label htmlFor="newAgentName" className="sr-only">{t('settings.agentNamePlaceholder')}</label>
         <input
+          id="newAgentName"
           type="text"
           value={newAgentName}
           onChange={(e) => setNewAgentName(e.target.value)}
           placeholder={t('settings.agentNamePlaceholder')}
           className="flex-1 rounded-md border border-zinc-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
         />
+        <label htmlFor="newAgentRole" className="sr-only">{t('settings.role')}</label>
         <select
+          id="newAgentRole"
           value={newAgentRole}
           onChange={(e) => setNewAgentRole(e.target.value as 'ADMIN' | 'MEMBER' | 'VIEWER')}
           className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -315,8 +319,9 @@ export function AgentsSettings() {
                 </div>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-zinc-700">{t('settings.nickname')}</label>
+                <label htmlFor="editingAgentNickname" className="mb-2 block text-sm font-medium text-zinc-700">{t('settings.nickname')}</label>
                 <input
+                  id="editingAgentNickname"
                   type="text"
                   value={editingAgentNickname}
                   onChange={(e) => setEditingAgentNickname(e.target.value)}

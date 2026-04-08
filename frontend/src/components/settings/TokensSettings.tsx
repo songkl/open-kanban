@@ -88,7 +88,9 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
       <p className="text-sm text-zinc-500">{t('settings.tokenDescription')}</p>
 
       <form onSubmit={handleCreateToken} className="flex gap-3">
+        <label htmlFor="newTokenName" className="sr-only">{t('settings.tokenNamePlaceholder')}</label>
         <input
+          id="newTokenName"
           type="text"
           value={newTokenName}
           onChange={(e) => setNewTokenName(e.target.value)}
@@ -111,6 +113,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
               {editingTokenId === token.id ? (
                 <div className="flex items-center gap-2">
                   <input
+                    id="editingTokenName"
                     type="text"
                     value={editingTokenName}
                     onChange={(e) => setEditingTokenName(e.target.value)}
