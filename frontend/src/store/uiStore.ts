@@ -150,4 +150,16 @@ if (typeof window !== 'undefined') {
   if (shouldBeDark) {
     document.documentElement.classList.add('dark');
   }
+
+  if (saved === null) {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (e.matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+  }
 }

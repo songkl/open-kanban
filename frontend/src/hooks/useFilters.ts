@@ -134,7 +134,8 @@ export function useFilters({ columns = [] }: UseFiltersOptions = {}): UseFilters
           const query = filters.searchQuery.toLowerCase();
           const titleMatch = task.title.toLowerCase().includes(query);
           const descMatch = (task.description || '').toLowerCase().includes(query);
-          if (!titleMatch && !descMatch) return false;
+          const idMatch = task.id.toLowerCase().includes(query);
+          if (!titleMatch && !descMatch && !idMatch) return false;
         }
         if (filters.priority && task.priority !== filters.priority) return false;
         if (filters.assignee && task.assignee !== filters.assignee) return false;
