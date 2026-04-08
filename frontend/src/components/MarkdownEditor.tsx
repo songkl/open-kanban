@@ -31,7 +31,7 @@ export default function MarkdownEditor({ value, onChange, height = 200, placehol
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={handleKeyDown}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none focus:border-blue-500 focus:outline-none"
+      className="w-full px-3 py-2 font-mono text-sm resize-none focus:border-blue-500 focus:outline-none"
       style={{ height }}
     />
   );

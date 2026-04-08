@@ -135,10 +135,10 @@ export function UserDetailPage() {
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-    if (minutes < 1) return t('time.justNow', 'Just now');
-    if (minutes < 60) return t('time.minutesAgo', '{{count}} min ago', { count: minutes });
-    if (hours < 24) return t('time.hoursAgo', '{{count}} hours ago', { count: hours });
-    if (days < 7) return t('time.daysAgo', '{{count}} days ago', { count: days });
+    if (minutes < 1) return t('taskModal.justNow');
+    if (minutes < 60) return t('taskModal.minutesAgo', { count: minutes });
+    if (hours < 24) return t('taskModal.hoursAgo', { count: hours });
+    if (days < 7) return t('taskModal.daysAgo', { count: days });
     return date.toLocaleDateString();
   };
 

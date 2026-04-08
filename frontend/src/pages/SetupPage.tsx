@@ -67,7 +67,7 @@ export function SetupPage() {
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-900">
       <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-8 shadow-lg">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Open kanban</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('app.title')}</h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('login.welcome')}</p>
           <p className="mt-1 text-xs text-blue-500 dark:text-blue-400">{t('login.firstUserAdmin')}</p>
         </div>

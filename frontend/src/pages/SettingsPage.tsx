@@ -10,9 +10,11 @@ import { ActivitiesSettings } from '../components/settings/ActivitiesSettings';
 import { AgentsSettings } from '../components/settings/AgentsSettings';
 import { UsersSettings } from '../components/settings/UsersSettings';
 import { ShortcutsSettings } from '../components/settings/ShortcutsSettings';
+import { ThemeSettings } from '../components/settings/ThemeSettings';
+import { useUIStore } from '../store/uiStore';
 import type { User } from '../types/kanban';
 
-type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts';
+type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme';
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -20,6 +22,7 @@ export function SettingsPage() {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const darkMode = useUIStore((state) => state.darkMode);
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const tab = searchParams.get('tab');
     if (tab === 'users') return tab;
@@ -162,6 +165,29 @@ export function SettingsPage() {
               >
                 {t('settings.shortcuts')}
               </button>
+              <button
+                onClick={() => switchToTab('theme')}
+                className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+              >
+                <span>{t('nav.theme')}</span>
+                {darkMode ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
+                    <circle cx="12" cy="12" r="5"/>
+                    <line x1="12" y1="1" x2="12" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/>
+                    <line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                  </svg>
+                )}
+              </button>
               <div className="border-t border-zinc-200 pt-2 mt-2">
                 <button
                   onClick={() => {
@@ -208,6 +234,10 @@ export function SettingsPage() {
 
             {activeTab === 'shortcuts' && (
               <ShortcutsSettings />
+            )}
+
+            {activeTab === 'theme' && (
+              <ThemeSettings />
             )}
           </div>
         </div>
