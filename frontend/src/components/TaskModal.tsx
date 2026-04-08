@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
+import { UserAvatar } from './UserAvatar';
 import type { Task, Attachment, Column, Agent, Subtask, Comment } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
@@ -159,6 +160,7 @@ export function TaskModal({
   const [commentsPage, setCommentsPage] = useState(1);
   const [taskComments, setTaskComments] = useState<Comment[]>(task.comments ?? []);
   const COMMENTS_PER_PAGE = 10;
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const parseMeta = (metaStr: string | Record<string, unknown> | null): Record<string, string> => {
     if (!metaStr) return {};
@@ -357,8 +359,8 @@ export function TaskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 overflow-y-auto">
-      <div className="flex flex-col h-full max-h-[calc(100vh-4rem)] bg-white dark:bg-zinc-800 my-8 mx-auto max-w-6xl overflow-hidden">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 overflow-y-auto ${isFullscreen ? 'p-0' : ''}`}>
+      <div className={`relative z-10 flex flex-col bg-white dark:bg-zinc-800 rounded-xl shadow-xl overflow-hidden ${isFullscreen ? 'w-screen h-screen max-w-full max-h-full rounded-none' : 'h-full max-h-[calc(100vh-4rem)] my-8 mx-auto max-w-7xl'}`}>
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-700 px-6 py-4">
           <div className="flex items-center gap-3 flex-wrap">
@@ -388,6 +390,32 @@ export function TaskModal({
                 {t('taskModal.editTask')}
               </button>
             )}
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(task.id);
+              }}
+              title={t('taskModal.copyTaskId')}
+              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={t('taskModal.fullscreen')}
+              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+            >
+              {isFullscreen ? (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              )}
+            </button>
             <button
               onClick={onClose}
               className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
@@ -668,9 +696,10 @@ export function TaskModal({
             <div ref={commentsRef} className="flex-1 overflow-y-auto p-4 space-y-4">
               {(taskComments || []).slice((commentsPage - 1) * COMMENTS_PER_PAGE, commentsPage * COMMENTS_PER_PAGE).map((comment) => (
                 <div key={comment.id} className="rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-3">
-                  <div className="mb-1 flex items-center justify-between">
+                  <div className="mb-1 flex items-center gap-2">
+                    <UserAvatar username={comment.author} size="sm" />
                     <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200">{comment.author}</span>
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500">{formatCommentDate(t, comment.createdAt)}</span>
+                    <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">{formatCommentDate(t, comment.createdAt)}</span>
                   </div>
                   <div className="prose prose-sm max-w-none text-zinc-600 dark:text-zinc-300">
                     <SafeMarkdown>{comment.content}</SafeMarkdown>
