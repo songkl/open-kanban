@@ -14,6 +14,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ defa
 const ActivityLogPage = lazy(() => import('./pages/ActivityLogPage').then(m => ({ default: m.ActivityLogPage })));
 const AgentActivityPage = lazy(() => import('./pages/AgentActivityPage').then(m => ({ default: m.AgentActivityPage })));
 const UserDetailPage = lazy(() => import('./pages/UserDetailPage').then(m => ({ default: m.UserDetailPage })));
+const ColumnDetailPage = lazy(() => import('./pages/ColumnDetailPage').then(m => ({ default: m.ColumnDetailPage })));
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/board/:boardId" element={<BoardPage />} />
+        <Route path="/board/:boardId/column/:columnId" element={<ColumnDetailPage />} />
         <Route path="/boards" element={<BoardsPage />} />
         <Route path="/drafts" element={<DraftsPage />} />
         <Route path="/history" element={<HistoryPage />} />
