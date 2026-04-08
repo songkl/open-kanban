@@ -18,16 +18,19 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 
 func (r *TaskRepository) GetTaskByID(id string) (*models.Task, error) {
 	var task models.Task
-	var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
+	var desc, assignee, meta, createdBy, createdByUsername, agentID, agentPrompt sql.NullString
 	var archivedAt sql.NullTime
 
 	err := r.db.QueryRow(`
 		SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
-		       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at
+		       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
+		       COALESCE(u.nickname, u.username) as created_by_username
 		FROM tasks t
+		LEFT JOIN users u ON t.created_by = u.id
 		WHERE t.id = ?
 	`, id).Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
-		&task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt)
+		&task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt,
+		&createdByUsername)
 
 	if err != nil {
 		return nil, err
@@ -53,6 +56,9 @@ func (r *TaskRepository) GetTaskByID(id string) (*models.Task, error) {
 	}
 	if createdBy.Valid {
 		task.CreatedBy = createdBy.String
+	}
+	if createdByUsername.Valid {
+		task.CreatedByUsername = createdByUsername.String
 	}
 
 	return &task, nil
@@ -113,11 +119,13 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		query := `SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 		          t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 		          COALESCE(cc.cnt, 0) as comment_count,
-		          COALESCE(sc.cnt, 0) as subtask_count
+		          COALESCE(sc.cnt, 0) as subtask_count,
+		          COALESCE(u.nickname, u.username) as created_by_username
 		          FROM tasks t
 		          JOIN columns col ON t.column_id = col.id
 		          LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
 		          LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+		          LEFT JOIN users u ON t.created_by = u.id
 		          ` + whereClause + `
 		          ORDER BY col.position ASC, t.position ASC
 		          LIMIT ? OFFSET ?`
@@ -138,11 +146,13 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		rows, err = r.db.Query(`SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 		                         t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 		                         COALESCE(cc.cnt, 0) as comment_count,
-		                         COALESCE(sc.cnt, 0) as subtask_count
+		                         COALESCE(sc.cnt, 0) as subtask_count,
+		                         COALESCE(u.nickname, u.username) as created_by_username
 		                         FROM tasks t
 		                         JOIN columns col ON t.column_id = col.id
 		                         LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
 		                         LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+		                         LEFT JOIN users u ON t.created_by = u.id
 		                         `+whereClause+`
 		                         ORDER BY col.position ASC, t.position ASC
 		                         LIMIT ? OFFSET ?`, pageSize, offset)
@@ -156,13 +166,13 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 	var tasks []models.Task
 	for rows.Next() {
 		var task models.Task
-		var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
+		var desc, assignee, meta, createdBy, createdByUsername, agentID, agentPrompt sql.NullString
 		var archivedAt sql.NullTime
 		var commentCount, subtaskCount int
 
 		if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
 			&task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt,
-			&commentCount, &subtaskCount); err != nil {
+			&commentCount, &subtaskCount, &createdByUsername); err != nil {
 			continue
 		}
 
@@ -186,6 +196,9 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 		}
 		if createdBy.Valid {
 			task.CreatedBy = createdBy.String
+		}
+		if createdByUsername.Valid {
+			task.CreatedByUsername = createdByUsername.String
 		}
 
 		task.CommentCount = &commentCount
@@ -374,6 +387,7 @@ type TaskSearchParams struct {
 	BoardID   string
 	Assignee  string
 	DateRange string
+	TaskID    string
 	Page      int
 	PageSize  int
 }
@@ -383,11 +397,13 @@ func (r *TaskRepository) SearchTasks(params TaskSearchParams) ([]models.Task, in
 		SELECT DISTINCT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 		       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 		       COALESCE(cc.cnt, 0) as comment_count,
-		       COALESCE(sc.cnt, 0) as subtask_count
+		       COALESCE(sc.cnt, 0) as subtask_count,
+		       COALESCE(u.nickname, u.username) as created_by_username
 		FROM tasks t
 		JOIN columns col ON t.column_id = col.id
 		LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
 		LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+		LEFT JOIN users u ON t.created_by = u.id
 	`
 
 	countQuery := `
@@ -447,6 +463,11 @@ func (r *TaskRepository) SearchTasks(params TaskSearchParams) ([]models.Task, in
 		}
 	}
 
+	if params.TaskID != "" {
+		conditions = append(conditions, "t.id = ?")
+		args = append(args, params.TaskID)
+	}
+
 	conditions = append(conditions, "t.archived = 0")
 
 	whereClause := ""
@@ -477,13 +498,13 @@ func (r *TaskRepository) SearchTasks(params TaskSearchParams) ([]models.Task, in
 	var tasks []models.Task
 	for rows.Next() {
 		var task models.Task
-		var desc, assignee, meta, createdBy, agentID, agentPrompt sql.NullString
+		var desc, assignee, meta, createdBy, createdByUsername, agentID, agentPrompt sql.NullString
 		var archivedAt sql.NullTime
 		var commentCount, subtaskCount int
 
 		if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
 			&task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt,
-			&commentCount, &subtaskCount); err != nil {
+			&commentCount, &subtaskCount, &createdByUsername); err != nil {
 			continue
 		}
 
@@ -507,6 +528,9 @@ func (r *TaskRepository) SearchTasks(params TaskSearchParams) ([]models.Task, in
 		}
 		if createdBy.Valid {
 			task.CreatedBy = createdBy.String
+		}
+		if createdByUsername.Valid {
+			task.CreatedByUsername = createdByUsername.String
 		}
 
 		task.CommentCount = &commentCount

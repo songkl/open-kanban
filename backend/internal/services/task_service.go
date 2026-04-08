@@ -570,6 +570,7 @@ type SearchTasksInput struct {
 	BoardID   string
 	Assignee  string
 	DateRange string
+	TaskID    string
 	Page      int
 	PageSize  int
 }
@@ -592,6 +593,7 @@ func (s *TaskService) SearchTasks(input SearchTasksInput) (*TaskListResult, erro
 		BoardID:   input.BoardID,
 		Assignee:  input.Assignee,
 		DateRange: input.DateRange,
+		TaskID:    input.TaskID,
 		Page:      input.Page,
 		PageSize:  input.PageSize,
 	}

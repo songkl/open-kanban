@@ -80,9 +80,11 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name,
 				       (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
+				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count,
+				       COALESCE(u.nickname, u.username) as created_by_username
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
+				LEFT JOIN users u ON t.created_by = u.id
 				WHERE t.archived = false AND t.published = true
 				  AND (t.assignee = ? OR t.column_id IN %s)
 				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
@@ -95,9 +97,11 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name,
 				       (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
+				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count,
+				       COALESCE(u.nickname, u.username) as created_by_username
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
+				LEFT JOIN users u ON t.created_by = u.id
 				WHERE t.archived = false AND t.published = true
 				  AND t.assignee = ?
 				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
@@ -114,9 +118,11 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name,
 				       (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
-				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count
+				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count,
+				       COALESCE(u.nickname, u.username) as created_by_username
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
+				LEFT JOIN users u ON t.created_by = u.id
 				WHERE t.archived = false AND t.published = true
 				  AND t.column_id IN %s
 				ORDER BY c.position ASC, t.position ASC, t.created_at ASC
@@ -136,10 +142,10 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			defer taskRows.Close()
 			for taskRows.Next() {
 				var task models.Task
-				var desc, assignee, meta, createdBy, columnName, agentID, agentPrompt sql.NullString
+				var desc, assignee, meta, createdBy, createdByUsername, columnName, agentID, agentPrompt sql.NullString
 				var archivedAt sql.NullTime
 				var commentCount, subtaskCount int
-				if err := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &columnName, &commentCount, &subtaskCount); err == nil {
+				if err := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &columnName, &commentCount, &subtaskCount, &createdByUsername); err == nil {
 					if desc.Valid {
 						task.Description = &desc.String
 					}
@@ -161,25 +167,29 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 					if createdBy.Valid {
 						task.CreatedBy = createdBy.String
 					}
+					if createdByUsername.Valid {
+						task.CreatedByUsername = createdByUsername.String
+					}
 
 					tasks = append(tasks, gin.H{
-						"id":          task.ID,
-						"title":       task.Title,
-						"description": task.Description,
-						"priority":    task.Priority,
-						"assignee":    task.Assignee,
-						"meta":        task.Meta,
-						"columnId":    task.ColumnID,
-						"columnName":  columnName.String,
-						"position":    task.Position,
-						"published":   task.Published,
-						"agentId":     task.AgentID,
-						"agentPrompt": task.AgentPrompt,
-						"archived":    task.Archived,
-						"archivedAt":  task.ArchivedAt,
-						"createdBy":   task.CreatedBy,
-						"createdAt":   task.CreatedAt,
-						"updatedAt":   task.UpdatedAt,
+						"id":                task.ID,
+						"title":             task.Title,
+						"description":       task.Description,
+						"priority":          task.Priority,
+						"assignee":          task.Assignee,
+						"meta":              task.Meta,
+						"columnId":          task.ColumnID,
+						"columnName":        columnName.String,
+						"position":          task.Position,
+						"published":         task.Published,
+						"agentId":           task.AgentID,
+						"agentPrompt":       task.AgentPrompt,
+						"archived":          task.Archived,
+						"archivedAt":        task.ArchivedAt,
+						"createdBy":         task.CreatedBy,
+						"createdByUsername": task.CreatedByUsername,
+						"createdAt":         task.CreatedAt,
+						"updatedAt":         task.UpdatedAt,
 						"_count": gin.H{
 							"comments": commentCount,
 							"subtasks": subtaskCount,

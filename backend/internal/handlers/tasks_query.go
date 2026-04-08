@@ -170,6 +170,7 @@ func SearchTasks(db *sql.DB) gin.HandlerFunc {
 		boardID := c.Query("boardId")
 		assignee := c.Query("assignee")
 		dateRange := c.Query("dateRange")
+		taskID := c.Query("taskId")
 
 		page := 1
 		pageSize := 20
@@ -191,6 +192,7 @@ func SearchTasks(db *sql.DB) gin.HandlerFunc {
 			BoardID:   boardID,
 			Assignee:  assignee,
 			DateRange: dateRange,
+			TaskID:    taskID,
 			Page:      page,
 			PageSize:  pageSize,
 		}

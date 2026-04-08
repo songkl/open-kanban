@@ -971,4 +971,32 @@ func TestSearchTasksHandler(t *testing.T) {
 			t.Errorf("expected 1 task, got %d", len(data))
 		}
 	})
+
+	t.Run("search by taskId", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search?taskId=task2", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok {
+			t.Errorf("expected data to be array, got %v", response["data"])
+		}
+		if len(data) != 1 {
+			t.Errorf("expected 1 task, got %d", len(data))
+		}
+		task := data[0].(map[string]interface{})
+		if task["id"] != "task2" {
+			t.Errorf("expected task id 'task2', got %v", task["id"])
+		}
+		if task["title"] != "Feature Request" {
+			t.Errorf("expected title 'Feature Request', got %v", task["title"])
+		}
+	})
 }

@@ -67,26 +67,27 @@ type ColumnAgent struct {
 
 // Task represents a task card
 type Task struct {
-	ID           string     `json:"id"`
-	Title        string     `json:"title"`
-	Description  *string    `json:"description,omitempty"`
-	Priority     string     `json:"priority"` // low, medium, high
-	Assignee     *string    `json:"assignee,omitempty"`
-	Meta         *string    `json:"meta,omitempty"`
-	ColumnID     string     `json:"columnId"`
-	Position     int        `json:"position"`
-	Published    bool       `json:"published"`
-	Archived     bool       `json:"archived"`
-	ArchivedAt   *time.Time `json:"archivedAt,omitempty"`
-	AgentID      *string    `json:"agentId,omitempty"`
-	AgentPrompt  *string    `json:"agentPrompt,omitempty"`
-	CreatedBy    string     `json:"createdBy"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
-	Comments     []Comment  `json:"comments,omitempty"`
-	Subtasks     []Subtask  `json:"subtasks,omitempty"`
-	CommentCount *int       `json:"commentCount,omitempty"`
-	SubtaskCount *int       `json:"subtaskCount,omitempty"`
+	ID                string     `json:"id"`
+	Title             string     `json:"title"`
+	Description       *string    `json:"description,omitempty"`
+	Priority          string     `json:"priority"` // low, medium, high
+	Assignee          *string    `json:"assignee,omitempty"`
+	Meta              *string    `json:"meta,omitempty"`
+	ColumnID          string     `json:"columnId"`
+	Position          int        `json:"position"`
+	Published         bool       `json:"published"`
+	Archived          bool       `json:"archived"`
+	ArchivedAt        *time.Time `json:"archivedAt,omitempty"`
+	AgentID           *string    `json:"agentId,omitempty"`
+	AgentPrompt       *string    `json:"agentPrompt,omitempty"`
+	CreatedBy         string     `json:"createdBy"`
+	CreatedByUsername string     `json:"createdByUsername,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
+	Comments          []Comment  `json:"comments,omitempty"`
+	Subtasks          []Subtask  `json:"subtasks,omitempty"`
+	CommentCount      *int       `json:"commentCount,omitempty"`
+	SubtaskCount      *int       `json:"subtaskCount,omitempty"`
 }
 
 // Comment represents a comment on a task
