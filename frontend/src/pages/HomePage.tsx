@@ -113,7 +113,7 @@ export function HomePage() {
       <div className="flex min-h-screen items-center justify-center bg-zinc-100">
         <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-zinc-800">Open kanban</h1>
+            <h1 className="text-2xl font-bold text-zinc-800">{t('app.title')}</h1>
             <p className="mt-2 text-sm text-zinc-500">{t('login.welcome')}</p>
             <p className="mt-1 text-xs text-blue-500">{t('login.firstUserAdmin')}</p>
           </div>

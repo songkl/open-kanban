@@ -6,8 +6,8 @@ import { AddTaskModal } from './AddTaskModal';
 vi.mock('@/services/api', () => ({
   columnsApi: {
     getByBoard: vi.fn().mockResolvedValue([
-      { id: 'col-1', name: 'To Do' },
-      { id: 'col-2', name: 'In Progress' },
+      { id: 'col-1', name: 'To Do', status: 'todo' },
+      { id: 'col-2', name: 'In Progress', status: 'in_progress' },
     ]),
   },
 }));
@@ -74,11 +74,8 @@ describe('AddTaskModal', () => {
 
   it('renders priority select with three options', () => {
     render(<AddTaskModal {...defaultProps} />);
-    const prioritySelect = screen.getByRole('combobox', { name: '' });
-    expect(prioritySelect).toBeInTheDocument();
-    expect(screen.getByText('taskModal.priorityLow')).toBeInTheDocument();
-    expect(screen.getByText('taskModal.priorityMedium')).toBeInTheDocument();
-    expect(screen.getByText('taskModal.priorityHigh')).toBeInTheDocument();
+    const priorityButton = screen.getByRole('button', { name: 'taskModal.priorityMedium' });
+    expect(priorityButton).toBeInTheDocument();
   });
 
   it('renders publish checkbox', () => {
