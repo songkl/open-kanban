@@ -106,14 +106,18 @@ jobs:
           echo "Generated changelog:"
           cat CHANGELOG.md
 
-      - name: Commit changelog
+      - name: Commit and push changelog
         run: |
           if [[ $(git status --porcelain) ]]; then
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
             git add CHANGELOG.md
-            git commit -m "docs: update changelog [skip ci]" || echo "Nothing to commit"
-            git push || echo "Push failed, will continue"
+            if git commit -m "docs: update changelog [skip ci]"; then
+              echo "Commit succeeded, pushing to remote..."
+              git push || echo "Push failed, will continue"
+            else
+              echo "Commit failed, skipping push"
+            fi
           else
             echo "No changes to commit"
           fi

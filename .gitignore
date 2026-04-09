@@ -15,6 +15,9 @@ mcp-server/node_modules/
 # Salt file (in user home directory)
 .openkanban/
 
+# Opencode
+.opencode/
+
 # Database
 *.db
 *.db-journal
