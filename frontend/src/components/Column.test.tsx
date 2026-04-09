@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import { Column } from './Column';
 import type { Column as ColumnType } from '@/types/kanban';
 
@@ -53,29 +54,29 @@ describe('Column', () => {
   });
 
   it('renders column name', () => {
-    render(<Column {...defaultProps} />);
+    render(<BrowserRouter><Column {...defaultProps} /></BrowserRouter>);
     expect(screen.getByText('To Do')).toBeInTheDocument();
   });
 
   it('renders task count', () => {
-    render(<Column {...defaultProps} />);
+    render(<BrowserRouter><Column {...defaultProps} /></BrowserRouter>);
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 
   it('renders empty state when no tasks', () => {
     const emptyColumn = { ...mockColumn, tasks: [] };
-    render(<Column {...defaultProps} column={emptyColumn} />);
+    render(<BrowserRouter><Column {...defaultProps} column={emptyColumn} /></BrowserRouter>);
     expect(screen.getByText('column.noTasks')).toBeInTheDocument();
   });
 
   it('shows description when column has description', () => {
     const columnWithDesc = { ...mockColumn, description: 'Column description' };
-    render(<Column {...defaultProps} column={columnWithDesc} />);
+    render(<BrowserRouter><Column {...defaultProps} column={columnWithDesc} /></BrowserRouter>);
     expect(screen.getByText('column.description')).toBeInTheDocument();
   });
 
   it('renders column with task card', () => {
-    render(<Column {...defaultProps} />);
+    render(<BrowserRouter><Column {...defaultProps} /></BrowserRouter>);
     expect(screen.getByText('Task 1')).toBeInTheDocument();
   });
 });

@@ -146,6 +146,8 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
           {isEditing ? (
             <input
               ref={inputRef}
+              id="column-name-input"
+              name="column-name"
               type="text"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -190,7 +192,14 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
           )}
           <span className="ml-auto text-sm text-zinc-500 flex items-center gap-2">
             {onSelectAllTasks && tasks.length > 0 && (
+              <label className="sr-only" htmlFor={`select-all-${column.id}`}>
+                {t('column.selectAll')}
+              </label>
+            )}
+            {onSelectAllTasks && tasks.length > 0 && (
               <input
+                id={`select-all-${column.id}`}
+                name={`select-all-${column.id}`}
                 type="checkbox"
                 className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-blue-500 focus:ring-blue-500 cursor-pointer"
                 checked={selectedTasks && tasks.length > 0 && tasks.every(t => selectedTasks.has(t.id))}
@@ -200,7 +209,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                     onSelectAllTasks(column.id, tasks.map(t => t.id));
                   }
                 }}
-                title={t('column.selectAll')}
+                aria-label={t('column.selectAll')}
               />
             )}
             <button

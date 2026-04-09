@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Task, Column as ColumnType } from '../types/kanban';
 
 interface KeyboardNavigationProps {
@@ -38,6 +38,8 @@ export function KeyboardNavigation({
   onArchiveTask,
   onDeleteTask,
 }: KeyboardNavigationProps) {
+  const lastEscPressRef = useRef<number>(0);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'n') {
@@ -71,6 +73,7 @@ export function KeyboardNavigation({
       }
 
       if (e.key === 'Escape') {
+        const now = Date.now();
         if (showAddTaskModal) {
           onSetShowAddTaskModal(false);
           onSetDefaultColumnIdForNewTask(undefined);
@@ -78,8 +81,11 @@ export function KeyboardNavigation({
           onSetSelectedTask(null);
           onSetEditTaskId(null);
         } else if (selectedTasks.size > 0) {
-          onClearSelection();
+          if (now - lastEscPressRef.current < 300) {
+            onClearSelection();
+          }
         }
+        lastEscPressRef.current = now;
         return;
       }
 

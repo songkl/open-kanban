@@ -33,7 +33,7 @@ export function FilterPanelContent({
   return (
     <>
       <div className="mb-3">
-        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
+        <label htmlFor="filter-priority" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
         <select
           id="filter-priority"
           name="filter-priority"
@@ -48,7 +48,7 @@ export function FilterPanelContent({
         </select>
       </div>
       <div className="mb-3">
-        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
+        <label htmlFor="filter-assignee" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
         <select
           id="filter-assignee"
           name="filter-assignee"
@@ -65,7 +65,7 @@ export function FilterPanelContent({
         </select>
       </div>
       <div className="mb-3">
-        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
+        <label htmlFor="filter-date-range" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
         <select
           id="filter-date-range"
           name="filter-date-range"
@@ -81,7 +81,7 @@ export function FilterPanelContent({
       </div>
       {uniqueTags.length > 0 && (
         <div className="mb-3">
-          <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
+          <label htmlFor="filter-tag" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
           <select
             id="filter-tag"
             name="filter-tag"

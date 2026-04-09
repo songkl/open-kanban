@@ -72,12 +72,22 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
     transition,
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.metaKey || e.ctrlKey) && onSelect) {
+      e.preventDefault();
+      onSelect(task.id, e as unknown as React.ChangeEvent<HTMLInputElement>);
+    } else {
+      onClick();
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
+      onClick={handleCardClick}
       className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/95 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
         isDragging ? 'opacity-60 ring-2 ring-blue-400 scale-105 z-50 shadow-blue-200 dark:shadow-blue-900/50' : ''
       } ${priorityBorderColors[task.priority] || priorityBorderColors.medium} ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
@@ -92,11 +102,17 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           onTouchStart={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
+          <label className="sr-only" htmlFor={`task-select-${task.id}`}>
+            {t('taskCard.selectTask')}
+          </label>
           <input
+            id={`task-select-${task.id}`}
+            name={`task-select-${task.id}`}
             type="checkbox"
             checked={isSelected || false}
             onChange={(e) => onSelect && onSelect(task.id, e)}
             className="h-4 w-4 rounded border-zinc-300 text-blue-500 focus:ring-blue-400 cursor-pointer"
+            aria-label={t('taskCard.selectTask')}
           />
         </div>
       )}
@@ -172,7 +188,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                     </svg>
                   </button>
                   {showMoveSubmenu && (
-                    <div className="absolute left-full top-0 ml-1 w-36 rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 z-30">
+                    <div className="absolute top-full left-0 mt-1 w-36 rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 z-30">
                       {columns.filter(col => col.id !== task.columnId).map(col => (
                         <button
                           key={col.id}

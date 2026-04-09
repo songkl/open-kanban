@@ -759,26 +759,33 @@ export function TaskModal({
                     onDrop={(e) => handleEditorDrop(e, 'comment')}
                   onDragOver={(e) => e.preventDefault()}
                 >
-                  <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 120 }} disabled />}>
+                  <Suspense fallback={<textarea id="comment-input" aria-label={t('taskModal.addComment')} className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 120 }} disabled />}>
                     <MarkdownEditor
                       value={newComment}
                       onChange={(val) => setNewComment(val || '')}
                       height={120}
+                      id="comment-input"
+                      aria-label={t('taskModal.addComment')}
                     />
                   </Suspense>
                 </div>
               )}
               
               {!isEditing && (
-                <textarea
-                  id="task-comment-input"
-                  name="task-comment-input"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder={`${t('taskModal.addComment')} ${t('taskModal.commentHint')}`}
-                  rows={3}
-                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none"
-                />
+                <>
+                  <label htmlFor="comment-input" className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                    {t('taskModal.addComment')}
+                  </label>
+                  <textarea
+                    id="comment-input"
+                    name="comment-input"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder={`${t('taskModal.addComment')} ${t('taskModal.commentHint')}`}
+                    rows={3}
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none"
+                  />
+                </>
               )}
               
               <div className="flex gap-2">
