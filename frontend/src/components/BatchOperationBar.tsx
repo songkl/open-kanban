@@ -32,7 +32,9 @@ export function BatchOperationBar({
         {t('task.selectedCount', { count: selectedTasks.size })}
       </span>
       <div className="h-4 w-px bg-zinc-600" />
+      <label htmlFor="batch-move" className="sr-only">{t('task.moveToColumn')}</label>
       <select
+        id="batch-move"
         onChange={(e) => {
           if (e.target.value) onBatchMove(e.target.value);
           e.target.value = '';
@@ -46,7 +48,9 @@ export function BatchOperationBar({
           </option>
         ))}
       </select>
+      <label htmlFor="batch-priority" className="sr-only">{t('task.setPriority')}</label>
       <select
+        id="batch-priority"
         onChange={(e) => {
           if (e.target.value) onBatchUpdatePriority(e.target.value);
           e.target.value = '';
@@ -58,7 +62,9 @@ export function BatchOperationBar({
         <option value="medium">{t('task.priority.medium')}</option>
         <option value="low">{t('task.priority.low')}</option>
       </select>
+      <label htmlFor="batch-assignee" className="sr-only">{t('task.setAssignee')}</label>
       <select
+        id="batch-assignee"
         onChange={(e) => {
           onBatchUpdateAssignee(e.target.value);
           e.target.value = '';

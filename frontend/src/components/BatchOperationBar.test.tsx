@@ -78,7 +78,7 @@ describe('BatchOperationBar', () => {
         onClearSelection={vi.fn()}
       />
     );
-    expect(screen.getByText('Move to Column')).toBeInTheDocument();
+    expect(screen.getAllByText('Move to Column').length).toBeGreaterThan(0);
     expect(screen.getByText('To Do')).toBeInTheDocument();
     expect(screen.getByText('In Progress')).toBeInTheDocument();
   });
@@ -118,7 +118,7 @@ describe('BatchOperationBar', () => {
         onClearSelection={vi.fn()}
       />
     );
-    expect(screen.getByText('Set Priority')).toBeInTheDocument();
+    expect(screen.getAllByText('Set Priority').length).toBeGreaterThan(0);
     expect(screen.getByText('High')).toBeInTheDocument();
     expect(screen.getByText('Medium')).toBeInTheDocument();
     expect(screen.getByText('Low')).toBeInTheDocument();
