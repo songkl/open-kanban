@@ -126,7 +126,7 @@ export function AgentActivityPage() {
       const getWsUrl = () => {
         if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
         if (import.meta.env.DEV) {
-          return `ws://${window.location.host}/ws`;
+          return `ws://localhost:8081/ws`;
         }
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}/ws`;

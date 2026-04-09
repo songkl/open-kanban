@@ -16,7 +16,8 @@
   },
   "common": {
     "close": "关闭",
-    "cancel": "取消"
+    "cancel": "取消",
+    "back": "返回"
   },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",
@@ -395,6 +396,11 @@
   },
   "settings": {
     "title": "设置",
+    "theme": "主题",
+    "themeDescription": "自定义工作空间的外观",
+    "darkMode": "暗色模式",
+    "darkModeOn": "已开启",
+    "darkModeOff": "已关闭",
     "edit": "编辑",
     "delete": "删除",
     "back": "返回",
@@ -572,7 +578,8 @@
     "expand": "展开",
     "moreSubtasks": "+{{count}} 更多",
     "completed": "已完成",
-    "viewComments": "查看评论"
+    "viewComments": "查看评论",
+    "selectTask": "选择任务"
   },
   "taskModal": {
     "justNow": "刚刚",

@@ -112,10 +112,10 @@ export function BoardPage() {
     setColumns,
   } = useBoardState({ boardIdFromUrl, taskIdFromUrl });
 
-  const showToastMessage = (message: string) => {
+  const showToastMessage = useCallback((message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 2000);
-  };
+  }, []);
 
   useEffect(() => {
     if (darkMode) {
@@ -287,7 +287,7 @@ export function BoardPage() {
       console.error('Export failed:', error);
       showToastMessage(t('export.failed'));
     }
-  }, [currentBoard, t]);
+  }, [currentBoard, t, showToastMessage]);
 
   const handleReset = useCallback(() => {
     if (!currentBoard) return;
@@ -308,7 +308,7 @@ export function BoardPage() {
         setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       },
     });
-  }, [currentBoard, t]);
+  }, [currentBoard, t, showToastMessage]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
     setConfirmDialog({

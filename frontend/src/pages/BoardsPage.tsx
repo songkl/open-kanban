@@ -269,7 +269,7 @@ export function BoardsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 p-6">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
@@ -279,14 +279,14 @@ export function BoardsPage() {
               </svg>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-zinc-800">{t('nav.boardManagement')}</h1>
-              <p className="text-sm text-zinc-500">{t('board.count', { count: boards.length })}</p>
+              <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('nav.boardManagement')}</h1>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('board.count', { count: boards.length })}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Link
               to="/columns"
-              className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-zinc-600 shadow-sm border border-zinc-100 hover:bg-zinc-50 hover:border-zinc-200 transition-all"
+              className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:hover:border-zinc-600 transition-all"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="5" height="18"/>
@@ -306,17 +306,17 @@ export function BoardsPage() {
         </div>
 
         {loadError ? (
-          <div className="rounded-2xl bg-white p-8 text-center shadow-sm border border-zinc-100">
-            <div className="mb-6 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-red-50 text-red-500">
+          <div className="rounded-2xl bg-white dark:bg-zinc-800 p-8 text-center shadow-sm border border-zinc-100 dark:border-zinc-700">
+            <div className="mb-6 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-red-50 dark:bg-red-900/30 text-red-500">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="8" x2="12" y2="12"/>
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
             </div>
-            <p className="text-lg font-semibold text-zinc-800">{t('app.error.loadFailed')}</p>
+            <p className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('app.error.loadFailed')}</p>
             <div className="flex flex-col gap-3 items-center">
-              <p className="text-sm text-zinc-500">{t('board.noAccessHint')}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('board.noAccessHint')}</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowModal(true)}
@@ -326,14 +326,14 @@ export function BoardsPage() {
                 </button>
                 <button
                   onClick={() => window.location.href = '/settings?tab=permissions'}
-                  className="rounded-xl bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+                  className="rounded-xl bg-zinc-100 dark:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
                 >
                   {t('board.contactAdmin')}
                 </button>
               </div>
               <button
                 onClick={fetchBoards}
-                className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-600 transition-colors"
+                className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -343,13 +343,13 @@ export function BoardsPage() {
             </div>
           </div>
         ) : boards.length === 0 ? (
-          <div className="rounded-2xl bg-white p-12 text-center shadow-sm border border-zinc-100">
-            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 text-zinc-400">
+          <div className="rounded-2xl bg-white dark:bg-zinc-800 p-12 text-center shadow-sm border border-zinc-100 dark:border-zinc-700">
+            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               </svg>
             </div>
-            <p className="text-lg font-medium text-zinc-500">{t('board.noBoards')}</p>
+            <p className="text-lg font-medium text-zinc-500 dark:text-zinc-400">{t('board.noBoards')}</p>
             <button
               onClick={openAddModal}
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
@@ -425,13 +425,13 @@ export function BoardsPage() {
       />
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] rounded-lg bg-zinc-800 px-4 py-2 text-sm text-white shadow-lg">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] rounded-lg bg-zinc-800 dark:bg-zinc-700 px-4 py-2 text-sm text-white shadow-lg">
           {toast}
         </div>
       )}
       <ErrorToastContainer />
 
-      <footer className="fixed bottom-4 right-6 flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-600">
+      <footer className="fixed bottom-4 right-6 flex items-center gap-2 text-sm text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300">
         <a
           href="https://github.com/songkl/open-kanban"
           target="_blank"

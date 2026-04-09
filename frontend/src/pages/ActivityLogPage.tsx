@@ -205,8 +205,10 @@ export function ActivityLogPage() {
           <h3 className="mb-3 text-sm font-medium text-zinc-700">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div>
-              <label className="mb-1 block text-xs text-zinc-500">{t('settings.operationType')}</label>
+              <label htmlFor="filterAction" className="mb-1 block text-xs text-zinc-500">{t('settings.operationType')}</label>
               <select
+                id="filterAction"
+                name="filterAction"
                 value={filterAction}
                 onChange={(e) => setFilterAction(e.target.value)}
                 className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -230,18 +232,22 @@ export function ActivityLogPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-zinc-500">{t('settings.startTime')}</label>
+              <label htmlFor="filterStartTime" className="mb-1 block text-xs text-zinc-500">{t('settings.startTime')}</label>
               <input
                 type="datetime-local"
+                id="filterStartTime"
+                name="filterStartTime"
                 value={filterStartTime}
                 onChange={(e) => setFilterStartTime(e.target.value)}
                 className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-zinc-500">{t('settings.endTime')}</label>
+              <label htmlFor="filterEndTime" className="mb-1 block text-xs text-zinc-500">{t('settings.endTime')}</label>
               <input
                 type="datetime-local"
+                id="filterEndTime"
+                name="filterEndTime"
                 value={filterEndTime}
                 onChange={(e) => setFilterEndTime(e.target.value)}
                 className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"

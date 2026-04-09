@@ -142,8 +142,11 @@ export function ColumnDetailPage() {
           </div>
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-500">{t('filter.assignee')}:</label>
+              <label htmlFor="filter-assignee" className="text-sm text-zinc-500">{t('filter.assignee')}:</label>
               <select
+                id="filter-assignee"
+                name="filter-assignee"
+                aria-label={t('filter.assignee')}
                 value={filterAssignee}
                 onChange={(e) => setFilterAssignee(e.target.value)}
                 className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700"
@@ -155,8 +158,11 @@ export function ColumnDetailPage() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-500">{t('userDetail.publisher')}:</label>
+              <label htmlFor="filter-publisher" className="text-sm text-zinc-500">{t('userDetail.publisher')}:</label>
               <select
+                id="filter-publisher"
+                name="filter-publisher"
+                aria-label={t('userDetail.publisher')}
                 value={filterPublisher}
                 onChange={(e) => setFilterPublisher(e.target.value)}
                 className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
@@ -168,8 +174,11 @@ export function ColumnDetailPage() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-zinc-500">{t('userDetail.columnName')}:</label>
+              <label htmlFor="filter-column" className="text-sm text-zinc-500">{t('userDetail.columnName')}:</label>
               <select
+                id="filter-column"
+                name="filter-column"
+                aria-label={t('userDetail.columnName')}
                 value={columnId}
                 onChange={(e) => handleColumnChange(e.target.value)}
                 className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700"

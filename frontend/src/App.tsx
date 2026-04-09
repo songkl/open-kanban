@@ -32,6 +32,7 @@ function App() {
         <Route path="/completed" element={<CompletedPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/activities" element={<ActivityLogPage />} />
+        <Route path="/activity" element={<ActivityLogPage />} />
         <Route path="/agent-activity" element={<AgentActivityPage />} />
         <Route path="/user/:userId" element={<UserDetailPage />} />
       </Routes>

@@ -16,7 +16,8 @@
   },
   "common": {
     "close": "Close",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "back": "Back"
   },
   "upload": {
     "fileTooLarge": "File too large, max 10MB",
@@ -395,6 +396,11 @@
   },
   "settings": {
     "title": "Settings",
+    "theme": "Theme",
+    "themeDescription": "Customize the appearance of your workspace",
+    "darkMode": "Dark Mode",
+    "darkModeOn": "On",
+    "darkModeOff": "Off",
     "edit": "Edit",
     "delete": "Delete",
     "back": "Back",
@@ -572,7 +578,8 @@
     "expand": "Expand",
     "moreSubtasks": "+{{count}} more",
     "completed": "Completed",
-    "viewComments": "View comments"
+    "viewComments": "View comments",
+    "selectTask": "Select task"
   },
   "taskModal": {
     "justNow": "Just now",
