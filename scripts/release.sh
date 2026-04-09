@@ -78,6 +78,25 @@ for PLATFORM in "${PLATFORMS[@]}"; do
   # Show size
   SIZE=$(ls -lh "$RELEASE_DIR/$OUTPUT_NAME" | awk '{print $5}')
   echo "    Size: $SIZE"
+
+  # Build MySQL-only version
+  MYSQL_OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}-mysql"
+  if [ "$GOOS" = "windows" ]; then
+    MYSQL_OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}-mysql.exe"
+  fi
+
+  echo "  Building $MYSQL_OUTPUT_NAME (MySQL-only)..."
+  GOOS=$GOOS GOARCH=$GOARCH go build -tags "mysql && !sqlite" -ldflags="-s -w" -o "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" ./cmd/server/main.go
+
+  # Compress with UPX if available (max compression)
+  if [ "$UPX_OK" = true ]; then
+    echo "    Compressing with UPX -9..."
+    upx -9 --best "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" 2>&1 || true
+  fi
+
+  # Show size
+  SIZE=$(ls -lh "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" | awk '{print $5}')
+  echo "    Size: $SIZE"
 done
 
 # Create web.tar.gz
@@ -105,6 +124,14 @@ echo "  - kanban-server-darwin-arm64"
 echo "  - kanban-server-linux-amd64"
 echo "  - kanban-server-linux-arm64"
 echo "  - kanban-server-windows-amd64.exe"
+echo "  - kanban-server-darwin-amd64-mysql"
+echo "  - kanban-server-darwin-arm64-mysql"
+echo "  - kanban-server-linux-amd64-mysql"
+echo "  - kanban-server-linux-arm64-mysql"
+echo "  - kanban-server-windows-amd64-mysql.exe"
 echo "  - web.tar.gz"
+echo ""
+echo "MySQL-only builds (no SQLite):"
+echo "  - kanban-server-*-mysql"
 echo ""
 echo "MCP Server: cd mcp-server && npm publish"
