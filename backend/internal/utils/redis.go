@@ -24,12 +24,24 @@ func decodeJSON(data string, v interface{}) error {
 }
 
 var (
-	redisClient     *redis.Client
-	redisClientOnce sync.Once
-	redisInitErr    error
+	redisClient      *redis.Client
+	redisClientOnce  sync.Once
+	redisInitErr     error
+	redisEnabled     bool
+	redisEnabledOnce sync.Once
 )
 
+func isRedisEnabled() bool {
+	redisEnabledOnce.Do(func() {
+		redisEnabled = os.Getenv("REDIS_ENABLED") == "true"
+	})
+	return redisEnabled
+}
+
 func GetRedisClient() (*redis.Client, error) {
+	if !isRedisEnabled() {
+		return nil, fmt.Errorf("redis is not enabled, set REDIS_ENABLED=true to enable")
+	}
 	redisClientOnce.Do(func() {
 		redisAddr := os.Getenv("REDIS_URL")
 		if redisAddr == "" {
@@ -60,6 +72,9 @@ func GetRedisClient() (*redis.Client, error) {
 }
 
 func IsRedisAvailable() bool {
+	if !isRedisEnabled() {
+		return false
+	}
 	client, err := GetRedisClient()
 	if err != nil {
 		return false
