@@ -468,6 +468,85 @@ describe('useTasks', () => {
     });
   });
 
+  describe('selectAllInColumn', () => {
+    it('should select all tasks in column when none are selected', () => {
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+      act(() => {
+        result.current.selectAllInColumn('col-1', ['task-1', 'task-2']);
+      });
+      expect(result.current.selectedTasks).toEqual(new Set(['task-1', 'task-2']));
+    });
+
+    it('should deselect all tasks when all are already selected', () => {
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+      act(() => {
+        result.current.handleTaskSelect('task-1', mockTask, { metaKey: true });
+        result.current.handleTaskSelect('task-2', { ...mockTask, id: 'task-2' }, { metaKey: true });
+      });
+      expect(result.current.selectedTasks.size).toBe(2);
+      act(() => {
+        result.current.selectAllInColumn('col-1', ['task-1', 'task-2']);
+      });
+      expect(result.current.selectedTasks.size).toBe(0);
+    });
+
+    it('should do nothing when column does not exist', () => {
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+      act(() => {
+        result.current.selectAllInColumn('nonexistent', ['task-1']);
+      });
+      expect(result.current.selectedTasks.size).toBe(0);
+    });
+
+    it('should do nothing when taskIds is empty', () => {
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+      act(() => {
+        result.current.selectAllInColumn('col-1', []);
+      });
+      expect(result.current.selectedTasks.size).toBe(0);
+    });
+  });
+
+  describe('handleTaskSelect with shift key', () => {
+    it('should select range with shift key', () => {
+      const allTasksColumns: typeof mockColumns = [
+        {
+          id: 'col-1',
+          name: 'To Do',
+          status: 'todo',
+          position: 0,
+          color: '#3b82f6',
+          tasks: [
+            { ...mockTask, id: 'task-1' },
+            { ...mockTask, id: 'task-2' },
+            { ...mockTask, id: 'task-3' },
+          ],
+          createdAt: '2024-01-01',
+          updatedAt: '2024-01-01',
+        },
+      ];
+      const { result } = renderHook(() =>
+        useTasks({ columns: allTasksColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+      act(() => {
+        result.current.handleTaskSelect('task-1', { ...mockTask, id: 'task-1' }, { shiftKey: true });
+      });
+      expect(result.current.selectedTasks).toEqual(new Set(['task-1']));
+      act(() => {
+        result.current.handleTaskSelect('task-3', { ...mockTask, id: 'task-3' }, { shiftKey: true });
+      });
+      expect(result.current.selectedTasks).toEqual(new Set(['task-1', 'task-2', 'task-3']));
+    });
+  });
+
   describe('ref access', () => {
     it('should provide access to lastLocalUpdateRef', () => {
       const { result } = renderHook(() =>

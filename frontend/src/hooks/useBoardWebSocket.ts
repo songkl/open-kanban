@@ -30,15 +30,24 @@ export function useBoardWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const currentBoardRef = useRef<Board | null>(null);
   const connectWebSocketRef = useRef<(() => void) | null>(null);
+  const unmountedRef = useRef(false);
+  const connectionIdRef = useRef(0);
+  const callbacksRef = useRef({ fetchColumns, handleTaskNotificationUpdate, processOfflineQueue, lastLocalUpdateRef });
 
   useEffect(() => {
     currentBoardRef.current = currentBoard;
   }, [currentBoard]);
 
+  useEffect(() => {
+    callbacksRef.current = { fetchColumns, handleTaskNotificationUpdate, processOfflineQueue, lastLocalUpdateRef };
+  }, [fetchColumns, handleTaskNotificationUpdate, processOfflineQueue, lastLocalUpdateRef]);
+
   const connectWebSocket = useCallback(() => {
+    if (unmountedRef.current) return;
+    const currentConnectionId = ++connectionIdRef.current;
     if (wsRef.current) {
-      wsRef.current.onclose = null;
       if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
+        wsRef.current.onclose = null;
         wsRef.current.close();
       }
     }
@@ -57,17 +66,23 @@ export function useBoardWebSocket({
 
     const getReconnectDelay = (attempt: number) => {
       const delay = Math.min(1000 * Math.pow(2, attempt), MAX_RECONNECT_DELAY);
-      return delay;
+      return delay + Math.random() * 1000;
+    };
+
+    ws.onerror = () => {
+      if (unmountedRef.current || currentConnectionId !== connectionIdRef.current) return;
+      console.log('WebSocket error occurred');
     };
 
     ws.onopen = () => {
+      if (unmountedRef.current) return;
       console.log('WebSocket connected');
       setWsStatus('connected');
       setReconnectCount(0);
       reconnectAttemptRef.current = 0;
-      processOfflineQueue();
+      callbacksRef.current.processOfflineQueue();
       if (currentBoardRef.current) {
-        fetchColumns(currentBoardRef.current.id, true);
+        callbacksRef.current.fetchColumns(currentBoardRef.current.id, true);
       }
     };
 
@@ -83,6 +98,7 @@ export function useBoardWebSocket({
     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL);
 
     ws.onmessage = (event) => {
+      if (unmountedRef.current) return;
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'heartbeat_ack') {
@@ -90,24 +106,24 @@ export function useBoardWebSocket({
         }
         if (message.type === 'refresh') {
           const now = Date.now();
-          if (now - lastLocalUpdateRef.current < REFRESH_DEBOUNCE_MS) {
+          if (now - callbacksRef.current.lastLocalUpdateRef.current < REFRESH_DEBOUNCE_MS) {
             console.log('Skipping redundant refresh after local update');
             return;
           }
           if (currentBoardRef.current) {
-            fetchColumns(currentBoardRef.current.id, true);
+            callbacksRef.current.fetchColumns(currentBoardRef.current.id, true);
           }
         } else if (message.type === 'task_notification') {
           const { boardId, taskId, action } = message;
           if (currentBoardRef.current && boardId === currentBoardRef.current.id) {
             const now = Date.now();
-            if (now - lastLocalUpdateRef.current < REFRESH_DEBOUNCE_MS) {
+            if (now - callbacksRef.current.lastLocalUpdateRef.current < REFRESH_DEBOUNCE_MS) {
               return;
             }
             if (action === 'create') {
-              fetchColumns(currentBoardRef.current.id, true);
+              callbacksRef.current.fetchColumns(currentBoardRef.current.id, true);
             } else if (action === 'update' || action === 'update_status') {
-              handleTaskNotificationUpdate(taskId);
+              callbacksRef.current.handleTaskNotificationUpdate(taskId);
             }
           }
         }
@@ -117,6 +133,7 @@ export function useBoardWebSocket({
     };
 
     ws.onclose = () => {
+      if (unmountedRef.current || currentConnectionId !== connectionIdRef.current) return;
       console.log('WebSocket disconnected');
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
@@ -136,27 +153,21 @@ export function useBoardWebSocket({
       }
     };
 
-    ws.onerror = () => {
-      if (ws.readyState !== WebSocket.OPEN) {
-        console.error('WebSocket error: connection failed');
-      }
-    };
-
     wsRef.current = ws;
-  }, [fetchColumns, handleTaskNotificationUpdate, processOfflineQueue, lastLocalUpdateRef]);
+  }, []);
 
   useEffect(() => {
     connectWebSocketRef.current = connectWebSocket;
   }, [connectWebSocket]);
 
   useEffect(() => {
+    unmountedRef.current = false;
     connectWebSocket();
 
     return () => {
+      unmountedRef.current = true;
       if (wsRef.current) {
-        if (wsRef.current.readyState === WebSocket.CONNECTING) {
-          wsRef.current.onclose = null;
-        }
+        wsRef.current.onclose = null;
         wsRef.current.close();
       }
     };

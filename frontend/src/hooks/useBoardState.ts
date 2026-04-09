@@ -166,7 +166,6 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
   const {
     wsStatus,
     reconnectCount,
-    connectWebSocket,
   } = useBoardWebSocket({
     currentBoard,
     fetchColumns,
@@ -183,22 +182,8 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
   }, []);
 
   useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        await Promise.all([
-          fetchBoards(),
-          new Promise<void>((resolve) => {
-            connectWebSocket();
-            resolve();
-          }),
-        ]);
-      } catch (error) {
-        console.error('Failed to load initial data:', error);
-      }
-    };
-
-    loadInitialData();
-  }, [fetchBoards, connectWebSocket]);
+    fetchBoards();
+  }, [fetchBoards]);
 
   useEffect(() => {
     if (currentBoard) {
