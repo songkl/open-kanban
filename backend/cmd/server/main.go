@@ -18,6 +18,43 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func loadEnvFromFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	for lineNum, line := range lines {
+		lineNum++
+		line = strings.TrimSpace(line)
+
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			log.Printf("Warning: Line %d: invalid format in config file\n", lineNum)
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		if key == "" {
+			log.Printf("Warning: Line %d: empty key in config file\n", lineNum)
+			continue
+		}
+
+		if _, exists := os.LookupEnv(key); !exists {
+			os.Setenv(key, value)
+		}
+	}
+
+	return nil
+}
+
 //go:embed web
 var embeddedWeb embed.FS
 
@@ -38,6 +75,8 @@ func main() {
 	userNickname := resetPasswordCmd.String("user", "", "User nickname")
 	newPassword := resetPasswordCmd.String("password", "", "New password")
 
+	configFilePath := flag.String("config", "", "Path to config file (reads env vars from file)")
+
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "reset-password":
@@ -49,10 +88,17 @@ func main() {
 			runPasswordReset(*userNickname, *newPassword)
 			return
 		case "help", "--help":
-			fmt.Println("Available commands:")
-			fmt.Println("  reset-password -user <nickname> -password <password>  Reset user password")
-			fmt.Println("  help                                                    Show this help")
+			printUsage()
 			return
+		}
+	}
+
+	flag.Parse()
+
+	if *configFilePath != "" {
+		log.Printf("Loading config from: %s", *configFilePath)
+		if err := loadEnvFromFile(*configFilePath); err != nil {
+			log.Fatalf("Failed to load config file: %v", err)
 		}
 	}
 
@@ -203,6 +249,9 @@ func main() {
 		tasks.GET("/:id", handlers.GetTask(db))
 		tasks.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 		tasks.POST("", handlers.CreateTask(db))
+		tasks.POST("/batch", handlers.BatchCreateTasks(db))
+		tasks.PUT("/batch", handlers.BatchUpdateTasks(db))
+		tasks.DELETE("/batch", handlers.BatchDeleteTasks(db))
 		tasks.PUT("/:id", handlers.UpdateTask(db))
 		tasks.DELETE("/:id", handlers.DeleteTask(db))
 		tasks.POST("/:id/archive", handlers.ArchiveTask(db))
@@ -404,6 +453,22 @@ func main() {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+}
+
+func printUsage() {
+	fmt.Println("kanban-server - Open Kanban Server")
+	fmt.Println("")
+	fmt.Println("Usage:")
+	fmt.Println("  kanban-server [options]")
+	fmt.Println("  kanban-server reset-password -user <nickname> -password <password>")
+	fmt.Println("")
+	fmt.Println("Options:")
+	fmt.Println("  -config <path>   Path to config file (reads env vars from file)")
+	fmt.Println("")
+	fmt.Println("Examples:")
+	fmt.Println("  kanban-server -config /tmp/kanban.env")
+	fmt.Println("  kanban-server -config /etc/kanban.env")
+	fmt.Println("")
 }
 
 func runPasswordReset(nickname, newPassword string) {
