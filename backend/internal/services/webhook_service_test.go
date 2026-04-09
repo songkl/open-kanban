@@ -16,13 +16,13 @@ func resetWebhookService() {
 }
 
 func TestInitWebhookService(t *testing.T) {
-	os.Setenv("WEBHOOK_ENABLED", "true")
-	os.Setenv("WEBHOOK_URL", "https://example.com/webhook")
-	os.Setenv("WEBHOOK_SECRET", "test-secret")
+	_ = os.Setenv("WEBHOOK_ENABLED", "true")
+	_ = os.Setenv("WEBHOOK_URL", "https://example.com/webhook")
+	_ = os.Setenv("WEBHOOK_SECRET", "test-secret")
 	defer func() {
-		os.Unsetenv("WEBHOOK_ENABLED")
-		os.Unsetenv("WEBHOOK_URL")
-		os.Unsetenv("WEBHOOK_SECRET")
+		_ = os.Unsetenv("WEBHOOK_ENABLED")
+		_ = os.Unsetenv("WEBHOOK_URL")
+		_ = os.Unsetenv("WEBHOOK_SECRET")
 	}()
 
 	ws := services.InitWebhookService()
@@ -31,13 +31,13 @@ func TestInitWebhookService(t *testing.T) {
 }
 
 func TestGetWebhookService(t *testing.T) {
-	os.Setenv("WEBHOOK_ENABLED", "false")
-	os.Setenv("WEBHOOK_URL", "")
-	os.Setenv("WEBHOOK_SECRET", "")
+	_ = os.Setenv("WEBHOOK_ENABLED", "false")
+	_ = os.Setenv("WEBHOOK_URL", "")
+	_ = os.Setenv("WEBHOOK_SECRET", "")
 	defer func() {
-		os.Unsetenv("WEBHOOK_ENABLED")
-		os.Unsetenv("WEBHOOK_URL")
-		os.Unsetenv("WEBHOOK_SECRET")
+		_ = os.Unsetenv("WEBHOOK_ENABLED")
+		_ = os.Unsetenv("WEBHOOK_URL")
+		_ = os.Unsetenv("WEBHOOK_SECRET")
 	}()
 
 	services.InitWebhookService()
@@ -61,15 +61,15 @@ func TestWebhookService_IsEnabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("WEBHOOK_ENABLED", "")
-			os.Setenv("WEBHOOK_URL", "")
-			os.Setenv("WEBHOOK_SECRET", "")
+			_ = os.Setenv("WEBHOOK_ENABLED", "")
+			_ = os.Setenv("WEBHOOK_URL", "")
+			_ = os.Setenv("WEBHOOK_SECRET", "")
 
 			if tt.enabled {
-				os.Setenv("WEBHOOK_ENABLED", "true")
+				_ = os.Setenv("WEBHOOK_ENABLED", "true")
 			}
 			if tt.url != "" {
-				os.Setenv("WEBHOOK_URL", tt.url)
+				_ = os.Setenv("WEBHOOK_URL", tt.url)
 			}
 
 			ws := services.InitWebhookService()
@@ -80,11 +80,11 @@ func TestWebhookService_IsEnabled(t *testing.T) {
 
 func TestWebhookService_SendWebhook(t *testing.T) {
 	t.Run("SendWebhook when disabled returns nil", func(t *testing.T) {
-		os.Setenv("WEBHOOK_ENABLED", "false")
-		os.Setenv("WEBHOOK_URL", "")
+		_ = os.Setenv("WEBHOOK_ENABLED", "false")
+		_ = os.Setenv("WEBHOOK_URL", "")
 		defer func() {
-			os.Unsetenv("WEBHOOK_ENABLED")
-			os.Unsetenv("WEBHOOK_URL")
+			_ = os.Unsetenv("WEBHOOK_ENABLED")
+			_ = os.Unsetenv("WEBHOOK_URL")
 		}()
 
 		ws := services.InitWebhookService()
@@ -93,11 +93,11 @@ func TestWebhookService_SendWebhook(t *testing.T) {
 	})
 
 	t.Run("SendWebhook when enabled but no url returns nil", func(t *testing.T) {
-		os.Setenv("WEBHOOK_ENABLED", "true")
-		os.Setenv("WEBHOOK_URL", "")
+		_ = os.Setenv("WEBHOOK_ENABLED", "true")
+		_ = os.Setenv("WEBHOOK_URL", "")
 		defer func() {
-			os.Unsetenv("WEBHOOK_ENABLED")
-			os.Unsetenv("WEBHOOK_URL")
+			_ = os.Unsetenv("WEBHOOK_ENABLED")
+			_ = os.Unsetenv("WEBHOOK_URL")
 		}()
 
 		ws := services.InitWebhookService()
@@ -115,13 +115,13 @@ func TestWebhookService_SendWebhook(t *testing.T) {
 		}))
 		defer server.Close()
 
-		os.Setenv("WEBHOOK_ENABLED", "true")
-		os.Setenv("WEBHOOK_URL", server.URL)
-		os.Setenv("WEBHOOK_SECRET", "test-secret")
+		_ = os.Setenv("WEBHOOK_ENABLED", "true")
+		_ = os.Setenv("WEBHOOK_URL", server.URL)
+		_ = os.Setenv("WEBHOOK_SECRET", "test-secret")
 		defer func() {
-			os.Unsetenv("WEBHOOK_ENABLED")
-			os.Unsetenv("WEBHOOK_URL")
-			os.Unsetenv("WEBHOOK_SECRET")
+			_ = os.Unsetenv("WEBHOOK_ENABLED")
+			_ = os.Unsetenv("WEBHOOK_URL")
+			_ = os.Unsetenv("WEBHOOK_SECRET")
 		}()
 
 		ws := services.InitWebhookService()
@@ -143,13 +143,13 @@ func TestWebhookService_SendWebhook(t *testing.T) {
 		}))
 		defer server.Close()
 
-		os.Setenv("WEBHOOK_ENABLED", "true")
-		os.Setenv("WEBHOOK_URL", server.URL)
-		os.Setenv("WEBHOOK_SECRET", "test-secret")
+		_ = os.Setenv("WEBHOOK_ENABLED", "true")
+		_ = os.Setenv("WEBHOOK_URL", server.URL)
+		_ = os.Setenv("WEBHOOK_SECRET", "test-secret")
 		defer func() {
-			os.Unsetenv("WEBHOOK_ENABLED")
-			os.Unsetenv("WEBHOOK_URL")
-			os.Unsetenv("WEBHOOK_SECRET")
+			_ = os.Unsetenv("WEBHOOK_ENABLED")
+			_ = os.Unsetenv("WEBHOOK_URL")
+			_ = os.Unsetenv("WEBHOOK_SECRET")
 		}()
 
 		ws := services.InitWebhookService()
@@ -166,13 +166,13 @@ func TestWebhookService_NotifyMethods(t *testing.T) {
 	}))
 	defer server.Close()
 
-	os.Setenv("WEBHOOK_ENABLED", "true")
-	os.Setenv("WEBHOOK_URL", server.URL)
-	os.Setenv("WEBHOOK_SECRET", "")
+	_ = os.Setenv("WEBHOOK_ENABLED", "true")
+	_ = os.Setenv("WEBHOOK_URL", server.URL)
+	_ = os.Setenv("WEBHOOK_SECRET", "")
 	defer func() {
-		os.Unsetenv("WEBHOOK_ENABLED")
-		os.Unsetenv("WEBHOOK_URL")
-		os.Unsetenv("WEBHOOK_SECRET")
+		_ = os.Unsetenv("WEBHOOK_ENABLED")
+		_ = os.Unsetenv("WEBHOOK_URL")
+		_ = os.Unsetenv("WEBHOOK_SECRET")
 	}()
 
 	ws := services.InitWebhookService()
@@ -199,13 +199,13 @@ func TestWebhookService_SendWebhook_NoSecret(t *testing.T) {
 	}))
 	defer server.Close()
 
-	os.Setenv("WEBHOOK_ENABLED", "true")
-	os.Setenv("WEBHOOK_URL", server.URL)
-	os.Setenv("WEBHOOK_SECRET", "")
+	_ = os.Setenv("WEBHOOK_ENABLED", "true")
+	_ = os.Setenv("WEBHOOK_URL", server.URL)
+	_ = os.Setenv("WEBHOOK_SECRET", "")
 	defer func() {
-		os.Unsetenv("WEBHOOK_ENABLED")
-		os.Unsetenv("WEBHOOK_URL")
-		os.Unsetenv("WEBHOOK_SECRET")
+		_ = os.Unsetenv("WEBHOOK_ENABLED")
+		_ = os.Unsetenv("WEBHOOK_URL")
+		_ = os.Unsetenv("WEBHOOK_SECRET")
 	}()
 
 	ws := services.InitWebhookService()

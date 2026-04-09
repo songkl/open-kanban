@@ -118,7 +118,7 @@ func setupServiceTestDB(t *testing.T) *sql.DB {
 
 func TestGetTasks(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -195,7 +195,7 @@ func TestGetTasks(t *testing.T) {
 
 func TestGetTask(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -250,7 +250,7 @@ func TestGetTask(t *testing.T) {
 
 func TestCreateTask(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -342,7 +342,7 @@ func TestCreateTask(t *testing.T) {
 
 func TestUpdateTask(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -427,7 +427,7 @@ func TestUpdateTask(t *testing.T) {
 
 func TestUpdateTaskAgentFields(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -453,7 +453,7 @@ func TestUpdateTaskAgentFields(t *testing.T) {
 
 func TestUpdateTaskPublishedField(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -478,7 +478,7 @@ func TestUpdateTaskPublishedField(t *testing.T) {
 
 func TestUpdateTaskMetaField(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -495,7 +495,7 @@ func TestUpdateTaskMetaField(t *testing.T) {
 
 func TestUpdateTaskAssigneeField(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -520,7 +520,7 @@ func TestUpdateTaskAssigneeField(t *testing.T) {
 
 func TestUpdateTaskNoChanges(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -542,7 +542,7 @@ func TestUpdateTaskNoChanges(t *testing.T) {
 
 func TestDeleteTask(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -561,7 +561,7 @@ func TestDeleteTask(t *testing.T) {
 
 func TestArchiveTask(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -626,7 +626,7 @@ func TestArchiveTask(t *testing.T) {
 
 func TestCompleteTask(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -669,7 +669,7 @@ func TestCompleteTask(t *testing.T) {
 
 func TestCalculatePosition(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -714,7 +714,7 @@ func TestCalculatePosition(t *testing.T) {
 
 func TestTriggerAgentForTask(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -723,7 +723,7 @@ func TestTriggerAgentForTask(t *testing.T) {
 
 func TestCompleteTaskLastColumn(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -737,7 +737,7 @@ func TestCompleteTaskLastColumn(t *testing.T) {
 
 func TestUpdateTaskPositionSameColumn(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -759,7 +759,7 @@ func TestUpdateTaskPositionSameColumn(t *testing.T) {
 
 func TestUpdateTaskColumnChange(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -787,7 +787,7 @@ func TestUpdateTaskColumnChange(t *testing.T) {
 
 func TestCreateTaskInvalidColumn(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -803,7 +803,7 @@ func TestCreateTaskInvalidColumn(t *testing.T) {
 
 func TestGetTasksByStatus(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 
@@ -821,7 +821,7 @@ func TestGetTasksByStatus(t *testing.T) {
 
 func TestGetTasksByBoardAndStatus(t *testing.T) {
 	db := setupServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewTaskService(db)
 

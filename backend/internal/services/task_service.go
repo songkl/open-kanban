@@ -70,7 +70,7 @@ func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, p
 		return nil, err
 	}
 
-	var result []gin.H
+	result := []gin.H{}
 	for _, task := range tasks {
 		commentCount := 0
 		subtaskCount := 0
@@ -261,8 +261,8 @@ func (s *TaskService) UpdateTask(taskID string, userID, role string, input Updat
 	}
 	if input.ColumnID != "" && input.ColumnID != oldTask.ColumnID {
 		var oldStatus, newStatus sql.NullString
-		s.db.QueryRow("SELECT status FROM columns WHERE id = ?", oldTask.ColumnID).Scan(&oldStatus)
-		s.db.QueryRow("SELECT status FROM columns WHERE id = ?", input.ColumnID).Scan(&newStatus)
+		_ = s.db.QueryRow("SELECT status FROM columns WHERE id = ?", oldTask.ColumnID).Scan(&oldStatus)
+		_ = s.db.QueryRow("SELECT status FROM columns WHERE id = ?", input.ColumnID).Scan(&newStatus)
 		oldStatusVal := ""
 		if oldStatus.Valid {
 			oldStatusVal = oldStatus.String
@@ -286,13 +286,13 @@ func (s *TaskService) UpdateTask(taskID string, userID, role string, input Updat
 		isSameColumn := targetColumnID == oldTask.ColumnID
 		if isSameColumn {
 			if newPos < oldPos {
-				s.taskRepo.ShiftPositionsUp(targetColumnID, newPos, oldPos, taskID)
+				_ = s.taskRepo.ShiftPositionsUp(targetColumnID, newPos, oldPos, taskID)
 			} else if newPos > oldPos {
-				s.taskRepo.ShiftPositionsDown(targetColumnID, oldPos, newPos, taskID)
+				_ = s.taskRepo.ShiftPositionsDown(targetColumnID, oldPos, newPos, taskID)
 			}
 		} else {
-			s.taskRepo.ShiftPositionsLeft(oldTask.ColumnID, oldPos)
-			s.taskRepo.ShiftPositionsRight(targetColumnID, newPos, taskID)
+			_ = s.taskRepo.ShiftPositionsLeft(oldTask.ColumnID, oldPos)
+			_ = s.taskRepo.ShiftPositionsRight(targetColumnID, newPos, taskID)
 		}
 	}
 	if input.Published != nil && *input.Published != oldTask.Published {
@@ -443,16 +443,16 @@ func (s *TaskService) generateTaskID(columnID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ? FOR UPDATE", boardID).Scan(&counter)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		tx, err = s.db.Begin()
 		if err != nil {
 			return "", err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		err = tx.QueryRow("SELECT task_counter FROM boards WHERE id = ?", boardID).Scan(&counter)
 		if err != nil {
 			return "", err
@@ -603,7 +603,7 @@ func (s *TaskService) SearchTasks(input SearchTasksInput) (*TaskListResult, erro
 		return nil, err
 	}
 
-	var result []gin.H
+	result := []gin.H{}
 	for _, task := range tasks {
 		commentCount := 0
 		subtaskCount := 0

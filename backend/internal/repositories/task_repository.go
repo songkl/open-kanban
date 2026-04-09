@@ -163,7 +163,7 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 	}
 	defer rows.Close()
 
-	var tasks []models.Task
+	tasks := []models.Task{}
 	for rows.Next() {
 		var task models.Task
 		var desc, assignee, meta, createdBy, createdByUsername, agentID, agentPrompt sql.NullString
@@ -495,7 +495,7 @@ func (r *TaskRepository) SearchTasks(params TaskSearchParams) ([]models.Task, in
 	}
 	defer rows.Close()
 
-	var tasks []models.Task
+	tasks := []models.Task{}
 	for rows.Next() {
 		var task models.Task
 		var desc, assignee, meta, createdBy, createdByUsername, agentID, agentPrompt sql.NullString

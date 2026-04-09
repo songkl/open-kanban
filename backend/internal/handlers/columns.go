@@ -291,10 +291,15 @@ func CreateColumn(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 
+		var responseStatus interface{}
+		if req.Status != "" {
+			responseStatus = req.Status
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"id":        colID,
 			"name":      req.Name,
-			"status":    req.Status,
+			"status":    responseStatus,
 			"position":  position,
 			"color":     color,
 			"boardId":   req.BoardID,
