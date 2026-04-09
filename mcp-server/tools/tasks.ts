@@ -178,7 +178,7 @@ export function create_task(srv: McpServer) {
       priority: args.priority || "medium",
       assignee: args.assignee,
       meta: args.meta,
-      published: args.published ?? false,
+      published: args.published ?? true,
       position: 9999,
     });
     broadcast();
@@ -273,5 +273,105 @@ export function complete_task(srv: McpServer) {
     const task = await apiPost<any>(`/api/v1/tasks/${id}/complete`, {});
     broadcast();
     return jsonToolResult(task);
+  });
+}
+
+export function batch_update_tasks(srv: McpServer) {
+  srv.registerTool("batch_update_tasks", {
+    description: "批量更新任务状态或移动任务到指定列",
+    inputSchema: z.object({
+      ids: z.array(z.string()).describe("任务ID列表"),
+      columnId: z.string().optional().describe("目标列ID，与status二选一"),
+      status: StatusEnum.optional().describe("目标状态，与columnId二选一"),
+      priority: PriorityEnum.optional().describe("新优先级"),
+      assignee: z.string().optional().describe("新负责人"),
+    }),
+  }, async (args) => {
+    if (!args.columnId && !args.status && !args.priority && !args.assignee) {
+      return createToolResult("at least one update field is required (columnId, status, priority, or assignee)", true);
+    }
+
+    let columnId = args.columnId;
+
+    if (!columnId && args.status) {
+      const allColumns = await apiGet<any[]>("/api/v1/columns");
+      const statusMap: Record<string, string> = {
+        "todo": "待办",
+        "in_progress": "进行中",
+        "testing": "待测试",
+        "review": "待审核",
+        "done": "已完成",
+      };
+      const columnName = statusMap[args.status];
+      if (columnName) {
+        const col = allColumns.find((c: any) => c.name === columnName);
+        if (col) {
+          columnId = col.id;
+        }
+      }
+    }
+
+    const updateData: any = {};
+    if (columnId) updateData.columnId = columnId;
+    if (args.priority) updateData.priority = args.priority;
+    if (args.assignee) updateData.assignee = args.assignee;
+
+    const result = await apiPut<any>("/api/v1/tasks/batch", {
+      ids: args.ids,
+      ...updateData,
+    });
+    broadcast();
+    return jsonToolResult(result);
+  });
+}
+
+export function batch_delete_tasks(srv: McpServer) {
+  srv.registerTool("batch_delete_tasks", {
+    description: "批量删除任务",
+    inputSchema: z.object({
+      ids: z.array(z.string()).describe("任务ID列表"),
+    }),
+  }, async (args) => {
+    if (!args.ids || args.ids.length === 0) {
+      return createToolResult("at least one task id is required", true);
+    }
+
+    const { apiDeleteWithResult } = await import("./helpers.js");
+    const result = await apiDeleteWithResult<any>("/api/v1/tasks/batch", { ids: args.ids });
+    broadcast();
+    return jsonToolResult(result);
+  });
+}
+
+export function batch_create_tasks(srv: McpServer) {
+  srv.registerTool("batch_create_tasks", {
+    description: "批量创建任务",
+    inputSchema: z.object({
+      tasks: z.array(z.object({
+        title: z.string().describe("任务标题"),
+        description: z.string().optional().describe("任务描述"),
+        columnId: z.string().describe("所属列ID"),
+        priority: PriorityEnum.optional().describe("优先级 (low/medium/high)"),
+        assignee: z.string().optional().describe("负责人"),
+        published: z.boolean().optional().describe("是否发布到看板，默认 true"),
+      })).describe("任务列表"),
+    }),
+  }, async (args) => {
+    if (!args.tasks || args.tasks.length === 0) {
+      return createToolResult("at least one task is required", true);
+    }
+
+    const tasks = args.tasks.map(t => ({
+      title: t.title,
+      description: t.description,
+      columnId: t.columnId,
+      priority: t.priority || "medium",
+      assignee: t.assignee,
+      published: t.published !== false,
+    }));
+
+    const result = await apiPost<any>("/api/v1/tasks/batch", { tasks });
+    broadcast();
+    return jsonToolResult(result);
   });
 }

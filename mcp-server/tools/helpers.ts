@@ -53,17 +53,36 @@ export async function apiPut<T>(path: string, body: any): Promise<T> {
   return text ? JSON.parse(text) : ({} as T);
 }
 
-export async function apiDelete(path: string): Promise<void> {
+export async function apiDelete(path: string, body?: any): Promise<void> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "DELETE",
     headers: {
+      "Content-Type": "application/json",
       ...(MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {}),
       [MCP_REQUEST_HEADER]: "true",
     },
+    body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
+}
+
+export async function apiDeleteWithResult<T>(path: string, body?: any): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...(MCP_TOKEN ? { "Authorization": `Bearer ${MCP_TOKEN}` } : {}),
+      [MCP_REQUEST_HEADER]: "true",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status} ${res.statusText}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : ({} as T);
 }
 
 export async function broadcast() {

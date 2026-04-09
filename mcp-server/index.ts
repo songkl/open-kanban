@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { get_status } from "./tools/boards.js";
 import { list_boards, get_board } from "./tools/boards.js";
 import { list_columns, get_column } from "./tools/columns.js";
-import { list_tasks, get_task, create_task, update_task, delete_task, complete_task } from "./tools/tasks.js";
+import { list_tasks, get_task, create_task, update_task, delete_task, complete_task, batch_update_tasks, batch_delete_tasks, batch_create_tasks } from "./tools/tasks.js";
 import { list_drafts, publish_task } from "./tools/drafts.js";
 import { list_archived_tasks, archive_task } from "./tools/archive.js";
 import { add_comment, list_comments } from "./tools/comments.js";
@@ -28,6 +28,9 @@ export function registerTools(srv: McpServer) {
   update_task(srv);
   delete_task(srv);
   complete_task(srv);
+  batch_update_tasks(srv);
+  batch_delete_tasks(srv);
+  batch_create_tasks(srv);
   list_drafts(srv);
   publish_task(srv);
   list_archived_tasks(srv);
