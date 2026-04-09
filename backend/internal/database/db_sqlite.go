@@ -1,18 +1,14 @@
-//go:build !mysql && !sqlite
+//go:build sqlite && !mysql
 
 package database
 
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"strings"
-	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/mysql"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/mattn/go-sqlite3"
@@ -70,19 +66,6 @@ func getEnvOrDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
-func InitDB() (*sql.DB, error) {
-	config := GetDBConfig()
-
-	switch config.Type {
-	case "mysql":
-		return initMySQL(config)
-	case "sqlite":
-		return initSQLite(config)
-	default:
-		return nil, fmt.Errorf("unsupported database type: %s", config.Type)
-	}
-}
-
 func initSQLite(config *DBConfig) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", config.Path)
 	if err != nil {
@@ -103,47 +86,6 @@ func initSQLite(config *DBConfig) (*sql.DB, error) {
 
 	if err := runSQLiteMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run SQLite migrations: %w", err)
-	}
-
-	return db, nil
-}
-
-func initMySQL(config *DBConfig) (*sql.DB, error) {
-	rootDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/",
-		config.User, config.Password, config.Host, config.Port)
-
-	rootDB, err := sql.Open("mysql", rootDSN)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MySQL server: %w", err)
-	}
-	defer rootDB.Close()
-
-	_, err = rootDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", config.Database))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MySQL database: %w", err)
-	}
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4",
-		config.User, config.Password, config.Host, config.Port, config.Database)
-
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open MySQL database: %w", err)
-	}
-
-	db.SetMaxOpenConns(config.MaxOpenConns)
-	db.SetMaxIdleConns(config.MaxIdleConns)
-	db.SetConnMaxLifetime(time.Duration(config.ConnMaxLifetime) * time.Second)
-
-	log.Printf("[MySQL] Connection pool configured: MaxOpenConns=%d, MaxIdleConns=%d, ConnMaxLifetime=%ds",
-		config.MaxOpenConns, config.MaxIdleConns, config.ConnMaxLifetime)
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping MySQL database: %w", err)
-	}
-
-	if err := runMySQLMigrations(db, config.Database); err != nil {
-		return nil, fmt.Errorf("failed to run MySQL migrations: %w", err)
 	}
 
 	return db, nil
@@ -178,31 +120,10 @@ func runSQLiteMigrations(db *sql.DB) error {
 	return nil
 }
 
-func runMySQLMigrations(db *sql.DB, databaseName string) error {
-	driver, err := mysql.WithInstance(db, &mysql.Config{})
-	if err != nil {
-		return fmt.Errorf("failed to create MySQL migration driver: %w", err)
+func InitDB() (*sql.DB, error) {
+	config := GetDBConfig()
+	if config.Type != "sqlite" {
+		return nil, fmt.Errorf("unsupported database type: %s (SQLite build only supports sqlite)", config.Type)
 	}
-
-	d, err := iofs.New(migrations.MySQLFS, "mysql")
-	if err != nil {
-		return fmt.Errorf("failed to create MySQL migration source: %w", err)
-	}
-
-	m, err := migrate.NewWithInstance("iofs", d, databaseName, driver)
-	if err != nil {
-		return fmt.Errorf("failed to create MySQL migrate instance: %w", err)
-	}
-
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
-			if forceErr := m.Force(7); forceErr != nil {
-				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
-			}
-		} else {
-			return fmt.Errorf("failed to run MySQL migrations: %w", err)
-		}
-	}
-
-	return nil
+	return initSQLite(config)
 }
