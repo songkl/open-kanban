@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.openkanban.server</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/kanban-server</string>
+        <string>-config</string>
+        <string>/opt/kanban/kanban.env</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/opt/kanban</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/opt/kanban/logs/kanban.log</string>
+    <key>StandardErrorPath</key>
+    <string>/opt/kanban/logs/kanban.error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>8080</string>
+        <key>DB_TYPE</key>
+        <string>sqlite</string>
+        <key>DATABASE_URL</key>
+        <string>/opt/kanban/kanban.db</string>
+    </dict>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>1024</integer>
+    </dict>
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>512</integer>
+    </dict>
+</dict>
+</plist>

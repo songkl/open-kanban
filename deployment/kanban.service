@@ -1,0 +1,23 @@
+[Unit]
+Description=Open Kanban Server
+Documentation=https://github.com/songkl/open-kanban
+After=network.target
+
+[Service]
+Type=simple
+User=kanban
+Group=kanban
+WorkingDirectory=/opt/kanban
+ExecStart=/usr/local/bin/kanban-server -config /opt/kanban/kanban.env
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kanban
+
+Environment=PORT=8080
+Environment=DB_TYPE=sqlite
+Environment=DATABASE_URL=/opt/kanban/kanban.db
+
+[Install]
+WantedBy=multi-user.target
