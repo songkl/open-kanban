@@ -16,6 +16,8 @@ export function list_tasks(srv: McpServer) {
       searchQuery: z.string().optional().describe("搜索任务标题和描述"),
       dateRange: DateRangeEnum.optional().describe("按创建时间筛选"),
       tag: z.string().optional().describe("按标签筛选"),
+      lightweight: z.boolean().optional().default(true).describe("返回轻量数据(默认true)，只包含id/title/priority/assignee/createdAt"),
+      fields: z.enum(["id", "id+updated"]).optional().describe("变更检测场景：id或id+updatedAt"),
     }),
   }, async (args) => {
     const boardId = args.boardId;
@@ -110,8 +112,23 @@ export function list_tasks(srv: McpServer) {
       });
     }
 
-    const lightweightTasks = tasks.map(({ comments, subtasks, ...task }: any) => task);
-    return jsonToolResult(lightweightTasks);
+    let resultTasks: any[];
+    if (args.fields === "id") {
+      resultTasks = tasks.map((t: any) => ({ id: t.id }));
+    } else if (args.fields === "id+updated") {
+      resultTasks = tasks.map((t: any) => ({ id: t.id, updatedAt: t.updatedAt }));
+    } else if (args.lightweight !== false) {
+      resultTasks = tasks.map(({ comments, subtasks, description, meta, columnId, position, published, archived, archivedAt, subtaskCount, ...task }: any) => ({
+        id: task.id,
+        title: task.title,
+        priority: task.priority,
+        assignee: task.assignee,
+        createdAt: task.createdAt,
+      }));
+    } else {
+      resultTasks = tasks.map(({ comments, subtasks, ...task }: any) => task);
+    }
+    return jsonToolResult(resultTasks);
   });
 }
 
