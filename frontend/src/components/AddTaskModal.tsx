@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next';
 import { columnsApi } from '@/services/api';
 import { CustomDropdown } from './CustomDropdown';
-import type { Column } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
 
@@ -33,7 +32,7 @@ export function AddTaskModal({
   const [description, setDescription] = useState('');
   const [isPublished, setIsPublished] = useState(true);
   const [selectedBoardId, setSelectedBoardId] = useState(currentBoardId || '');
-  const [columns, setColumns] = useState<Column[]>([]);
+  const [columns, setColumns] = useState<{ id: string; name: string }[]>([]);
   const [selectedColumnId, setSelectedColumnId] = useState('');
   const [priority, setPriority] = useState('medium');
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -46,7 +45,7 @@ export function AddTaskModal({
         if (defaultColumnId && data.some((c) => c.id === defaultColumnId)) {
           setSelectedColumnId(defaultColumnId);
         } else {
-          const todoCol = data.find((c) => c.status === 'todo');
+          const todoCol = data.find((c) => c.name === t('task.status.todo'));
           setSelectedColumnId(todoCol?.id || data[0]?.id || '');
         }
       });
@@ -164,47 +163,24 @@ export function AddTaskModal({
           {boards.length > 0 && (
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('task.selectBoard')}</label>
-              <select
+              <CustomDropdown
+                options={boards.map(board => ({ value: board.id, label: board.name }))}
                 value={selectedBoardId}
-                onChange={(e) => setSelectedBoardId(e.target.value)}
-                className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm dark:bg-zinc-700 dark:text-zinc-100"
-              >
-                {boards.map((board) => (
-                  <option key={board.id} value={board.id}>
-                    {board.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedBoardId}
+                className="w-full"
+              />
             </div>
           )}
 
           {columns.length > 0 && (
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('task.selectColumn')}</label>
-              <select
+              <CustomDropdown
+                options={columns.map(col => ({ value: col.id, label: col.name }))}
                 value={selectedColumnId}
-                onChange={(e) => setSelectedColumnId(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    const currentIndex = columns.findIndex((c) => c.id === selectedColumnId);
-                    let nextIndex;
-                    if (e.key === 'ArrowDown') {
-                      nextIndex = currentIndex < columns.length - 1 ? currentIndex + 1 : 0;
-                    } else {
-                      nextIndex = currentIndex > 0 ? currentIndex - 1 : columns.length - 1;
-                    }
-                    setSelectedColumnId(columns[nextIndex].id);
-                  }
-                }}
-                className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm dark:bg-zinc-700 dark:text-zinc-100"
-              >
-                {columns.map((col) => (
-                    <option key={col.id} value={col.id}>
-                      {col.name}
-                    </option>
-                  ))}
-              </select>
+                onChange={setSelectedColumnId}
+                className="w-full"
+              />
             </div>
           )}
 
@@ -221,12 +197,12 @@ export function AddTaskModal({
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('taskModal.priority')}</label>
             <CustomDropdown
-              value={priority}
               options={[
                 { value: 'low', label: t('taskModal.priorityLow') },
                 { value: 'medium', label: t('taskModal.priorityMedium') },
                 { value: 'high', label: t('taskModal.priorityHigh') },
               ]}
+              value={priority}
               onChange={setPriority}
               className="w-full"
             />

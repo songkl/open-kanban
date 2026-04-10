@@ -430,8 +430,8 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 
 func getCurrentUserFromToken(db *sql.DB, tokenKey string) *models.User {
 	if cached, ok := tokenCache.Load(tokenKey); ok {
-		if entry, ok := cached.(*cachedUser); ok && time.Now().Before(entry.expiresAt) && entry.user.Enabled {
-			return entry.user
+		if time.Now().Before(cached.expiresAt) && cached.user.Enabled {
+			return cached.user
 		}
 	}
 

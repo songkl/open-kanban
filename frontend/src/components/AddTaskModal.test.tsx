@@ -6,8 +6,8 @@ import { AddTaskModal } from './AddTaskModal';
 vi.mock('@/services/api', () => ({
   columnsApi: {
     getByBoard: vi.fn().mockResolvedValue([
-      { id: 'col-1', name: 'To Do', status: 'todo' },
-      { id: 'col-2', name: 'In Progress', status: 'in_progress' },
+      { id: 'col-1', name: 'To Do' },
+      { id: 'col-2', name: 'In Progress' },
     ]),
   },
 }));
@@ -72,10 +72,27 @@ describe('AddTaskModal', () => {
     expect(input).toHaveValue('');
   });
 
-  it('renders priority select with three options', () => {
+  it('renders priority dropdown and calls onSubmit with correct priority when changed', async () => {
     render(<AddTaskModal {...defaultProps} />);
     const priorityButton = screen.getByRole('button', { name: 'taskModal.priorityMedium' });
     expect(priorityButton).toBeInTheDocument();
+    await userEvent.click(priorityButton);
+    expect(screen.getByRole('option', { name: 'taskModal.priorityLow' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'taskModal.priorityMedium' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'taskModal.priorityHigh' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: 'taskModal.priorityHigh' }));
+    const input = screen.getByPlaceholderText('task.titlePlaceholder');
+    await userEvent.type(input, 'New Task Title');
+    const submitButton = screen.getByRole('button', { name: 'task.add' });
+    await userEvent.click(submitButton);
+    expect(defaultProps.onSubmit).toHaveBeenCalledWith(
+      'New Task Title',
+      '',
+      true,
+      expect.any(String),
+      expect.any(String),
+      'high'
+    );
   });
 
   it('renders publish checkbox', () => {

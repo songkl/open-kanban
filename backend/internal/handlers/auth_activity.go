@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -24,13 +25,23 @@ type Activity struct {
 }
 
 func LogActivity(db *sql.DB, userID, action, targetType, targetID, targetTitle, details, ipAddress, source string) {
+	if userID == "" {
+		slog.Error("LogActivity called with empty userID", "action", action, "targetType", targetType, "targetID", targetID)
+		return
+	}
 	id := generateID()
 	createdAt := time.Now()
-	db.Exec(
+	_, err := db.Exec(
 		"INSERT INTO activities (id, user_id, action, target_type, target_id, target_title, details, ip_address, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		id, userID, action, targetType, targetID, targetTitle, details, ipAddress, source, createdAt,
 	)
-	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", userID)
+	if err != nil {
+		slog.Error("Failed to insert activity", "error", err, "userID", userID, "action", action, "targetType", targetType, "targetID", targetID)
+	}
+	_, err = db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", userID)
+	if err != nil {
+		slog.Error("Failed to update user last_active_at", "error", err, "userID", userID)
+	}
 	go BroadcastActivityExternal(sanitizeActivity(Activity{
 		ID:          id,
 		UserID:      userID,

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { FilterState, FilterPreset } from '../hooks/useFilters';
+import { CustomDropdown } from './CustomDropdown';
 
 interface FilterPanelContentProps {
   filters: FilterState;
@@ -33,69 +34,57 @@ export function FilterPanelContent({
   return (
     <>
       <div className="mb-3">
-        <label htmlFor="filter-priority" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
-        <select
-          id="filter-priority"
-          name="filter-priority"
+        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
+        <CustomDropdown
+          options={[
+            { value: '', label: t('filter.all') },
+            { value: 'high', label: t('filter.high') },
+            { value: 'medium', label: t('filter.medium') },
+            { value: 'low', label: t('filter.low') },
+          ]}
           value={filters.priority}
-          onChange={(e) => onSetFilters((prev) => ({ ...prev, priority: e.target.value }))}
-          className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-        >
-          <option value="">{t('filter.all')}</option>
-          <option value="high">{t('filter.high')}</option>
-          <option value="medium">{t('filter.medium')}</option>
-          <option value="low">{t('filter.low')}</option>
-        </select>
+          onChange={(val) => onSetFilters((prev) => ({ ...prev, priority: val }))}
+          className="w-full"
+        />
       </div>
       <div className="mb-3">
-        <label htmlFor="filter-assignee" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
-        <select
-          id="filter-assignee"
-          name="filter-assignee"
+        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
+        <CustomDropdown
+          options={[
+            { value: '', label: t('filter.all') },
+            ...uniqueAssignees.map((a) => ({ value: a, label: a })),
+          ]}
           value={filters.assignee}
-          onChange={(e) => onSetFilters((prev) => ({ ...prev, assignee: e.target.value }))}
-          className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-        >
-          <option value="">{t('filter.all')}</option>
-          {uniqueAssignees.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => onSetFilters((prev) => ({ ...prev, assignee: val }))}
+          className="w-full"
+        />
       </div>
       <div className="mb-3">
-        <label htmlFor="filter-date-range" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
-        <select
-          id="filter-date-range"
-          name="filter-date-range"
+        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
+        <CustomDropdown
+          options={[
+            { value: '', label: t('filter.all') },
+            { value: 'today', label: t('filter.today') },
+            { value: 'thisWeek', label: t('filter.thisWeek') },
+            { value: 'thisMonth', label: t('filter.thisMonth') },
+          ]}
           value={filters.dateRange}
-          onChange={(e) => onSetFilters((prev) => ({ ...prev, dateRange: e.target.value }))}
-          className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-        >
-          <option value="">{t('filter.all')}</option>
-          <option value="today">{t('filter.today')}</option>
-          <option value="thisWeek">{t('filter.thisWeek')}</option>
-          <option value="thisMonth">{t('filter.thisMonth')}</option>
-        </select>
+          onChange={(val) => onSetFilters((prev) => ({ ...prev, dateRange: val }))}
+          className="w-full"
+        />
       </div>
       {uniqueTags.length > 0 && (
         <div className="mb-3">
-          <label htmlFor="filter-tag" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
-          <select
-            id="filter-tag"
-            name="filter-tag"
+          <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
+          <CustomDropdown
+            options={[
+              { value: '', label: t('filter.all') },
+              ...uniqueTags.map((tag) => ({ value: tag, label: tag })),
+            ]}
             value={filters.tag}
-            onChange={(e) => onSetFilters((prev) => ({ ...prev, tag: e.target.value }))}
-            className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">{t('filter.all')}</option>
-            {uniqueTags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
+            onChange={(val) => onSetFilters((prev) => ({ ...prev, tag: val }))}
+            className="w-full"
+          />
         </div>
       )}
       <div className="flex gap-2 pt-2 border-t border-zinc-100">

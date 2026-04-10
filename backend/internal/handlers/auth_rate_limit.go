@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"open-kanban/internal/config"
+	"open-kanban/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -112,7 +113,6 @@ func (r *redisRateLimitStore) check(key string, maxRequests int, windowSecs int)
 
 var (
 	rateLimitStoreInstance rateLimitStore
-	redisClient            *redis.Client
 )
 
 func cleanupOldRateLimitEntriesLocked(now time.Time) {
@@ -259,20 +259,16 @@ func init() {
 	}
 
 	rateLimitStoreType := os.Getenv("RATE_LIMIT_STORE")
+	if rateLimitStoreType == "" && utils.IsRedisAvailable() {
+		rateLimitStoreType = "redis"
+	}
+
 	if rateLimitStoreType == "redis" {
-		redisAddr := os.Getenv("REDIS_URL")
-		if redisAddr == "" {
-			redisAddr = "localhost:6379"
-		}
-		redisClient = redis.NewClient(&redis.Options{
-			Addr: redisAddr,
-		})
-		ctx := context.Background()
-		_, err := redisClient.Ping(ctx).Result()
+		client, err := utils.GetRedisClient()
 		if err == nil {
 			rateLimitStoreInstance = &redisRateLimitStore{
-				client: redisClient,
-				ctx:    ctx,
+				client: client,
+				ctx:    context.Background(),
 			}
 		} else {
 			rateLimitStoreInstance = &memoryRateLimitStore{}

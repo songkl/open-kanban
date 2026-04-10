@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"open-kanban/internal/config"
+	"open-kanban/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -58,32 +59,111 @@ var (
 			return isOriginAllowed(origin)
 		},
 	}
-	clients          = make(map[*websocket.Conn]*Client)
+	clients          = make(map[*websocket.Conn]bool)
 	clientsMux       sync.RWMutex
 	userConnCount    = make(map[string]int)
 	userConnCountMux sync.Mutex
 )
 
-type Client struct {
-	conn *websocket.Conn
+type connectionCounter interface {
+	GetTotalConnections() (int64, error)
+	IncrTotal() (int64, error)
+	DecrTotal() (int64, error)
+	GetUserConnections(userID string) (int64, error)
+	IncrUser(userID string) (int64, error)
+	DecrUser(userID string) (int64, error)
 }
 
-func NewClient(conn *websocket.Conn) *Client {
-	return &Client{conn: conn}
+type memoryConnectionCounter struct{}
+
+func (m *memoryConnectionCounter) GetTotalConnections() (int64, error) {
+	clientsMux.RLock()
+	defer clientsMux.RUnlock()
+	return int64(len(clients)), nil
 }
 
-func (c *Client) WriteMessage(data []byte) bool {
-	return c.conn.WriteMessage(websocket.TextMessage, data) == nil
+func (m *memoryConnectionCounter) IncrTotal() (int64, error) {
+	clientsMux.Lock()
+	defer clientsMux.Unlock()
+	return int64(len(clients) + 1), nil
 }
 
-func (c *Client) Close() {
-	c.conn.Close()
+func (m *memoryConnectionCounter) DecrTotal() (int64, error) {
+	clientsMux.Lock()
+	defer clientsMux.Unlock()
+	return int64(len(clients) - 1), nil
+}
+
+func (m *memoryConnectionCounter) GetUserConnections(userID string) (int64, error) {
+	userConnCountMux.Lock()
+	defer userConnCountMux.Unlock()
+	return int64(userConnCount[userID]), nil
+}
+
+func (m *memoryConnectionCounter) IncrUser(userID string) (int64, error) {
+	userConnCountMux.Lock()
+	defer userConnCountMux.Unlock()
+	userConnCount[userID]++
+	return int64(userConnCount[userID]), nil
+}
+
+func (m *memoryConnectionCounter) DecrUser(userID string) (int64, error) {
+	userConnCountMux.Lock()
+	defer userConnCountMux.Unlock()
+	userConnCount[userID]--
+	if userConnCount[userID] <= 0 {
+		delete(userConnCount, userID)
+	}
+	return int64(userConnCount[userID]), nil
+}
+
+type redisConnectionCounter struct {
+	counter *utils.RedisConnectionCounter
+}
+
+func (r *redisConnectionCounter) GetTotalConnections() (int64, error) {
+	return r.counter.GetTotalConnections()
+}
+
+func (r *redisConnectionCounter) IncrTotal() (int64, error) {
+	return r.counter.IncrTotal()
+}
+
+func (r *redisConnectionCounter) DecrTotal() (int64, error) {
+	return r.counter.DecrTotal()
+}
+
+func (r *redisConnectionCounter) GetUserConnections(userID string) (int64, error) {
+	return r.counter.GetUserConnections(userID)
+}
+
+func (r *redisConnectionCounter) IncrUser(userID string) (int64, error) {
+	return r.counter.IncrUser(userID)
+}
+
+func (r *redisConnectionCounter) DecrUser(userID string) (int64, error) {
+	return r.counter.DecrUser(userID)
+}
+
+var (
+	connCounter     connectionCounter
+	connCounterOnce sync.Once
+)
+
+func initConnectionCounter() {
+	connCounterOnce.Do(func() {
+		redisCounter, err := utils.NewRedisConnectionCounter()
+		if err == nil && utils.IsRedisAvailable() {
+			connCounter = &redisConnectionCounter{counter: redisCounter}
+		} else {
+			connCounter = &memoryConnectionCounter{}
+		}
+	})
 }
 
 func getConnectionCount() int {
-	clientsMux.RLock()
-	defer clientsMux.RUnlock()
-	return len(clients)
+	count, _ := connCounter.GetTotalConnections()
+	return int(count)
 }
 
 func GetConnectionCount() int {
@@ -99,10 +179,8 @@ func isConnectionAllowed() bool {
 	if maxConns == 0 {
 		return true
 	}
-	clientsMux.RLock()
-	allowed := len(clients) < maxConns
-	clientsMux.RUnlock()
-	return allowed
+	count, _ := connCounter.GetTotalConnections()
+	return count < int64(maxConns)
 }
 
 func isUserConnectionAllowed(userID string) bool {
@@ -110,30 +188,23 @@ func isUserConnectionAllowed(userID string) bool {
 	if maxConnsPerUser == 0 {
 		return true
 	}
-	userConnCountMux.Lock()
-	defer userConnCountMux.Unlock()
-	count := userConnCount[userID]
-	return count < maxConnsPerUser
+	count, _ := connCounter.GetUserConnections(userID)
+	return count < int64(maxConnsPerUser)
 }
 
 func incrementUserConnCount(userID string) {
-	userConnCountMux.Lock()
-	defer userConnCountMux.Unlock()
-	userConnCount[userID]++
+	connCounter.IncrUser(userID)
 }
 
 func decrementUserConnCount(userID string) {
-	userConnCountMux.Lock()
-	defer userConnCountMux.Unlock()
-	userConnCount[userID]--
-	if userConnCount[userID] <= 0 {
-		delete(userConnCount, userID)
-	}
+	connCounter.DecrUser(userID)
 }
 
 // WebSocketHandler handles WebSocket connections
 func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		initConnectionCounter()
+
 		tokenKey := ""
 
 		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
@@ -183,15 +254,15 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			return nil
 		})
 
-		client := NewClient(conn)
-
 		clientsMux.Lock()
-		clients[conn] = client
+		clients[conn] = true
 		clientsMux.Unlock()
+		connCounter.IncrTotal()
 		incrementUserConnCount(userID)
 		initBroadcastWorker()
 
-		slog.Info("WebSocket client connected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConnCount[userID])
+		userConns, _ := connCounter.GetUserConnections(userID)
+		slog.Info("WebSocket client connected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConns)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -207,8 +278,9 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				case <-done:
 					return
 				case <-pingTicker.C:
-					if !client.WriteMessage([]byte(`{"type":"ping"}`)) {
-						slog.Warn("Failed to send ping to client", "request_id", requestID, "user_id", userID)
+					conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
+					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+						slog.Warn("Failed to send ping to client", "request_id", requestID, "user_id", userID, "error", err)
 						return
 					}
 				}
@@ -229,8 +301,9 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				break
 			}
 			if msgType == websocket.TextMessage {
-				if !client.WriteMessage([]byte(`{"type":"heartbeat_ack"}`)) {
-					slog.Warn("Failed to send heartbeat_ack to client", "request_id", requestID, "user_id", userID)
+				conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`)); err != nil {
+					slog.Warn("Failed to send heartbeat_ack to client", "request_id", requestID, "user_id", userID, "error", err)
 					break
 				}
 			}
@@ -240,8 +313,14 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		wg.Wait()
 
 		safeRemoveClient(conn)
+		connCounter.DecrTotal()
 		decrementUserConnCount(userID)
 
-		slog.Info("WebSocket client disconnected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConnCount[userID])
+		userConns, _ = connCounter.GetUserConnections(userID)
+		slog.Info("WebSocket client disconnected", "request_id", requestID, "user_id", userID, "total_clients", getConnectionCount(), "user_connections", userConns)
 	}
+}
+
+func init() {
+	initConnectionCounter()
 }

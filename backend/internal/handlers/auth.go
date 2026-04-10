@@ -15,6 +15,7 @@ import (
 
 	"open-kanban/internal/database"
 	"open-kanban/internal/models"
+	"open-kanban/internal/utils"
 )
 
 type cachedUser struct {
@@ -22,9 +23,79 @@ type cachedUser struct {
 	expiresAt time.Time
 }
 
-var tokenCache sync.Map
+type tokenCacheStore interface {
+	Load(token string) (*cachedUser, bool)
+	Store(token string, entry *cachedUser)
+	Delete(token string)
+}
 
-const tokenCacheDuration = 5 * time.Minute
+type memoryTokenCache struct {
+	cache sync.Map
+}
+
+func (m *memoryTokenCache) Load(token string) (*cachedUser, bool) {
+	if cached, ok := m.cache.Load(token); ok {
+		if entry, ok := cached.(*cachedUser); ok {
+			return entry, true
+		}
+	}
+	return nil, false
+}
+
+func (m *memoryTokenCache) Store(token string, entry *cachedUser) {
+	m.cache.Store(token, entry)
+}
+
+func (m *memoryTokenCache) Delete(token string) {
+	m.cache.Delete(token)
+}
+
+type redisTokenCacheStore struct {
+	cache *utils.RedisTokenCache
+}
+
+func (r *redisTokenCacheStore) Load(token string) (*cachedUser, bool) {
+	entry, found, err := r.cache.Load(token)
+	if err != nil || !found {
+		return nil, false
+	}
+	return &cachedUser{
+		user: &models.User{
+			ID:       entry.UserID,
+			Username: entry.Username,
+			Nickname: entry.Nickname,
+			Avatar:   entry.Avatar,
+			Type:     entry.Type,
+			Role:     entry.Role,
+			Enabled:  entry.Enabled,
+		},
+		expiresAt: entry.ExpiresAt,
+	}, true
+}
+
+func (r *redisTokenCacheStore) Store(token string, entry *cachedUser) {
+	utilsEntry := &utils.TokenCacheEntry{
+		UserID:    entry.user.ID,
+		Username:  entry.user.Username,
+		Nickname:  entry.user.Nickname,
+		Avatar:    entry.user.Avatar,
+		Type:      entry.user.Type,
+		Role:      entry.user.Role,
+		Enabled:   entry.user.Enabled,
+		ExpiresAt: entry.expiresAt,
+	}
+	r.cache.Store(token, utilsEntry, tokenCacheDuration)
+}
+
+func (r *redisTokenCacheStore) Delete(token string) {
+	r.cache.Delete(token)
+}
+
+var (
+	tokenCache         tokenCacheStore
+	tokenCacheOnce     sync.Once
+	tokenCacheDuration = 5 * time.Minute
+)
 
 var (
 	avatarOptions = []string{
@@ -128,10 +199,8 @@ func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
 		}
 	}
 
-	if cached, ok := tokenCache.Load(tokenKey); ok {
-		if entry, ok := cached.(*cachedUser); ok && time.Now().Before(entry.expiresAt) && entry.user.Enabled {
-			return entry.user
-		}
+	if cached, ok := tokenCache.Load(tokenKey); ok && time.Now().Before(cached.expiresAt) && cached.user.Enabled {
+		return cached.user
 	}
 
 	var user models.User
@@ -204,19 +273,31 @@ func getUserFromContext(c *gin.Context) *models.User {
 	return getCurrentUser(c, nil)
 }
 
+func initTokenCache() {
+	tokenCacheOnce.Do(func() {
+		redisCache, err := utils.NewRedisTokenCache()
+		if err == nil && utils.IsRedisAvailable() {
+			tokenCache = &redisTokenCacheStore{cache: redisCache}
+		} else {
+			tokenCache = &memoryTokenCache{}
+		}
+	})
+}
+
 func cleanupTokenCache() {
+	if _, ok := tokenCache.(*memoryTokenCache); !ok {
+		return
+	}
 	for {
 		time.Sleep(5 * time.Minute)
-		now := time.Now()
-		tokenCache.Range(func(key, value interface{}) bool {
-			if entry, ok := value.(*cachedUser); ok && now.After(entry.expiresAt) {
-				tokenCache.Delete(key)
-			}
-			return true
-		})
 	}
 }
 
 func ResetTokenCacheForTest() {
-	tokenCache = sync.Map{}
+	tokenCache = &memoryTokenCache{}
+}
+
+func init() {
+	initTokenCache()
+	go cleanupTokenCache()
 }

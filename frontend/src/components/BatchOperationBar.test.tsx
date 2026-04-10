@@ -64,26 +64,7 @@ describe('BatchOperationBar', () => {
     expect(screen.getByText(/Selected 2 tasks/)).toBeInTheDocument();
   });
 
-  it('renders column options for move', () => {
-    render(
-      <BatchOperationBar
-        selectedTasks={new Set(['task-1'])}
-        columns={mockColumns}
-        uniqueAssignees={[]}
-        onBatchMove={vi.fn()}
-        onBatchUpdatePriority={vi.fn()}
-        onBatchUpdateAssignee={vi.fn()}
-        onBatchArchive={vi.fn()}
-        onBatchDelete={vi.fn()}
-        onClearSelection={vi.fn()}
-      />
-    );
-    expect(screen.getAllByText('Move to Column').length).toBeGreaterThan(0);
-    expect(screen.getByText('To Do')).toBeInTheDocument();
-    expect(screen.getByText('In Progress')).toBeInTheDocument();
-  });
-
-  it('calls onBatchMove when selecting a column', () => {
+  it('renders column dropdown and calls onBatchMove when selecting', () => {
     const onBatchMove = vi.fn();
     render(
       <BatchOperationBar
@@ -98,30 +79,38 @@ describe('BatchOperationBar', () => {
         onClearSelection={vi.fn()}
       />
     );
-    const selects = screen.getAllByRole('combobox');
-    const moveSelect = selects[0];
-    fireEvent.change(moveSelect, { target: { value: 'col-2' } });
+    expect(screen.getByText('Move to Column')).toBeInTheDocument();
+    const moveButton = screen.getByRole('button', { name: 'Move to Column' });
+    fireEvent.click(moveButton);
+    expect(screen.getByRole('option', { name: 'To Do' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'In Progress' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'In Progress' }));
     expect(onBatchMove).toHaveBeenCalledWith('col-2');
   });
 
-  it('renders priority options', () => {
+  it('renders priority dropdown and calls onBatchUpdatePriority when selecting', () => {
+    const onBatchUpdatePriority = vi.fn();
     render(
       <BatchOperationBar
         selectedTasks={new Set(['task-1'])}
         columns={mockColumns}
         uniqueAssignees={[]}
         onBatchMove={vi.fn()}
-        onBatchUpdatePriority={vi.fn()}
+        onBatchUpdatePriority={onBatchUpdatePriority}
         onBatchUpdateAssignee={vi.fn()}
         onBatchArchive={vi.fn()}
         onBatchDelete={vi.fn()}
         onClearSelection={vi.fn()}
       />
     );
-    expect(screen.getAllByText('Set Priority').length).toBeGreaterThan(0);
-    expect(screen.getByText('High')).toBeInTheDocument();
-    expect(screen.getByText('Medium')).toBeInTheDocument();
-    expect(screen.getByText('Low')).toBeInTheDocument();
+    expect(screen.getByText('Set Priority')).toBeInTheDocument();
+    const priorityButton = screen.getByRole('button', { name: 'Set Priority' });
+    fireEvent.click(priorityButton);
+    expect(screen.getByRole('option', { name: 'High' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Medium' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Low' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'High' }));
+    expect(onBatchUpdatePriority).toHaveBeenCalledWith('high');
   });
 
   it('calls onClearSelection when clear button is clicked', () => {
