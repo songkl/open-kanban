@@ -63,7 +63,8 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-		FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+		FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+		UNIQUE(user_id, board_id)
 	);
 	CREATE TABLE columns (
 		id TEXT PRIMARY KEY,
@@ -111,7 +112,7 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 	CREATE TABLE activities (
 		id TEXT PRIMARY KEY,
 		user_id TEXT NOT NULL,
-		action TEXT NOT NULL CHECK(action IN ('CREATE_TASK', 'UPDATE_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'ADD_COMMENT', 'LOGIN', 'LOGOUT', 'BOARD_CREATE', 'BOARD_UPDATE', 'BOARD_DELETE', 'COLUMN_CREATE', 'COLUMN_UPDATE', 'COLUMN_DELETE', 'USER_CREATE', 'USER_UPDATE', 'BOARD_COPY', 'TEMPLATE_CREATE', 'TEMPLATE_DELETE', 'BOARD_IMPORT')),
+		action TEXT NOT NULL CHECK(action IN ('CREATE_TASK', 'UPDATE_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'ADD_COMMENT', 'LOGIN', 'LOGOUT', 'BOARD_CREATE', 'BOARD_UPDATE', 'BOARD_DELETE', 'COLUMN_CREATE', 'COLUMN_UPDATE', 'COLUMN_DELETE', 'USER_CREATE', 'USER_UPDATE', 'BOARD_COPY', 'TEMPLATE_CREATE', 'TEMPLATE_DELETE', 'BOARD_IMPORT', 'APP_CONFIG_UPDATE')),
 		target_type TEXT NOT NULL CHECK(target_type IN ('TASK', 'COMMENT', 'BOARD', 'COLUMN', 'USER', 'SYSTEM', 'TEMPLATE')),
 		target_id TEXT,
 		target_title TEXT,
@@ -457,7 +458,7 @@ func TestGetActivitiesHandler(t *testing.T) {
 	db := setupUserPermDB(t)
 	defer db.Close()
 
-	_, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, target_id, source, created_at) VALUES ('act1', 'admin1', 'LOGIN', 'SYSTEM', '', 'web', datetime('now'))`)
+	_, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, target_id, target_title, details, ip_address, source, created_at) VALUES ('act1', 'admin1', 'LOGIN', 'SYSTEM', '', '', '', '127.0.0.1', 'web', datetime('now'))`)
 	if err != nil {
 		t.Fatalf("failed to insert activity: %v", err)
 	}
@@ -742,10 +743,15 @@ func TestSetUserEnabledHandler(t *testing.T) {
 }
 
 func TestGetAgentsHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
 	defer db.Close()
 
-	_, err := db.Exec(`INSERT INTO users (id, username, nickname, role, type, enabled) VALUES ('agent1', 'agent1', 'Test Agent', 'ADMIN', 'AGENT', 1)`)
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM users WHERE type = 'AGENT'").Scan(&count)
+	t.Logf("AGENT users count before insert: %d", count)
+
+	_, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled) VALUES ('agent1', 'agent1', 'Test Agent', '', 'ADMIN', 'AGENT', 1)`)
 	if err != nil {
 		t.Fatalf("failed to insert agent: %v", err)
 	}

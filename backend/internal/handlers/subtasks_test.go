@@ -304,6 +304,7 @@ func TestGetSubtasksHandler(t *testing.T) {
 }
 
 func TestCreateSubtaskHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
 	db := setupSubtasksDB(t)
 	defer db.Close()
 
@@ -423,6 +424,7 @@ func TestCreateSubtaskHandler(t *testing.T) {
 }
 
 func TestUpdateSubtaskHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
 	db := setupSubtasksDB(t)
 	defer db.Close()
 
@@ -550,6 +552,7 @@ func TestUpdateSubtaskHandler(t *testing.T) {
 }
 
 func TestDeleteSubtaskHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
 	db := setupSubtasksDB(t)
 	defer db.Close()
 

@@ -128,14 +128,15 @@ func setupTemplatesDB(t *testing.T) *sql.DB {
 	CREATE TABLE activities (
 		id TEXT PRIMARY KEY,
 		user_id TEXT NOT NULL,
-		action TEXT NOT NULL,
-		target_type TEXT,
+		action TEXT NOT NULL CHECK(action IN ('CREATE_TASK', 'UPDATE_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'ADD_COMMENT', 'LOGIN', 'LOGOUT', 'BOARD_CREATE', 'BOARD_UPDATE', 'BOARD_DELETE', 'COLUMN_CREATE', 'COLUMN_UPDATE', 'COLUMN_DELETE', 'USER_CREATE', 'USER_UPDATE', 'BOARD_COPY', 'TEMPLATE_CREATE', 'TEMPLATE_DELETE', 'BOARD_IMPORT', 'APP_CONFIG_UPDATE')),
+		target_type TEXT NOT NULL CHECK(target_type IN ('TASK', 'COMMENT', 'BOARD', 'COLUMN', 'USER', 'SYSTEM', 'TEMPLATE')),
 		target_id TEXT,
 		target_title TEXT,
 		details TEXT,
 		ip_address TEXT,
-		source TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		source TEXT NOT NULL DEFAULT 'web' CHECK(source IN ('web', 'mcp', 'api')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE TABLE app_config (
 		key TEXT PRIMARY KEY,
