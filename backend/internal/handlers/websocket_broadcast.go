@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -66,9 +67,9 @@ func enqueueBroadcast(msgType int, data any) bool {
 
 func processBroadcast(msg broadcastMessage) {
 	clientsMux.RLock()
-	clientList := make([]*Client, 0, len(clients))
-	for _, client := range clients {
-		clientList = append(clientList, client)
+	conns := make([]*websocket.Conn, 0, len(clients))
+	for conn := range clients {
+		conns = append(conns, conn)
 	}
 	clientsMux.RUnlock()
 
@@ -78,19 +79,21 @@ func processBroadcast(msg broadcastMessage) {
 		return
 	}
 
-	for _, client := range clientList {
-		if !client.WriteMessage(data) {
-			safeRemoveClient(client.conn)
+	for _, conn := range conns {
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			slog.Warn("Failed to broadcast to client", "error", err)
+			safeRemoveClient(conn)
 		}
 	}
 }
 
 func safeRemoveClient(conn *websocket.Conn) {
 	clientsMux.Lock()
-	if client, ok := clients[conn]; ok {
+	if _, ok := clients[conn]; ok {
 		delete(clients, conn)
 		clientsMux.Unlock()
-		client.Close()
+		conn.Close()
 	} else {
 		clientsMux.Unlock()
 	}
