@@ -13,6 +13,19 @@ All notable changes to this project will be documented in this file.
 ### Documentation
 
 #### Added
+  - feat: add comments and subtasks indexes migration
+
+## [0.1.1]
+
+### Features
+
+### Bug Fixes
+
+### Improvements
+
+### Documentation
+
+#### Added
   - feat: add dark mode system preference listener [T-1294]
   - feat: add ColumnDetailPage route and ThemeSettings [T-1294]
   - feat: add fullscreen mode and copy task ID to TaskModal [T-1294]
