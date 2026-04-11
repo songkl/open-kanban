@@ -13,6 +13,23 @@ All notable changes to this project will be documented in this file.
 ### Documentation
 
 #### Added
+  - feat: add task sorting by position/priority/createdAt/title/assignee (T-1397)
+  - feat: add comments and subtasks indexes migration
+
+#### Documentation
+  - docs: update changelog [skip ci]
+
+## [0.1.1]
+
+### Features
+
+### Bug Fixes
+
+### Improvements
+
+### Documentation
+
+#### Added
   - feat: add comments and subtasks indexes migration
 
 ## [0.1.1]
