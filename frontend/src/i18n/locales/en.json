@@ -17,7 +17,10 @@
   "common": {
     "close": "Close",
     "cancel": "Cancel",
-    "back": "Back"
+    "back": "Back",
+    "sortBy": "Sort by",
+    "sortAsc": "Ascending",
+    "sortDesc": "Descending"
   },
   "upload": {
     "fileTooLarge": "File too large, max 10MB",
@@ -126,7 +129,11 @@
     "setPriority": "Set priority...",
     "setAssignee": "Set assignee...",
     "clearAssignee": "Clear assignee",
-    "clearSelection": "Clear"
+    "clearSelection": "Clear",
+    "position": "Position",
+    "createdAt": "Created At",
+    "title": "Title",
+    "assignee": "Assignee"
   },
   "comment": {
     "add": "Add Comment",

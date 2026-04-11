@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState, useId } from 'react';
+import { useState, useId, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -48,6 +48,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -71,6 +72,17 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showMoreMenu && moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
+        setShowMoveSubmenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMoreMenu]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     if ((e.metaKey || e.ctrlKey) && onSelect) {
@@ -170,6 +182,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
           {showMoreMenu && (
             <div
+              ref={moreMenuRef}
               className="absolute right-0 top-full mt-1 w-40 rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 z-20"
               onMouseDown={(e) => e.stopPropagation()}
             >

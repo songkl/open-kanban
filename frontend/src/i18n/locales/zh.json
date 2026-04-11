@@ -17,7 +17,10 @@
   "common": {
     "close": "关闭",
     "cancel": "取消",
-    "back": "返回"
+    "back": "返回",
+    "sortBy": "排序",
+    "sortAsc": "升序",
+    "sortDesc": "降序"
   },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",
@@ -126,7 +129,11 @@
     "setPriority": "设置优先级...",
     "setAssignee": "设置负责人...",
     "clearAssignee": "清除负责人",
-    "clearSelection": "清除"
+    "clearSelection": "清除",
+    "position": "位置",
+    "createdAt": "创建时间",
+    "title": "标题",
+    "assignee": "负责人"
   },
   "comment": {
     "add": "添加评论",
@@ -480,7 +487,7 @@
     "editAgent": "编辑 Agent",
     "updateAgentFailed": "更新 Agent 失败",
     "saving": "保存中...",
-    "noAgents": "暂无 Agent，点击上方按钮创建",
+    "noAgents": "暂无 Agent",
     "userManagement": "用户管理",
     "usersDescription": "管理员可以查看所有用户信息。Agent 用户只能通过 Token 访问系统。",
     "noUsers": "暂无用户",

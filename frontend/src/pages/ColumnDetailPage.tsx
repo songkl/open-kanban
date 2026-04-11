@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { TaskCard } from '@/components/TaskCard';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { columnsApi, tasksApi } from '@/services/api';
-import type { Column, Task } from '@/types/kanban';
+import { TaskModal } from '@/components/TaskModal';
+import { columnsApi, tasksApi, boardsApi, commentsApi } from '@/services/api';
+import type { Column, Task, Board } from '@/types/kanban';
 
 export function ColumnDetailPage() {
   const { t } = useTranslation();
@@ -19,6 +20,10 @@ export function ColumnDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterAssignee, setFilterAssignee] = useState('');
   const [filterPublisher, setFilterPublisher] = useState('');
+  const [sortBy, setSortBy] = useState<'position' | 'priority' | 'createdAt' | 'title' | 'assignee'>('position');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   useEffect(() => {
     if (!boardId || !columnId) {
@@ -44,6 +49,9 @@ export function ColumnDetailPage() {
 
         const tasksResponse = await tasksApi.getByColumn(columnId, 1, 100);
         setTasks(tasksResponse.data || []);
+
+        const boardsData = await boardsApi.getAll();
+        setBoards(boardsData);
       } catch (err) {
         console.error('Failed to fetch column data:', err);
         setError('Failed to load column data');
@@ -77,12 +85,103 @@ export function ColumnDetailPage() {
   }, [tasks]);
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
+    const filtered = tasks.filter(task => {
       if (filterAssignee && task.assignee !== filterAssignee) return false;
       if (filterPublisher && task.createdBy !== filterPublisher) return false;
       return true;
     });
-  }, [tasks, filterAssignee, filterPublisher]);
+
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case 'position':
+          cmp = a.position - b.position;
+          break;
+        case 'priority':
+          cmp = priorityOrder[a.priority as keyof typeof priorityOrder] - priorityOrder[b.priority as keyof typeof priorityOrder];
+          break;
+        case 'createdAt':
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        case 'title':
+          cmp = (a.title || '').localeCompare(b.title || '');
+          break;
+        case 'assignee':
+          cmp = (a.assignee || '\xff').localeCompare(b.assignee || '\xff');
+          break;
+      }
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [tasks, filterAssignee, filterPublisher, sortBy, sortOrder]);
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+  };
+
+  const handleTaskCommentsClick = (task: Task) => {
+    setSelectedTask(task);
+  };
+
+  const handleUpdateTask = async (task: Task) => {
+    try {
+      const updated = await tasksApi.update(task.id, {
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        assignee: task.assignee,
+        columnId: task.columnId,
+        position: task.position ?? 0,
+        published: task.published,
+        meta: task.meta,
+      });
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...updated } : t));
+      if (selectedTask?.id === task.id) {
+        setSelectedTask(prev => prev ? { ...prev, ...updated } : null);
+      }
+    } catch (err) {
+      console.error('Failed to update task:', err);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await tasksApi.delete(taskId);
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      setSelectedTask(null);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+    }
+  };
+
+  const handleArchiveTask = async (taskId: string) => {
+    try {
+      await tasksApi.archive(taskId, true);
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      if (selectedTask?.id === taskId) {
+        setSelectedTask(null);
+      }
+    } catch (err) {
+      console.error('Failed to archive task:', err);
+    }
+  };
+
+  const handleAddComment = async (taskId: string, content: string, author: string) => {
+    try {
+      await commentsApi.create({ taskId, content, author });
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        setTasks(prev => prev.map(t => 
+          t.id === taskId 
+            ? { ...t, _count: { ...t._count, comments: (t._count?.comments || 0) + 1 } }
+            : t
+        ));
+      }
+    } catch (err) {
+      console.error('Failed to add comment:', err);
+    }
+  };
 
   if (loading) {
     return <LoadingScreen />;
@@ -188,6 +287,30 @@ export function ColumnDetailPage() {
                 ))}
               </select>
             </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="sort-by" className="text-sm text-zinc-500">{t('common.sortBy')}:</label>
+              <select
+                id="sort-by"
+                name="sort-by"
+                aria-label={t('common.sortBy')}
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+              >
+                <option value="position">{t('task.position')}</option>
+                <option value="priority">{t('task.priority')}</option>
+                <option value="createdAt">{t('task.createdAt')}</option>
+                <option value="title">{t('task.title')}</option>
+                <option value="assignee">{t('task.assignee')}</option>
+              </select>
+              <button
+                onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+                title={sortOrder === 'asc' ? t('common.sortAsc') : t('common.sortDesc')}
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
             <span className="text-sm text-zinc-500">
               {t('userDetail.taskCount', { count: filteredTasks.length })}
             </span>
@@ -229,13 +352,38 @@ export function ColumnDetailPage() {
                 key={task.id}
                 task={task}
                 columnName={column.name}
-                isSelected={false}
-                onClick={() => {}}
+                isSelected={selectedTask?.id === task.id}
+                onClick={() => handleTaskClick(task)}
+                onCommentsClick={() => handleTaskCommentsClick(task)}
               />
             ))}
           </div>
         )}
       </main>
+
+      {selectedTask && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <TaskModal
+            task={selectedTask}
+            columnName={column.name}
+            columns={columns.map((c) => ({ id: c.id, name: c.name }))}
+            boardId={boardId}
+            boards={boards}
+            canEdit={true}
+            startEditing={false}
+            onClose={() => setSelectedTask(null)}
+            onUpdate={handleUpdateTask}
+            onDelete={handleDeleteTask}
+            onArchive={handleArchiveTask}
+            onAddComment={handleAddComment}
+            onEditingStarted={() => {}}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
