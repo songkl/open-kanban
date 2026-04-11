@@ -59,7 +59,21 @@ jobs:
             OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}"
             [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
             echo "Building $OUTPUT_NAME..."
-            GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "../release/$OUTPUT_NAME" ./cmd/server/main.go
+            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "../release/$OUTPUT_NAME" ./cmd/server/main.go
+            upx -9 --best "../release/$OUTPUT_NAME" || true
+          done
+
+      - name: Build Backend MySQL-only (cross-compile)
+        run: |
+          cd backend
+          PLATFORMS=("darwin amd64" "darwin arm64" "linux amd64" "linux arm64" "windows amd64")
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            set -- $PLATFORM
+            GOOS=$1 GOARCH=$2
+            OUTPUT_NAME="kanban-server-mysql-${GOOS}-${GOARCH}"
+            [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
+            echo "Building $OUTPUT_NAME (MySQL-only)..."
+            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -tags mysql -o "../release/$OUTPUT_NAME" ./cmd/server/main.go
             upx -9 --best "../release/$OUTPUT_NAME" || true
           done
 

@@ -15,7 +15,7 @@ RUN mkdir -p cmd/server/web && cp -r dist/* cmd/server/web/ || true
 
 WORKDIR /app/backend
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/kanban-server ./cmd/server
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /app/kanban-server ./cmd/server
 
 FROM alpine:3.19
 
