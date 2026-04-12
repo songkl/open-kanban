@@ -6,6 +6,7 @@ interface DropdownOption {
 }
 
 interface CustomDropdownProps {
+  id?: string;
   value: string;
   options: DropdownOption[];
   onChange: (value: string) => void;
@@ -15,6 +16,7 @@ interface CustomDropdownProps {
 }
 
 export function CustomDropdown({
+  id,
   value,
   options,
   onChange,
@@ -74,6 +76,7 @@ export function CustomDropdown({
     >
       <button
         type="button"
+        id={id}
         onClick={(e) => {
           e.stopPropagation();
           if (!disabled) setIsOpen(!isOpen);

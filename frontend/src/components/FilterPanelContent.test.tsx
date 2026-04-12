@@ -61,22 +61,22 @@ describe('FilterPanelContent', () => {
 
   it('should call onSetFilters when priority changes', () => {
     render(<FilterPanelContent {...defaultProps} />);
-    const select = screen.getByLabelText(/filter\.priority/i);
-    fireEvent.change(select, { target: { value: 'high' } });
+    fireEvent.click(screen.getByLabelText(/filter\.priority/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.high/i }));
     expect(defaultProps.onSetFilters).toHaveBeenCalled();
   });
 
   it('should call onSetFilters when assignee changes', () => {
     render(<FilterPanelContent {...defaultProps} uniqueAssignees={['Alice', 'Bob']} />);
-    const select = screen.getByLabelText(/filter\.assignee/i);
-    fireEvent.change(select, { target: { value: 'Alice' } });
+    fireEvent.click(screen.getByLabelText(/filter\.assignee/i));
+    fireEvent.click(screen.getByRole('option', { name: 'Alice' }));
     expect(defaultProps.onSetFilters).toHaveBeenCalled();
   });
 
   it('should call onSetFilters when dateRange changes', () => {
     render(<FilterPanelContent {...defaultProps} />);
-    const select = screen.getByLabelText(/filter\.dateRange/i);
-    fireEvent.change(select, { target: { value: 'today' } });
+    fireEvent.click(screen.getByLabelText(/filter\.dateRange/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.today/i }));
     expect(defaultProps.onSetFilters).toHaveBeenCalled();
   });
 
@@ -129,8 +129,8 @@ describe('FilterPanelContent', () => {
       { id: '1', name: 'My Preset', filters: mockFilters }
     ];
     render(<FilterPanelContent {...defaultProps} filterPresets={presets} showPresetDropdown={true} />);
-    const deleteButtons = screen.getAllByRole('button');
-    const deleteButton = deleteButtons.find(btn => btn.innerHTML.includes('line'));
+    const presetContainer = screen.getByText('My Preset').parentElement;
+    const deleteButton = presetContainer?.querySelector('button:last-child');
     if (deleteButton) {
       fireEvent.click(deleteButton);
       expect(defaultProps.onDeletePreset).toHaveBeenCalledWith('1');

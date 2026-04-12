@@ -34,8 +34,9 @@ export function FilterPanelContent({
   return (
     <>
       <div className="mb-3">
-        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
+        <label htmlFor="filter-priority" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
         <CustomDropdown
+          id="filter-priority"
           options={[
             { value: '', label: t('filter.all') },
             { value: 'high', label: t('filter.high') },
@@ -48,8 +49,9 @@ export function FilterPanelContent({
         />
       </div>
       <div className="mb-3">
-        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
+        <label htmlFor="filter-assignee" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
         <CustomDropdown
+          id="filter-assignee"
           options={[
             { value: '', label: t('filter.all') },
             ...uniqueAssignees.map((a) => ({ value: a, label: a })),
@@ -60,8 +62,9 @@ export function FilterPanelContent({
         />
       </div>
       <div className="mb-3">
-        <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
+        <label htmlFor="filter-dateRange" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
         <CustomDropdown
+          id="filter-dateRange"
           options={[
             { value: '', label: t('filter.all') },
             { value: 'today', label: t('filter.today') },
@@ -75,8 +78,9 @@ export function FilterPanelContent({
       </div>
       {uniqueTags.length > 0 && (
         <div className="mb-3">
-          <label className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
+          <label htmlFor="filter-tag" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
           <CustomDropdown
+            id="filter-tag"
             options={[
               { value: '', label: t('filter.all') },
               ...uniqueTags.map((tag) => ({ value: tag, label: tag })),
