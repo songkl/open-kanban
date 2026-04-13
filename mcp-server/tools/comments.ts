@@ -28,9 +28,7 @@ export function list_comments(srv: McpServer) {
       taskId: z.string().describe("任务ID"),
     }),
     }, async ({ taskId }) => {
-    const task = await apiGet<any>(`/api/v1/tasks/${taskId}?include=comments`);
-    const comments = task?.comments || [];
-    const comments = task?.comments || [];
+    const comments = await apiGet<any[]>(`/api/v1/comments?taskId=${taskId}`);
     return jsonToolResult(comments);
   });
 }
