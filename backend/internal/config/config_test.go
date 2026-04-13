@@ -7,8 +7,8 @@ import (
 )
 
 func TestGetEnvInt(t *testing.T) {
-	os.Setenv("TEST_INT_KEY", "123")
-	defer os.Unsetenv("TEST_INT_KEY")
+	_ = os.Setenv("TEST_INT_KEY", "123")
+	defer func() { _ = os.Unsetenv("TEST_INT_KEY") }()
 
 	result := getEnvInt("TEST_INT_KEY", 0)
 	if result != 123 {
@@ -20,16 +20,16 @@ func TestGetEnvInt(t *testing.T) {
 		t.Errorf("expected default 456, got %d", result)
 	}
 
-	os.Setenv("TEST_INT_INVALID", "not_a_number")
-	defer os.Unsetenv("TEST_INT_INVALID")
+	_ = os.Setenv("TEST_INT_INVALID", "not_a_number")
+	defer func() { _ = os.Unsetenv("TEST_INT_INVALID") }()
 
 	result = getEnvInt("TEST_INT_INVALID", 789)
 	if result != 789 {
 		t.Errorf("expected default 789 for invalid value, got %d", result)
 	}
 
-	os.Setenv("TEST_INT_NEGATIVE", "-5")
-	defer os.Unsetenv("TEST_INT_NEGATIVE")
+	_ = os.Setenv("TEST_INT_NEGATIVE", "-5")
+	defer func() { _ = os.Unsetenv("TEST_INT_NEGATIVE") }()
 
 	result = getEnvInt("TEST_INT_NEGATIVE", 0)
 	if result != 0 {
@@ -38,8 +38,8 @@ func TestGetEnvInt(t *testing.T) {
 }
 
 func TestGetEnvDuration(t *testing.T) {
-	os.Setenv("TEST_DURATION_KEY", "60")
-	defer os.Unsetenv("TEST_DURATION_KEY")
+	_ = os.Setenv("TEST_DURATION_KEY", "60")
+	defer func() { _ = os.Unsetenv("TEST_DURATION_KEY") }()
 
 	result := getEnvDuration("TEST_DURATION_KEY", 0)
 	expected := 60 * time.Second
@@ -53,8 +53,8 @@ func TestGetEnvDuration(t *testing.T) {
 		t.Errorf("expected default %v, got %v", expected, result)
 	}
 
-	os.Setenv("TEST_DURATION_INVALID", "not_a_number")
-	defer os.Unsetenv("TEST_DURATION_INVALID")
+	_ = os.Setenv("TEST_DURATION_INVALID", "not_a_number")
+	defer func() { _ = os.Unsetenv("TEST_DURATION_INVALID") }()
 
 	result = getEnvDuration("TEST_DURATION_INVALID", 15*time.Second)
 	expected = 15 * time.Second
@@ -64,13 +64,13 @@ func TestGetEnvDuration(t *testing.T) {
 }
 
 func TestInitConfig(t *testing.T) {
-	os.Setenv("WS_PING_INTERVAL", "45")
-	os.Setenv("WS_MAX_CONNECTIONS", "100")
-	os.Setenv("RATE_LIMIT_MAX_ENTRIES", "500")
+	_ = os.Setenv("WS_PING_INTERVAL", "45")
+	_ = os.Setenv("WS_MAX_CONNECTIONS", "100")
+	_ = os.Setenv("RATE_LIMIT_MAX_ENTRIES", "500")
 	defer func() {
-		os.Unsetenv("WS_PING_INTERVAL")
-		os.Unsetenv("WS_MAX_CONNECTIONS")
-		os.Unsetenv("RATE_LIMIT_MAX_ENTRIES")
+		_ = os.Unsetenv("WS_PING_INTERVAL")
+		_ = os.Unsetenv("WS_MAX_CONNECTIONS")
+		_ = os.Unsetenv("RATE_LIMIT_MAX_ENTRIES")
 	}()
 
 	cfg := InitConfig()
@@ -101,15 +101,15 @@ func TestGetConfig(t *testing.T) {
 }
 
 func TestConfigDefaults(t *testing.T) {
-	os.Unsetenv("WS_PING_INTERVAL")
-	os.Unsetenv("WS_PING_WRITE_DEADLINE")
-	os.Unsetenv("WS_READ_DEADLINE")
-	os.Unsetenv("WS_MAX_CONNECTIONS")
-	os.Unsetenv("WS_MAX_CONNECTIONS_PER_USER")
-	os.Unsetenv("RATE_LIMIT_MAX_ENTRIES")
-	os.Unsetenv("GLOBAL_RATE_LIMIT_MAX_ENTRIES")
-	os.Unsetenv("BROADCAST_WRITE_DEADLINE")
-	os.Unsetenv("WEBHOOK_TIMEOUT")
+	_ = os.Unsetenv("WS_PING_INTERVAL")
+	_ = os.Unsetenv("WS_PING_WRITE_DEADLINE")
+	_ = os.Unsetenv("WS_READ_DEADLINE")
+	_ = os.Unsetenv("WS_MAX_CONNECTIONS")
+	_ = os.Unsetenv("WS_MAX_CONNECTIONS_PER_USER")
+	_ = os.Unsetenv("RATE_LIMIT_MAX_ENTRIES")
+	_ = os.Unsetenv("GLOBAL_RATE_LIMIT_MAX_ENTRIES")
+	_ = os.Unsetenv("BROADCAST_WRITE_DEADLINE")
+	_ = os.Unsetenv("WEBHOOK_TIMEOUT")
 
 	cfg := InitConfig()
 

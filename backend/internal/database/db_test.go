@@ -13,16 +13,16 @@ import (
 )
 
 func TestGetDBConfig_DefaultSQLite(t *testing.T) {
-	os.Setenv("DB_TYPE", "")
-	os.Setenv("DB_HOST", "")
-	os.Setenv("DB_PORT", "")
-	os.Setenv("DB_USER", "")
-	os.Setenv("DB_PASSWORD", "")
-	os.Setenv("DB_NAME", "")
-	os.Setenv("DATABASE_URL", "")
-	os.Setenv("DB_MAX_OPEN_CONNS", "")
-	os.Setenv("DB_MAX_IDLE_CONNS", "")
-	os.Setenv("DB_CONN_MAX_LIFETIME", "")
+	_ = os.Setenv("DB_TYPE", "")
+	_ = os.Setenv("DB_HOST", "")
+	_ = os.Setenv("DB_PORT", "")
+	_ = os.Setenv("DB_USER", "")
+	_ = os.Setenv("DB_PASSWORD", "")
+	_ = os.Setenv("DB_NAME", "")
+	_ = os.Setenv("DATABASE_URL", "")
+	_ = os.Setenv("DB_MAX_OPEN_CONNS", "")
+	_ = os.Setenv("DB_MAX_IDLE_CONNS", "")
+	_ = os.Setenv("DB_CONN_MAX_LIFETIME", "")
 
 	config := database.GetDBConfig()
 
@@ -53,16 +53,16 @@ func TestGetDBConfig_DefaultSQLite(t *testing.T) {
 }
 
 func TestGetDBConfig_MySQL(t *testing.T) {
-	os.Setenv("DB_TYPE", "mysql")
-	os.Setenv("DB_HOST", "myhost")
-	os.Setenv("DB_PORT", "3307")
-	os.Setenv("DB_USER", "myuser")
-	os.Setenv("DB_PASSWORD", "mypass")
-	os.Setenv("DB_NAME", "mydb")
-	os.Setenv("DATABASE_URL", "")
-	os.Setenv("DB_MAX_OPEN_CONNS", "10")
-	os.Setenv("DB_MAX_IDLE_CONNS", "3")
-	os.Setenv("DB_CONN_MAX_LIFETIME", "600")
+	_ = os.Setenv("DB_TYPE", "mysql")
+	_ = os.Setenv("DB_HOST", "myhost")
+	_ = os.Setenv("DB_PORT", "3307")
+	_ = os.Setenv("DB_USER", "myuser")
+	_ = os.Setenv("DB_PASSWORD", "mypass")
+	_ = os.Setenv("DB_NAME", "mydb")
+	_ = os.Setenv("DATABASE_URL", "")
+	_ = os.Setenv("DB_MAX_OPEN_CONNS", "10")
+	_ = os.Setenv("DB_MAX_IDLE_CONNS", "3")
+	_ = os.Setenv("DB_CONN_MAX_LIFETIME", "600")
 
 	config := database.GetDBConfig()
 
@@ -96,10 +96,10 @@ func TestGetDBConfig_MySQL(t *testing.T) {
 }
 
 func TestGetDBConfig_SQLite(t *testing.T) {
-	os.Setenv("DB_TYPE", "sqlite")
-	os.Setenv("DB_HOST", "")
-	os.Setenv("DB_PORT", "")
-	os.Setenv("DATABASE_URL", "/path/to/db.sqlite")
+	_ = os.Setenv("DB_TYPE", "sqlite")
+	_ = os.Setenv("DB_HOST", "")
+	_ = os.Setenv("DB_PORT", "")
+	_ = os.Setenv("DATABASE_URL", "/path/to/db.sqlite")
 
 	config := database.GetDBConfig()
 
@@ -112,8 +112,8 @@ func TestGetDBConfig_SQLite(t *testing.T) {
 }
 
 func TestGetDBConfig_InvalidMaxOpenConns(t *testing.T) {
-	os.Setenv("DB_TYPE", "sqlite")
-	os.Setenv("DB_MAX_OPEN_CONNS", "invalid")
+	_ = os.Setenv("DB_TYPE", "sqlite")
+	_ = os.Setenv("DB_MAX_OPEN_CONNS", "invalid")
 
 	config := database.GetDBConfig()
 
@@ -123,8 +123,8 @@ func TestGetDBConfig_InvalidMaxOpenConns(t *testing.T) {
 }
 
 func TestGetDBConfig_InvalidMaxIdleConns(t *testing.T) {
-	os.Setenv("DB_TYPE", "sqlite")
-	os.Setenv("DB_MAX_IDLE_CONNS", "invalid")
+	_ = os.Setenv("DB_TYPE", "sqlite")
+	_ = os.Setenv("DB_MAX_IDLE_CONNS", "invalid")
 
 	config := database.GetDBConfig()
 
@@ -134,8 +134,8 @@ func TestGetDBConfig_InvalidMaxIdleConns(t *testing.T) {
 }
 
 func TestGetDBConfig_InvalidConnMaxLifetime(t *testing.T) {
-	os.Setenv("DB_TYPE", "sqlite")
-	os.Setenv("DB_CONN_MAX_LIFETIME", "invalid")
+	_ = os.Setenv("DB_TYPE", "sqlite")
+	_ = os.Setenv("DB_CONN_MAX_LIFETIME", "invalid")
 
 	config := database.GetDBConfig()
 
@@ -145,7 +145,7 @@ func TestGetDBConfig_InvalidConnMaxLifetime(t *testing.T) {
 }
 
 func TestInitDB_UnsupportedType(t *testing.T) {
-	os.Setenv("DB_TYPE", "postgres")
+	_ = os.Setenv("DB_TYPE", "postgres")
 
 	_, err := database.InitDB()
 
@@ -158,14 +158,14 @@ func TestInitDB_UnsupportedType(t *testing.T) {
 }
 
 func TestInitDB_SQLiteInMemory(t *testing.T) {
-	os.Setenv("DB_TYPE", "sqlite")
-	os.Setenv("DATABASE_URL", ":memory:")
+	_ = os.Setenv("DB_TYPE", "sqlite")
+	_ = os.Setenv("DATABASE_URL", ":memory:")
 
 	db, err := database.InitDB()
 	if err != nil {
 		t.Fatalf("failed to init SQLite in-memory db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Ping(); err != nil {
 		t.Errorf("failed to ping database: %v", err)
@@ -182,14 +182,14 @@ func TestInitDB_SQLiteInMemory(t *testing.T) {
 }
 
 func TestInitDB_SQLiteWithPath(t *testing.T) {
-	os.Setenv("DB_TYPE", "sqlite")
-	os.Setenv("DATABASE_URL", "/tmp/test_kanban.db")
+	_ = os.Setenv("DB_TYPE", "sqlite")
+	_ = os.Setenv("DATABASE_URL", "/tmp/test_kanban.db")
 
 	db, err := database.InitDB()
 	if err != nil {
 		t.Fatalf("failed to init SQLite db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Ping(); err != nil {
 		t.Errorf("failed to ping database: %v", err)
@@ -199,21 +199,21 @@ func TestInitDB_SQLiteWithPath(t *testing.T) {
 }
 
 func TestInitDB_MySQL(t *testing.T) {
-	os.Setenv("DB_TYPE", "mysql")
-	os.Setenv("DB_HOST", "10.0.1.240")
-	os.Setenv("DB_PORT", "3306")
-	os.Setenv("DB_USER", "test")
-	os.Setenv("DB_PASSWORD", "password")
-	os.Setenv("DB_NAME", "test")
-	os.Setenv("DB_MAX_OPEN_CONNS", "10")
-	os.Setenv("DB_MAX_IDLE_CONNS", "5")
-	os.Setenv("DB_CONN_MAX_LIFETIME", "300")
+	_ = os.Setenv("DB_TYPE", "mysql")
+	_ = os.Setenv("DB_HOST", "10.0.1.240")
+	_ = os.Setenv("DB_PORT", "3306")
+	_ = os.Setenv("DB_USER", "test")
+	_ = os.Setenv("DB_PASSWORD", "password")
+	_ = os.Setenv("DB_NAME", "test")
+	_ = os.Setenv("DB_MAX_OPEN_CONNS", "10")
+	_ = os.Setenv("DB_MAX_IDLE_CONNS", "5")
+	_ = os.Setenv("DB_CONN_MAX_LIFETIME", "300")
 
 	db, err := database.InitDB()
 	if err != nil {
 		t.Fatalf("failed to init MySQL db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.Ping(); err != nil {
 		t.Errorf("failed to ping MySQL database: %v", err)

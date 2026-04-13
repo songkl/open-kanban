@@ -306,6 +306,18 @@ func main() {
 	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
 	r.DELETE("/api/v1/attachments/:id", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))
 
+	// Workspace routes - for MCP file operations
+	workspace := r.Group("/api/v1/workspace")
+	workspace.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		workspace.GET("/stats", handlers.WorkspaceStats(db))
+		workspace.GET("/files", handlers.ListWorkspaceFiles(db))
+		workspace.GET("/files/*path", handlers.ReadWorkspaceFile(db))
+		workspace.POST("/upload", handlers.UploadTextFile(db))
+		workspace.POST("/batch-upload", handlers.BatchUploadTextFiles(db))
+		workspace.DELETE("/files/*path", handlers.DeleteWorkspaceFile(db))
+	}
+
 	// WebSocket route (same port)
 	r.GET("/ws", handlers.WebSocketHandler(db))
 

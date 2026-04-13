@@ -12,7 +12,7 @@ describe('MarkdownEditor', () => {
     vi.clearAllMocks();
   });
 
-  it('should render textarea', () => {
+  it('should render textarea in edit mode by default', () => {
     render(<MarkdownEditor {...defaultProps} />);
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
@@ -50,5 +50,28 @@ describe('MarkdownEditor', () => {
     const textarea = screen.getByRole('textbox');
     fireEvent.keyDown(textarea, { key: 'Tab' });
     expect(defaultProps.onChange).toHaveBeenCalled();
+  });
+
+  it('should show preview mode when preview button is clicked', () => {
+    render(<MarkdownEditor {...defaultProps} value="Hello world" />);
+    const previewButton = screen.getByRole('button', { name: '预览' });
+    fireEvent.click(previewButton);
+    expect(screen.getByText('Markdown 实时预览')).toBeInTheDocument();
+  });
+
+  it('should switch back to edit mode when edit button is clicked', () => {
+    render(<MarkdownEditor {...defaultProps} value="Hello world" />);
+    const previewButton = screen.getByRole('button', { name: '预览' });
+    fireEvent.click(previewButton);
+    const editButton = screen.getByRole('button', { name: '编辑' });
+    fireEvent.click(editButton);
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('should render markdown content in preview mode', () => {
+    render(<MarkdownEditor {...defaultProps} value="**bold** and *italic*" />);
+    const previewButton = screen.getByRole('button', { name: '预览' });
+    fireEvent.click(previewButton);
+    expect(screen.getByText('bold')).toBeInTheDocument();
   });
 });

@@ -10,6 +10,7 @@ import { add_comment, list_comments } from "./tools/comments.js";
 import { list_subtasks, create_subtask, update_subtask, delete_subtask } from "./tools/subtasks.js";
 import { get_dashboard_stats } from "./tools/stats.js";
 import { list_my_tasks } from "./tools/mytasks.js";
+import { upload_file, batch_upload_files, list_workspace_files, read_workspace_file, delete_workspace_file, workspace_stats } from "./tools/upload.js";
 
 const server = new McpServer({
   name: "kanban-mcp-server",
@@ -43,6 +44,12 @@ export function registerTools(srv: McpServer) {
   delete_subtask(srv);
   get_dashboard_stats(srv);
   list_my_tasks(srv);
+  upload_file(srv);
+  batch_upload_files(srv);
+  list_workspace_files(srv);
+  read_workspace_file(srv);
+  delete_workspace_file(srv);
+  workspace_stats(srv);
 }
 
 registerTools(server);
