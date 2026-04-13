@@ -13,6 +13,7 @@ interface CustomDropdownProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  menuAbove?: boolean;
 }
 
 export function CustomDropdown({
@@ -23,6 +24,7 @@ export function CustomDropdown({
   placeholder = 'Select...',
   className = '',
   disabled = false,
+  menuAbove = false,
 }: CustomDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,7 +114,9 @@ export function CustomDropdown({
 
       {isOpen && (
         <div
-          className="absolute z-50 mt-1 w-full rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 max-h-60 overflow-auto"
+          className={`absolute z-50 w-full rounded-md bg-white dark:bg-zinc-700 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-600 max-h-60 overflow-auto ${
+            menuAbove ? 'bottom-full mb-1' : 'mt-1'
+          }`}
           role="listbox"
         >
           {options.map((option) => (

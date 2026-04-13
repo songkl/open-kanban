@@ -50,6 +50,7 @@ export function BatchOperationBar({
         onChange={(val) => { if (val) onBatchMove(val); }}
         placeholder={t('task.moveToColumn')}
         className="w-36"
+        menuAbove={true}
       />
       <CustomDropdown
         options={priorityOptions}
@@ -57,6 +58,7 @@ export function BatchOperationBar({
         onChange={(val) => { if (val) onBatchUpdatePriority(val); }}
         placeholder={t('task.setPriority')}
         className="w-32"
+        menuAbove={true}
       />
       <CustomDropdown
         options={assigneeOptions}
@@ -64,6 +66,7 @@ export function BatchOperationBar({
         onChange={onBatchUpdateAssignee}
         placeholder={t('task.setAssignee')}
         className="w-32"
+        menuAbove={true}
       />
       <div className="h-4 w-px bg-zinc-600" />
       <button

@@ -97,6 +97,10 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       const parsedUpdated = {
         ...updated,
         meta: typeof updated.meta === 'string' ? JSON.parse(updated.meta || '{}') : updated.meta || null,
+        _count: {
+          comments: (updated as { commentCount?: number }).commentCount ?? updated._count?.comments ?? 0,
+          subtasks: (updated as { subtaskCount?: number }).subtaskCount ?? updated._count?.subtasks ?? 0,
+        },
       };
 
       if (isSameBoard) {

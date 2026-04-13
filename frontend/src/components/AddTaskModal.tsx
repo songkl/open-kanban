@@ -111,6 +111,7 @@ export function AddTaskModal({
   useEffect(() => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
+      setTimeout(() => titleInputRef.current?.focus(), 0);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
   }, [isOpen, handleKeyDown]);

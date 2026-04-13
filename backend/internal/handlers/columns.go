@@ -157,21 +157,23 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 							}
 
 							tasks = append(tasks, gin.H{
-								"id":           task.ID,
-								"title":        task.Title,
-								"description":  task.Description,
-								"priority":     task.Priority,
-								"assignee":     task.Assignee,
-								"meta":         task.Meta,
-								"columnId":     task.ColumnID,
-								"position":     task.Position,
-								"published":    task.Published,
-								"archived":     task.Archived,
-								"archivedAt":   task.ArchivedAt,
-								"createdAt":    task.CreatedAt,
-								"updatedAt":    task.UpdatedAt,
-								"commentCount": commentCount,
-								"subtaskCount": subtaskCount,
+								"id":          task.ID,
+								"title":       task.Title,
+								"description": task.Description,
+								"priority":    task.Priority,
+								"assignee":    task.Assignee,
+								"meta":        task.Meta,
+								"columnId":    task.ColumnID,
+								"position":    task.Position,
+								"published":   task.Published,
+								"archived":    task.Archived,
+								"archivedAt":  task.ArchivedAt,
+								"createdAt":   task.CreatedAt,
+								"updatedAt":   task.UpdatedAt,
+								"_count": gin.H{
+									"comments": commentCount,
+									"subtasks": subtaskCount,
+								},
 							})
 						}
 					}

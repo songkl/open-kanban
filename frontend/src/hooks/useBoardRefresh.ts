@@ -43,6 +43,10 @@ export function useBoardRefresh({ columns, onColumnsChange }: UseBoardRefreshOpt
       const parsedTask: Task = {
         ...updatedTask,
         meta: typeof updatedTask.meta === 'string' ? JSON.parse(updatedTask.meta || '{}') : updatedTask.meta || null,
+        _count: {
+          comments: (updatedTask as { commentCount?: number }).commentCount ?? updatedTask._count?.comments,
+          subtasks: (updatedTask as { subtaskCount?: number }).subtaskCount ?? updatedTask._count?.subtasks,
+        },
       };
 
       const currentColumns = columnsRef.current;
