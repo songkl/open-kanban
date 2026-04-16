@@ -502,6 +502,11 @@ func TestUpdateTaskHandler(t *testing.T) {
 	})
 
 	t.Run("update task columnId succeeds with non-UUID column ID", func(t *testing.T) {
+		_, err := db.Exec(`INSERT INTO columns (id, name, board_id) VALUES ('c2', 'Test Column 2', 'b1')`)
+		if err != nil {
+			t.Fatalf("failed to insert test column c2: %v", err)
+		}
+
 		body := map[string]interface{}{"columnId": "c2"}
 		jsonBody, _ := json.Marshal(body)
 

@@ -688,3 +688,200 @@ func TestBatchCreateTasksPermissionDenied(t *testing.T) {
 		}
 	})
 }
+
+func setupCrossBoardDB(t *testing.T) *sql.DB {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+
+	schema := `
+	CREATE TABLE users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE NOT NULL,
+		nickname TEXT NOT NULL,
+		password TEXT,
+		avatar TEXT,
+		type TEXT DEFAULT 'HUMAN',
+		role TEXT DEFAULT 'MEMBER',
+		enabled BOOLEAN DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_active_at DATETIME
+	);
+	CREATE TABLE tokens (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		key TEXT UNIQUE NOT NULL,
+		expires_at DATETIME,
+		user_agent TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	CREATE TABLE boards (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		short_alias TEXT UNIQUE,
+		task_counter INTEGER DEFAULT 1000,
+		deleted BOOLEAN DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		description TEXT DEFAULT ''
+	);
+	CREATE TABLE board_permissions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		board_id TEXT NOT NULL,
+		owner_agent_id TEXT,
+		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+	);
+	CREATE TABLE column_permissions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		column_id TEXT NOT NULL,
+		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
+	);
+	CREATE TABLE columns (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		status TEXT,
+		position INTEGER DEFAULT 0,
+		color TEXT DEFAULT '#6b7280',
+		description TEXT DEFAULT '',
+		board_id TEXT NOT NULL,
+		owner_agent_id TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+	);
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		description TEXT,
+		priority TEXT DEFAULT 'medium',
+		assignee TEXT,
+		meta TEXT,
+		column_id TEXT NOT NULL,
+		position INTEGER DEFAULT 0,
+		published BOOLEAN DEFAULT 0,
+		archived BOOLEAN DEFAULT 0,
+		archived_at DATETIME,
+		agent_id TEXT,
+		agent_prompt TEXT,
+		created_by TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
+	);
+	CREATE TABLE activities (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		action TEXT NOT NULL CHECK(action IN ('CREATE_TASK', 'UPDATE_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'ADD_COMMENT', 'LOGIN', 'LOGOUT', 'BOARD_CREATE', 'BOARD_UPDATE', 'BOARD_DELETE', 'COLUMN_CREATE', 'COLUMN_UPDATE', 'COLUMN_DELETE', 'USER_CREATE', 'USER_UPDATE', 'BOARD_COPY', 'TEMPLATE_CREATE', 'TEMPLATE_DELETE', 'BOARD_IMPORT', 'APP_CONFIG_UPDATE')),
+		target_type TEXT NOT NULL CHECK(target_type IN ('TASK', 'COMMENT', 'BOARD', 'COLUMN', 'USER', 'SYSTEM', 'TEMPLATE')),
+		target_id TEXT,
+		target_title TEXT,
+		details TEXT,
+		ip_address TEXT,
+		source TEXT NOT NULL DEFAULT 'web' CHECK(source IN ('web', 'mcp', 'api')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	`
+
+	_, err = db.Exec(schema)
+	if err != nil {
+		t.Fatalf("failed to create schema: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar) VALUES ('u1', 'admin', 'admin', 'pass', 'ADMIN', 1, '')`)
+	if err != nil {
+		t.Fatalf("failed to insert test user: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tokens (id, user_id, key, expires_at) VALUES ('t1', 'u1', 'test-token', NULL)`)
+	if err != nil {
+		t.Fatalf("failed to insert test token: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO boards (id, name) VALUES ('b1', 'Test Board 1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test board 1: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO boards (id, name) VALUES ('b2', 'Test Board 2')`)
+	if err != nil {
+		t.Fatalf("failed to insert test board 2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('bp1', 'u1', 'b1', 'ADMIN')`)
+	if err != nil {
+		t.Fatalf("failed to insert test board permission: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('bp2', 'u1', 'b2', 'ADMIN')`)
+	if err != nil {
+		t.Fatalf("failed to insert test board permission: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO columns (id, name, status, board_id) VALUES ('c1', '待办', 'todo', 'b1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test column c1: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO columns (id, name, status, board_id) VALUES ('c2', '待办', 'todo', 'b2')`)
+	if err != nil {
+		t.Fatalf("failed to insert test column c2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Task 1', 'c1', 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+
+	return db
+}
+
+func TestBatchUpdateTasksCrossBoard(t *testing.T) {
+	db := setupCrossBoardDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.PUT("/api/tasks/batch", handlers.BatchUpdateTasks(db))
+
+	t.Run("batch update cannot move task to different board", func(t *testing.T) {
+		body := map[string]interface{}{"ids": []string{"task1"}, "columnId": "c2"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("PUT", "/api/tasks/batch", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+		if response["failed"].(float64) != 1 {
+			t.Errorf("expected failed=1, got %v", response)
+		}
+		errors, ok := response["errors"].([]interface{})
+		if !ok || len(errors) == 0 {
+			t.Errorf("expected error message, got %v", response)
+		}
+		if len(errors) > 0 && errors[0] != "task task1: cannot move task to a column in a different board" {
+			t.Errorf("expected cross-board error, got %v", errors[0])
+		}
+
+		var colID string
+		db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task1'").Scan(&colID)
+		if colID != "c1" {
+			t.Errorf("task should remain in c1, got %s", colID)
+		}
+	})
+}

@@ -785,6 +785,25 @@ func TestUpdateTaskColumnChange(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskColumnChangeDifferentBoard(t *testing.T) {
+	db := setupServiceTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, _ = db.Exec(`INSERT INTO boards (id, name, short_alias, task_counter) VALUES ('b2', 'Test Board 2', 'TST2', 1000)`)
+	_, _ = db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c4', 'Other Board Column', 'b2', 0, 'todo')`)
+
+	svc := services.NewTaskService(db)
+
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t1', 'Task', 'c1', 1000, 'u1')`)
+
+	_, _, err := svc.UpdateTask("t1", "", "", services.UpdateTaskInput{
+		ColumnID: "c4",
+	})
+	if err == nil {
+		t.Error("expected error when moving task to column in different board")
+	}
+}
+
 func TestCreateTaskInvalidColumn(t *testing.T) {
 	db := setupServiceTestDB(t)
 	defer func() { _ = db.Close() }()

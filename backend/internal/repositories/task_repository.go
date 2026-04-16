@@ -352,7 +352,7 @@ func (r *TaskRepository) GetNextColumn(boardID string, currentPosition int) (str
 	if err != nil {
 		return "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if rows.Next() {
 		if err := rows.Scan(&nextColumnID); err != nil {
 			return "", err

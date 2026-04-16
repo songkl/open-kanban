@@ -72,6 +72,7 @@ func ServeFile(db *sql.DB) gin.HandlerFunc {
 		}
 
 		// Open file
+		// #nosec G304 - path is validated above to be within upload directory
 		file, err := os.Open(absFilePath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read file"})

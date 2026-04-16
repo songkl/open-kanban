@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../../services/api';
@@ -33,7 +33,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
   const [creating, setCreating] = useState(false);
   const [registrationConfig, setRegistrationConfig] = useState<{ allowRegistration: boolean; requirePassword: boolean; authEnabled: boolean } | null>(null);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
       const data = await onLoadUsers();
@@ -43,21 +43,21 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [onLoadUsers]);
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     try {
       const config = await authApi.getConfig();
       setRegistrationConfig(config);
     } catch (err) {
       console.error('Failed to load config:', err);
     }
-  };
+  }, []);
 
-  useState(() => {
+  useEffect(() => {
     loadUsers();
     loadConfig();
-  });
+  }, [loadUsers, loadConfig]);
 
   const handleCreateUser = async () => {
     if (!newUsername.trim()) {

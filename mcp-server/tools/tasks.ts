@@ -166,6 +166,8 @@ export function create_task(srv: McpServer) {
     const url = boardId ? `/api/v1/columns?boardId=${boardId}` : "/api/v1/columns";
     const columns = await apiGet<any[]>(url);
 
+    const boardColumns = boardId ? columns.filter((c: any) => c.boardId === boardId) : columns;
+
     let columnId = args.columnId;
 
     if (!columnId && args.status) {
@@ -177,15 +179,15 @@ export function create_task(srv: McpServer) {
       };
       const columnName = statusMap[args.status];
       if (columnName) {
-        const col = columns.find((c: any) => c.name === columnName);
+        const col = boardColumns.find((c: any) => c.name === columnName);
         if (col) {
           columnId = col.id;
         }
       }
     }
 
-    if (!columnId && columns.length > 0) {
-      columnId = columns[0].id;
+    if (!columnId && boardColumns.length > 0) {
+      columnId = boardColumns[0].id;
     }
 
     const task = await apiPost<any>("/api/v1/tasks", {

@@ -79,7 +79,9 @@ func TestWorkspaceStats(t *testing.T) {
 	defer db.Close()
 
 	tmpDir := t.TempDir()
-	os.Setenv("WORKSPACE_DIR", tmpDir)
+	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
+		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
+	}
 	defer os.Unsetenv("WORKSPACE_DIR")
 
 	router := gin.New()
@@ -118,7 +120,9 @@ func TestListWorkspaceFiles(t *testing.T) {
 	defer db.Close()
 
 	tmpDir := t.TempDir()
-	os.Setenv("WORKSPACE_DIR", tmpDir)
+	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
+		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
+	}
 	defer os.Unsetenv("WORKSPACE_DIR")
 
 	router := gin.New()
@@ -161,7 +165,9 @@ func TestUploadTextFile(t *testing.T) {
 	defer db.Close()
 
 	tmpDir := t.TempDir()
-	os.Setenv("WORKSPACE_DIR", tmpDir)
+	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
+		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
+	}
 	defer os.Unsetenv("WORKSPACE_DIR")
 
 	router := gin.New()
@@ -221,12 +227,18 @@ func TestReadWorkspaceFile(t *testing.T) {
 	defer db.Close()
 
 	tmpDir := t.TempDir()
-	os.Setenv("WORKSPACE_DIR", tmpDir)
+	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
+		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
+	}
 	defer os.Unsetenv("WORKSPACE_DIR")
 
 	subDir := filepath.Join(tmpDir, "subdir")
-	os.MkdirAll(subDir, 0755)
-	os.WriteFile(filepath.Join(subDir, "test.txt"), []byte("test content"), 0644)
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(subDir, "test.txt"), []byte("test content"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
 
 	router := gin.New()
 	router.GET("/api/v1/workspace/files/*path", handlers.RequireAuth(db), handlers.ReadWorkspaceFile(db))
@@ -279,7 +291,9 @@ func TestDeleteWorkspaceFile(t *testing.T) {
 	defer db.Close()
 
 	tmpDir := t.TempDir()
-	os.Setenv("WORKSPACE_DIR", tmpDir)
+	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
+		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
+	}
 	defer os.Unsetenv("WORKSPACE_DIR")
 
 	testFile := filepath.Join(tmpDir, "todelete.txt")
@@ -331,7 +345,9 @@ func TestBatchUploadTextFiles(t *testing.T) {
 	defer db.Close()
 
 	tmpDir := t.TempDir()
-	os.Setenv("WORKSPACE_DIR", tmpDir)
+	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
+		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
+	}
 	defer os.Unsetenv("WORKSPACE_DIR")
 
 	router := gin.New()

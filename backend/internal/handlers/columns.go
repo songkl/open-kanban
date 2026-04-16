@@ -123,12 +123,12 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 					       COALESCE(cc.cnt, 0) as comment_count,
 					       COALESCE(sc.cnt, 0) as subtask_count
 					FROM tasks t
+					INNER JOIN columns c ON t.column_id = c.id AND c.board_id = ?
 					LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
 					LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
 					WHERE t.column_id = ? AND t.archived = false AND t.published = true
 					ORDER BY t.position ASC, t.created_at ASC
-				`, col.ID)
-				fmt.Printf("DEBUG: col.ID=%s, err=%v, taskRows=%v\n", col.ID, err, taskRows)
+				`, col.BoardID, col.ID)
 				if err == nil {
 					defer taskRows.Close()
 					rowCount := 0
@@ -141,7 +141,6 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 						scanErr := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
 							&task.Published, &task.Archived, &archivedAt, &task.CreatedAt, &task.UpdatedAt,
 							&commentCount, &subtaskCount)
-						fmt.Printf("DEBUG: row %d, task.ID=%s, scanErr=%v\n", rowCount, task.ID, scanErr)
 						if scanErr == nil {
 							if desc.Valid {
 								task.Description = &desc.String
@@ -177,7 +176,6 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 							})
 						}
 					}
-					fmt.Printf("DEBUG: total rows=%d, tasks len=%d\n", rowCount, len(tasks))
 				}
 
 				var agentConfig *gin.H

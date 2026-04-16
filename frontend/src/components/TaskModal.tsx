@@ -81,9 +81,21 @@ export function TaskModal({
   useEffect(() => {
     if (startEditing && !isEditing) {
       setIsEditing(true);
+    }
+  }, [startEditing, isEditing]);
+
+  useEffect(() => {
+    if (isEditing && startEditing) {
       onEditingStarted?.();
     }
-  }, [startEditing, isEditing, onEditingStarted]);
+  }, [isEditing, startEditing, onEditingStarted]);
+
+  useEffect(() => {
+    if (isEditing && startEditing) {
+      const timer = setTimeout(() => titleInputRef.current?.focus(), 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isEditing, startEditing]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -104,7 +116,6 @@ export function TaskModal({
       }
 
       if (e.key === 'Tab' && isEditing) {
-        e.preventDefault();
         const fieldOrder = [
           titleInputRef,
           statusSelectRef,
@@ -113,15 +124,14 @@ export function TaskModal({
           metaKeyInputRef,
         ];
         const currentIndex = fieldOrder.findIndex(ref => ref.current === e.target);
-        if (currentIndex === -1) {
-          titleInputRef.current?.focus();
-        } else {
+        if (currentIndex !== -1) {
+          e.preventDefault();
           const nextIndex = e.shiftKey
             ? (currentIndex - 1 + fieldOrder.length) % fieldOrder.length
             : (currentIndex + 1) % fieldOrder.length;
           fieldOrder[nextIndex]?.current?.focus();
+          return;
         }
-        return;
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -373,6 +383,12 @@ export function TaskModal({
               <div>
                 <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
                 <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500">
+                  {task.createdByUsername && (
+                    <div className="flex items-center gap-1">
+                      <UserAvatar username={task.createdByUsername} size="sm" />
+                      <span>{task.createdByUsername}</span>
+                    </div>
+                  )}
                   <span>{t('taskModal.publishedAt')}: {new Date(task.createdAt).toLocaleString()}</span>
                   {task.updatedAt !== task.createdAt && (
                     <span>{t('taskModal.updatedAt')}: {new Date(task.updatedAt).toLocaleString()}</span>

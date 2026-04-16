@@ -116,7 +116,7 @@ func initMySQL(config *DBConfig) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MySQL server: %w", err)
 	}
-	defer rootDB.Close()
+	defer func() { _ = rootDB.Close() }()
 
 	_, err = rootDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", config.Database))
 	if err != nil {

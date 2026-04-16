@@ -51,7 +51,7 @@ func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, p
 		}
 		rows, err := s.db.Query(query, args...)
 		if err == nil {
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 			for rows.Next() {
 				var colID string
 				if err := rows.Scan(&colID); err == nil {
@@ -260,6 +260,17 @@ func (s *TaskService) UpdateTask(taskID string, userID, role string, input Updat
 		}
 	}
 	if input.ColumnID != "" && input.ColumnID != oldTask.ColumnID {
+		oldBoardID, err := s.getBoardIDForColumn(oldTask.ColumnID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get board for current column")
+		}
+		newBoardID, err := s.getBoardIDForColumn(input.ColumnID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get board for target column")
+		}
+		if oldBoardID != newBoardID {
+			return nil, nil, fmt.Errorf("cannot move task to a column in a different board")
+		}
 		var oldStatus, newStatus sql.NullString
 		_ = s.db.QueryRow("SELECT status FROM columns WHERE id = ?", oldTask.ColumnID).Scan(&oldStatus)
 		_ = s.db.QueryRow("SELECT status FROM columns WHERE id = ?", input.ColumnID).Scan(&newStatus)

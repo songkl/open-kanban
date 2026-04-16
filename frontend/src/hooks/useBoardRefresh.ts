@@ -40,16 +40,20 @@ export function useBoardRefresh({ columns, onColumnsChange }: UseBoardRefreshOpt
       const updatedTask = await tasksApi.getById(taskId);
       if (!updatedTask) return;
 
+      const currentColumns = columnsRef.current;
+      const oldTask = currentColumns.flatMap(col => col.tasks).find(t => t.id === taskId);
+
       const parsedTask: Task = {
         ...updatedTask,
         meta: typeof updatedTask.meta === 'string' ? JSON.parse(updatedTask.meta || '{}') : updatedTask.meta || null,
+        comments: updatedTask.comments ?? oldTask?.comments ?? [],
+        subtasks: updatedTask.subtasks ?? oldTask?.subtasks ?? [],
         _count: {
-          comments: (updatedTask as { commentCount?: number }).commentCount ?? updatedTask._count?.comments,
-          subtasks: (updatedTask as { subtaskCount?: number }).subtaskCount ?? updatedTask._count?.subtasks,
+          comments: (updatedTask as { commentCount?: number }).commentCount ?? updatedTask._count?.comments ?? oldTask?._count?.comments ?? 0,
+          subtasks: (updatedTask as { subtaskCount?: number }).subtaskCount ?? updatedTask._count?.subtasks ?? oldTask?._count?.subtasks ?? 0,
         },
       };
 
-      const currentColumns = columnsRef.current;
       const oldColumn = currentColumns.find(col => col.tasks.some(t => t.id === taskId));
       const newColumnId = parsedTask.columnId;
 
