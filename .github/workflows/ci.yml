@@ -94,7 +94,7 @@ jobs:
       - name: Run Go tests
         run: |
           cd backend
-          go test ./... -race -coverprofile=coverage.out
+          go test -tags sqlite ./... -race -coverprofile=coverage.out
 
       - name: Check coverage
         run: |

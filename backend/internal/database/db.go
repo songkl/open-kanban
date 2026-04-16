@@ -18,6 +18,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"open-kanban/internal/database/migrations"
+	"open-kanban/internal/version"
 )
 
 type DBConfig struct {
@@ -165,6 +166,31 @@ func runSQLiteMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create SQLite migrate instance: %w", err)
 	}
 
+	gitVersion := version.GetGitVersion()
+	if gitVersion != "" {
+		if fromMig, toMig, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			log.Printf("[SQLite] Running migrations from version %s (migrations %d to %d)", gitVersion, fromMig, toMig)
+			if err := m.Migrate(uint(toMig)); err != nil && err != migrate.ErrNoChange {
+				if strings.Contains(err.Error(), "Dirty") {
+					if forceErr := m.Force(toMig); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else if strings.Contains(err.Error(), "no migration found") {
+					log.Printf("[SQLite] Migration %d not found, forcing to current version", toMig)
+					if forceErr := m.Force(toMig - 1); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else {
+					return fmt.Errorf("failed to run SQLite migrations: %w", err)
+				}
+			}
+			if err := storeSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[SQLite] Warning: failed to store schema version: %v", err)
+			}
+			return nil
+		}
+	}
+
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
 			if forceErr := m.Force(7); forceErr != nil {
@@ -176,6 +202,24 @@ func runSQLiteMigrations(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func storeSchemaVersion(db *sql.DB, ver string) error {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS schema_version (version TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, datetime('now'))", ver)
+	return err
+}
+
+func getStoredSchemaVersion(db *sql.DB) (string, error) {
+	var version string
+	err := db.QueryRow("SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1").Scan(&version)
+	if err != nil {
+		return "", err
+	}
+	return version, nil
 }
 
 func runMySQLMigrations(db *sql.DB, databaseName string) error {
@@ -194,6 +238,31 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 		return fmt.Errorf("failed to create MySQL migrate instance: %w", err)
 	}
 
+	gitVersion := version.GetGitVersion()
+	if gitVersion != "" {
+		if fromMig, toMig, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			log.Printf("[MySQL] Running migrations from version %s (migrations %d to %d)", gitVersion, fromMig, toMig)
+			if err := m.Migrate(uint(toMig)); err != nil && err != migrate.ErrNoChange {
+				if strings.Contains(err.Error(), "Dirty") {
+					if forceErr := m.Force(toMig); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else if strings.Contains(err.Error(), "no migration found") {
+					log.Printf("[MySQL] Migration %d not found, forcing to current version", toMig)
+					if forceErr := m.Force(toMig - 1); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else {
+					return fmt.Errorf("failed to run MySQL migrations: %w", err)
+				}
+			}
+			if err := storeMySQLSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[MySQL] Warning: failed to store schema version: %v", err)
+			}
+			return nil
+		}
+	}
+
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
 			if forceErr := m.Force(7); forceErr != nil {
@@ -205,4 +274,13 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 	}
 
 	return nil
+}
+
+func storeMySQLSchemaVersion(db *sql.DB, ver string) error {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS schema_version (version VARCHAR(255) PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("INSERT INTO schema_version (version, applied_at) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE version = VALUES(version), applied_at = VALUES(applied_at)", ver)
+	return err
 }

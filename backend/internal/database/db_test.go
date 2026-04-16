@@ -3,7 +3,6 @@
 package database_test
 
 import (
-	"database/sql"
 	"os"
 	"testing"
 
@@ -196,62 +195,4 @@ func TestInitDB_SQLiteWithPath(t *testing.T) {
 	}
 
 	os.Remove("/tmp/test_kanban.db")
-}
-
-func TestInitDB_MySQL(t *testing.T) {
-	_ = os.Setenv("DB_TYPE", "mysql")
-	_ = os.Setenv("DB_HOST", "10.0.1.240")
-	_ = os.Setenv("DB_PORT", "3306")
-	_ = os.Setenv("DB_USER", "test")
-	_ = os.Setenv("DB_PASSWORD", "password")
-	_ = os.Setenv("DB_NAME", "test")
-	_ = os.Setenv("DB_MAX_OPEN_CONNS", "10")
-	_ = os.Setenv("DB_MAX_IDLE_CONNS", "5")
-	_ = os.Setenv("DB_CONN_MAX_LIFETIME", "300")
-
-	db, err := database.InitDB()
-	if err != nil {
-		t.Fatalf("failed to init MySQL db: %v", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	if err := db.Ping(); err != nil {
-		t.Errorf("failed to ping MySQL database: %v", err)
-	}
-
-	var version string
-	err = db.QueryRow("SELECT VERSION()").Scan(&version)
-	if err != nil {
-		t.Errorf("failed to query MySQL version: %v", err)
-	}
-	if version == "" {
-		t.Error("expected non-empty MySQL version")
-	}
-
-	_, err = db.Exec("SELECT 1")
-	if err != nil {
-		t.Errorf("failed to execute simple query: %v", err)
-	}
-}
-
-func TestMySQLConnection(t *testing.T) {
-	dsn := "test:password@tcp(10.0.1.240:3306)/test?parseTime=true&charset=utf8mb4"
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		t.Fatalf("failed to open MySQL connection: %v", err)
-	}
-	defer db.Close()
-
-	if err := db.Ping(); err != nil {
-		t.Errorf("failed to ping MySQL server: %v", err)
-	}
-
-	var result int
-	err = db.QueryRow("SELECT 1").Scan(&result)
-	if err != nil {
-		t.Errorf("failed to execute query: %v", err)
-	}
-	if result != 1 {
-		t.Errorf("expected result 1, got %d", result)
-	}
 }
