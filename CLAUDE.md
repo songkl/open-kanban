@@ -43,3 +43,17 @@ Every new feature addition **must** include:
 - Frontend: `npm run build`
 - MCP Server: `npm run build` in mcp-server directory, for dev PORT=8081
 
+### Git Commit Messages
+
+All commit messages **must** start with the task ID in the format `T-XXXX: `.
+
+**Correct:**
+- `T-123: Add user login feature`
+- `T-456: Fix pagination bug`
+
+**Incorrect:**
+- `Add user login feature`
+- `Fixed the bug`
+
+This ensures every commit is traceable to a specific task.
+

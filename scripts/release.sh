@@ -67,7 +67,7 @@ for PLATFORM in "${PLATFORMS[@]}"; do
 
   echo "  Building $OUTPUT_NAME..."
   cd "$PROJECT_DIR/backend"
-  GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server/main.go
+  GOOS=$GOOS GOARCH=$GOARCH go build -tags="release" -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server/main.go
 
   # Compress with UPX if available (max compression)
   if [ "$UPX_OK" = true ]; then
@@ -86,7 +86,7 @@ for PLATFORM in "${PLATFORMS[@]}"; do
   fi
 
   echo "  Building $MYSQL_OUTPUT_NAME (MySQL-only)..."
-  GOOS=$GOOS GOARCH=$GOARCH go build -tags "mysql && !sqlite" -ldflags="-s -w" -o "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" ./cmd/server/main.go
+  GOOS=$GOOS GOARCH=$GOARCH go build -tags "mysql && release && !sqlite" -ldflags="-s -w" -o "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" ./cmd/server/main.go
 
   # Compress with UPX if available (max compression)
   if [ "$UPX_OK" = true ]; then
