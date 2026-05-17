@@ -30,6 +30,36 @@ All notable changes to this project will be documented in this file.
   - docs: update changelog [skip ci]
   - docs: update changelog [skip ci]
   - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+
+## [0.2.0]
+
+### Features
+
+### Bug Fixes
+
+### Improvements
+
+### Documentation
+
+#### Added
+  - feat: add sqlite build tag for tests and add git version based migration
+  - feat: add task sorting by position/priority/createdAt/title/assignee (T-1397)
+  - feat: add comments and subtasks indexes migration
+
+#### Fixed
+  - fix: update _count structure for tasks and add dropdown menuAbove option
+  - fix: update filter panel tests to use proper dropdown interaction
+
+#### Documentation
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
 
 ## [0.1.1]
 
