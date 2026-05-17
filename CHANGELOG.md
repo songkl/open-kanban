@@ -12,6 +12,19 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
+#### Documentation
+  - docs: update changelog [skip ci]
+
+## [0.2.0]
+
+### Features
+
+### Bug Fixes
+
+### Improvements
+
+### Documentation
+
 #### Added
   - feat: add sqlite build tag for tests and add git version based migration
   - feat: add task sorting by position/priority/createdAt/title/assignee (T-1397)
