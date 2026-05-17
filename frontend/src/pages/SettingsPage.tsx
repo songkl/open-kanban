@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
@@ -72,7 +72,7 @@ export function SettingsPage() {
     }
   };
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       const data = await authApi.getUsers();
       setUsers(data || []);
@@ -81,7 +81,7 @@ export function SettingsPage() {
       console.error('Failed to load users:', err);
       return [];
     }
-  };
+  }, []);
 
   const switchToTab = (tab: Tab) => {
     setActiveTab(tab);

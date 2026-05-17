@@ -225,14 +225,15 @@ export function TaskModal({
   }, [task.id]);
 
   useEffect(() => {
-    if (task.id && (!task.comments || task.comments.length === 0)) {
+    if (!task.id) return;
+    if (!task.comments || task.comments.length === 0) {
       commentsApi.getByTask(task.id)
         .then((data) => setTaskComments(data || []))
         .catch(console.error);
-    } else if (task.comments) {
+    } else {
       setTaskComments(task.comments);
     }
-  }, [task.id, task.comments]);
+  }, [task.id, JSON.stringify(task.comments)]);
 
   useEffect(() => {
     if (commentsRef.current) {

@@ -4,6 +4,7 @@ import { useState, useId, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
+import { UserAvatar } from './UserAvatar';
 
 interface TaskCardProps {
   task: Task;
@@ -337,6 +338,9 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
         <div className="flex items-center gap-2">
+          {task.createdByUsername && (
+            <UserAvatar username={task.createdByUsername} size="sm" />
+          )}
           {task.assignee && (
             <span className="text-xs text-zinc-400 dark:text-zinc-500">{task.assignee}</span>
           )}
