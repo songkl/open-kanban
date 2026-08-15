@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -944,6 +945,35 @@ func TestGetAvatarsHandler(t *testing.T) {
 		avatars := resp["avatars"].([]interface{})
 		if len(avatars) == 0 {
 			t.Errorf("expected non-empty avatars list")
+		}
+	})
+}
+
+func TestHashPasswordWithSalt(t *testing.T) {
+	t.Run("hash and verify works with various password lengths including long ones", func(t *testing.T) {
+		handlers.SetSaltForTest("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+
+		passwords := []string{
+			"short",
+			"correctpassword",
+			"a-very-long-password-with-special-chars-!@#$%^&*()_+",
+			strings.Repeat("x", 100),
+			strings.Repeat("y", 200),
+			"密码-中文-测试",
+		}
+
+		for _, pw := range passwords {
+			hash, err := handlers.HashPasswordWithSalt(pw)
+			if err != nil {
+				t.Errorf("hash failed for password length %d: %v", len(pw), err)
+				continue
+			}
+			if hash == "" {
+				t.Errorf("expected non-empty hash for password length %d", len(pw))
+			}
+			if !handlers.VerifyPasswordWithSaltForTest(pw, hash) {
+				t.Errorf("verify failed for password length %d", len(pw))
+			}
 		}
 	})
 }

@@ -108,4 +108,17 @@ describe('AddTaskModal', () => {
     await userEvent.click(cancelButton);
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
+
+  it('keeps focus in description textarea while typing', async () => {
+    render(<AddTaskModal {...defaultProps} />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const textarea = document.querySelector('textarea');
+    expect(textarea).not.toBeNull();
+    textarea!.focus();
+    await userEvent.click(textarea!);
+    await userEvent.type(textarea!, 'hello');
+
+    expect(document.activeElement).toBe(textarea);
+  });
 });

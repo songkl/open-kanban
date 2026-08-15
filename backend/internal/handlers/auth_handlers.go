@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"time"
 
@@ -107,7 +108,8 @@ func Init(db *sql.DB) gin.HandlerFunc {
 			userID, req.Username, nickname, hashedPassword, avatar, "HUMAN", "ADMIN", time.Now(), time.Now(),
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			log.Printf("[Init] failed to insert admin user: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user: " + err.Error()})
 			return
 		}
 
@@ -227,7 +229,8 @@ func Login(db *sql.DB) gin.HandlerFunc {
 				userID, username, username, hashedPassword, avatar, userType, role, time.Now(), time.Now(),
 			)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+				log.Printf("[Login] failed to auto-create user: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user: " + err.Error()})
 				return
 			}
 

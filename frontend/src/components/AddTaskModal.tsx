@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { columnsApi } from '@/services/api';
 import { CustomDropdown } from './CustomDropdown';
@@ -58,7 +58,6 @@ export function AddTaskModal({
     setIsPublished(true);
     setSelectedBoardId(currentBoardId || '');
     setPriority('medium');
-    setTimeout(() => titleInputRef.current?.focus(), 0);
   }, [currentBoardId]);
 
   const handleClose = useCallback(() => {
@@ -108,13 +107,23 @@ export function AddTaskModal({
     }
   }, [handleClose, title, description, isPublished, selectedColumnId, selectedBoardId, priority, onSubmit]);
 
+  const handleKeyDownRef = useRef(handleKeyDown);
   useEffect(() => {
+    handleKeyDownRef.current = handleKeyDown;
+  }, [handleKeyDown]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => handleKeyDownRef.current(e);
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen]);
+
+  useLayoutEffect(() => {
     if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      setTimeout(() => titleInputRef.current?.focus(), 0);
-      return () => document.removeEventListener('keydown', handleKeyDown);
+      titleInputRef.current?.focus();
     }
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

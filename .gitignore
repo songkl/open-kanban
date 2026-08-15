@@ -58,3 +58,7 @@ kanban.db.*
 coverage/
 frontend/src/types/generated/
 test/
+
+
+.claude/
+backend/web/

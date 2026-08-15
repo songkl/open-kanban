@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
@@ -160,8 +161,8 @@ func hashWithSalt(input string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	combined := salt + input
-	hash, err := bcrypt.GenerateFromPassword([]byte(combined), bcrypt.DefaultCost)
+	digest := sha256.Sum256([]byte(salt + input))
+	hash, err := bcrypt.GenerateFromPassword(digest[:], bcrypt.DefaultCost)
 	if err != nil {
 		return "", err
 	}
@@ -173,13 +174,17 @@ func verifyWithSalt(input, hash string) bool {
 	if err != nil {
 		return false
 	}
-	combined := salt + input
-	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(combined))
+	digest := sha256.Sum256([]byte(salt + input))
+	err = bcrypt.CompareHashAndPassword([]byte(hash), digest[:])
 	return err == nil
 }
 
 func HashPasswordWithSalt(password string) (string, error) {
 	return hashWithSalt(password)
+}
+
+func VerifyPasswordWithSaltForTest(password, hash string) bool {
+	return verifyWithSalt(password, hash)
 }
 
 func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
