@@ -11,10 +11,12 @@ import { list_subtasks, create_subtask, update_subtask, delete_subtask } from ".
 import { get_dashboard_stats } from "./tools/stats.js";
 import { list_my_tasks } from "./tools/mytasks.js";
 import { upload_file, batch_upload_files, list_workspace_files, read_workspace_file, delete_workspace_file, workspace_stats } from "./tools/upload.js";
+import { setOAuthClient } from "./tools/helpers.js";
+import { OAuthClient } from "./src/auth/client.js";
 
 const server = new McpServer({
   name: "kanban-mcp-server",
-  version: "1.3.0",
+  version: "2.0.0",
 });
 
 export function registerTools(srv: McpServer) {
@@ -53,6 +55,48 @@ export function registerTools(srv: McpServer) {
 }
 
 registerTools(server);
+
+// --- OAuth 2.1 bootstrap ----------------------------------------------------
+// Discovery + DCR + device flow happens synchronously on startup. We surface
+// the user_code + verification_uri to stderr so the AI host (and the user)
+// can see the prompt. When the env var KANBAN_MCP_TOKEN is set we skip the
+// device flow and rely on the legacy bearer.
+async function bootstrapAuth(): Promise<void> {
+  const apiUrl = process.env.KANBAN_API_URL || "http://localhost:8080";
+  if (process.env.KANBAN_MCP_TOKEN) {
+    // Legacy mode: helpers.ts will pick up the token from env.
+    return;
+  }
+  try {
+    const client = await OAuthClient.fromConfig({ apiUrl });
+    const creds = client.loadCredentials();
+    if (creds?.accessToken || creds?.refreshToken) {
+      setOAuthClient(client);
+      return;
+    }
+    // Run the interactive device flow. The host will print stderr output to
+    // the user via the MCP "logging" facility when wired up.
+    await client.authorizeInteractive({
+      apiUrl,
+      onPrompt: async (poll) => {
+        process.stderr.write(
+          `\n[kanban-mcp] OAuth authorization required\n` +
+            `  Visit: ${poll.verificationUri}\n` +
+            `  Enter code: ${poll.userCode}\n` +
+            `  Waiting for approval...\n`
+        );
+        // Approve is implicit: the MCP host cannot click buttons for the
+        // user, so we just wait for the user to complete the browser flow.
+        return "approve";
+      }
+    });
+    setOAuthClient(client);
+  } catch (err) {
+    process.stderr.write(`[kanban-mcp] OAuth bootstrap failed: ${(err as Error).message}\n`);
+  }
+}
+
+await bootstrapAuth();
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

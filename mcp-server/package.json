@@ -1,7 +1,7 @@
 {
   "name": "open-kanban-mcp",
-  "version": "1.2.0",
-  "description": "MCP Server for Open kanban board",
+  "version": "2.0.0",
+  "description": "MCP Server for Open kanban board with OAuth 2.1 device flow",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -10,12 +10,16 @@
   "scripts": {
     "build": "tsc && npm run add-shebang",
     "add-shebang": "echo '#!/usr/bin/env node' | cat - dist/index.js > temp.js && mv temp.js dist/index.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "vitest run"
   },
   "keywords": [
     "mcp",
     "mcp-server",
-    "kanban"
+    "kanban",
+    "oauth",
+    "oauth2.1",
+    "device-flow"
   ],
   "author": "",
   "license": "MIT",
@@ -24,7 +28,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=18.0.0"
