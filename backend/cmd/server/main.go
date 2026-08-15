@@ -61,24 +61,13 @@ func loadEnvFromFile(path string) error {
 //go:embed web
 var embeddedWeb embed.FS
 
-func splitOrigins(origins string) []string {
-	var result []string
-	for _, o := range strings.Split(origins, ",") {
-		o = strings.TrimSpace(o)
-		if o != "" {
-			result = append(result, o)
-		}
-	}
-	return result
-}
-
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 
 		c.Writer.Header().Set("Vary", "Origin")
 
-		allowedOrigins := splitOrigins(os.Getenv("ALLOWED_ORIGINS"))
+		allowedOrigins := handlers.GetAllowedOrigins()
 
 		isAllowed := false
 		allowedOrigin := ""

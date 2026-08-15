@@ -3,6 +3,8 @@ package handlers_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"testing"
 
 	"open-kanban/internal/handlers"
@@ -99,6 +101,96 @@ func TestIsOriginAllowed(t *testing.T) {
 			result := handlers.IsOriginAllowedForTest(tt.origin)
 			if result != tt.expected {
 				t.Errorf("expected %v, got %v for origin %s", tt.expected, result, tt.origin)
+			}
+		})
+	}
+}
+
+func TestGetAllowedOrigins(t *testing.T) {
+	unsetEnv := func(key string) {
+		prev, had := os.LookupEnv(key)
+		os.Unsetenv(key)
+		t.Cleanup(func() {
+			if had {
+				_ = os.Setenv(key, prev)
+			} else {
+				_ = os.Unsetenv(key)
+			}
+		})
+	}
+
+	t.Run("explicit ALLOWED_ORIGINS overrides default", func(t *testing.T) {
+		t.Setenv("ALLOWED_ORIGINS", "http://a.example.com,http://b.example.com")
+		t.Setenv("PORT", "1234")
+
+		got := handlers.GetAllowedOrigins()
+		want := []string{"http://a.example.com", "http://b.example.com"}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("expected %v, got %v", want, got)
+		}
+	})
+
+	t.Run("empty ALLOWED_ORIGINS falls back to default", func(t *testing.T) {
+		t.Setenv("ALLOWED_ORIGINS", "")
+		t.Setenv("PORT", "9090")
+
+		got := handlers.GetAllowedOrigins()
+		want := []string{"http://localhost:9090"}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("expected %v, got %v", want, got)
+		}
+	})
+
+	t.Run("unset ALLOWED_ORIGINS falls back to default with PORT", func(t *testing.T) {
+		unsetEnv("ALLOWED_ORIGINS")
+		t.Setenv("PORT", "9090")
+
+		got := handlers.GetAllowedOrigins()
+		want := []string{"http://localhost:9090"}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("expected %v, got %v", want, got)
+		}
+	})
+
+	t.Run("unset ALLOWED_ORIGINS and unset PORT use port 8080", func(t *testing.T) {
+		unsetEnv("ALLOWED_ORIGINS")
+		unsetEnv("PORT")
+
+		got := handlers.GetAllowedOrigins()
+		want := []string{"http://localhost:8080"}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("expected %v, got %v", want, got)
+		}
+	})
+}
+
+func TestIsOriginAllowedDefaultFallback(t *testing.T) {
+	prevOrigins, hadOrigins := os.LookupEnv("ALLOWED_ORIGINS")
+	os.Unsetenv("ALLOWED_ORIGINS")
+	t.Cleanup(func() {
+		if hadOrigins {
+			_ = os.Setenv("ALLOWED_ORIGINS", prevOrigins)
+		} else {
+			_ = os.Unsetenv("ALLOWED_ORIGINS")
+		}
+	})
+	t.Setenv("PORT", "8081")
+
+	tests := []struct {
+		name     string
+		origin   string
+		expected bool
+	}{
+		{name: "default localhost matches PORT", origin: "http://localhost:8081", expected: true},
+		{name: "different port rejected", origin: "http://localhost:8080", expected: false},
+		{name: "different host rejected", origin: "http://evil.com", expected: false},
+		{name: "empty origin rejected", origin: "", expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := handlers.IsOriginAllowedForTest(tt.origin); got != tt.expected {
+				t.Errorf("expected %v, got %v for origin %s", tt.expected, got, tt.origin)
 			}
 		})
 	}

@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,22 +16,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func splitOrigins(origins string) []string {
-	var result []string
-	for _, o := range strings.Split(origins, ",") {
-		o = strings.TrimSpace(o)
-		if o != "" {
-			result = append(result, o)
-		}
-	}
-	return result
-}
-
 func isOriginAllowed(origin string) bool {
 	if origin == "" {
 		return false
 	}
-	allowedOrigins := splitOrigins(os.Getenv("ALLOWED_ORIGINS"))
+	allowedOrigins := GetAllowedOrigins()
 	for _, allowed := range allowedOrigins {
 		if origin == allowed {
 			return true
