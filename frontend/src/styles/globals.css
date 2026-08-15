@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/*
+ * Tailwind v4 ships with the `dark:` variant bound to
+ * prefers-color-scheme: dark. The app instead toggles a `.dark` class
+ * on <html> via uiStore.setDarkMode(), so rebind the variant to match
+ * any element with that class (or its descendants).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
     "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
