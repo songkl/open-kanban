@@ -317,7 +317,7 @@ export function DraftsPage() {
 
               <div className="flex items-start justify-between gap-2 pl-3">
                 <div className="flex-1">
-                  <span className="mb-1 block text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400 font-mono">#{task.id.slice(-6)}</span>
+                  <span className="mb-1 block text-xs text-zinc-400 dark:text-zinc-400 font-mono">#{task.id.slice(-6)}</span>
                   <h3 className="font-medium text-zinc-800 dark:text-zinc-100 break-words">{task.title}</h3>
                 </div>
               </div>
@@ -333,13 +333,13 @@ export function DraftsPage() {
                   {task.subtasks.slice(0, 3).map((subtask) => (
                     <div key={subtask.id} className="flex items-center gap-1.5 text-xs">
                       <span className={`h-1.5 w-1.5 rounded-full ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
-                      <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
+                      <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
                         {subtask.title}
                       </span>
                     </div>
                   ))}
                   {task.subtasks.length > 3 && (
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('drafts.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-400">{t('drafts.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
                   )}
                 </div>
               )}
@@ -352,20 +352,20 @@ export function DraftsPage() {
                     {t(`task.priority.${task.priority}`)}
                   </span>
                   {task.subtasks && task.subtasks.length > 0 && (
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
+                    <span className="text-xs text-zinc-400 dark:text-zinc-400">
                       ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   {task.comments && task.comments.length > 0 && (
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">💬 {task.comments.length}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-400">💬 {task.comments.length}</span>
                   )}
                 </div>
               </div>
 
               <div className="mt-2 border-t border-zinc-200 dark:border-zinc-700 pt-2 pl-3">
-                <div className="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
+                <div className="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-400">
                   <span>{t('drafts.createdAt')} {new Date(task.createdAt).toLocaleString()}</span>
                   <div className="flex gap-2">
                     <button

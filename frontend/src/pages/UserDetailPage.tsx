@@ -399,7 +399,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
+                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
                         }`}>
                           {perm.access === 'ADMIN' ? t('settings.admin') : perm.access === 'WRITE' ? t('settings.member') : t('settings.viewer')}
                         </span>
@@ -436,7 +436,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
+                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
                         }`}>
                           {perm.access === 'ADMIN' ? t('settings.admin') : perm.access === 'WRITE' ? t('settings.member') : t('settings.viewer')}
                         </span>
@@ -476,7 +476,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
+                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
                         }`}>
                           {perm.access}
                         </span>

@@ -426,7 +426,7 @@ export function AgentActivityPage() {
                   return (
                     <div
                       key={activity.id}
-                      className="flex items-start gap-4 rounded-lg bg-white p-4 shadow dark:bg-zinc-800-sm"
+                      className="flex items-start gap-4 rounded-lg bg-white p-4 shadow dark:bg-zinc-800"
                     >
                       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">
                         <span className="text-lg">{actionIcons[activity.action] || '📌'}</span>

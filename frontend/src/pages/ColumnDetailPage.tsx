@@ -209,7 +209,7 @@ export function ColumnDetailPage() {
         <div className="flex items-center gap-4">
           <Link
             to={`/board/${boardId}`}
-            className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-100"
+            className="flex items-center gap-2 text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-100"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -322,7 +322,7 @@ export function ColumnDetailPage() {
 
       <main className="p-6">
         {column.description && (
-          <div className="mb-6 rounded-lg bg-white p-4 text-sm text-zinc-600 dark:text-zinc-300 dark:bg-zinc-800 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700">
+          <div className="mb-6 rounded-lg bg-white p-4 text-sm text-zinc-600 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700">
             <p>{column.description}</p>
           </div>
         )}
@@ -339,7 +339,7 @@ export function ColumnDetailPage() {
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="mb-4 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300"
+              className="mb-4 text-zinc-300 dark:text-zinc-300"
             >
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <line x1="9" y1="9" x2="15" y2="15" />

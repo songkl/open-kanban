@@ -290,14 +290,14 @@ export function SetupPage() {
               placeholder={t('login.enterPassword')}
               className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
             />
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('login.passwordHint')}</p>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-400">{t('login.passwordHint')}</p>
           </div>
 
           <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4">
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex w-full items-center justify-between text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-800 dark:text-zinc-100 dark:hover:text-zinc-100"
+              className="flex w-full items-center justify-between text-sm font-medium text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-100"
             >
               <span>{t('setup.advancedSettings')}</span>
               <svg
@@ -338,7 +338,7 @@ export function SetupPage() {
                         placeholder="kanban.db"
                         className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                       />
-                      <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('setup.dbPathHint')}</p>
+                      <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-400">{t('setup.dbPathHint')}</p>
                   </div>
                 ) : (
                   <>
@@ -435,7 +435,7 @@ export function SetupPage() {
                         placeholder="http://localhost:5173, http://localhost:3000"
                         className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                       />
-                      <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('setup.allowedOriginsHint')}</p>
+                      <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-400">{t('setup.allowedOriginsHint')}</p>
                     </div>
                   </div>
                 </div>

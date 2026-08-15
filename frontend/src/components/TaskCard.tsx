@@ -158,7 +158,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 'bg-green-500 shadow-sm shadow-green-500/50'
               }`}
             />
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400 font-mono">
+            <span className="text-xs text-zinc-400 dark:text-zinc-400 font-mono">
               #{String(task.id || '').slice(-6)}
             </span>
           </div>
@@ -177,7 +177,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 e.stopPropagation();
                 setShowMoreMenu(!showMoreMenu);
               }}
-              className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-300 z-10 relative transition-colors"
+              className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
               title={t('taskCard.moreActions')}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -271,7 +271,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               e.stopPropagation();
               onClick();
             }}
-            className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-300 z-10 relative transition-colors"
+            className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
             title={t('taskCard.viewDetails')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -315,13 +315,13 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           {task.subtasks.slice(0, 3).map((subtask) => (
             <div key={subtask.id} className="flex items-center gap-2 text-xs">
               <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
-              <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
+              <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
                 {subtask.title}
               </span>
             </div>
           ))}
           {task.subtasks.length > 3 && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('taskCard.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-400">{t('taskCard.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
           )}
         </div>
       )}
@@ -338,7 +338,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             {task.priority === 'high' ? t('task.priority.high') : task.priority === 'medium' ? t('task.priority.medium') : t('task.priority.low')}
           </span>
           {task.subtasks && task.subtasks.length > 0 && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs text-zinc-400 dark:text-zinc-400">
               ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
             </span>
           )}
@@ -348,7 +348,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             <UserAvatar username={task.createdByUsername} size="sm" />
           )}
           {task.assignee && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{task.assignee}</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-400">{task.assignee}</span>
           )}
           {((task._count?.comments ?? 0) > 0 || (task.comments && task.comments.length > 0)) && (
             <span

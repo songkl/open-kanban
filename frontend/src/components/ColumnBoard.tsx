@@ -354,7 +354,7 @@ export function ColumnBoard({
                 </div>
                 <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-zinc-100/80 to-transparent dark:from-zinc-900/80 pointer-events-none" />
                 <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-zinc-100/80 to-transparent dark:from-zinc-900/80 pointer-events-none" />
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-zinc-800/70 text-white text-xs px-2 py-1 rounded-full dark:bg-zinc-200/70 dark:text-zinc-800 dark:text-zinc-100">
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-zinc-800/70 text-white text-xs px-2 py-1 rounded-full dark:bg-zinc-200/70 dark:text-zinc-100">
                   {t('mobile.columnsCount', { count: columns.length })}
                 </div>
               </div>
@@ -393,7 +393,7 @@ export function ColumnBoard({
             </div>
             <div className="absolute left-0 top-0 bottom-4 w-8 bg-gradient-to-r from-zinc-100 dark:from-zinc-900 to-transparent pointer-events-none z-10" id="scroll-fade-left" />
             <div className="absolute right-4 top-0 bottom-4 w-8 bg-gradient-to-l from-zinc-100 dark:from-zinc-900 to-transparent pointer-events-none z-10" id="scroll-fade-right" />
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-zinc-800/70 text-white text-xs px-2 py-1 rounded-full dark:bg-zinc-200/70 dark:text-zinc-800 dark:text-zinc-100 opacity-0 transition-opacity" id="scroll-hint">
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-zinc-800/70 text-white text-xs px-2 py-1 rounded-full dark:bg-zinc-200/70 dark:text-zinc-100 opacity-0 transition-opacity" id="scroll-hint">
               {t('board.scrollHint')}
             </div>
           </div>

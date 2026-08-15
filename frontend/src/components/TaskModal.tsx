@@ -383,7 +383,7 @@ export function TaskModal({
             {!isEditing && (
               <div>
                 <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
-                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
+                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-400">
                   {task.createdByUsername && (
                     <div className="flex items-center gap-1">
                       <UserAvatar username={task.createdByUsername} size="sm" />
@@ -412,7 +412,7 @@ export function TaskModal({
                 navigator.clipboard.writeText(task.id);
               }}
               title={t('taskModal.copyTaskId')}
-              className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-200"
+              className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -421,7 +421,7 @@ export function TaskModal({
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
               title={t('taskModal.fullscreen')}
-              className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-200"
+              className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
             >
               {isFullscreen ? (
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -435,7 +435,7 @@ export function TaskModal({
             </button>
             <button
               onClick={onClose}
-              className="rounded-md p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-200"
+              className="rounded-md p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -486,7 +486,7 @@ export function TaskModal({
                   {task.description ? (
                     <SafeMarkdown>{task.description}</SafeMarkdown>
                   ) : (
-                    <span className="text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('taskModal.noDescription')}</span>
+                    <span className="text-zinc-400 dark:text-zinc-400">{t('taskModal.noDescription')}</span>
                   )}
                 </div>
               )}
@@ -705,7 +705,7 @@ export function TaskModal({
             <div className="flex-shrink-0 p-4 pb-2 border-b border-zinc-100 dark:border-zinc-700 flex items-center justify-between">
               <h4 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.comments')} ({taskComments?.length || 0})</h4>
               {taskComments && taskComments.length > COMMENTS_PER_PAGE && (
-                <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
+                <span className="text-xs text-zinc-400 dark:text-zinc-400">
                   {commentsPage} / {Math.ceil(taskComments.length / COMMENTS_PER_PAGE)}
                 </span>
               )}
@@ -716,7 +716,7 @@ export function TaskModal({
                   <div className="mb-1 flex items-center gap-2">
                     <UserAvatar username={comment.author} size="sm" />
                     <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200">{comment.author}</span>
-                    <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{formatCommentDate(t, comment.createdAt)}</span>
+                    <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-400">{formatCommentDate(t, comment.createdAt)}</span>
                   </div>
                   <div className="prose prose-sm max-w-none text-zinc-600 dark:text-zinc-300">
                     <SafeMarkdown>{comment.content}</SafeMarkdown>
@@ -851,7 +851,7 @@ export function TaskModal({
               </button>
             </div>
           ) : (
-            <span className="text-sm text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('taskModal.completedNotEditable')}</span>
+            <span className="text-sm text-zinc-400 dark:text-zinc-400">{t('taskModal.completedNotEditable')}</span>
           )}
         </div>
       </div>
@@ -873,7 +873,7 @@ export function TaskModal({
       {showDeleteConfirmModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirmModal(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-xl">
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
             <h3 className="mb-2 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('taskModal.confirmDeleteTitle')}</h3>
             <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">{t('taskModal.confirmDelete')}</p>
             <div className="flex gap-3">

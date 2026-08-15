@@ -263,7 +263,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
 
       <div className="space-y-3">
         {users.map((user) => (
-          <div key={user.id} className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow dark:bg-zinc-800-sm hover:shadow-md transition-shadow">
+          <div key={user.id} className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow dark:bg-zinc-800 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3">
               <UserAvatar
                 username={user.nickname}

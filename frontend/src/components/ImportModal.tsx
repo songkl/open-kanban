@@ -67,7 +67,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
     >
       <div className="absolute inset-0" />
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800 border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -155,7 +155,7 @@ export function ImportConflictConfirm({ isOpen, onCancel, onConfirm }: ImportCon
     >
       <div className="absolute inset-0" />
       <div
-        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow dark:bg-zinc-800 border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center gap-3">

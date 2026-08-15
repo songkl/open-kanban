@@ -237,7 +237,7 @@ export function AgentsSettings() {
       {showTokenModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-xl">
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
             <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.tokenGenerated')}</h2>
             <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-500">{t('settings.tokenGeneratedHint')}</p>
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-zinc-100 p-3">
@@ -271,7 +271,7 @@ export function AgentsSettings() {
       {editingAgent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setEditingAgent(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-xl">
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
             <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.editAgent')}</h2>
             <form onSubmit={(e) => { e.preventDefault(); handleUpdateAgent(); }} className="space-y-4">
               <div>

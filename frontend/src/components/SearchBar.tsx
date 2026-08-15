@@ -23,7 +23,7 @@ export function SearchBar({ value, onChange, onClear }: SearchBarProps) {
       {value && (
         <button
           onClick={onClear}
-          className="absolute right-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:text-zinc-300"
+          className="absolute right-2 text-zinc-400 dark:text-zinc-300"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

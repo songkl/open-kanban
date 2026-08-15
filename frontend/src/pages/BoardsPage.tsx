@@ -346,7 +346,7 @@ export function BoardsPage() {
           </div>
         ) : boards.length === 0 ? (
           <div className="rounded-2xl bg-white dark:bg-zinc-800 p-12 text-center shadow-sm border border-zinc-100 dark:border-zinc-700">
-            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
+            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-400">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               </svg>
@@ -433,7 +433,7 @@ export function BoardsPage() {
       )}
       <ErrorToastContainer />
 
-      <footer className="fixed bottom-4 right-6 flex items-center gap-2 text-sm text-zinc-400 dark:text-zinc-500 dark:text-zinc-400 hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300">
+      <footer className="fixed bottom-4 right-6 flex items-center gap-2 text-sm text-zinc-400 dark:text-zinc-400 hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300">
         <a
           href="https://github.com/songkl/open-kanban"
           target="_blank"

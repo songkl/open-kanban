@@ -23,7 +23,7 @@ export function DeleteColumnModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800 border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">

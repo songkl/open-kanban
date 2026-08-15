@@ -217,7 +217,7 @@ export function OAuthSettings({ currentUser }: Props) {
                 className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 data-testid={`oauth-config-${row.key}`}
               />
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">default: {row.default}</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-400">default: {row.default}</p>
             </div>
           ))}
           <button
@@ -250,7 +250,7 @@ function TabButton({
       className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         active
           ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-          : 'border-transparent text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'
+          : 'border-transparent text-zinc-500 dark:text-zinc-500 dark:hover:text-zinc-200'
       }`}
     >
       {children}

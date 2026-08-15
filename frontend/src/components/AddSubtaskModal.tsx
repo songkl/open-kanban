@@ -35,7 +35,7 @@ export function AddSubtaskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" />
 
-      <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-xl">
+      <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
         <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('subtask.add')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
