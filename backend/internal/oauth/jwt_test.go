@@ -284,10 +284,10 @@ func TestSignerVerifyRejectsTamperedSignature(t *testing.T) {
 	if len(parts) != 3 {
 		t.Fatalf("expected JWT with 3 parts, got %d", len(parts))
 	}
-	tampered := parts[0] + "." + parts[1] + "." + flipLastChar(parts[2])
+	tampered := parts[0] + "." + parts[1] + "." + flipLastGroup(parts[2])
 	_, err = s.VerifyAccessToken(tampered, "https://kanban.example", "kanban")
 	if err == nil {
-		t.Fatal("expected error for tampered signature, got nil")
+		t.Fatalf("expected error for tampered signature, got nil; sig=%s", tampered[len(tampered)-30:])
 	}
 	if !errors.Is(err, oauth.ErrTokenInvalid) {
 		t.Errorf("expected ErrTokenInvalid, got %v", err)
@@ -354,14 +354,19 @@ func TestJWKBase64Encodings(t *testing.T) {
 	}
 }
 
-func flipLastChar(s string) string {
-	if s == "" {
-		return "A"
+func flipLastGroup(s string) string {
+	// Mutate the entire last base64url group so at least one byte of the
+	// underlying signature changes deterministically.
+	if len(s) < 4 {
+		return strings.Repeat("X", len(s))
 	}
-	last := s[len(s)-1]
-	var replacement byte = 'A'
-	if last == 'A' {
-		replacement = 'B'
+	out := []byte(s)
+	for i := len(out) - 4; i < len(out); i++ {
+		if out[i] == 'A' {
+			out[i] = 'B'
+		} else {
+			out[i] = 'A'
+		}
 	}
-	return s[:len(s)-1] + string(replacement)
+	return string(out)
 }
