@@ -61,12 +61,18 @@ func insertClient(t *testing.T, db *sql.DB, id, secretHash, name string, grantTy
 	t.Helper()
 	gj, _ := json.Marshal(grantTypes)
 	sj, _ := json.Marshal(scopes)
+	method := "none"
+	var secretParam interface{}
+	if secretHash != "" {
+		method = "client_secret_basic"
+		secretParam = secretHash
+	}
 	_, err := db.Exec(
 		`INSERT INTO oauth_clients
 			(id, client_id, client_secret_hash, name, redirect_uris, grant_types,
 			 token_endpoint_auth_method, scopes, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, '[]', ?, 'none', ?, ?, ?)`,
-		"row-"+id, id, secretHash, name, string(gj), string(sj), time.Now(), time.Now(),
+		 VALUES (?, ?, ?, ?, '[]', ?, ?, ?, ?, ?)`,
+		"row-"+id, id, secretParam, name, string(gj), method, string(sj), time.Now(), time.Now(),
 	)
 	if err != nil {
 		t.Fatalf("insert client: %v", err)

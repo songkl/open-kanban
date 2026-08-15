@@ -182,15 +182,10 @@ func randomURLSafeToken(n int) (string, error) {
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
-	return base64URLEncode(buf), nil
+	return base64URLNoPad(buf), nil
 }
 
-func base64URLEncode(b []byte) string {
-	// avoid importing encoding/base64 in every file
-	return base64URL(b)
-}
-
-func base64URL(b []byte) string {
+func base64URLNoPad(b []byte) string {
 	const enc = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 	out := make([]byte, 0, ((len(b)+2)/3)*4)
 	i := 0
