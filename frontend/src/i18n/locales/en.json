@@ -132,8 +132,7 @@
     "clearSelection": "Clear",
     "position": "Position",
     "createdAt": "Created At",
-    "title": "Title",
-    "assignee": "Assignee"
+    "title": "Title"
   },
   "comment": {
     "add": "Add Comment",
@@ -696,5 +695,24 @@
     "boardPermissions": "Board Permissions",
     "columnPermissions": "Column Permissions",
     "noBoards": "No accessible boards"
+  },
+  "oauth": {
+    "device": {
+      "title": "Authorize device",
+      "subtitle": "Enter the code shown by the application that wants to access your kanban.",
+      "codeLabel": "User code",
+      "clientLabel": "Application:",
+      "scopeLabel": "Requested permissions:",
+      "approve": "Approve",
+      "deny": "Deny",
+      "unknownCode": "Unknown code. Double-check the value and try again.",
+      "expired": "This code has expired. Restart the application to get a new one.",
+      "lookupFailed": "Could not verify the code. Please retry.",
+      "failed": "Could not submit your decision. Please retry.",
+      "loginRequired": "Please sign in to authorize this request.",
+      "goLogin": "Sign in",
+      "approvedBanner": "Approved. You can return to your device.",
+      "deniedBanner": "Denied. The device will not receive access."
+    }
   }
 }

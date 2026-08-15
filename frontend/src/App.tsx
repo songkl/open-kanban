@@ -16,6 +16,7 @@ const ActivityLogPage = lazy(() => import('./pages/ActivityLogPage').then(m => (
 const AgentActivityPage = lazy(() => import('./pages/AgentActivityPage').then(m => ({ default: m.AgentActivityPage })));
 const UserDetailPage = lazy(() => import('./pages/UserDetailPage').then(m => ({ default: m.UserDetailPage })));
 const ColumnDetailPage = lazy(() => import('./pages/ColumnDetailPage').then(m => ({ default: m.ColumnDetailPage })));
+const OAuthDevicePage = lazy(() => import('./pages/OAuthDevicePage').then(m => ({ default: m.OAuthDevicePage })));
 
 function HomeRedirect() {
   const navigate = useNavigate();
@@ -69,6 +70,7 @@ function App() {
         <Route path="/activity" element={<ActivityLogPage />} />
         <Route path="/agent-activity" element={<AgentActivityPage />} />
         <Route path="/user/:userId" element={<UserDetailPage />} />
+        <Route path="/oauth/device" element={<OAuthDevicePage />} />
       </Routes>
     </Suspense>
   );

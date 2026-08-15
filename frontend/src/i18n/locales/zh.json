@@ -132,8 +132,7 @@
     "clearSelection": "清除",
     "position": "位置",
     "createdAt": "创建时间",
-    "title": "标题",
-    "assignee": "负责人"
+    "title": "标题"
   },
   "comment": {
     "add": "添加评论",
@@ -696,5 +695,24 @@
     "boardPermissions": "看板权限",
     "columnPermissions": "列权限",
     "noBoards": "无可访问的看板"
+  },
+  "oauth": {
+    "device": {
+      "title": "授权设备",
+      "subtitle": "输入应用展示给你的验证码以访问看板。",
+      "codeLabel": "用户码",
+      "clientLabel": "应用：",
+      "scopeLabel": "请求的权限：",
+      "approve": "批准",
+      "deny": "拒绝",
+      "unknownCode": "无法识别该验证码，请检查后重试。",
+      "expired": "验证码已过期，请重新启动应用获取新验证码。",
+      "lookupFailed": "校验验证码失败，请重试。",
+      "failed": "提交失败，请重试。",
+      "loginRequired": "请先登录后再授权。",
+      "goLogin": "去登录",
+      "approvedBanner": "已批准。可以返回设备继续操作。",
+      "deniedBanner": "已拒绝。设备将不会获得访问权限。"
+    }
   }
 }
