@@ -18,7 +18,7 @@ export function SearchBar({ value, onChange, onClear }: SearchBarProps) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={t('filter.searchPlaceholder')}
-        className="w-40 rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        className="w-40 rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-800 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
       />
       {value && (
         <button
