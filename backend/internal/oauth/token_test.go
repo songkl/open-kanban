@@ -36,9 +36,21 @@ func setupTokenDB(t *testing.T) *sql.DB {
 			username TEXT UNIQUE NOT NULL,
 			nickname TEXT NOT NULL,
 			password TEXT,
+			avatar TEXT,
 			type TEXT DEFAULT 'HUMAN' CHECK(type IN ('HUMAN','AGENT')),
 			role TEXT DEFAULT 'MEMBER' CHECK(role IN ('ADMIN','MEMBER','VIEWER')),
 			enabled BOOLEAN DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_active_at DATETIME
+		);
+		CREATE TABLE IF NOT EXISTS tokens (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			key TEXT UNIQUE NOT NULL,
+			user_id TEXT NOT NULL,
+			expires_at DATETIME,
+			user_agent TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);

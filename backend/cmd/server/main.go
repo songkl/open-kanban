@@ -246,6 +246,8 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	r.POST("/oauth/register", oauth.RegisterClient(db))
 	r.POST("/oauth/device/code", oauth.RequestDeviceCode(db))
 	r.POST("/oauth/token", oauth.TokenEndpoint(db, signer))
+	r.GET("/oauth/device/lookup", oauth.DeviceLookupHandler(db))
+	r.POST("/oauth/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
 
 	auth := r.Group("/api/v1/auth")
 	{
