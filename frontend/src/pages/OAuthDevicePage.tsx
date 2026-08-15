@@ -103,17 +103,17 @@ export function OAuthDevicePage() {
 
   if (needsLogin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
-        <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-xl shadow p-6 text-center">
-          <h1 className="text-xl font-semibold mb-2 dark:text-slate-100">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 px-4 dark:bg-zinc-900">
+        <div className="w-full max-w-md rounded-xl bg-white p-6 text-center shadow-lg dark:bg-zinc-800">
+          <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
             {t('oauth.device.title')}
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-4">
+          <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
             {t('oauth.device.loginRequired')}
           </p>
           <button
             type="button"
-            className="w-full px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white"
+            className="w-full rounded-md bg-blue-500 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-600"
             onClick={() => navigate('/login?return=/oauth/device?user_code=' + encodeURIComponent(code))}
           >
             {t('oauth.device.goLogin')}
@@ -124,16 +124,16 @@ export function OAuthDevicePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
-      <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-xl shadow p-6">
-        <h1 className="text-xl font-semibold mb-4 dark:text-slate-100">
+    <div className="flex min-h-screen items-center justify-center bg-zinc-100 px-4 dark:bg-zinc-900">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg dark:bg-zinc-800">
+        <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
           {t('oauth.device.title')}
         </h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
           {t('oauth.device.subtitle')}
         </p>
 
-        <label className="block text-sm font-medium mb-1 dark:text-slate-300" htmlFor="user-code">
+        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200" htmlFor="user-code">
           {t('oauth.device.codeLabel')}
         </label>
         <input
@@ -142,25 +142,25 @@ export function OAuthDevicePage() {
           autoComplete="off"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase().trim())}
-          className="w-full px-3 py-2 border rounded-md font-mono text-lg tracking-widest dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+          className="w-full rounded-md border border-zinc-300 px-4 py-2 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
           placeholder="XXXX-XXXX"
           maxLength={9}
           data-testid="user-code-input"
         />
 
         {error && (
-          <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
+          <p className="mt-3 rounded-md bg-red-50 p-2 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-400" role="alert">
             {error}
           </p>
         )}
 
         {lookup && !decided && (
-          <div className="mt-5 p-3 rounded-md border border-slate-200 dark:border-slate-700">
-            <p className="text-sm text-slate-700 dark:text-slate-300">
+          <div className="mt-5 rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">
               <span className="font-medium">{t('oauth.device.clientLabel')}</span>{' '}
               {lookup.clientName || lookup.clientId}
             </p>
-            <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
+            <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
               <span className="font-medium">{t('oauth.device.scopeLabel')}</span>{' '}
               {lookup.scope || '(none)'}
             </p>
@@ -169,10 +169,10 @@ export function OAuthDevicePage() {
 
         {decided && (
           <div
-            className={`mt-5 p-3 rounded-md text-sm ${
+            className={`mt-5 rounded-md p-3 text-sm ${
               decided === 'approved'
-                ? 'bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-200'
-                : 'bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200'
+                ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'
             }`}
             data-testid="decision-banner"
           >
@@ -187,7 +187,7 @@ export function OAuthDevicePage() {
             type="button"
             disabled={!lookup || submitting || decided !== null}
             onClick={() => decide('approve')}
-            className="flex-1 px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white disabled:bg-slate-300 disabled:cursor-not-allowed"
+            className="flex-1 rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
             data-testid="approve-btn"
           >
             {t('oauth.device.approve')}
@@ -196,7 +196,7 @@ export function OAuthDevicePage() {
             type="button"
             disabled={!lookup || submitting || decided !== null}
             onClick={() => decide('deny')}
-            className="flex-1 px-4 py-2 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 rounded-md bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600"
             data-testid="deny-btn"
           >
             {t('oauth.device.deny')}

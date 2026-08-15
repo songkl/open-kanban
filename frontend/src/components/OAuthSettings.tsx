@@ -85,26 +85,29 @@ export function OAuthSettings({ currentUser }: Props) {
   };
 
   return (
-    <div className="space-y-4" data-testid="oauth-settings">
-      <h2 className="text-xl font-semibold dark:text-slate-100">
+    <div className="space-y-6" data-testid="oauth-settings">
+      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">
         {t('oauth.admin.title')}
       </h2>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">
         {t('oauth.admin.subtitle')}
       </p>
 
       {error && (
-        <div className="p-3 rounded-md bg-red-50 text-red-700 text-sm" role="alert">
+        <div
+          className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/30 dark:text-red-400"
+          role="alert"
+        >
           {error}
         </div>
       )}
       {success && (
-        <div className="p-3 rounded-md bg-green-50 text-green-700 text-sm">
+        <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">
           {success}
         </div>
       )}
 
-      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-700">
+      <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-700">
         <TabButton active={tab === 'clients'} onClick={() => setTab('clients')}>
           {t('oauth.admin.tabClients')}
         </TabButton>
@@ -118,35 +121,37 @@ export function OAuthSettings({ currentUser }: Props) {
         )}
       </div>
 
-      {loading && <p className="text-sm text-slate-500">{t('oauth.admin.loading')}</p>}
+      {loading && <p className="py-8 text-center text-sm text-zinc-500">{t('oauth.admin.loading')}</p>}
 
       {tab === 'clients' && isAdmin && (
-        <div className="space-y-2" data-testid="oauth-clients-list">
-          <p className="text-xs text-slate-500">
+        <div className="space-y-3" data-testid="oauth-clients-list">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {t('oauth.admin.dynamicRegistration', { enabled: dynamicEnabled })}
           </p>
           {clients.length === 0 && !loading && (
-            <p className="text-sm text-slate-500">{t('oauth.admin.noClients')}</p>
+            <div className="rounded-md border border-zinc-200 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+              {t('oauth.admin.noClients')}
+            </div>
           )}
           {clients.map((c) => (
             <div
               key={c.id}
-              className="p-3 border border-slate-200 dark:border-slate-700 rounded-md flex justify-between items-start"
+              className="flex items-start justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
               data-testid="oauth-client-row"
             >
               <div className="space-y-1">
-                <p className="font-medium dark:text-slate-100">{c.name}</p>
-                <p className="text-xs text-slate-500 font-mono">{c.clientId}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <div className="font-medium text-zinc-800 dark:text-zinc-100">{c.name}</div>
+                <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.clientId}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
                   {c.grantTypes.join(', ') || '—'}
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                </div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
                   {c.scopes.join(' ') || '—'}
-                </p>
+                </div>
               </div>
               <button
                 type="button"
-                className="text-xs text-red-600 hover:underline"
+                className="rounded bg-red-50 px-3 py-1 text-sm text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
                 onClick={() => handleDeleteClient(c.clientId)}
                 data-testid="oauth-delete-client"
               >
@@ -158,26 +163,28 @@ export function OAuthSettings({ currentUser }: Props) {
       )}
 
       {tab === 'consents' && (
-        <div className="space-y-2" data-testid="oauth-consents-list">
+        <div className="space-y-3" data-testid="oauth-consents-list">
           {consents.length === 0 && !loading && (
-            <p className="text-sm text-slate-500">{t('oauth.admin.noConsents')}</p>
+            <div className="rounded-md border border-zinc-200 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+              {t('oauth.admin.noConsents')}
+            </div>
           )}
           {consents.map((c) => (
             <div
               key={c.clientId}
-              className="p-3 border border-slate-200 dark:border-slate-700 rounded-md flex justify-between items-start"
+              className="flex items-start justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
               data-testid="oauth-consent-row"
             >
-              <div>
-                <p className="font-medium dark:text-slate-100">
+              <div className="space-y-1">
+                <div className="font-medium text-zinc-800 dark:text-zinc-100">
                   {c.clientName || c.clientId}
-                </p>
-                <p className="text-xs text-slate-500 font-mono">{c.clientId}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">{c.scope}</p>
+                </div>
+                <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.clientId}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">{c.scope}</div>
               </div>
               <button
                 type="button"
-                className="text-xs text-red-600 hover:underline"
+                className="rounded bg-red-50 px-3 py-1 text-sm text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
                 onClick={() => handleRevokeConsent(c.clientId)}
                 data-testid="oauth-revoke-consent"
               >
@@ -193,12 +200,12 @@ export function OAuthSettings({ currentUser }: Props) {
           {config.map((row) => (
             <div
               key={row.key}
-              className="p-3 border border-slate-200 dark:border-slate-700 rounded-md"
+              className="space-y-1 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
             >
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-200">
                 {row.key}
               </label>
-              <p className="text-xs text-slate-500 mb-1">{row.description}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">{row.description}</p>
               <input
                 type="text"
                 value={row.value}
@@ -207,15 +214,15 @@ export function OAuthSettings({ currentUser }: Props) {
                     prev.map((p) => (p.key === row.key ? { ...p, value: e.target.value } : p))
                   )
                 }
-                className="w-full px-2 py-1 text-sm border rounded dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
+                className="w-full rounded-md border border-zinc-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
                 data-testid={`oauth-config-${row.key}`}
               />
-              <p className="text-xs text-slate-400 mt-1">default: {row.default}</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">default: {row.default}</p>
             </div>
           ))}
           <button
             type="button"
-            className="px-4 py-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white"
+            className="rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
             onClick={handleSaveConfig}
             data-testid="oauth-save-config"
           >
@@ -240,10 +247,10 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium border-b-2 ${
+      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         active
-          ? 'border-purple-600 text-purple-700 dark:text-purple-300'
-          : 'border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400'
+          ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+          : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
       }`}
     >
       {children}
