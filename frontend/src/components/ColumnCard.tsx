@@ -28,13 +28,17 @@ export function ColumnCard({
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
-  } = useSortable({ id: column.id });
+  } = useSortable({
+    id: column.id,
+    // Skip the dnd-kit drop animation for the same reason as TaskCard:
+    // the parent updates the columns state synchronously on drop and we
+    // don't want the column to bounce back to its old DOM position.
+    transition: null,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
     opacity: isDragging ? 0.5 : 1,
   };
 

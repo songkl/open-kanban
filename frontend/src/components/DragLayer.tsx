@@ -8,7 +8,7 @@ interface DragLayerProps {
 
 export function DragLayer({ activeTask }: DragLayerProps) {
   return (
-    <DragOverlay>
+    <DragOverlay dropAnimation={null}>
       {activeTask && <TaskCard task={activeTask} onClick={() => {}} />}
     </DragOverlay>
   );

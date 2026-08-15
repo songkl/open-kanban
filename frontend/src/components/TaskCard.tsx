@@ -63,15 +63,21 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
   } = useSortable({
     id: taskId,
+    // Drop animation makes the card visually bounce back to its pre-drag
+    // position before React's reconciliation moves it to the new DOM
+    // spot. Disable it so the card always lands at its final position
+    // immediately, matching the synchronous `setColumns` update that
+    // the parent does in onDragEnd. While dragging, `useSortable`
+    // already drives the card in real time via `transform` without any
+    // CSS transition, so this only affects the post-drop settle phase.
+    transition: null,
   });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
   };
 
   useEffect(() => {

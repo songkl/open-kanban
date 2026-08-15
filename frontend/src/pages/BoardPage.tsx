@@ -8,7 +8,7 @@ import { BatchOperationBar } from '../components/BatchOperationBar';
 import { WsWarning } from '../components/WsWarning';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BoardSelector } from '../components/BoardSelector';
-import { boardsApi } from '../services/api';
+import { boardsApi, tasksApi } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
 import { useSetupGuard } from '../hooks/useSetupGuard';
@@ -157,7 +157,6 @@ export function BoardPage() {
     overColumn: ColumnType,
     activeTaskLocal: Task | null
   ) => {
-    const tasksApi = (await import('../services/api')).tasksApi;
     const previousColumns = columns;
 
     if (activeColumn.id === overColumn.id) {
@@ -228,7 +227,6 @@ export function BoardPage() {
   }, []);
 
   const handleMoveToColumn = useCallback(async (taskId: string, toColumnId: string) => {
-    const tasksApi = (await import('../services/api')).tasksApi;
     const previousColumns = columns;
 
     const sourceColumn = columns.find(col => col.tasks?.some(t => t.id === taskId));
