@@ -18,18 +18,23 @@ import type { User } from '../types/kanban';
 
 type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth';
 
+const ALL_TABS: Tab[] = ['profile', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth'];
+
+function isTab(value: string | null): value is Tab {
+  return value !== null && (ALL_TABS as string[]).includes(value);
+}
+
 export function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   useSetupGuard();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const darkMode = useUIStore((state) => state.darkMode);
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'users') return tab;
-    return 'profile';
+    return isTab(tab) ? tab : 'profile';
   });
   const [users, setUsers] = useState<User[]>([]);
 
@@ -42,6 +47,17 @@ export function SettingsPage() {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep the URL in sync with the active tab so it can be bookmarked
+  // and shared. Back/forward navigation also picks up the change.
+  useEffect(() => {
+    const current = searchParams.get('tab');
+    if (current === activeTab) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', activeTab);
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const loadData = async () => {
     try {
