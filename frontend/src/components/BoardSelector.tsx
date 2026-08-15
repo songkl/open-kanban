@@ -19,7 +19,7 @@ export const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
       <div ref={ref} className="relative">
         <button
           onClick={onToggleDropdown}
-          className="flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 max-w-36"
+          className="flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 max-w-36"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
