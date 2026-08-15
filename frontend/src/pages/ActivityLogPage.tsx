@@ -180,40 +180,40 @@ export function ActivityLogPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <div className="mx-auto max-w-4xl">
         <header className="mb-6">
           <Link
             to="/"
-            className="mb-4 inline-block rounded-md bg-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-300"
+            className="mb-4 inline-block rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
           >
             ← {t('nav.back')}
           </Link>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold text-zinc-800">{t('nav.activityLog')}</h1>
+              <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('nav.activityLog')}</h1>
               {currentUser && (
                 <div className="flex items-center gap-2">
                   <UserAvatar username={currentUser.nickname} avatar={currentUser.avatar} size="sm" />
-                  <span className="text-sm text-zinc-600">{currentUser.nickname}</span>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-300">{currentUser.nickname}</span>
                 </div>
               )}
             </div>
-            <span className="text-sm text-zinc-500">{activities.length} {t('nav.records')}</span>
+            <span className="text-sm text-zinc-500 dark:text-zinc-500">{activities.length} {t('nav.records')}</span>
           </div>
         </header>
 
-        <div className="mb-6 rounded-lg bg-white p-4 shadow">
-          <h3 className="mb-3 text-sm font-medium text-zinc-700">{t('settings.filterConditions')}</h3>
+        <div className="mb-6 rounded-lg bg-white p-4 shadow dark:bg-zinc-800">
+          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div>
-              <label htmlFor="filterAction" className="mb-1 block text-xs text-zinc-500">{t('settings.operationType')}</label>
+              <label htmlFor="filterAction" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.operationType')}</label>
               <select
                 id="filterAction"
                 name="filterAction"
                 value={filterAction}
                 onChange={(e) => setFilterAction(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               >
                 <option value="">{t('filter.all')}</option>
                 <option value="CREATE_TASK">{t('settings.activities.CREATE_TASK')}</option>
@@ -234,25 +234,25 @@ export function ActivityLogPage() {
               </select>
             </div>
             <div>
-              <label htmlFor="filterStartTime" className="mb-1 block text-xs text-zinc-500">{t('settings.startTime')}</label>
+              <label htmlFor="filterStartTime" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.startTime')}</label>
               <input
                 type="datetime-local"
                 id="filterStartTime"
                 name="filterStartTime"
                 value={filterStartTime}
                 onChange={(e) => setFilterStartTime(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label htmlFor="filterEndTime" className="mb-1 block text-xs text-zinc-500">{t('settings.endTime')}</label>
+              <label htmlFor="filterEndTime" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.endTime')}</label>
               <input
                 type="datetime-local"
                 id="filterEndTime"
                 name="filterEndTime"
                 value={filterEndTime}
                 onChange={(e) => setFilterEndTime(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div className="flex items-end gap-2">
@@ -264,7 +264,7 @@ export function ActivityLogPage() {
               </button>
               <button
                 onClick={handleClearFilter}
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50"
+                className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
               >
                 {t('filter.clear')}
               </button>
@@ -274,10 +274,10 @@ export function ActivityLogPage() {
 
         {loading ? (
           <div className="flex h-64 items-center justify-center">
-            <div className="text-zinc-500">{t('settings.loading')}</div>
+            <div className="text-zinc-500 dark:text-zinc-500">{t('settings.loading')}</div>
           </div>
         ) : activities.length === 0 ? (
-          <div className="rounded-lg bg-white p-8 text-center text-zinc-500 shadow">
+          <div className="rounded-lg bg-white p-8 text-center text-zinc-500 dark:text-zinc-500 shadow">
             {t('settings.noActivities')}
           </div>
         ) : (
@@ -287,7 +287,7 @@ export function ActivityLogPage() {
               return (
                 <div
                   key={activity.id}
-                  className={`flex items-start gap-4 rounded-lg bg-white p-4 shadow ${isClickable ? 'cursor-pointer hover:bg-zinc-50' : ''}`}
+                  className={`flex items-start gap-4 rounded-lg bg-white p-4 shadow dark:bg-zinc-800 ${isClickable ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-700' : ''}`}
                   onClick={() => handleActivityClick(activity)}
                 >
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">
@@ -295,11 +295,11 @@ export function ActivityLogPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`font-medium ${isClickable ? 'text-blue-600' : 'text-zinc-800'}`}>
+                      <span className={`font-medium ${isClickable ? 'text-blue-600' : 'text-zinc-800 dark:text-zinc-100'}`}>
                         {typeof t(`settings.activities.${activity.action}`) === 'string' ? t(`settings.activities.${activity.action}`) : activity.action}
                       </span>
                       {activity.targetTitle && (
-                        <span className="text-sm text-zinc-600 truncate">- {activity.targetTitle}</span>
+                        <span className="text-sm text-zinc-600 dark:text-zinc-300 truncate">- {activity.targetTitle}</span>
                       )}
                       {activity.details && (
                         <span className="text-sm text-blue-600">{activity.details}</span>
@@ -308,7 +308,7 @@ export function ActivityLogPage() {
                         <span className="text-xs text-blue-500">{t('settings.clickToView')}</span>
                       )}
                     </div>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400">
+                    <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400 dark:text-zinc-500">
                       <span>{formatTime(activity.createdAt)}</span>
                       <span>|</span>
                       <span>{t('settings.operator')}: {users[activity.userId] || activity.userId}</span>

@@ -75,7 +75,7 @@ export function LoginPage() {
       <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-8 shadow-lg">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Open kanban</h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('login.welcome')}</p>
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">{t('login.welcome')}</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">

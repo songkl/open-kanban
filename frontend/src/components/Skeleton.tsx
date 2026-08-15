@@ -1,6 +1,6 @@
 export function BoardSkeleton() {
   return (
-    <div className="h-screen bg-zinc-100 p-6">
+    <div className="h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       {/* Header skeleton */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -73,7 +73,7 @@ export function LoadingOverlay({ message }: { message?: string }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
       <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-4 shadow-lg">
         <Spinner className="h-8 w-8 text-blue-500" />
-        <span className="text-sm text-zinc-600">{message}</span>
+        <span className="text-sm text-zinc-600 dark:text-zinc-300">{message}</span>
       </div>
     </div>
   );

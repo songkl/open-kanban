@@ -107,7 +107,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       {...attributes}
       {...listeners}
       onClick={handleCardClick}
-      className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/95 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
+      className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/95 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:border-zinc-700 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
         isDragging ? 'opacity-60 ring-2 ring-blue-400 scale-105 z-50 shadow-blue-200 dark:shadow-blue-900/50' : ''
       } ${priorityBorderColors[task.priority] || priorityBorderColors.medium} ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
     >
@@ -130,7 +130,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             type="checkbox"
             checked={isSelected || false}
             onChange={(e) => onSelect && onSelect(task.id, e)}
-            className="h-4 w-4 rounded border-zinc-300 text-blue-500 focus:ring-blue-400 cursor-pointer"
+            className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600 text-blue-500 focus:ring-blue-400 cursor-pointer"
             aria-label={t('taskCard.selectTask')}
           />
         </div>
@@ -158,7 +158,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 'bg-green-500 shadow-sm shadow-green-500/50'
               }`}
             />
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400 font-mono">
               #{String(task.id || '').slice(-6)}
             </span>
           </div>
@@ -177,7 +177,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 e.stopPropagation();
                 setShowMoreMenu(!showMoreMenu);
               }}
-              className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
+              className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-300 z-10 relative transition-colors"
               title={t('taskCard.moreActions')}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -271,7 +271,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               e.stopPropagation();
               onClick();
             }}
-            className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
+            className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-300 z-10 relative transition-colors"
             title={t('taskCard.viewDetails')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -285,7 +285,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       {task.description && typeof task.description === 'string' && (
         <div className="mb-3 pl-3">
           <p
-            className={`text-sm text-zinc-500 dark:text-zinc-400 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-all leading-relaxed ${
+            className={`text-sm text-zinc-500 dark:text-zinc-500 cursor-pointer hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300 transition-all leading-relaxed ${
               isExpanded ? '' : 'line-clamp-2'
             }`}
             onClick={(e) => {
@@ -315,13 +315,13 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           {task.subtasks.slice(0, 3).map((subtask) => (
             <div key={subtask.id} className="flex items-center gap-2 text-xs">
               <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
-              <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
+              <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 dark:text-zinc-500 line-through truncate' : 'text-zinc-600 dark:text-zinc-300 truncate'}>
                 {subtask.title}
               </span>
             </div>
           ))}
           {task.subtasks.length > 3 && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">{t('taskCard.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('taskCard.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
           )}
         </div>
       )}
@@ -338,7 +338,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             {task.priority === 'high' ? t('task.priority.high') : task.priority === 'medium' ? t('task.priority.medium') : t('task.priority.low')}
           </span>
           {task.subtasks && task.subtasks.length > 0 && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
               ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
             </span>
           )}
@@ -348,11 +348,11 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             <UserAvatar username={task.createdByUsername} size="sm" />
           )}
           {task.assignee && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">{task.assignee}</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{task.assignee}</span>
           )}
           {((task._count?.comments ?? 0) > 0 || (task.comments && task.comments.length > 0)) && (
             <span
-              className="flex items-center gap-1 cursor-pointer text-xs text-zinc-400 hover:text-blue-500 transition-colors"
+              className="flex items-center gap-1 cursor-pointer text-xs text-zinc-400 dark:text-zinc-500 hover:text-blue-500 transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 if (onCommentsClick) {

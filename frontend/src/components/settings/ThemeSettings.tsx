@@ -8,10 +8,10 @@ export function ThemeSettings() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-zinc-800">{t('settings.theme')}</h2>
-      <p className="text-sm text-zinc-500">{t('settings.themeDescription')}</p>
+      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.theme')}</h2>
+      <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('settings.themeDescription')}</p>
       <div className="space-y-4">
-        <div className="rounded-lg border border-zinc-200 divide-y divide-zinc-100">
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-100 dark:divide-zinc-700">
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-3">
               {darkMode ? (
@@ -27,13 +27,13 @@ export function ThemeSettings() {
                   <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                 </svg>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
                   <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                 </svg>
               )}
               <div>
-                <span className="text-sm text-zinc-600">{t('settings.darkMode')}</span>
-                <p className="text-xs text-zinc-400">{darkMode ? t('settings.darkModeOn') : t('settings.darkModeOff')}</p>
+                <span className="text-sm text-zinc-600 dark:text-zinc-300">{t('settings.darkMode')}</span>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">{darkMode ? t('settings.darkModeOn') : t('settings.darkModeOff')}</p>
               </div>
             </div>
             <button

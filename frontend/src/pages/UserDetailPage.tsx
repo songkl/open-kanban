@@ -150,19 +150,19 @@ export function UserDetailPage() {
 
   if (!targetUser) {
     return (
-      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
-        <div className="text-zinc-500">{t('userDetail.notFound', 'User not found')}</div>
+      <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center">
+        <div className="text-zinc-500 dark:text-zinc-500">{t('userDetail.notFound', 'User not found')}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center gap-4">
           <Link
             to="/settings?tab=users"
-            className="rounded-md bg-zinc-200 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600"
+            className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600:bg-zinc-600"
           >
             ← {t('userDetail.back', 'Back to Users')}
           </Link>
@@ -191,7 +191,7 @@ export function UserDetailPage() {
                 className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                   activeTab === 'profile'
                     ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                    : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                    : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                 }`}
               >
                 {t('userDetail.profile', 'Profile')}
@@ -202,7 +202,7 @@ export function UserDetailPage() {
                   className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                     activeTab === 'activities'
                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                   }`}
                 >
                   {t('userDetail.activities', 'Activities')}
@@ -214,7 +214,7 @@ export function UserDetailPage() {
                   className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                     activeTab === 'permissions'
                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                   }`}
                 >
                   {t('userDetail.permissions', 'Permissions')}
@@ -226,7 +226,7 @@ export function UserDetailPage() {
                   className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                     activeTab === 'boards'
                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                   }`}
                 >
                   {t('userDetail.boards', 'Boards')}
@@ -242,7 +242,7 @@ export function UserDetailPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-500">{t('userDetail.avatar', 'Avatar')}</label>
+                      <label className="mb-2 block text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('userDetail.avatar', 'Avatar')}</label>
                       <UserAvatar
                         username={targetUser.nickname}
                         avatar={targetUser.avatar}
@@ -250,35 +250,35 @@ export function UserDetailPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-500">{t('userDetail.nickname', 'Nickname')}</label>
+                      <label className="mb-2 block text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('userDetail.nickname', 'Nickname')}</label>
                       <p className="text-zinc-800 dark:text-zinc-100">{targetUser.nickname}</p>
                     </div>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-500">{t('userDetail.role', 'Role')}</label>
+                      <label className="mb-2 block text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('userDetail.role', 'Role')}</label>
                       <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${
                         targetUser.role === 'ADMIN'
                           ? 'bg-blue-100 text-blue-700'
                           : targetUser.role === 'MEMBER'
                           ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-zinc-100 text-zinc-600'
+                          : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
                       }`}>
                         {targetUser.role === 'ADMIN' ? t('settings.admin') : targetUser.role === 'MEMBER' ? t('settings.member') : t('settings.viewer')}
                       </span>
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-500">{t('userDetail.type', 'Type')}</label>
+                      <label className="mb-2 block text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('userDetail.type', 'Type')}</label>
                       <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${
                         targetUser.type === 'AGENT'
                           ? 'bg-violet-100 text-violet-700'
-                          : 'bg-zinc-100 text-zinc-500'
+                          : 'bg-zinc-100 text-zinc-500 dark:text-zinc-500'
                       }`}>
                         {targetUser.type === 'AGENT' ? t('settings.agent') : t('settings.human')}
                       </span>
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-500">{t('userDetail.status', 'Status')}</label>
+                      <label className="mb-2 block text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('userDetail.status', 'Status')}</label>
                       <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${
                         targetUser.enabled
                           ? 'bg-emerald-100 text-emerald-700'
@@ -288,14 +288,14 @@ export function UserDetailPage() {
                       </span>
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-500">{t('userDetail.createdAt', 'Created At')}</label>
+                      <label className="mb-2 block text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('userDetail.createdAt', 'Created At')}</label>
                       <p className="text-zinc-800 dark:text-zinc-100">
                         {new Date(targetUser.createdAt).toLocaleString()}
                       </p>
                     </div>
                     {targetUser.lastActiveAt && (
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-500">{t('userDetail.lastActive', 'Last Active')}</label>
+                        <label className="mb-2 block text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('userDetail.lastActive', 'Last Active')}</label>
                         <p className="text-zinc-800 dark:text-zinc-100">
                           {new Date(targetUser.lastActiveAt).toLocaleString()}
                         </p>
@@ -311,7 +311,7 @@ export function UserDetailPage() {
                 <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('userDetail.activities', 'Activities')}</h2>
                 {activities.length === 0 ? (
                   <div className="py-12 text-center rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
-                    <p className="text-zinc-500 dark:text-zinc-400">{t('settings.noActivities')}</p>
+                    <p className="text-zinc-500 dark:text-zinc-500">{t('settings.noActivities')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -330,7 +330,7 @@ export function UserDetailPage() {
                             <span className="font-medium text-zinc-800 dark:text-zinc-100">
                               {activity.userNickname || 'Unknown'}
                             </span>
-                            <span className="text-zinc-500 dark:text-zinc-400">
+                            <span className="text-zinc-500 dark:text-zinc-500">
                               {getActionLabel(activity.action)}
                             </span>
                             {activity.targetTitle && (
@@ -339,7 +339,7 @@ export function UserDetailPage() {
                               </span>
                             )}
                           </div>
-                          <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400">
+                          <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400 dark:text-zinc-500">
                             <span>{formatTime(activity.createdAt)}</span>
                             {activity.source && (
                               <span className="rounded bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5">
@@ -374,7 +374,7 @@ export function UserDetailPage() {
                 <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('userDetail.boardPermissions', 'Board Permissions')}</h2>
                 {boardPermissions.length === 0 ? (
                   <div className="py-12 text-center rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
-                    <p className="text-zinc-500 dark:text-zinc-400">{t('settings.noPermission')}</p>
+                    <p className="text-zinc-500 dark:text-zinc-500">{t('settings.noPermission')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -391,7 +391,7 @@ export function UserDetailPage() {
                           </div>
                           <div>
                             <div className="font-medium text-zinc-800 dark:text-zinc-100">{perm.boardName}</div>
-                            <div className="text-xs text-zinc-500">{perm.boardId}</div>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-500">{perm.boardId}</div>
                           </div>
                         </div>
                         <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
@@ -399,7 +399,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300'
+                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
                         }`}>
                           {perm.access === 'ADMIN' ? t('settings.admin') : perm.access === 'WRITE' ? t('settings.member') : t('settings.viewer')}
                         </span>
@@ -411,7 +411,7 @@ export function UserDetailPage() {
                 <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 pt-4">{t('userDetail.columnPermissions', 'Column Permissions')}</h2>
                 {columnPermissions.length === 0 ? (
                   <div className="py-12 text-center rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
-                    <p className="text-zinc-500 dark:text-zinc-400">{t('settings.noPermission')}</p>
+                    <p className="text-zinc-500 dark:text-zinc-500">{t('settings.noPermission')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -428,7 +428,7 @@ export function UserDetailPage() {
                           </div>
                           <div>
                             <div className="font-medium text-zinc-800 dark:text-zinc-100">{perm.columnName}</div>
-                            <div className="text-xs text-zinc-500">{perm.columnId}</div>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-500">{perm.columnId}</div>
                           </div>
                         </div>
                         <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
@@ -436,7 +436,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300'
+                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
                         }`}>
                           {perm.access === 'ADMIN' ? t('settings.admin') : perm.access === 'WRITE' ? t('settings.member') : t('settings.viewer')}
                         </span>
@@ -452,7 +452,7 @@ export function UserDetailPage() {
                 <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('userDetail.boards', 'Accessible Boards')}</h2>
                 {boardPermissions.length === 0 ? (
                   <div className="py-12 text-center rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
-                    <p className="text-zinc-500 dark:text-zinc-400">{t('userDetail.noBoards', 'No accessible boards')}</p>
+                    <p className="text-zinc-500 dark:text-zinc-500">{t('userDetail.noBoards', 'No accessible boards')}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4">
@@ -469,14 +469,14 @@ export function UserDetailPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-zinc-800 dark:text-zinc-100 truncate">{perm.boardName}</div>
-                          <div className="text-xs text-zinc-500">{perm.boardId}</div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-500">{perm.boardId}</div>
                         </div>
                         <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
                           perm.access === 'ADMIN'
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300'
+                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
                         }`}>
                           {perm.access}
                         </span>

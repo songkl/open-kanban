@@ -40,7 +40,7 @@ export function ColumnPermissionsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100 max-h-[80vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -50,19 +50,19 @@ export function ColumnPermissionsModal({
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-zinc-800">{t('column.columnPermissions')}</h2>
-            <p className="text-sm text-zinc-500">{column.name}</p>
+            <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{t('column.columnPermissions')}</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-500">{column.name}</p>
           </div>
         </div>
 
         {loading ? (
-          <div className="py-8 text-center text-zinc-500">{t('common.loading')}</div>
+          <div className="py-8 text-center text-zinc-500 dark:text-zinc-500">{t('common.loading')}</div>
         ) : (
           <>
             <div className="mb-4">
-              <h3 className="text-sm font-semibold text-zinc-700 mb-3">{t('column.currentPermissions')}</h3>
+              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">{t('column.currentPermissions')}</h3>
               {permissions.length === 0 ? (
-                <p className="text-sm text-zinc-400 py-4 text-center">{t('column.noPermissions')}</p>
+                <p className="text-sm text-zinc-400 dark:text-zinc-500 py-4 text-center">{t('column.noPermissions')}</p>
               ) : (
                 <div className="space-y-2">
                   {permissions.map((perm) => (
@@ -72,8 +72,8 @@ export function ColumnPermissionsModal({
                           {perm.userNickname.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-zinc-800">{perm.userNickname}</div>
-                          <div className="text-xs text-zinc-400">{perm.columnName} - {t('column.permission.' + perm.access)}</div>
+                          <div className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{perm.userNickname}</div>
+                          <div className="text-xs text-zinc-400 dark:text-zinc-500">{perm.columnName} - {t('column.permission.' + perm.access)}</div>
                         </div>
                       </div>
                       <button
@@ -89,7 +89,7 @@ export function ColumnPermissionsModal({
             </div>
 
             <div className="border-t border-zinc-100 pt-4">
-              <h3 className="text-sm font-semibold text-zinc-700 mb-3">{t('column.addPermission')}</h3>
+              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">{t('column.addPermission')}</h3>
               <AddColumnPermissionForm
                 columnId={column.id}
                 onPermissionAdded={onPermissionAdded}
@@ -101,7 +101,7 @@ export function ColumnPermissionsModal({
         <div className="mt-6 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+            className="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
           >
             {t('common.close')}
           </button>

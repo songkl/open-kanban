@@ -215,8 +215,8 @@ export function FileUpload({
             isDragging
               ? 'border-blue-500 bg-blue-50'
               : canUpload
-              ? 'border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50'
-              : 'border-zinc-200 bg-zinc-50 cursor-not-allowed'
+              ? 'border-zinc-300 dark:border-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700'
+              : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 cursor-not-allowed'
           }
         `}
       >
@@ -233,7 +233,7 @@ export function FileUpload({
         <div className="flex flex-col items-center gap-2 text-center">
           <div
             className={`rounded-full p-3 ${
-              isDragging ? 'bg-blue-100 text-blue-600' : 'bg-zinc-100 text-zinc-500'
+              isDragging ? 'bg-blue-100 text-blue-600' : 'bg-zinc-100 text-zinc-500 dark:text-zinc-500'
             }`}
           >
             <svg
@@ -256,12 +256,12 @@ export function FileUpload({
               <span className="text-blue-600 font-medium">{t('upload.dropToUpload')}</span>
             ) : (
               <>
-                <span className="font-medium text-zinc-700">{t('upload.clickToUpload')}</span>
-                <span className="text-zinc-500"> {t('upload.orDragHere')}</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">{t('upload.clickToUpload')}</span>
+                <span className="text-zinc-500 dark:text-zinc-500"> {t('upload.orDragHere')}</span>
               </>
             )}
           </div>
-          <div className="text-xs text-zinc-400">
+          <div className="text-xs text-zinc-400 dark:text-zinc-500">
             {t('upload.supportedFormats')}
           </div>
         </div>
@@ -273,12 +273,12 @@ export function FileUpload({
           {uploadingFiles.map((file) => (
             <div
               key={file.id}
-              className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-3"
+              className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3"
             >
               {/* File Icon */}
               <div className="flex-shrink-0">
                 {file.file.type.startsWith('image/') ? (
-                  <div className="h-10 w-10 overflow-hidden rounded bg-zinc-100">
+                  <div className="h-10 w-10 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-700">
                     <img
                       src={URL.createObjectURL(file.file)}
                       alt={file.file.name}
@@ -286,10 +286,10 @@ export function FileUpload({
                     />
                   </div>
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded bg-zinc-100">
+                  <div className="flex h-10 w-10 items-center justify-center rounded bg-zinc-100 dark:bg-zinc-700">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-zinc-500"
+                      className="h-5 w-5 text-zinc-500 dark:text-zinc-500"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -307,10 +307,10 @@ export function FileUpload({
 
               {/* File Info */}
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-zinc-700">
+                <div className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
                   {file.file.name}
                 </div>
-                <div className="text-xs text-zinc-500">
+                <div className="text-xs text-zinc-500 dark:text-zinc-500">
                   {formatFileSize(file.file.size)}
                 </div>
 
@@ -323,7 +323,7 @@ export function FileUpload({
                         style={{ width: `${file.progress}%` }}
                       />
                     </div>
-                    <div className="mt-0.5 text-xs text-zinc-500">{file.progress}%</div>
+                    <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">{file.progress}%</div>
                   </div>
                 )}
                 {file.status === 'success' && (
@@ -351,7 +351,7 @@ export function FileUpload({
                   </div>
                 )}
                 {file.status === 'cancelled' && (
-                  <div className="mt-1 flex items-center gap-1 text-xs text-zinc-400">
+                  <div className="mt-1 flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
                     <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                       <path
                         fillRule="evenodd"
@@ -368,7 +368,7 @@ export function FileUpload({
               {file.status === 'uploading' && file.abort && (
                 <button
                   onClick={() => file.abort?.()}
-                  className="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-orange-500"
+                  className="flex-shrink-0 rounded p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-orange-500"
                   title={t('upload.cancelUpload')}
                 >
                   <svg
@@ -390,7 +390,7 @@ export function FileUpload({
               {file.status !== 'uploading' && (
                 <button
                   onClick={() => handleRemove(file.id)}
-                  className="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                  className="flex-shrink-0 rounded p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"

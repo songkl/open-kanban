@@ -46,12 +46,12 @@ export function ColumnCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm border border-zinc-100 hover:shadow-md hover:border-zinc-200 transition-all duration-200"
+      className="group flex items-center gap-4 rounded-xl bg-white p-4 shadow dark:bg-zinc-800-sm border border-zinc-100 hover:shadow-md hover:border-zinc-200 dark:border-zinc-700 transition-all duration-200"
     >
       <button
         {...attributes}
         {...listeners}
-        className="cursor-grab text-zinc-300 hover:text-zinc-500 active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
+        className="cursor-grab text-zinc-300 hover:text-zinc-500 dark:text-zinc-500 active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity"
         title={t('column.dragToSort')}
       >
         <svg
@@ -73,13 +73,13 @@ export function ColumnCard({
         className="h-6 w-6 rounded-full shadow-sm"
         style={{ backgroundColor: column.color }}
       />
-      <span className="flex-1 font-semibold text-zinc-800">{column.name}</span>
+      <span className="flex-1 font-semibold text-zinc-800 dark:text-zinc-100">{column.name}</span>
       {column.status && (
-        <span className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500 border border-zinc-100">
+        <span className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 border border-zinc-100">
           {column.status}
         </span>
       )}
-      <span className="text-xs text-zinc-400 font-mono">#{column.position + 1}</span>
+      <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">#{column.position + 1}</span>
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
         {canManagePermission && (
           <button

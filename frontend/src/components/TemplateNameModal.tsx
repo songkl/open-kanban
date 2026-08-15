@@ -38,7 +38,7 @@ export function TemplateNameModal({
     >
       <div className="absolute inset-0" />
       <div
-        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -47,15 +47,15 @@ export function TemplateNameModal({
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
             </svg>
           </div>
-          <h3 className="text-lg font-bold text-zinc-800">
+          <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">
             {t('modal.saveAsTemplate')}
           </h3>
         </div>
-        <p className="mb-4 text-sm text-zinc-600">
+        <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-300">
           {t('modal.templateNameHint', { boardName: initialBoardName })}
         </p>
         <div className="mb-6">
-          <label className="mb-2 block text-sm font-semibold text-zinc-700">
+          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
             {t('modal.templateName')}
           </label>
           <input
@@ -63,7 +63,7 @@ export function TemplateNameModal({
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
             placeholder={t('modal.enterTemplateName')}
-            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             autoFocus
           />
         </div>
@@ -71,7 +71,7 @@ export function TemplateNameModal({
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
           >
             {t('task.cancel')}
           </button>
@@ -79,7 +79,7 @@ export function TemplateNameModal({
             type="button"
             onClick={handleSubmit}
             disabled={!templateName.trim()}
-            className={`flex-1 rounded-xl px-4 py-3 font-medium transition-all shadow-sm hover:shadow ${!templateName.trim() ? 'bg-gradient-to-r from-zinc-300 to-zinc-300 text-zinc-400' : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700'}`}
+            className={`flex-1 rounded-xl px-4 py-3 font-medium transition-all shadow-sm hover:shadow ${!templateName.trim() ? 'bg-gradient-to-r from-zinc-300 to-zinc-300 text-zinc-400 dark:text-zinc-500' : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700'}`}
           >
             {t('task.save')}
           </button>

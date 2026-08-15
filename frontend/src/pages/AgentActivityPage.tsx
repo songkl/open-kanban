@@ -294,25 +294,25 @@ export function AgentActivityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900">
       <div className="flex h-screen">
-        <div className="w-80 flex-shrink-0 border-r border-zinc-200 bg-white">
+        <div className="w-80 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
           <div className="flex h-full flex-col">
-            <div className="border-b border-zinc-200 p-4">
+            <div className="border-b border-zinc-200 dark:border-zinc-700 p-4">
               <Link
                 to="/"
-                className="mb-4 inline-block rounded-md bg-zinc-200 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-300"
+                className="mb-4 inline-block rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
               >
                 ← {t('nav.back')}
               </Link>
-              <h1 className="text-lg font-bold text-zinc-800">{t('nav.agentActivity')}</h1>
-              <p className="mt-1 text-xs text-zinc-500">
+              <h1 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">{t('nav.agentActivity')}</h1>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
                 {t('settings.agentActivity.description')}
               </p>
             </div>
 
-            <div className="border-b border-zinc-200 p-3">
-              <label className="mb-1.5 block text-xs font-medium text-zinc-600">
+            <div className="border-b border-zinc-200 dark:border-zinc-700 p-3">
+              <label className="mb-1.5 block text-xs font-medium text-zinc-600 dark:text-zinc-300">
                 {t('settings.agentActivity.filterByAgent')}
               </label>
               <input
@@ -320,17 +320,17 @@ export function AgentActivityPage() {
                 value={agentSearchQuery}
                 onChange={(e) => setAgentSearchQuery(e.target.value)}
                 placeholder={t('filter.search')}
-                className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <div className="flex-1 overflow-y-auto p-3">
-              <h2 className="mb-2 text-xs font-medium text-zinc-500 uppercase tracking-wide">
+              <h2 className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-500 uppercase tracking-wide">
                 {t('settings.agentActivity.recentlyActive')}
               </h2>
               <div className="space-y-2">
                 {filteredAgents.length === 0 ? (
-                  <div className="py-4 text-center text-sm text-zinc-500">
+                  <div className="py-4 text-center text-sm text-zinc-500 dark:text-zinc-500">
                     {agentSearchQuery ? t('filter.noResults') : t('settings.noAgents')}
                   </div>
                 ) : (
@@ -341,7 +341,7 @@ export function AgentActivityPage() {
                       className={`w-full flex items-center gap-3 rounded-lg p-2 text-left transition-colors ${
                         selectedAgentId === agent.id
                           ? 'bg-blue-100 ring-1 ring-blue-300'
-                          : 'hover:bg-zinc-50'
+                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-700'
                       }`}
                     >
                       <div className="relative">
@@ -360,8 +360,8 @@ export function AgentActivityPage() {
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-zinc-800 truncate">{agent.nickname}</div>
-                        <div className="text-xs text-zinc-400">
+                        <div className="font-medium text-zinc-800 dark:text-zinc-100 truncate">{agent.nickname}</div>
+                        <div className="text-xs text-zinc-400 dark:text-zinc-500">
                           {formatLastActive(agent.lastActiveAt)}
                         </div>
                       </div>
@@ -374,14 +374,14 @@ export function AgentActivityPage() {
         </div>
 
         <div className="flex-1 flex flex-col">
-          <div className="border-b border-zinc-200 bg-white px-6 py-3 flex items-center justify-between">
+          <div className="border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-6 py-3 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-zinc-800">
+              <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">
                 {selectedAgentId
                   ? `${agents.find((a) => a.id === selectedAgentId)?.nickname || ''} ${t('settings.agentActivity.activityLog')}`
                   : t('settings.agentActivity.allActivityLog')}
               </h2>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-zinc-500 dark:text-zinc-500">
                 {total > 0
                   ? `${t('settings.agentActivity.recordCountWithTotal', { count: activities.length, total })} ${t('nav.records')}`
                   : `${t('settings.agentActivity.recordCount', { count: activities.length })} ${t('nav.records')}`}
@@ -389,18 +389,18 @@ export function AgentActivityPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-zinc-600">
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
                 <input
                   type="checkbox"
                   checked={autoRefresh}
                   onChange={(e) => setAutoRefresh(e.target.checked)}
-                  className="rounded border-zinc-300"
+                  className="rounded border-zinc-300 dark:border-zinc-600"
                 />
                 {t('settings.agentActivity.autoRefresh')}
               </label>
               <button
                 onClick={() => loadActivities(selectedAgentId || undefined)}
-                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200"
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200"
               >
                 {t('settings.agentActivity.refresh')}
               </button>
@@ -414,7 +414,7 @@ export function AgentActivityPage() {
           >
             {activities.length === 0 ? (
               <div className="flex h-full items-center justify-center">
-                <div className="text-center text-zinc-500">
+                <div className="text-center text-zinc-500 dark:text-zinc-500">
                   <div className="mb-2 text-4xl">🤖</div>
                   <div>{t('settings.noActivities')}</div>
                 </div>
@@ -426,14 +426,14 @@ export function AgentActivityPage() {
                   return (
                     <div
                       key={activity.id}
-                      className="flex items-start gap-4 rounded-lg bg-white p-4 shadow-sm"
+                      className="flex items-start gap-4 rounded-lg bg-white p-4 shadow dark:bg-zinc-800-sm"
                     >
                       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">
                         <span className="text-lg">{actionIcons[activity.action] || '📌'}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-zinc-800">
+                          <span className="font-medium text-zinc-800 dark:text-zinc-100">
                             {typeof t(`settings.activities.${activity.action}`) === 'string' ? t(`settings.activities.${activity.action}`) : activity.action}
                           </span>
                           {activity.targetTitle && (
@@ -445,13 +445,13 @@ export function AgentActivityPage() {
                                 {t('settings.agentActivity.dashPrefix')} {activity.targetTitle}
                               </button>
                             ) : (
-                              <span className="text-sm text-zinc-600 truncate">
+                              <span className="text-sm text-zinc-600 dark:text-zinc-300 truncate">
                                 {t('settings.agentActivity.dashPrefix')} {activity.targetTitle}
                               </span>
                             )
                           )}
                         </div>
-                        <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400">
+                        <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400 dark:text-zinc-500">
                           <span>{formatTime(activity.createdAt)}</span>
                           {agent && (
                             <>
@@ -493,7 +493,7 @@ export function AgentActivityPage() {
                   </div>
                 )}
                 {!hasMore && activities.length > 0 && (
-                  <div className="text-center py-4 text-sm text-zinc-400">
+                  <div className="text-center py-4 text-sm text-zinc-400 dark:text-zinc-500">
                     {t('settings.noMoreActivities')}
                   </div>
                 )}

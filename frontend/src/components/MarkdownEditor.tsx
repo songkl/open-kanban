@@ -64,7 +64,7 @@ export default function MarkdownEditor({ value, onChange, height = 200, placehol
           </button>
         </div>
         {showPreview && (
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">Markdown 实时预览</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-500">Markdown 实时预览</span>
         )}
       </div>
       
@@ -76,7 +76,7 @@ export default function MarkdownEditor({ value, onChange, height = 200, placehol
           {value ? (
             <ReactMarkdown rehype-sanitize>{renderMarkdown(value)}</ReactMarkdown>
           ) : (
-            <p className="text-zinc-400 dark:text-zinc-500 italic">暂无内容</p>
+            <p className="text-zinc-400 dark:text-zinc-500 dark:text-zinc-400 italic">暂无内容</p>
           )}
         </div>
       ) : (

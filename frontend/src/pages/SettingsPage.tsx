@@ -98,13 +98,13 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center gap-4">
-          <Link to="/" className="rounded-md bg-zinc-200 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-300">
+          <Link to="/" className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600">
             ← {t('settings.back')}
           </Link>
-          <h1 className="text-2xl font-bold text-zinc-800">{t('settings.title')}</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('settings.title')}</h1>
           <div className="ml-auto flex items-center gap-2">
             <UserAvatar
               username={currentUser?.nickname || ''}
@@ -126,14 +126,14 @@ export function SettingsPage() {
             <nav className="space-y-1">
               <button
                 onClick={() => switchToTab('profile')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'profile' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'profile' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
               >
                 {t('settings.profile')}
               </button>
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('tokens')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'tokens' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'tokens' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.tokens')}
                 </button>
@@ -141,7 +141,7 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('activities')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'activities' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'activities' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.activitiesTitle')}
                 </button>
@@ -149,7 +149,7 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('agents')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'agents' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'agents' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.agents')}
                 </button>
@@ -157,27 +157,27 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('users')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'users' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'users' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.users')}
                 </button>
               )}
               <button
                 onClick={() => switchToTab('shortcuts')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'shortcuts' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'shortcuts' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
               >
                 {t('settings.shortcuts')}
               </button>
               <button
                 onClick={() => switchToTab('oauth')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'oauth' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'oauth' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
                 data-testid="tab-oauth"
               >
                 {t('oauth.admin.title')}
               </button>
               <button
                 onClick={() => switchToTab('theme')}
-                className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
               >
                 <span>{t('nav.theme')}</span>
                 {darkMode ? (
@@ -193,12 +193,12 @@ export function SettingsPage() {
                     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                   </svg>
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                   </svg>
                 )}
               </button>
-              <div className="border-t border-zinc-200 pt-2 mt-2">
+              <div className="border-t border-zinc-200 dark:border-zinc-700 pt-2 mt-2">
                 <button
                   onClick={() => {
                     localStorage.removeItem('token');
@@ -212,7 +212,7 @@ export function SettingsPage() {
             </nav>
           </div>
 
-          <div className="flex-1 rounded-lg bg-white p-6 shadow">
+          <div className="flex-1 rounded-lg bg-white p-6 shadow dark:bg-zinc-800">
             {activeTab === 'profile' && currentUser && (
               <ProfileSettings
                 currentUser={currentUser}

@@ -54,21 +54,21 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-zinc-800">{t('settings.activitiesTitle')}</h2>
-      <p className="text-sm text-zinc-500">{t('settings.activitiesDescription')}</p>
+      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.activitiesTitle')}</h2>
+      <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('settings.activitiesDescription')}</p>
 
       {currentUser?.role === 'ADMIN' && (
-        <div className="rounded-lg border border-zinc-200 p-4">
-          <h3 className="mb-3 text-sm font-medium text-zinc-700">{t('settings.filterConditions')}</h3>
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div>
-              <label htmlFor="activityFilterAction" className="mb-1 block text-xs text-zinc-500">{t('settings.operationType')}</label>
+              <label htmlFor="activityFilterAction" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.operationType')}</label>
               <select
                 id="activityFilterAction"
                 name="activityFilterAction"
                 value={activityFilterAction}
                 onChange={(e) => setActivityFilterAction(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               >
                 <option value="">{t('filter.all')}</option>
                 <option value="CREATE_TASK">{t('settings.activities.CREATE_TASK')}</option>
@@ -89,25 +89,25 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
               </select>
             </div>
             <div>
-              <label htmlFor="activityFilterStartTime" className="mb-1 block text-xs text-zinc-500">{t('settings.startTime')}</label>
+              <label htmlFor="activityFilterStartTime" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.startTime')}</label>
               <input
                 id="activityFilterStartTime"
                 name="activityFilterStartTime"
                 type="datetime-local"
                 value={activityFilterStartTime}
                 onChange={(e) => setActivityFilterStartTime(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div>
-              <label htmlFor="activityFilterEndTime" className="mb-1 block text-xs text-zinc-500">{t('settings.endTime')}</label>
+              <label htmlFor="activityFilterEndTime" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.endTime')}</label>
               <input
                 id="activityFilterEndTime"
                 name="activityFilterEndTime"
                 type="datetime-local"
                 value={activityFilterEndTime}
                 onChange={(e) => setActivityFilterEndTime(e.target.value)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div className="flex items-end">
@@ -122,7 +122,7 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
         </div>
       )}
 
-      <div className="h-[calc(100vh-380px)] overflow-y-auto rounded-xl border border-zinc-200 bg-white">
+      <div className="h-[calc(100vh-380px)] overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
         <div className="p-4 space-y-3">
           {activities.map((activity) => (
             <div key={activity.id} className="flex items-start gap-4 rounded-lg border border-zinc-100 p-4">
@@ -148,14 +148,14 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
                 {activity.action === 'BOARD_IMPORT' && <span className="text-lg">📥</span>}
               </div>
               <div className="flex-1">
-                <div className="font-medium text-zinc-800">
+                <div className="font-medium text-zinc-800 dark:text-zinc-100">
                   {typeof t(`settings.activities.${activity.action}`) === 'string' ? t(`settings.activities.${activity.action}`) : activity.action}
                 </div>
                 {activity.targetTitle && (
-                  <div className="text-sm text-zinc-600">{activity.targetTitle}</div>
+                  <div className="text-sm text-zinc-600 dark:text-zinc-300">{activity.targetTitle}</div>
                 )}
                 {currentUser?.role === 'ADMIN' && (
-                  <div className="mt-1 text-xs text-zinc-400">
+                  <div className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                     {t('settings.operator')}: {userNicknameMap[activity.userId] || activity.userId} | {new Date(activity.createdAt).toLocaleString()}
                     {activity.ipAddress && (
                       <> | IP: {activity.ipAddress}</>
@@ -166,7 +166,7 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
                   </div>
                 )}
                 {currentUser?.role !== 'ADMIN' && (
-                  <div className="mt-1 text-xs text-zinc-400">
+                  <div className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                     {new Date(activity.createdAt).toLocaleString()}
                   </div>
                 )}
@@ -174,9 +174,9 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
             </div>
           ))}
           {loading ? (
-            <div className="py-8 text-center text-zinc-500">{t('common.loading')}</div>
+            <div className="py-8 text-center text-zinc-500 dark:text-zinc-500">{t('common.loading')}</div>
           ) : activities.length === 0 ? (
-            <div className="py-8 text-center text-zinc-500">{t('settings.noActivities')}</div>
+            <div className="py-8 text-center text-zinc-500 dark:text-zinc-500">{t('settings.noActivities')}</div>
           ) : null}
         </div>
       </div>

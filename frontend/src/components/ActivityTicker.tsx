@@ -91,7 +91,7 @@ export function ActivityTicker() {
               {activity.targetTitle && (
                 <span className="text-blue-300 truncate max-w-32">{activity.targetTitle}</span>
               )}
-              <span className="text-zinc-500">{formatTime(activity.createdAt)}</span>
+              <span className="text-zinc-500 dark:text-zinc-500">{formatTime(activity.createdAt)}</span>
             </div>
           ))}
         </div>

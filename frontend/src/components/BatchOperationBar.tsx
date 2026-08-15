@@ -83,7 +83,7 @@ export function BatchOperationBar({
       </button>
       <button
         onClick={onClearSelection}
-        className="rounded-md bg-zinc-600 hover:bg-zinc-500 px-3 py-1 text-sm text-white font-medium transition-colors"
+        className="rounded-md bg-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-7000 px-3 py-1 text-sm text-white font-medium transition-colors"
       >
         {t('task.clearSelection')}
       </button>

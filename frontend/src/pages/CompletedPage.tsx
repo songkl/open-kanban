@@ -162,14 +162,14 @@ export function CompletedPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-zinc-800">{t('completed.title')}</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('completed.title')}</h1>
         </div>
         <Link
           to="/"
-          className="rounded-md bg-zinc-200 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-300"
+          className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
         >
           {t('completed.backToBoard')}
         </Link>
@@ -179,7 +179,7 @@ export function CompletedPage() {
         <select
           value={boardFilter}
           onChange={(e) => setBoardFilter(e.target.value)}
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+          className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-2 text-sm"
         >
           <option value="all">{t('filter.all')}</option>
           {boards.map((board) => (
@@ -189,13 +189,13 @@ export function CompletedPage() {
 
         <div className="flex-1" />
 
-        <span className="text-sm text-zinc-500">
+        <span className="text-sm text-zinc-500 dark:text-zinc-500">
           {t('completed.selectedCount', { selected: selectedTasks.size, total: tasks.length })}
         </span>
 
         <button
           onClick={toggleSelectAll}
-          className="rounded-md bg-zinc-200 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-300"
+          className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
         >
           {selectedTasks.size === tasks.length ? t('completed.deselectAll') : t('completed.selectAll')}
         </button>
@@ -216,15 +216,15 @@ export function CompletedPage() {
       </div>
 
       {loading ? (
-        <div className="text-center text-zinc-500">{t('completed.loading')}</div>
+        <div className="text-center text-zinc-500 dark:text-zinc-500">{t('completed.loading')}</div>
       ) : tasks.length === 0 ? (
-        <div className="text-center text-zinc-500">{t('completed.empty')}</div>
+        <div className="text-center text-zinc-500 dark:text-zinc-500">{t('completed.empty')}</div>
       ) : (
         <div className="space-y-2">
           {tasks.map((task) => (
             <div
               key={task.id}
-              className={`flex items-center gap-4 rounded-lg bg-white p-4 shadow ${
+              className={`flex items-center gap-4 rounded-lg bg-white p-4 shadow dark:bg-zinc-800 ${
                 selectedTasks.has(task.id) ? 'ring-2 ring-blue-500' : ''
               }`}
             >
@@ -232,34 +232,34 @@ export function CompletedPage() {
                 type="checkbox"
                 checked={selectedTasks.has(task.id)}
                 onChange={() => toggleSelect(task.id)}
-                className="h-5 w-5 rounded border-zinc-300"
+                className="h-5 w-5 rounded border-zinc-300 dark:border-zinc-600"
               />
 
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-zinc-800">{task.title}</span>
+                  <span className="font-medium text-zinc-800 dark:text-zinc-100">{task.title}</span>
                   <span className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    priorityColors[task.priority] || 'bg-zinc-100 text-zinc-700'
+                    priorityColors[task.priority] || 'bg-zinc-100 text-zinc-700 dark:text-zinc-200'
                   }`}>
                     {t(`task.priority.${task.priority}`)}
                   </span>
-                  <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+                  <span className="rounded bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs text-zinc-600 dark:text-zinc-300">
                     {task.boardName}
                   </span>
                 </div>
                 {task.description && (
-                  <div className="mt-1 text-sm text-zinc-500 line-clamp-2">
+                  <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-500 line-clamp-2">
                     <SafeMarkdown>{task.description}</SafeMarkdown>
                   </div>
                 )}
-                <div className="mt-1 text-xs text-zinc-400">
+                <div className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                   ID: {task.id}
                 </div>
               </div>
 
               <Link
                 to="/"
-                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200"
+                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200"
               >
                 {t('task.enter')}
               </Link>

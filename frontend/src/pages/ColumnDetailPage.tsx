@@ -205,11 +205,11 @@ export function ColumnDetailPage() {
 
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900">
-      <header className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-700 dark:bg-zinc-800">
+      <header className="border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-6 py-4">
         <div className="flex items-center gap-4">
           <Link
             to={`/board/${boardId}`}
-            className="flex items-center gap-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-100"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -236,21 +236,21 @@ export function ColumnDetailPage() {
               {column.name}
             </h1>
             {column.status && (
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-500 dark:bg-zinc-700">
                 {column.status}
               </span>
             )}
           </div>
           <div className="ml-auto flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <label htmlFor="filter-assignee" className="text-sm text-zinc-500">{t('filter.assignee')}:</label>
+              <label htmlFor="filter-assignee" className="text-sm text-zinc-500 dark:text-zinc-500">{t('filter.assignee')}:</label>
               <select
                 id="filter-assignee"
                 name="filter-assignee"
                 aria-label={t('filter.assignee')}
                 value={filterAssignee}
                 onChange={(e) => setFilterAssignee(e.target.value)}
-                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700"
+                className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1.5 text-sm dark:bg-zinc-700"
               >
                 <option value="">{t('filter.all')}</option>
                 {uniqueAssignees.map(a => (
@@ -259,14 +259,14 @@ export function ColumnDetailPage() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label htmlFor="filter-publisher" className="text-sm text-zinc-500">{t('userDetail.publisher')}:</label>
+              <label htmlFor="filter-publisher" className="text-sm text-zinc-500 dark:text-zinc-500">{t('userDetail.publisher')}:</label>
               <select
                 id="filter-publisher"
                 name="filter-publisher"
                 aria-label={t('userDetail.publisher')}
                 value={filterPublisher}
                 onChange={(e) => setFilterPublisher(e.target.value)}
-                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+                className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1.5 text-sm dark:bg-zinc-700 dark:text-zinc-100"
               >
                 <option value="">{t('filter.all')}</option>
                 {uniquePublishers.map(p => (
@@ -275,14 +275,14 @@ export function ColumnDetailPage() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label htmlFor="filter-column" className="text-sm text-zinc-500">{t('userDetail.columnName')}:</label>
+              <label htmlFor="filter-column" className="text-sm text-zinc-500 dark:text-zinc-500">{t('userDetail.columnName')}:</label>
               <select
                 id="filter-column"
                 name="filter-column"
                 aria-label={t('userDetail.columnName')}
                 value={columnId}
                 onChange={(e) => handleColumnChange(e.target.value)}
-                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700"
+                className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1.5 text-sm dark:bg-zinc-700"
               >
                 {columns.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -290,14 +290,14 @@ export function ColumnDetailPage() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label htmlFor="sort-by" className="text-sm text-zinc-500">{t('common.sortBy')}:</label>
+              <label htmlFor="sort-by" className="text-sm text-zinc-500 dark:text-zinc-500">{t('common.sortBy')}:</label>
               <select
                 id="sort-by"
                 name="sort-by"
                 aria-label={t('common.sortBy')}
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+                className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1.5 text-sm dark:bg-zinc-700 dark:text-zinc-100"
               >
                 <option value="position">{t('task.position')}</option>
                 <option value="priority">{t('task.priority')}</option>
@@ -307,13 +307,13 @@ export function ColumnDetailPage() {
               </select>
               <button
                 onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
-                className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+                className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1.5 text-sm dark:bg-zinc-700 dark:text-zinc-100"
                 title={sortOrder === 'asc' ? t('common.sortAsc') : t('common.sortDesc')}
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
             </div>
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-zinc-500 dark:text-zinc-500">
               {t('userDetail.taskCount', { count: filteredTasks.length })}
             </span>
           </div>
@@ -322,13 +322,13 @@ export function ColumnDetailPage() {
 
       <main className="p-6">
         {column.description && (
-          <div className="mb-6 rounded-lg bg-white p-4 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+          <div className="mb-6 rounded-lg bg-white p-4 text-sm text-zinc-600 dark:text-zinc-300 dark:bg-zinc-800 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700">
             <p>{column.description}</p>
           </div>
         )}
 
         {filteredTasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
+          <div className="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-500">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="48"
@@ -339,7 +339,7 @@ export function ColumnDetailPage() {
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="mb-4 text-zinc-300 dark:text-zinc-600"
+              className="mb-4 text-zinc-300 dark:text-zinc-600 dark:text-zinc-300"
             >
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <line x1="9" y1="9" x2="15" y2="15" />

@@ -50,28 +50,28 @@ export function BoardActionsMenu({
         </svg>
       </button>
       {showMoreMenu && (
-        <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg z-50">
-          <Link to="/boards" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+        <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50">
+          <Link to="/boards" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
             {t('nav.manageBoards')}
           </Link>
-          <Link to="/drafts" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+          <Link to="/drafts" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
             {t('nav.drafts')}
           </Link>
-          <Link to="/history" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+          <Link to="/history" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
             {t('nav.history')}
           </Link>
-          <Link to="/completed" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+          <Link to="/completed" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
             {t('nav.completed')}
           </Link>
           {currentUser?.role === 'ADMIN' && (
             <>
-              <Link to="/settings?tab=users" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+              <Link to="/settings?tab=users" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
                 {t('nav.admin')}
               </Link>
-              <Link to="/activities" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+              <Link to="/activities" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
                 {t('nav.activityLog')}
               </Link>
-              <Link to="/agent-activity" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+              <Link to="/agent-activity" onClick={() => onSetShowMoreMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
                 {t('nav.agentActivity')}
               </Link>
             </>
@@ -80,7 +80,7 @@ export function BoardActionsMenu({
           <div className="relative">
             <button
               onClick={() => onSetShowExportMenu(!showExportMenu)}
-              className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100"
             >
               <span>{t('nav.export')}</span>
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -88,11 +88,11 @@ export function BoardActionsMenu({
               </svg>
             </button>
             {showExportMenu && (
-              <div ref={exportMenuRef} className="absolute right-full top-0 mr-1 w-36 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg z-50">
-                <button onClick={() => onExport('json')} className="w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100">
+              <div ref={exportMenuRef} className="absolute right-full top-0 mr-1 w-36 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50">
+                <button onClick={() => onExport('json')} className="w-full px-4 py-2 text-left text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
                   JSON
                 </button>
-                <button onClick={() => onExport('csv')} className="w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100">
+                <button onClick={() => onExport('csv')} className="w-full px-4 py-2 text-left text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
                   CSV
                 </button>
               </div>

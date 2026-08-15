@@ -78,8 +78,8 @@ export function BoardToolbar({
           className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm ${
             hasActiveFilters
               ? 'bg-blue-100 text-blue-700 border border-blue-300'
-              : 'bg-zinc-200 text-zinc-700 border border-transparent'
-          } hover:bg-zinc-300`}
+              : 'bg-zinc-200 text-zinc-700 dark:text-zinc-200 border border-transparent'
+          } hover:bg-zinc-300 dark:hover:bg-zinc-600`}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -104,7 +104,7 @@ export function BoardToolbar({
         {showFilterPanel && (
           <div
             ref={filterPanelRef}
-            className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg z-50"
+            className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 shadow-lg z-50"
           >
             <FilterPanelContent
               filters={filters}

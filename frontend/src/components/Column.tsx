@@ -173,7 +173,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-blue-500"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 dark:text-zinc-500 hover:text-blue-500"
                 >
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -184,13 +184,13 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
           {column.status && (
             <span
               onClick={handleCopyStatus}
-              className="ml-2 rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-600 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors relative"
+              className="ml-2 rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-600 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors relative"
               title={t('column.clickToCopyStatus')}
             >
               {showCopied ? t('column.copied') : column.status}
             </span>
           )}
-          <span className="ml-auto text-sm text-zinc-500 flex items-center gap-2">
+          <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-500 flex items-center gap-2">
             {onSelectAllTasks && tasks.length > 0 && (
               <label className="sr-only" htmlFor={`select-all-${column.id}`}>
                 {t('column.selectAll')}
@@ -228,10 +228,10 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
         </div>
 
         {column.description && (
-          <div className="px-3 py-2 border-b border-zinc-200/50 dark:border-zinc-700/50">
+          <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700/50">
             <button
               onClick={() => setShowDescription(!showDescription)}
-              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+              className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:text-zinc-200 dark:hover:text-zinc-300 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${showDescription ? 'rotate-90' : ''}`}>
                 <polyline points="9 18 15 12 9 6"/>
@@ -239,7 +239,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
               {t('column.description')}
             </button>
             {showDescription && (
-              <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-400 prose prose-sm dark:prose-invert max-w-none">
+              <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-500 prose prose-sm dark:prose-invert max-w-none">
                 <SafeMarkdown>{column.description}</SafeMarkdown>
               </div>
             )}
@@ -257,14 +257,14 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                 className="py-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-100/50 dark:hover:bg-zinc-700/30 rounded-lg transition-colors"
               >
                 <div className="mb-3 rounded-full bg-zinc-100 p-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                     <line x1="12" y1="8" x2="12" y2="16"/>
                     <line x1="8" y1="12" x2="16" y2="12"/>
                   </svg>
                 </div>
-                <p className="text-sm font-medium text-zinc-500">{t('column.noTasks')}</p>
-                <p className="mt-1 text-xs text-zinc-400">{t('column.clickToAddTask')}</p>
+                <p className="text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('column.noTasks')}</p>
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{t('column.clickToAddTask')}</p>
               </div>
             ) : (
               tasks.map((task) => (

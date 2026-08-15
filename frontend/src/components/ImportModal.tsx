@@ -67,7 +67,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
     >
       <div className="absolute inset-0" />
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -76,14 +76,14 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-zinc-800">
+          <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">
             {t('modal.importBoard')}
           </h2>
         </div>
 
         <div className="space-y-5">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {t('modal.selectFile')}
             </label>
             <input
@@ -91,15 +91,15 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
               type="file"
               accept=".json"
               onChange={handleFileChange}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-100 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100"
             />
-            <p className="mt-1.5 text-xs text-zinc-400">
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
               {t('modal.importHint')}
             </p>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {t('modal.boardId')}({t('modal.optional')})
             </label>
             <input
@@ -107,9 +107,9 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
               value={importBoardId}
               onChange={(e) => setImportBoardId(e.target.value.replace(/\//g, ''))}
               placeholder={t('modal.autoGenerate')}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
-            <p className="mt-1.5 text-xs text-zinc-400">
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
               {t('modal.boardIdHint')}
             </p>
           </div>
@@ -118,7 +118,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+              className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
             >
               {t('task.cancel')}
             </button>
@@ -126,7 +126,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
               type="button"
               onClick={() => handleImport(false)}
               disabled={!importFile}
-              className={`flex-1 rounded-xl px-4 py-3 font-medium transition-all shadow-sm hover:shadow ${!importFile ? 'bg-gradient-to-r from-zinc-300 to-zinc-300 text-zinc-400' : 'bg-gradient-to-r from-sky-500 to-sky-600 text-white hover:from-sky-600 hover:to-sky-700'}`}
+              className={`flex-1 rounded-xl px-4 py-3 font-medium transition-all shadow-sm hover:shadow ${!importFile ? 'bg-gradient-to-r from-zinc-300 to-zinc-300 text-zinc-400 dark:text-zinc-500' : 'bg-gradient-to-r from-sky-500 to-sky-600 text-white hover:from-sky-600 hover:to-sky-700'}`}
             >
               {t('task.import')}
             </button>
@@ -155,7 +155,7 @@ export function ImportConflictConfirm({ isOpen, onCancel, onConfirm }: ImportCon
     >
       <div className="absolute inset-0" />
       <div
-        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center gap-3">
@@ -164,18 +164,18 @@ export function ImportConflictConfirm({ isOpen, onCancel, onConfirm }: ImportCon
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
           </div>
-          <h3 className="text-lg font-bold text-zinc-800">
+          <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">
             {t('modal.importConflictTitle')}
           </h3>
         </div>
-        <p className="mb-6 text-sm text-zinc-600">
+        <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">
           {t('modal.importConflictMessage')}
         </p>
         <div className="flex gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
           >
             {t('task.cancel')}
           </button>

@@ -29,7 +29,7 @@ export function DSStoreCard({
       className={`
         rounded-lg border p-4 cursor-pointer transition-all duration-200
         ${disabled
-          ? 'border-zinc-200 bg-zinc-50 opacity-60 cursor-not-allowed'
+          ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 opacity-60 cursor-not-allowed'
           : 'border-[#E7E7F5] hover:border-blue-500 bg-white'
         }
       `}
@@ -46,9 +46,9 @@ export function DSStoreCard({
         </div>
       )}
       <div>
-        <h3 className="font-semibold text-zinc-800">{title}</h3>
-        {subtitle && <p className="text-sm text-zinc-500 mt-0.5">{subtitle}</p>}
-        {description && <p className="text-sm text-zinc-600 mt-1">{description}</p>}
+        <h3 className="font-semibold text-zinc-800 dark:text-zinc-100">{title}</h3>
+        {subtitle && <p className="text-sm text-zinc-500 dark:text-zinc-500 mt-0.5">{subtitle}</p>}
+        {description && <p className="text-sm text-zinc-600 dark:text-zinc-300 mt-1">{description}</p>}
       </div>
       {actionText && onAction && !disabled && (
         <button

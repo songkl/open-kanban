@@ -44,7 +44,7 @@ export function AddColumnModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -53,12 +53,12 @@ export function AddColumnModal({
               <path d="M12 5v14M5 12h14"/>
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-zinc-800">{t('modal.addColumn')}</h2>
+          <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{t('modal.addColumn')}</h2>
         </div>
 
         <div className="space-y-5">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {t('column.columnName')}
             </label>
             <input
@@ -66,13 +66,13 @@ export function AddColumnModal({
               value={newColumnName}
               onChange={(e) => onNameChange(e.target.value)}
               placeholder={t('column.namePlaceholder')}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {t('column.statusCode')}
             </label>
             <input
@@ -80,13 +80,13 @@ export function AddColumnModal({
               value={status}
               onChange={(e) => onStatusChange(e.target.value)}
               placeholder={t('column.statusPlaceholder')}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
-            <p className="mt-1.5 text-xs text-zinc-400">{t('column.statusCodeHint')}</p>
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{t('column.statusCodeHint')}</p>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {t('column.color')}
             </label>
             <div className="flex gap-3">
@@ -115,7 +115,7 @@ export function AddColumnModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {t('column.description')}
             </label>
             <textarea
@@ -123,19 +123,19 @@ export function AddColumnModal({
               onChange={(e) => onDescriptionChange(e.target.value)}
               placeholder={t('column.descriptionPlaceholder')}
               rows={3}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
             />
-            <p className="mt-1.5 text-xs text-zinc-400">{t('column.descriptionHint')}</p>
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{t('column.descriptionHint')}</p>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
               {t('column.ownerAgent')}
             </label>
             <select
               value={ownerAgent}
               onChange={(e) => onOwnerAgentChange(e.target.value)}
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-zinc-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
               <option value="">{t('column.noOwnerAgent')}</option>
               {agents.filter(a => a.type === 'AGENT').map((agent) => (
@@ -144,14 +144,14 @@ export function AddColumnModal({
                 </option>
               ))}
             </select>
-            <p className="mt-1.5 text-xs text-zinc-400">{t('column.ownerAgentHint')}</p>
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{t('column.ownerAgentHint')}</p>
           </div>
         </div>
 
         <div className="mt-8 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
           >
             {t('column.cancel')}
           </button>

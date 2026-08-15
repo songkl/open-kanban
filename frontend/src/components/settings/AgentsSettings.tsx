@@ -85,16 +85,16 @@ export function AgentsSettings() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h2 className="text-lg font-semibold text-zinc-800">{t('settings.agentManagement')}</h2>
-        <div className="py-8 text-center text-zinc-500">{t('common.loading')}</div>
+        <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.agentManagement')}</h2>
+        <div className="py-8 text-center text-zinc-500 dark:text-zinc-500">{t('common.loading')}</div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-zinc-800">{t('settings.agentManagement')}</h2>
-      <p className="text-sm text-zinc-500">{t('settings.agentDescription')}</p>
+      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.agentManagement')}</h2>
+      <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('settings.agentDescription')}</p>
 
       <form onSubmit={handleCreateAgent} className="flex gap-3">
         <label htmlFor="newAgentName" className="sr-only">{t('settings.agentNamePlaceholder')}</label>
@@ -104,14 +104,14 @@ export function AgentsSettings() {
           value={newAgentName}
           onChange={(e) => setNewAgentName(e.target.value)}
           placeholder={t('settings.agentNamePlaceholder')}
-          className="flex-1 rounded-md border border-zinc-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
+          className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none"
         />
         <label htmlFor="newAgentRole" className="sr-only">{t('settings.role')}</label>
         <select
           id="newAgentRole"
           value={newAgentRole}
           onChange={(e) => setNewAgentRole(e.target.value as 'ADMIN' | 'MEMBER' | 'VIEWER')}
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         >
           <option value="ADMIN">{t('settings.admin')}</option>
           <option value="MEMBER">{t('settings.member')}</option>
@@ -128,7 +128,7 @@ export function AgentsSettings() {
 
       <div className="space-y-3">
         {agents.map((agent) => (
-          <div key={agent.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-4">
+          <div key={agent.id} className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
             <div className="flex items-center gap-3">
               <UserAvatar
                 username={agent.nickname}
@@ -136,9 +136,9 @@ export function AgentsSettings() {
                 size="md"
               />
               <div>
-                <div className="font-medium text-zinc-800">{agent.nickname}</div>
-                <div className="flex gap-2 text-xs text-zinc-500">
-                  <span className={`rounded px-1.5 py-0.5 text-xs ${agent.role === 'ADMIN' ? 'bg-blue-200 text-blue-800' : agent.role === 'MEMBER' ? 'bg-green-200 text-green-800' : 'bg-zinc-200 text-zinc-600'}`}>
+                <div className="font-medium text-zinc-800 dark:text-zinc-100">{agent.nickname}</div>
+                <div className="flex gap-2 text-xs text-zinc-500 dark:text-zinc-500">
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${agent.role === 'ADMIN' ? 'bg-blue-200 text-blue-800' : agent.role === 'MEMBER' ? 'bg-green-200 text-green-800' : 'bg-zinc-200 text-zinc-600 dark:text-zinc-300'}`}>
                     {agent.role === 'ADMIN' ? t('settings.admin') : agent.role === 'MEMBER' ? t('settings.member') : t('settings.viewer')}
                   </span>
                   {agent.lastActiveAt && (
@@ -177,7 +177,7 @@ export function AgentsSettings() {
                   setEditingAgentNickname(agent.nickname);
                   setEditingAgentAvatar(agent.avatar || '');
                 }}
-                className="rounded bg-zinc-100 px-3 py-1 text-sm text-zinc-700 hover:bg-zinc-200"
+                className="rounded bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
               >
                 {t('settings.edit')}
               </button>
@@ -230,16 +230,16 @@ export function AgentsSettings() {
           </div>
         ))}
         {agents.length === 0 && (
-          <div className="py-8 text-center text-zinc-500">{t('settings.noAgents')}</div>
+          <div className="py-8 text-center text-zinc-500 dark:text-zinc-500">{t('settings.noAgents')}</div>
         )}
       </div>
 
       {showTokenModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">{t('settings.tokenGenerated')}</h2>
-            <p className="mb-4 text-sm text-zinc-500">{t('settings.tokenGeneratedHint')}</p>
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-xl">
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.tokenGenerated')}</h2>
+            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-500">{t('settings.tokenGeneratedHint')}</p>
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-zinc-100 p-3">
               <code className="flex-1 break-all font-mono text-sm">{newAgentToken}</code>
               <button
@@ -260,7 +260,7 @@ export function AgentsSettings() {
             </div>
             <button
               onClick={() => setShowTokenModal(false)}
-              className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200"
+              className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
             >
               {t('settings.close')}
             </button>
@@ -271,11 +271,11 @@ export function AgentsSettings() {
       {editingAgent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setEditingAgent(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold text-zinc-800">{t('settings.editAgent')}</h2>
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-xl">
+            <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.editAgent')}</h2>
             <form onSubmit={(e) => { e.preventDefault(); handleUpdateAgent(); }} className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-zinc-700">{t('settings.avatar')}</label>
+                <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.avatar')}</label>
                 <div className="space-y-3">
                   <div className="flex items-center gap-4">
                     <UserAvatar
@@ -308,7 +308,7 @@ export function AgentsSettings() {
                           <button
                             type="button"
                             onClick={() => setEditingAgentAvatar('')}
-                            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                            className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700"
                           >
                             {t('settings.useLetterAvatar')}
                           </button>
@@ -319,13 +319,13 @@ export function AgentsSettings() {
                 </div>
               </div>
               <div>
-                <label htmlFor="editingAgentNickname" className="mb-2 block text-sm font-medium text-zinc-700">{t('settings.nickname')}</label>
+                <label htmlFor="editingAgentNickname" className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.nickname')}</label>
                 <input
                   id="editingAgentNickname"
                   type="text"
                   value={editingAgentNickname}
                   onChange={(e) => setEditingAgentNickname(e.target.value)}
-                  className="w-full rounded-md border border-zinc-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none"
                   maxLength={20}
                 />
               </div>
@@ -340,7 +340,7 @@ export function AgentsSettings() {
                 <button
                   type="button"
                   onClick={() => setEditingAgent(null)}
-                  className="flex-1 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200"
+                  className="flex-1 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
                 >
                   {t('settings.cancel')}
                 </button>

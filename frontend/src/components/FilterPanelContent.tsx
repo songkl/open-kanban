@@ -34,7 +34,7 @@ export function FilterPanelContent({
   return (
     <>
       <div className="mb-3">
-        <label htmlFor="filter-priority" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.priority')}</label>
+        <label htmlFor="filter-priority" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.priority')}</label>
         <CustomDropdown
           id="filter-priority"
           options={[
@@ -49,7 +49,7 @@ export function FilterPanelContent({
         />
       </div>
       <div className="mb-3">
-        <label htmlFor="filter-assignee" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.assignee')}</label>
+        <label htmlFor="filter-assignee" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.assignee')}</label>
         <CustomDropdown
           id="filter-assignee"
           options={[
@@ -62,7 +62,7 @@ export function FilterPanelContent({
         />
       </div>
       <div className="mb-3">
-        <label htmlFor="filter-dateRange" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.dateRange')}</label>
+        <label htmlFor="filter-dateRange" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.dateRange')}</label>
         <CustomDropdown
           id="filter-dateRange"
           options={[
@@ -78,7 +78,7 @@ export function FilterPanelContent({
       </div>
       {uniqueTags.length > 0 && (
         <div className="mb-3">
-          <label htmlFor="filter-tag" className="block text-xs font-medium text-zinc-500 mb-1">{t('filter.tag')}</label>
+          <label htmlFor="filter-tag" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.tag')}</label>
           <CustomDropdown
             id="filter-tag"
             options={[
@@ -94,7 +94,7 @@ export function FilterPanelContent({
       <div className="flex gap-2 pt-2 border-t border-zinc-100">
         <button
           onClick={onClearFilters}
-          className="flex-1 rounded-md bg-zinc-100 px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-200"
+          className="flex-1 rounded-md bg-zinc-100 px-2 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
         >
           {t('filter.clear')}
         </button>
@@ -108,7 +108,7 @@ export function FilterPanelContent({
       {filterPresets.length > 0 && (
         <div className="mt-3 pt-3 border-t border-zinc-100">
           <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium text-zinc-500">{t('filter.preset')}</label>
+            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-500">{t('filter.preset')}</label>
             <button
               onClick={() => onSetShowPresetDropdown(!showPresetDropdown)}
               className="text-xs text-blue-500 hover:text-blue-600"

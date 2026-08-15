@@ -93,14 +93,14 @@ export function TaskList({
             className="py-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-100/50 dark:hover:bg-zinc-700/30 rounded-lg transition-colors"
           >
             <div className="mb-3 rounded-full bg-zinc-100 p-4">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                 <line x1="12" y1="8" x2="12" y2="16"/>
                 <line x1="8" y1="12" x2="16" y2="12"/>
               </svg>
             </div>
-            <p className="text-sm font-medium text-zinc-500">{t('column.noTasks')}</p>
-            <p className="mt-1 text-xs text-zinc-400">{t('column.clickToAddTask')}</p>
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('column.noTasks')}</p>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{t('column.clickToAddTask')}</p>
           </div>
         ) : (
           tasks.map((task) => (

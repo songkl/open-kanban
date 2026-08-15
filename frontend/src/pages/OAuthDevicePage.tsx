@@ -108,7 +108,7 @@ export function OAuthDevicePage() {
           <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
             {t('oauth.device.title')}
           </h1>
-          <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-500">
             {t('oauth.device.loginRequired')}
           </p>
           <button
@@ -125,11 +125,11 @@ export function OAuthDevicePage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 px-4 dark:bg-zinc-900">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg dark:bg-zinc-800">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-lg dark:bg-zinc-800">
         <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
           {t('oauth.device.title')}
         </h1>
-        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-500">
           {t('oauth.device.subtitle')}
         </p>
 
@@ -142,7 +142,7 @@ export function OAuthDevicePage() {
           autoComplete="off"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase().trim())}
-          className="w-full rounded-md border border-zinc-300 px-4 py-2 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+          className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
           placeholder="XXXX-XXXX"
           maxLength={9}
           data-testid="user-code-input"
@@ -155,7 +155,7 @@ export function OAuthDevicePage() {
         )}
 
         {lookup && !decided && (
-          <div className="mt-5 rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
+          <div className="mt-5 rounded-md border border-zinc-200 dark:border-zinc-700 p-3">
             <p className="text-sm text-zinc-700 dark:text-zinc-300">
               <span className="font-medium">{t('oauth.device.clientLabel')}</span>{' '}
               {lookup.clientName || lookup.clientId}
@@ -196,7 +196,7 @@ export function OAuthDevicePage() {
             type="button"
             disabled={!lookup || submitting || decided !== null}
             onClick={() => decide('deny')}
-            className="flex-1 rounded-md bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600"
+            className="flex-1 rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50:bg-zinc-600"
             data-testid="deny-btn"
           >
             {t('oauth.device.deny')}

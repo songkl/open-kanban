@@ -19,7 +19,7 @@ export const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
       <div ref={ref} className="relative">
         <button
           onClick={onToggleDropdown}
-          className="flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm hover:bg-zinc-50 max-w-36"
+          className="flex items-center gap-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 max-w-36"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -55,13 +55,13 @@ export const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
           </svg>
         </button>
         {showDropdown && (
-          <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg z-50">
+          <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50">
             {boards.map((board) => (
               <button
                 key={board.id}
                 onClick={() => onSelectBoard(board.id)}
                 className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 ${
-                  board.id === boardIdFromUrl ? 'bg-blue-50 text-blue-700 font-medium' : 'text-zinc-700'
+                  board.id === boardIdFromUrl ? 'bg-blue-50 text-blue-700 font-medium' : 'text-zinc-700 dark:text-zinc-200'
                 }`}
               >
                 {board.name}

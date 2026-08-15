@@ -87,13 +87,13 @@ export function CustomDropdown({
         disabled={disabled}
         className={`w-full rounded-md border px-3 py-1.5 text-left text-sm flex items-center justify-between ${
           disabled
-            ? 'bg-zinc-100 dark:bg-zinc-700 border-zinc-200 dark:border-zinc-600 text-zinc-400 cursor-not-allowed'
+            ? 'bg-zinc-100 dark:bg-zinc-700 border-zinc-200 dark:border-zinc-600 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
             : 'bg-white dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-500'
         }`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className={selectedOption ? '' : 'text-zinc-400'}>
+        <span className={selectedOption ? '' : 'text-zinc-400 dark:text-zinc-500'}>
           {selectedOption?.label || placeholder}
         </span>
         <svg

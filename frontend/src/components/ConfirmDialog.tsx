@@ -59,7 +59,7 @@ export function ConfirmDialog({
       <div className="absolute inset-0" />
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
         tabIndex={-1}
       >
@@ -75,18 +75,18 @@ export function ConfirmDialog({
               </svg>
             )}
           </div>
-          <h3 className="text-lg font-bold text-zinc-800">
+          <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">
             {title}
           </h3>
         </div>
-        <p className="mb-6 text-sm text-zinc-600">
+        <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">
           {message}
         </p>
         <div className="flex gap-3">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
           >
             {cancelText || t('task.cancel')}
           </button>

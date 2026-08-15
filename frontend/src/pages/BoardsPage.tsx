@@ -282,13 +282,13 @@ export function BoardsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('nav.boardManagement')}</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('board.count', { count: boards.length })}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.count', { count: boards.length })}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Link
               to="/columns"
-              className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:hover:border-zinc-600 transition-all"
+              className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-500 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-200:border-zinc-600 transition-all"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="5" height="18"/>
@@ -318,7 +318,7 @@ export function BoardsPage() {
             </div>
             <p className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('app.error.loadFailed')}</p>
             <div className="flex flex-col gap-3 items-center">
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('board.noAccessHint')}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.noAccessHint')}</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowModal(true)}
@@ -346,12 +346,12 @@ export function BoardsPage() {
           </div>
         ) : boards.length === 0 ? (
           <div className="rounded-2xl bg-white dark:bg-zinc-800 p-12 text-center shadow-sm border border-zinc-100 dark:border-zinc-700">
-            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500">
+            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               </svg>
             </div>
-            <p className="text-lg font-medium text-zinc-500 dark:text-zinc-400">{t('board.noBoards')}</p>
+            <p className="text-lg font-medium text-zinc-500 dark:text-zinc-500">{t('board.noBoards')}</p>
             <button
               onClick={openAddModal}
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
@@ -433,7 +433,7 @@ export function BoardsPage() {
       )}
       <ErrorToastContainer />
 
-      <footer className="fixed bottom-4 right-6 flex items-center gap-2 text-sm text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300">
+      <footer className="fixed bottom-4 right-6 flex items-center gap-2 text-sm text-zinc-400 dark:text-zinc-500 dark:text-zinc-400 hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300">
         <a
           href="https://github.com/songkl/open-kanban"
           target="_blank"

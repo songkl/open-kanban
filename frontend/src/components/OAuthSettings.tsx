@@ -89,7 +89,7 @@ export function OAuthSettings({ currentUser }: Props) {
       <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">
         {t('oauth.admin.title')}
       </h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+      <p className="text-sm text-zinc-500 dark:text-zinc-500">
         {t('oauth.admin.subtitle')}
       </p>
 
@@ -121,31 +121,31 @@ export function OAuthSettings({ currentUser }: Props) {
         )}
       </div>
 
-      {loading && <p className="py-8 text-center text-sm text-zinc-500">{t('oauth.admin.loading')}</p>}
+      {loading && <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-500">{t('oauth.admin.loading')}</p>}
 
       {tab === 'clients' && isAdmin && (
         <div className="space-y-3" data-testid="oauth-clients-list">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-zinc-500 dark:text-zinc-500">
             {t('oauth.admin.dynamicRegistration', { enabled: dynamicEnabled })}
           </p>
           {clients.length === 0 && !loading && (
-            <div className="rounded-md border border-zinc-200 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+            <div className="rounded-md border border-zinc-200 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 dark:text-zinc-500">
               {t('oauth.admin.noClients')}
             </div>
           )}
           {clients.map((c) => (
             <div
               key={c.id}
-              className="flex items-start justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
+              className="flex items-start justify-between rounded-lg border border-zinc-200 dark:border-zinc-700 p-4"
               data-testid="oauth-client-row"
             >
               <div className="space-y-1">
                 <div className="font-medium text-zinc-800 dark:text-zinc-100">{c.name}</div>
-                <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.clientId}</div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                <div className="font-mono text-xs text-zinc-500 dark:text-zinc-500">{c.clientId}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-500">
                   {c.grantTypes.join(', ') || '—'}
                 </div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                <div className="text-xs text-zinc-500 dark:text-zinc-500">
                   {c.scopes.join(' ') || '—'}
                 </div>
               </div>
@@ -165,22 +165,22 @@ export function OAuthSettings({ currentUser }: Props) {
       {tab === 'consents' && (
         <div className="space-y-3" data-testid="oauth-consents-list">
           {consents.length === 0 && !loading && (
-            <div className="rounded-md border border-zinc-200 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+            <div className="rounded-md border border-zinc-200 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 dark:text-zinc-500">
               {t('oauth.admin.noConsents')}
             </div>
           )}
           {consents.map((c) => (
             <div
               key={c.clientId}
-              className="flex items-start justify-between rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
+              className="flex items-start justify-between rounded-lg border border-zinc-200 dark:border-zinc-700 p-4"
               data-testid="oauth-consent-row"
             >
               <div className="space-y-1">
                 <div className="font-medium text-zinc-800 dark:text-zinc-100">
                   {c.clientName || c.clientId}
                 </div>
-                <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{c.clientId}</div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400">{c.scope}</div>
+                <div className="font-mono text-xs text-zinc-500 dark:text-zinc-500">{c.clientId}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-500">{c.scope}</div>
               </div>
               <button
                 type="button"
@@ -200,12 +200,12 @@ export function OAuthSettings({ currentUser }: Props) {
           {config.map((row) => (
             <div
               key={row.key}
-              className="space-y-1 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
+              className="space-y-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4"
             >
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-200">
                 {row.key}
               </label>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">{row.description}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500">{row.description}</p>
               <input
                 type="text"
                 value={row.value}
@@ -214,10 +214,10 @@ export function OAuthSettings({ currentUser }: Props) {
                     prev.map((p) => (p.key === row.key ? { ...p, value: e.target.value } : p))
                   )
                 }
-                className="w-full rounded-md border border-zinc-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                 data-testid={`oauth-config-${row.key}`}
               />
-              <p className="text-xs text-zinc-400 dark:text-zinc-500">default: {row.default}</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">default: {row.default}</p>
             </div>
           ))}
           <button
@@ -250,7 +250,7 @@ function TabButton({
       className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         active
           ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-          : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+          : 'border-transparent text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200'
       }`}
     >
       {children}

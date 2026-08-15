@@ -383,7 +383,7 @@ export function TaskModal({
             {!isEditing && (
               <div>
                 <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
-                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500">
+                <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
                   {task.createdByUsername && (
                     <div className="flex items-center gap-1">
                       <UserAvatar username={task.createdByUsername} size="sm" />
@@ -412,7 +412,7 @@ export function TaskModal({
                 navigator.clipboard.writeText(task.id);
               }}
               title={t('taskModal.copyTaskId')}
-              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+              className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-200"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -421,7 +421,7 @@ export function TaskModal({
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
               title={t('taskModal.fullscreen')}
-              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+              className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-200"
             >
               {isFullscreen ? (
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -435,7 +435,7 @@ export function TaskModal({
             </button>
             <button
               onClick={onClose}
-              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+              className="rounded-md p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700:text-zinc-200"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -456,7 +456,7 @@ export function TaskModal({
                 type="text"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                className="mb-4 w-full rounded-lg border border-zinc-200 px-4 py-2.5 text-xl font-semibold"
+                className="mb-4 w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-xl font-semibold"
               />
             )}
 
@@ -468,12 +468,12 @@ export function TaskModal({
               {isEditing ? (
                 <div
                   id="desc-editor"
-                  className="rounded-lg border border-zinc-200 overflow-y-auto"
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-y-auto"
                   onPaste={(e) => handleEditorPaste(e, 'desc')}
                   onDrop={(e) => handleEditorDrop(e, 'desc')}
                   onDragOver={(e) => e.preventDefault()}
                 >
-                  <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 200 }} disabled />}>
+                  <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none" style={{ height: 200 }} disabled />}>
                     <MarkdownEditor
                       value={editDesc}
                       onChange={(val) => setEditDesc(val || '')}
@@ -486,7 +486,7 @@ export function TaskModal({
                   {task.description ? (
                     <SafeMarkdown>{task.description}</SafeMarkdown>
                   ) : (
-                    <span className="text-zinc-400 dark:text-zinc-500">{t('taskModal.noDescription')}</span>
+                    <span className="text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('taskModal.noDescription')}</span>
                   )}
                 </div>
               )}
@@ -496,12 +496,12 @@ export function TaskModal({
             {isEditing && (
               <div className="mb-6 grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.status')}</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.status')}</label>
                   <select
                     ref={statusSelectRef}
                     value={editColumn}
                     onChange={(e) => setEditColumn(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
                   >
                     {(allColumns.length > 0 ? allColumns : columns).map((col) => (
                       <option key={col.id} value={col.id}>{col.name}</option>
@@ -510,12 +510,12 @@ export function TaskModal({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.priority')}</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.priority')}</label>
                   <select
                     ref={prioritySelectRef}
                     value={editPriority}
                     onChange={(e) => setEditPriority(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
                   >
                     <option value="low">{t('taskModal.priorityLow')}</option>
                     <option value="medium">{t('taskModal.priorityMedium')}</option>
@@ -524,12 +524,12 @@ export function TaskModal({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.assignee')}</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.assignee')}</label>
                   <select
                     ref={assigneeSelectRef}
                     value={editAssignee}
                     onChange={(e) => setEditAssignee(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
                   >
                     <option value="">{t('taskModal.unassigned')}</option>
                     {agents.map((agent) => (
@@ -541,24 +541,24 @@ export function TaskModal({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.agentId')}</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.agentId')}</label>
                   <input
                     type="text"
                     value={editAgentId}
                     onChange={(e) => setEditAgentId(e.target.value)}
                     placeholder={t('taskModal.agentIdPlaceholder')}
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
                   />
                 </div>
 
                 <div className="col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600">{t('taskModal.agentPrompt')}</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.agentPrompt')}</label>
                   <textarea
                     value={editAgentPrompt}
                     onChange={(e) => setEditAgentPrompt(e.target.value)}
                     placeholder={t('taskModal.agentPromptPlaceholder')}
                     rows={3}
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 resize-none"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 resize-none"
                   />
                 </div>
               </div>
@@ -566,7 +566,7 @@ export function TaskModal({
 
             {/* Meta */}
             <div>
-              <h4 className="mb-2 text-sm font-semibold text-zinc-600">{t('taskModal.meta')}</h4>
+              <h4 className="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.meta')}</h4>
               <div className="space-y-2">
                 {Object.entries(editMeta).map(([key, value]) => (
                   <div key={key} className="flex items-center gap-2">
@@ -594,14 +594,14 @@ export function TaskModal({
                       value={newMetaKey}
                       onChange={(e) => setNewMetaKey(e.target.value)}
                       placeholder={t('taskModal.metaKey')}
-                      className="w-24 rounded border border-zinc-200 px-2 py-1 text-sm"
+                      className="w-24 rounded border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-sm"
                     />
                     <input
                       type="text"
                       value={newMetaValue}
                       onChange={(e) => setNewMetaValue(e.target.value)}
                       placeholder={t('taskModal.metaValue')}
-                      className="flex-1 rounded border border-zinc-200 px-2 py-1 text-sm"
+                      className="flex-1 rounded border border-zinc-200 dark:border-zinc-700 px-2 py-1 text-sm"
                     />
                     <button
                       onClick={() => {
@@ -623,7 +623,7 @@ export function TaskModal({
             {/* Subtasks */}
             <div className="mt-6">
               <div className="mb-3 flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-zinc-600">
+                  <h4 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">
                   {t('taskModal.subtasks')} ({subtasks.filter(s => s.completed).length}/{subtasks.length})
                 </h4>
                 {isEditing && (
@@ -653,9 +653,9 @@ export function TaskModal({
                         }
                       }}
                       disabled={!isEditing}
-                      className="h-4 w-4 rounded border-zinc-300"
+                      className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
                     />
-                    <span className={`flex-1 text-sm ${subtask.completed ? 'text-zinc-400 line-through' : 'text-zinc-700'}`}>
+                    <span className={`flex-1 text-sm ${subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through' : 'text-zinc-700 dark:text-zinc-200'}`}>
                       {subtask.title}
                     </span>
                     {isEditing && (
@@ -673,18 +673,18 @@ export function TaskModal({
                   </div>
                 ))}
                 {subtasks.length === 0 && (
-                  <p className="text-sm text-zinc-400">{t('taskModal.noSubtasks')}</p>
+                  <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('taskModal.noSubtasks')}</p>
                 )}
               </div>
             </div>
 
             {/* Attachments */}
             <div className="mt-6">
-              <h4 className="mb-3 text-sm font-semibold text-zinc-600">
+              <h4 className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-300">
                 {t('taskModal.attachments')} ({attachments.length})
               </h4>
               {loadingAttachments ? (
-                <div className="text-sm text-zinc-400">{t('taskModal.loading')}</div>
+                <div className="text-sm text-zinc-400 dark:text-zinc-500">{t('taskModal.loading')}</div>
               ) : attachments.length > 0 ? (
                 <AttachmentList
                   attachments={attachments}
@@ -692,7 +692,7 @@ export function TaskModal({
                   canDelete={canEdit}
                 />
               ) : (
-                <p className="text-sm text-zinc-400">{t('taskModal.noAttachments')}</p>
+                <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('taskModal.noAttachments')}</p>
               )}
               {uploadingInProgress && (
                 <p className="mt-2 text-sm text-blue-500">{t('taskModal.uploading')}</p>
@@ -705,7 +705,7 @@ export function TaskModal({
             <div className="flex-shrink-0 p-4 pb-2 border-b border-zinc-100 dark:border-zinc-700 flex items-center justify-between">
               <h4 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.comments')} ({taskComments?.length || 0})</h4>
               {taskComments && taskComments.length > COMMENTS_PER_PAGE && (
-                <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                <span className="text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">
                   {commentsPage} / {Math.ceil(taskComments.length / COMMENTS_PER_PAGE)}
                 </span>
               )}
@@ -716,7 +716,7 @@ export function TaskModal({
                   <div className="mb-1 flex items-center gap-2">
                     <UserAvatar username={comment.author} size="sm" />
                     <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200">{comment.author}</span>
-                    <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">{formatCommentDate(t, comment.createdAt)}</span>
+                    <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{formatCommentDate(t, comment.createdAt)}</span>
                   </div>
                   <div className="prose prose-sm max-w-none text-zinc-600 dark:text-zinc-300">
                     <SafeMarkdown>{comment.content}</SafeMarkdown>
@@ -738,14 +738,14 @@ export function TaskModal({
                   <button
                     onClick={() => { setCommentsPage(p => Math.max(1, p - 1)); commentsRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
                     disabled={commentsPage === 1}
-                    className="px-3 py-1 text-xs rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1 text-xs rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('taskModal.previousPage')}
                   </button>
                   <button
                     onClick={() => { setCommentsPage(p => Math.min(Math.ceil(taskComments!.length / COMMENTS_PER_PAGE), p + 1)); commentsRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}
                     disabled={commentsPage >= Math.ceil(taskComments.length / COMMENTS_PER_PAGE)}
-                    className="px-3 py-1 text-xs rounded bg-zinc-100 text-zinc-600 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1 text-xs rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t('taskModal.nextPage')}
                   </button>
@@ -756,7 +756,7 @@ export function TaskModal({
             {/* Comment Input - Fixed at bottom */}
             <div className="flex-shrink-0 p-4 border-t border-zinc-100 dark:border-zinc-700 space-y-2">
               {currentUser ? (
-                <div className="text-sm text-zinc-500 dark:text-zinc-400">{t('taskModal.commentIdentity', { name: currentUser.nickname })}</div>
+                <div className="text-sm text-zinc-500 dark:text-zinc-500">{t('taskModal.commentIdentity', { name: currentUser.nickname })}</div>
               ) : (
                 <input
                   type="text"
@@ -771,12 +771,12 @@ export function TaskModal({
                 <div
                   id="comment-editor"
                   ref={commentEditorRef}
-                  className="rounded-lg border border-zinc-200 overflow-y-auto"
+                  className="rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-y-auto"
                     onPaste={(e) => handleEditorPaste(e, 'comment')}
                     onDrop={(e) => handleEditorDrop(e, 'comment')}
                   onDragOver={(e) => e.preventDefault()}
                 >
-                  <Suspense fallback={<textarea id="comment-input" aria-label={t('taskModal.addComment')} className="w-full rounded-lg border border-zinc-200 px-3 py-2 font-mono text-sm resize-none" style={{ height: 120 }} disabled />}>
+                  <Suspense fallback={<textarea id="comment-input" aria-label={t('taskModal.addComment')} className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none" style={{ height: 120 }} disabled />}>
                     <MarkdownEditor
                       value={newComment}
                       onChange={(val) => setNewComment(val || '')}
@@ -800,7 +800,7 @@ export function TaskModal({
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder={`${t('taskModal.addComment')} ${t('taskModal.commentHint')}`}
                     rows={3}
-                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm resize-none"
                   />
                 </>
               )}
@@ -851,7 +851,7 @@ export function TaskModal({
               </button>
             </div>
           ) : (
-            <span className="text-sm text-zinc-400 dark:text-zinc-500">{t('taskModal.completedNotEditable')}</span>
+            <span className="text-sm text-zinc-400 dark:text-zinc-500 dark:text-zinc-400">{t('taskModal.completedNotEditable')}</span>
           )}
         </div>
       </div>
@@ -873,13 +873,13 @@ export function TaskModal({
       {showDeleteConfirmModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirmModal(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h3 className="mb-2 text-lg font-semibold text-zinc-800">{t('taskModal.confirmDeleteTitle')}</h3>
-            <p className="mb-6 text-sm text-zinc-600">{t('taskModal.confirmDelete')}</p>
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800-xl">
+            <h3 className="mb-2 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('taskModal.confirmDeleteTitle')}</h3>
+            <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">{t('taskModal.confirmDelete')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirmModal(false)}
-                className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 hover:bg-zinc-200"
+                className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
               >
                 {t('taskModal.cancel')}
               </button>

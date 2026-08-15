@@ -23,7 +23,7 @@ export function DeleteColumnModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-zinc-100"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800-2xl border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -32,11 +32,11 @@ export function DeleteColumnModal({
               <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-zinc-800">{t('modal.deleteColumn')}</h2>
+          <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{t('modal.deleteColumn')}</h2>
         </div>
 
         <div className="mb-6">
-          <p className="text-zinc-600 mb-3">
+          <p className="text-zinc-600 dark:text-zinc-300 mb-3">
             {t('column.confirmDeleteMessage', { columnName: column.name })}
           </p>
           {column.taskCount > 0 && (
@@ -51,7 +51,7 @@ export function DeleteColumnModal({
         <div className="mt-8 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 hover:bg-zinc-200 transition-colors"
+            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
           >
             {t('column.cancel')}
           </button>

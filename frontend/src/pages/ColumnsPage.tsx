@@ -338,13 +338,13 @@ export function ColumnsPage() {
   if (loading && columns.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-zinc-500">{t('column.loading')}</div>
+        <div className="text-zinc-500 dark:text-zinc-500">{t('column.loading')}</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 p-6">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -354,16 +354,16 @@ export function ColumnsPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-zinc-800">{t('nav.columnManagement')}</h1>
+            <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('nav.columnManagement')}</h1>
             {selectedBoard && (
-              <p className="text-sm text-zinc-500">{selectedBoard.name}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">{selectedBoard.name}</p>
             )}
           </div>
           {boards.length > 1 && (
             <select
               value={selectedBoard?.id || boardIdFromUrl || ''}
               onChange={(e) => handleBoardChange(e.target.value)}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm hover:border-zinc-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm shadow-sm hover:border-zinc-300 dark:border-zinc-600 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
               {boards.map((board) => (
                 <option key={board.id} value={board.id}>
@@ -379,7 +379,7 @@ export function ColumnsPage() {
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" className="text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
-              <span className="text-xs font-medium text-zinc-600">{t('column.export')}:</span>
+              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t('column.export')}:</span>
               <button
                 onClick={() => handleExport('json')}
                 disabled={exporting}
@@ -398,7 +398,7 @@ export function ColumnsPage() {
           )}
           <Link
             to={selectedBoard ? `/board/${selectedBoard.id}` : '/boards'}
-            className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-zinc-600 shadow-sm border border-zinc-100 hover:bg-zinc-50 hover:border-zinc-200 transition-all"
+            className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 shadow-sm border border-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:border-zinc-700 transition-all"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5M12 19l-7-7 7-7"/>
@@ -421,7 +421,7 @@ export function ColumnsPage() {
             {t('column.addColumn')}
           </button>
         )}
-        <span className="flex items-center gap-2 text-sm text-zinc-500">
+        <span className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-500">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
           </svg>
@@ -430,9 +430,9 @@ export function ColumnsPage() {
       </div>
 
       {loading ? (
-        <div className="text-center text-zinc-500">{t('column.loading')}</div>
+        <div className="text-center text-zinc-500 dark:text-zinc-500">{t('column.loading')}</div>
       ) : columns.length === 0 ? (
-        <div className="text-center text-zinc-500">{t('column.noColumns')}</div>
+        <div className="text-center text-zinc-500 dark:text-zinc-500">{t('column.noColumns')}</div>
       ) : (
         <DndContext
           sensors={sensors}

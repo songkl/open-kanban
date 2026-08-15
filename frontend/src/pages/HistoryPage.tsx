@@ -98,7 +98,7 @@ export function HistoryPage() {
   if (loading && boards.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-zinc-500">{t('history.loading')}</div>
+        <div className="text-zinc-500 dark:text-zinc-500">{t('history.loading')}</div>
       </div>
     );
   }
@@ -106,7 +106,7 @@ export function HistoryPage() {
   if (!currentUser) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-zinc-500">{t('history.loading')}</div>
+        <div className="text-zinc-500 dark:text-zinc-500">{t('history.loading')}</div>
       </div>
     );
   }
@@ -126,21 +126,21 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 p-6">
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
             to="/"
-            className="rounded-md bg-zinc-200 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-300"
+            className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
           >
             {t('history.backToBoard')}
           </Link>
-          <h1 className="text-2xl font-bold text-zinc-800">{t('history.title')}</h1>
+          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('history.title')}</h1>
           {boards.length > 0 && (
             <select
               value={selectedBoard}
               onChange={(e) => handleBoardChange(e.target.value)}
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm"
+              className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm"
             >
               {boards.map((board) => (
                 <option key={board.id} value={board.id}>
@@ -158,15 +158,15 @@ export function HistoryPage() {
             </Link>
           )}
         </div>
-        <span className="text-sm text-zinc-500">{t('history.archivedCount', { count: tasks.length })}</span>
+        <span className="text-sm text-zinc-500 dark:text-zinc-500">{t('history.archivedCount', { count: tasks.length })}</span>
       </header>
 
       {loading ? (
 <div className="flex h-64 items-center justify-center">
-          <div className="text-zinc-500">{t('history.loading')}</div>
+          <div className="text-zinc-500 dark:text-zinc-500">{t('history.loading')}</div>
         </div>
       ) : tasks.length === 0 ? (
-        <div className="rounded-lg bg-white p-8 text-center text-zinc-500">
+        <div className="rounded-lg bg-white p-8 text-center text-zinc-500 dark:text-zinc-500">
           {t('history.empty')}
         </div>
       ) : (
@@ -184,13 +184,13 @@ export function HistoryPage() {
 
               <div className="flex items-start justify-between gap-2 pl-3">
                 <div className="flex-1">
-                  <span className="mb-1 block text-xs text-zinc-400 font-mono">#{task.id.slice(-6)}</span>
-                  <h3 className="font-medium text-zinc-800">{task.title}</h3>
+                  <span className="mb-1 block text-xs text-zinc-400 dark:text-zinc-500 font-mono">#{task.id.slice(-6)}</span>
+                  <h3 className="font-medium text-zinc-800 dark:text-zinc-100">{task.title}</h3>
                 </div>
               </div>
 
               {task.description && (
-                <p className="mb-2 text-sm text-zinc-500 line-clamp-2 pl-3">
+                <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-500 line-clamp-2 pl-3">
                   {task.description}
                 </p>
               )}
@@ -200,13 +200,13 @@ export function HistoryPage() {
                   {task.subtasks.slice(0, 3).map((subtask) => (
                     <div key={subtask.id} className="flex items-center gap-1.5 text-xs">
                       <span className={`h-1.5 w-1.5 rounded-full ${subtask.completed ? 'bg-green-500' : 'bg-zinc-300'}`} />
-                      <span className={subtask.completed ? 'text-zinc-400 line-through' : 'text-zinc-600'}>
+                      <span className={subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through' : 'text-zinc-600 dark:text-zinc-300'}>
                         {subtask.title}
                       </span>
                     </div>
                   ))}
                   {task.subtasks.length > 3 && (
-                    <span className="text-xs text-zinc-400">{t('history.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">{t('history.moreSubtasks', { count: task.subtasks.length - 3 })}</span>
                   )}
                 </div>
               )}
@@ -217,20 +217,20 @@ export function HistoryPage() {
                     {t(`task.priority.${task.priority}`)}
                   </span>
                   {task.subtasks && task.subtasks.length > 0 && (
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">
                       ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   {task.comments && task.comments.length > 0 && (
-                    <span className="text-xs text-zinc-400">💬 {task.comments.length}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">💬 {task.comments.length}</span>
                   )}
                 </div>
               </div>
 
               <div className="mt-2 border-t pt-2 pl-3">
-                <div className="flex items-center justify-between text-xs text-zinc-400">
+                <div className="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500">
                   <span>{t('history.archivedAt')} {task.archivedAt ? new Date(task.archivedAt).toLocaleString() : '-'}</span>
                   <button
                     onClick={() => handleRestore(task.id)}

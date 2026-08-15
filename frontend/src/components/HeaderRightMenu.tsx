@@ -48,10 +48,10 @@ export function HeaderRightMenu({
             </span>
           </button>
           {showUserMenu && (
-            <div ref={userMenuRef} className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg z-50">
+            <div ref={userMenuRef} className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50">
               <div className="px-4 py-2 border-b border-zinc-100">
-                <p className="text-sm font-medium text-zinc-800">{currentUser.nickname}</p>
-                <p className="text-xs text-zinc-500 capitalize">{currentUser.role.toLowerCase()}</p>
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{currentUser.nickname}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-500 capitalize">{currentUser.role.toLowerCase()}</p>
               </div>
               <button
                 onClick={() => {
@@ -61,17 +61,17 @@ export function HeaderRightMenu({
                   }
                   onSetShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100"
               >
                 <span className={wsStatus === 'connected' ? 'text-green-600' : wsStatus === 'failed' ? 'text-red-500' : 'text-red-400'}>
                   {wsStatus === 'connected' ? '●' : '○'}
                 </span>
                 <span>{t('status.connection')}</span>
-                <span className="text-xs text-zinc-400 ml-auto">
+                <span className="text-xs text-zinc-400 dark:text-zinc-500 ml-auto">
                   {wsStatus === 'connected' ? t('status.connected') : wsStatus === 'failed' ? t('status.reconnect') : t('status.connecting')}
                 </span>
               </button>
-              <Link to="/settings" onClick={() => onSetShowUserMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100">
+              <Link to="/settings" onClick={() => onSetShowUserMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
                 {t('settings.title')}
               </Link>
               <button
@@ -80,20 +80,20 @@ export function HeaderRightMenu({
                   i18n.changeLanguage(newLang);
                   localStorage.setItem('language', newLang);
                 }}
-                className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+                className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100"
               >
                 <span>{t('nav.language')}</span>
-                <span className="text-xs text-zinc-500">{i18n.language === 'zh' ? t('language.en') : t('language.zh')}</span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-500">{i18n.language === 'zh' ? t('language.en') : t('language.zh')}</span>
               </button>
 
               <button
                 onClick={() => {
                   onSetDarkMode(!darkMode);
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100"
               >
                 <span>{t('settings.darkMode')}</span>
-                <span className="ml-auto text-xs text-zinc-400">{darkMode ? '🌙' : '☀️'}</span>
+                <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">{darkMode ? '🌙' : '☀️'}</span>
               </button>
 
               <button

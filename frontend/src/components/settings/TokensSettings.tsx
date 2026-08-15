@@ -76,16 +76,16 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h2 className="text-lg font-semibold text-zinc-800">{t('settings.tokens')}</h2>
-        <div className="py-8 text-center text-zinc-500">{t('common.loading')}</div>
+        <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.tokens')}</h2>
+        <div className="py-8 text-center text-zinc-500 dark:text-zinc-500">{t('common.loading')}</div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-zinc-800">{t('settings.tokens')}</h2>
-      <p className="text-sm text-zinc-500">{t('settings.tokenDescription')}</p>
+      <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.tokens')}</h2>
+      <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('settings.tokenDescription')}</p>
 
       <form onSubmit={handleCreateToken} className="flex gap-3">
         <label htmlFor="newTokenName" className="sr-only">{t('settings.tokenNamePlaceholder')}</label>
@@ -95,7 +95,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
           value={newTokenName}
           onChange={(e) => setNewTokenName(e.target.value)}
           placeholder={t('settings.tokenNamePlaceholder')}
-          className="flex-1 rounded-md border border-zinc-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
+          className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none"
         />
         <button
           type="submit"
@@ -108,7 +108,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
 
       <div className="space-y-3">
         {tokens.map((token) => (
-          <div key={token.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-4">
+          <div key={token.id} className="flex items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
             <div className="flex-1">
               {editingTokenId === token.id ? (
                 <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
                     type="text"
                     value={editingTokenName}
                     onChange={(e) => setEditingTokenName(e.target.value)}
-                    className="rounded-md border border-zinc-300 px-3 py-1 text-sm focus:border-blue-500 focus:outline-none"
+                    className="rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-1 text-sm focus:border-blue-500 focus:outline-none"
                     autoFocus
                   />
                   <button
@@ -128,16 +128,16 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
                   </button>
                   <button
                     onClick={() => setEditingTokenId(null)}
-                    className="rounded bg-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-300"
+                    className="rounded bg-zinc-200 dark:bg-zinc-700 px-2 py-1 text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600"
                   >
                     {t('settings.cancel')}
                   </button>
                 </div>
               ) : (
                 <div>
-                  <div className="font-medium text-zinc-800">{token.name}</div>
-                  <div className="font-mono text-sm text-zinc-500">{token.key}</div>
-                  <div className="mt-1 text-xs text-zinc-400">
+                  <div className="font-medium text-zinc-800 dark:text-zinc-100">{token.name}</div>
+                  <div className="font-mono text-sm text-zinc-500 dark:text-zinc-500">{token.key}</div>
+                  <div className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                     {t('settings.createdAt', { date: new Date(token.createdAt).toLocaleDateString() })}
                   </div>
                 </div>
@@ -149,7 +149,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
                   setEditingTokenId(token.id);
                   setEditingTokenName(token.name);
                 }}
-                className="rounded bg-zinc-100 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-200"
+                className="rounded bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200"
               >
                 {t('settings.rename')}
               </button>
@@ -163,7 +163,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
           </div>
         ))}
         {tokens.length === 0 && (
-          <div className="py-8 text-center text-zinc-500">{t('settings.noTokens')}</div>
+          <div className="py-8 text-center text-zinc-500 dark:text-zinc-500">{t('settings.noTokens')}</div>
         )}
       </div>
     </div>

@@ -59,7 +59,7 @@ export function AddColumnPermissionForm({ columnId, onPermissionAdded }: AddColu
         <select
           value={selectedUserId}
           onChange={(e) => setSelectedUserId(e.target.value)}
-          className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-100 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           required
         >
           <option value="">{t('column.selectUser')}</option>
@@ -72,7 +72,7 @@ export function AddColumnPermissionForm({ columnId, onPermissionAdded }: AddColu
         <select
           value={selectedAccess}
           onChange={(e) => setSelectedAccess(e.target.value)}
-          className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-100 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           required
         >
           <option value="READ">{t('column.permission.READ')}</option>

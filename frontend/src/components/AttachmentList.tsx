@@ -60,7 +60,7 @@ export function AttachmentList({
       );
     }
     return (
-      <svg className="h-6 w-6 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-6 w-6 text-zinc-500 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
       </svg>
     );
@@ -91,7 +91,7 @@ export function AttachmentList({
         {attachments.map((attachment) => (
           <div
             key={attachment.id}
-            className="group flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-3 hover:border-zinc-300 hover:shadow-sm transition-all"
+            className="group flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 hover:border-zinc-300 dark:border-zinc-600 hover:shadow-sm transition-all"
           >
             {/* Thumbnail / Icon */}
             <div
@@ -117,12 +117,12 @@ export function AttachmentList({
             {/* File Info */}
             <div className="min-w-0 flex-1">
               <div
-                className="truncate text-sm font-medium text-zinc-700 cursor-pointer hover:text-blue-600"
+                className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer hover:text-blue-600"
                 onClick={() => handlePreview(attachment)}
               >
                 {attachment.filename}
               </div>
-              <div className="text-xs text-zinc-500">
+              <div className="text-xs text-zinc-500 dark:text-zinc-500">
                 {formatFileSize(attachment.size)}
               </div>
             </div>
@@ -132,7 +132,7 @@ export function AttachmentList({
               {/* Preview / Download Button */}
               <button
                 onClick={() => handlePreview(attachment)}
-                className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                className="rounded p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300"
                 title={isImage(attachment.mimeType) ? t('attachment.preview') : t('attachment.open')}
               >
                 {isImage(attachment.mimeType) ? (
@@ -150,7 +150,7 @@ export function AttachmentList({
               {/* Download Button */}
               <button
                 onClick={() => handleDownload(attachment)}
-                className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                className="rounded p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300"
                 title={t('attachment.download')}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -162,7 +162,7 @@ export function AttachmentList({
               {canDelete && onDelete && (
                 <button
                   onClick={() => onDelete(attachment.id)}
-                  className="rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-500"
+                  className="rounded p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-red-50 hover:text-red-500"
                   title={t('attachment.delete')}
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
