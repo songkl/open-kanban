@@ -21,6 +21,7 @@ import (
 	"open-kanban/internal/config"
 	"open-kanban/internal/database"
 	"open-kanban/internal/handlers"
+	"open-kanban/internal/oauth"
 	"open-kanban/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -228,6 +229,24 @@ func corsMiddleware() gin.HandlerFunc {
 }
 
 func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path string)) {
+	signer := oauth.NewSigner(db)
+	if err := signer.LoadOrGenerate(); err != nil {
+		log.Fatalf("failed to load OAuth signing key: %v", err)
+	}
+	if err := oauth.EnsureDefaults(db); err != nil {
+		log.Fatalf("failed to seed OAuth defaults: %v", err)
+	}
+
+	// OAuth 2.1 discovery + JWKS
+	r.GET("/.well-known/oauth-authorization-server", oauth.DiscoveryHandler("/oauth/device/code"))
+	r.GET("/.well-known/oauth-protected-resource/mcp", oauth.ProtectedResourceHandler())
+	r.GET("/.well-known/jwks.json", oauth.JWKSHandler(signer))
+
+	// OAuth 2.1 endpoints
+	r.POST("/oauth/register", oauth.RegisterClient(db))
+	r.POST("/oauth/device/code", oauth.RequestDeviceCode(db))
+	r.POST("/oauth/token", oauth.TokenEndpoint(db, signer))
+
 	auth := r.Group("/api/v1/auth")
 	{
 		auth.POST("/login", handlers.Login(db))
