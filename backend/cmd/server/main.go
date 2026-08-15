@@ -283,6 +283,13 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.POST("/permissions/columns", handlers.SetColumnPermission(db))
 		authProtected.DELETE("/permissions/columns", handlers.DeleteColumnPermission(db))
 		authProtected.PUT("/config", handlers.UpdateAppConfig(db))
+		// OAuth 2.1 admin endpoints
+		authProtected.GET("/oauth/clients", oauth.ListAdminClientsHandler(db))
+		authProtected.DELETE("/oauth/clients", oauth.DeleteAdminClientHandler(db))
+		authProtected.GET("/oauth/consents", oauth.ListConsentsHandler(db))
+		authProtected.DELETE("/oauth/consents", oauth.RevokeConsentHandler(db))
+		authProtected.GET("/oauth/config", oauth.GetOAuthConfigHandler(db))
+		authProtected.PUT("/oauth/config", oauth.UpdateOAuthConfigHandler(db))
 	}
 
 	boards := r.Group("/api/v1/boards")

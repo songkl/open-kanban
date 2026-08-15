@@ -1,4 +1,4 @@
-import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent } from '@/types/kanban';
+import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry } from '@/types/kanban';
 import i18n from '@/i18n';
 
 export interface Permission {
@@ -431,6 +431,19 @@ export const authApi = {
     }),
   deleteAgent: (id: string) =>
     fetchApi<void>(`auth/agents?id=${id}`, { method: 'DELETE' }),
+  getOAuthClients: () => fetchApi<{ clients: OAuthClient[] }>('auth/oauth/clients').then(res => res.clients || []),
+  deleteOAuthClient: (clientId: string) =>
+    fetchApi<{ deleted: string }>(`auth/oauth/clients?client_id=${encodeURIComponent(clientId)}`, { method: 'DELETE' }),
+  getOAuthConsents: () => fetchApi<{ consents: OAuthConsent[] }>('auth/oauth/consents').then(res => res.consents || []),
+  revokeOAuthConsent: (clientId: string) =>
+    fetchApi<{ revoked: string }>(`auth/oauth/consents?client_id=${encodeURIComponent(clientId)}`, { method: 'DELETE' }),
+  getOAuthConfig: () =>
+    fetchApi<{ config: OAuthConfigEntry[]; dynamicRegistrationEnabled: boolean }>('auth/oauth/config'),
+  updateOAuthConfig: (updates: Record<string, string>) =>
+    fetchApi<{ updated: number }>('auth/oauth/config', {
+      method: 'PUT',
+      body: JSON.stringify({ updates }),
+    }),
   getBoards: () => fetchApi<Board[]>('boards'),
   getPermissions: (userId: string) =>
     fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string }> }>(`auth/permissions?userId=${userId}`),

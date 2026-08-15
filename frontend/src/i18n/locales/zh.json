@@ -713,6 +713,23 @@
       "goLogin": "去登录",
       "approvedBanner": "已批准。可以返回设备继续操作。",
       "deniedBanner": "已拒绝。设备将不会获得访问权限。"
+    },
+    "admin": {
+      "title": "OAuth 2.1",
+      "subtitle": "管理已授权访问看板的应用。",
+      "tabClients": "应用",
+      "tabConsents": "已授权",
+      "tabConfig": "设置",
+      "loading": "加载中…",
+      "noClients": "暂无注册的应用。",
+      "noConsents": "尚未授予任何应用权限。",
+      "revoke": "撤销",
+      "confirmDeleteClient": "删除该应用？该应用的全部令牌将被撤销。",
+      "confirmRevoke": "撤销授权？所有未过期的刷新令牌将被撤销。",
+      "clientDeleted": "应用已删除。",
+      "consentRevoked": "授权已撤销。",
+      "configSaved": "设置已保存。",
+      "dynamicRegistration": "动态注册当前{{enabled}}。"
     }
   }
 }

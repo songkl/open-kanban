@@ -12,10 +12,11 @@ import { AgentsSettings } from '../components/settings/AgentsSettings';
 import { UsersSettings } from '../components/settings/UsersSettings';
 import { ShortcutsSettings } from '../components/settings/ShortcutsSettings';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
+import { OAuthSettings } from '../components/OAuthSettings';
 import { useUIStore } from '../store/uiStore';
 import type { User } from '../types/kanban';
 
-type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme';
+type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth';
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -168,6 +169,13 @@ export function SettingsPage() {
                 {t('settings.shortcuts')}
               </button>
               <button
+                onClick={() => switchToTab('oauth')}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'oauth' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                data-testid="tab-oauth"
+              >
+                {t('oauth.admin.title')}
+              </button>
+              <button
                 onClick={() => switchToTab('theme')}
                 className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 hover:bg-zinc-50'}`}
               >
@@ -240,6 +248,10 @@ export function SettingsPage() {
 
             {activeTab === 'theme' && (
               <ThemeSettings />
+            )}
+
+            {activeTab === 'oauth' && currentUser && (
+              <OAuthSettings currentUser={currentUser} />
             )}
           </div>
         </div>

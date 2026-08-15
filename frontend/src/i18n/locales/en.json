@@ -713,6 +713,23 @@
       "goLogin": "Sign in",
       "approvedBanner": "Approved. You can return to your device.",
       "deniedBanner": "Denied. The device will not receive access."
+    },
+    "admin": {
+      "title": "OAuth 2.1",
+      "subtitle": "Manage applications authorised to access your kanban.",
+      "tabClients": "Apps",
+      "tabConsents": "Permissions",
+      "tabConfig": "Settings",
+      "loading": "Loading…",
+      "noClients": "No applications registered.",
+      "noConsents": "You have not granted any application permissions yet.",
+      "revoke": "Revoke",
+      "confirmDeleteClient": "Delete this application? All its tokens will be revoked.",
+      "confirmRevoke": "Revoke permission? Outstanding refresh tokens will be revoked.",
+      "clientDeleted": "Application removed.",
+      "consentRevoked": "Permission revoked.",
+      "configSaved": "Settings saved.",
+      "dynamicRegistration": "Dynamic registration is {{enabled}}."
     }
   }
 }

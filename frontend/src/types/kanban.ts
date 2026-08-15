@@ -101,3 +101,29 @@ export interface Token {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface OAuthClient {
+  id: string;
+  clientId: string;
+  name: string;
+  redirectUris: string[];
+  grantTypes: string[];
+  tokenEndpointAuthMethod: string;
+  scopes: string[];
+  isFirstParty: boolean;
+  createdAt: string;
+}
+
+export interface OAuthConsent {
+  clientId: string;
+  clientName: string;
+  scope: string;
+  grantedAt: string;
+}
+
+export interface OAuthConfigEntry {
+  key: string;
+  value: string;
+  default: string;
+  description: string;
+}
