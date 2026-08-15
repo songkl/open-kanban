@@ -242,12 +242,23 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	r.GET("/.well-known/oauth-protected-resource/mcp", oauth.ProtectedResourceHandler())
 	r.GET("/.well-known/jwks.json", oauth.JWKSHandler(signer))
 
-	// OAuth 2.1 endpoints
-	r.POST("/oauth/register", oauth.RegisterClient(db))
-	r.POST("/oauth/device/code", oauth.RequestDeviceCode(db))
-	r.POST("/oauth/token", oauth.TokenEndpoint(db, signer))
-	r.GET("/oauth/device/lookup", oauth.DeviceLookupHandler(db))
-	r.POST("/oauth/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
+	// OAuth 2.1 endpoints (gated by oauth_enabled app_config)
+	oauthGate := gin.HandlerFunc(func(c *gin.Context) {
+		if !oauth.IsOAuthEnabled(db) {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":             "oauth_disabled",
+				"error_description": "OAuth 2.1 is disabled by administrator.",
+			})
+			return
+		}
+		c.Next()
+	})
+	oauthGroup := r.Group("/oauth", oauthGate)
+	oauthGroup.POST("/register", oauth.RegisterClient(db))
+	oauthGroup.POST("/device/code", oauth.RequestDeviceCode(db))
+	oauthGroup.POST("/token", oauth.TokenEndpoint(db, signer))
+	oauthGroup.GET("/device/lookup", oauth.DeviceLookupHandler(db))
+	oauthGroup.POST("/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
 
 	auth := r.Group("/api/v1/auth")
 	{
