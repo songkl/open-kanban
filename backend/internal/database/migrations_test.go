@@ -42,6 +42,8 @@ func TestSQLiteMigrations(t *testing.T) {
 		"columns", "column_agents", "tasks", "comments",
 		"subtasks", "attachments", "activities", "templates",
 		"app_config", "column_permissions",
+		"oauth_clients", "oauth_authorization_codes",
+		"oauth_device_codes", "oauth_refresh_tokens", "oauth_consents",
 	}
 
 	for _, table := range tables {
@@ -64,5 +66,29 @@ func TestSQLiteMigrations(t *testing.T) {
 	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_column_permissions_user'").Scan(&count)
 	if err != nil {
 		t.Errorf("error checking index: %v", err)
+	}
+
+	oauthIndexes := []string{
+		"idx_oauth_clients_client_id",
+		"idx_oauth_authcodes_client",
+		"idx_oauth_authcodes_user",
+		"idx_oauth_authcodes_expires",
+		"idx_oauth_device_client",
+		"idx_oauth_device_status",
+		"idx_oauth_device_expires",
+		"idx_oauth_refresh_user",
+		"idx_oauth_refresh_client",
+		"idx_oauth_refresh_expires",
+		"idx_oauth_consents_user",
+	}
+	for _, idx := range oauthIndexes {
+		var c int
+		err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", idx).Scan(&c)
+		if err != nil {
+			t.Errorf("error checking oauth index %s: %v", idx, err)
+		}
+		if c == 0 {
+			t.Errorf("expected oauth index %s to exist", idx)
+		}
 	}
 }

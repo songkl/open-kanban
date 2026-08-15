@@ -144,3 +144,111 @@ type Attachment struct {
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
+
+// OAuthClient represents a registered OAuth 2.1 client (RFC 7591).
+type OAuthClient struct {
+	ID                       string    `json:"id"`
+	ClientID                 string    `json:"clientId"`
+	ClientSecretHash         *string   `json:"-"`
+	Name                     string    `json:"name"`
+	RedirectURIs             []string  `json:"redirectUris"`
+	GrantTypes               []string  `json:"grantTypes"`
+	TokenEndpointAuthMethod  string    `json:"tokenEndpointAuthMethod"`
+	Scopes                   []string  `json:"scopes"`
+	IsFirstParty             bool      `json:"isFirstParty"`
+	CreatedByUserID          *string   `json:"createdByUserId,omitempty"`
+	CreatedAt                time.Time `json:"createdAt"`
+	UpdatedAt                time.Time `json:"updatedAt"`
+}
+
+// OAuthClientRegistrationResponse is what RFC 7591 returns to the client.
+type OAuthClientRegistrationResponse struct {
+	ClientID                string   `json:"client_id"`
+	ClientSecret            string   `json:"client_secret,omitempty"`
+	ClientIDIssuedAt        int64    `json:"client_id_issued_at"`
+	ClientSecretExpiresAt   int64    `json:"client_secret_expires_at,omitempty"`
+	RedirectURIs            []string `json:"redirect_uris,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+	Scope                   string   `json:"scope,omitempty"`
+	ClientName              string   `json:"client_name,omitempty"`
+}
+
+// OAuthAuthorizationCode represents a short-lived code (RFC 6749 §4.1.2).
+type OAuthAuthorizationCode struct {
+	Code                string    `json:"code"`
+	ClientID            string    `json:"clientId"`
+	UserID              string    `json:"userId"`
+	RedirectURI         string    `json:"redirectUri"`
+	Scope               string    `json:"scope"`
+	CodeChallenge       *string   `json:"codeChallenge,omitempty"`
+	CodeChallengeMethod *string   `json:"codeChallengeMethod,omitempty"`
+	ExpiresAt           time.Time `json:"expiresAt"`
+	UsedAt              *time.Time `json:"usedAt,omitempty"`
+	CreatedAt           time.Time `json:"createdAt"`
+}
+
+// OAuthDeviceCode represents a device authorization grant (RFC 8628).
+type OAuthDeviceCode struct {
+	ID               string     `json:"id"`
+	DeviceCodeHash   string     `json:"-"`
+	UserCodeHash     string     `json:"-"`
+	UserCodeDisplay  string     `json:"userCode"`
+	ClientID         string     `json:"clientId"`
+	Scope            string     `json:"scope"`
+	ExpiresAt        time.Time  `json:"expiresAt"`
+	IntervalSeconds  int        `json:"interval"`
+	LastPollAt       *time.Time `json:"lastPollAt,omitempty"`
+	Status           string     `json:"status"` // pending|approved|denied|expired
+	UserID           *string    `json:"userId,omitempty"`
+	VerificationURI  string     `json:"verificationUri"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+// OAuthRefreshToken represents a stored refresh token (hashed at rest).
+type OAuthRefreshToken struct {
+	ID           string     `json:"id"`
+	TokenHash    string     `json:"-"`
+	ClientID     string     `json:"clientId"`
+	UserID       string     `json:"userId"`
+	Scope        string     `json:"scope"`
+	ExpiresAt    time.Time  `json:"expiresAt"`
+	RevokedAt    *time.Time `json:"revokedAt,omitempty"`
+	ReplacedByID *string    `json:"replacedById,omitempty"`
+	CreatedAt    time.Time  `json:"createdAt"`
+}
+
+// OAuthConsent records that a user has authorized a client for a scope set.
+type OAuthConsent struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"userId"`
+	ClientID  string    `json:"clientId"`
+	Scope     string    `json:"scope"`
+	GrantedAt time.Time `json:"grantedAt"`
+}
+
+// OAuthTokenResponse is the standard response from /oauth/token.
+type OAuthTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json:"token_type"`
+	ExpiresIn    int64  `json:"expires_in"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	Scope        string `json:"scope,omitempty"`
+}
+
+// OAuthErrorResponse is the standard error response from OAuth endpoints.
+type OAuthErrorResponse struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description,omitempty"`
+	ErrorURI         string `json:"error_uri,omitempty"`
+}
+
+// DeviceAuthorizationResponse is what RFC 8628 §3.2 returns.
+type DeviceAuthorizationResponse struct {
+	DeviceCode               string `json:"device_code"`
+	UserCode                 string `json:"user_code"`
+	VerificationURI          string `json:"verification_uri"`
+	VerificationURIComplete  string `json:"verification_uri_complete,omitempty"`
+	ExpiresIn                int64  `json:"expires_in"`
+	Interval                 int    `json:"interval"`
+}

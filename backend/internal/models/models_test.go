@@ -336,3 +336,154 @@ func TestColumnAgentJSON(t *testing.T) {
 func strPtr(s string) *string {
 	return &s
 }
+
+func TestOAuthClientJSON(t *testing.T) {
+	now := time.Now()
+	client := models.OAuthClient{
+		ID:                      "client-row-1",
+		ClientID:                "open-kanban-mcp",
+		ClientSecretHash:        nil,
+		Name:                    "Open Kanban MCP",
+		RedirectURIs:            []string{"http://127.0.0.1:9999/callback"},
+		GrantTypes:              []string{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
+		TokenEndpointAuthMethod: "none",
+		Scopes:                  []string{"kanban:read", "tasks:write"},
+		IsFirstParty:            true,
+		CreatedAt:               now,
+		UpdatedAt:               now,
+	}
+
+	data, err := json.Marshal(client)
+	if err != nil {
+		t.Fatalf("failed to marshal oauth client: %v", err)
+	}
+
+	var unmarshaled models.OAuthClient
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal oauth client: %v", err)
+	}
+	if unmarshaled.ClientID != client.ClientID {
+		t.Errorf("expected client id %s, got %s", client.ClientID, unmarshaled.ClientID)
+	}
+	if len(unmarshaled.GrantTypes) != 2 {
+		t.Errorf("expected 2 grant types, got %d", len(unmarshaled.GrantTypes))
+	}
+	if unmarshaled.ClientSecretHash != nil {
+		t.Errorf("expected client secret hash to be hidden (json:\"-\")")
+	}
+}
+
+func TestOAuthDeviceCodeJSON(t *testing.T) {
+	now := time.Now()
+	uid := "user-1"
+	device := models.OAuthDeviceCode{
+		ID:              "dc-1",
+		DeviceCodeHash:  "should-not-leak",
+		UserCodeHash:    "should-not-leak",
+		UserCodeDisplay: "ABCD-1234",
+		ClientID:        "open-kanban-mcp",
+		Scope:           "kanban:read tasks:write",
+		ExpiresAt:       now.Add(10 * time.Minute),
+		IntervalSeconds: 5,
+		Status:          "pending",
+		UserID:          &uid,
+		VerificationURI: "http://localhost:8080/oauth/device",
+		CreatedAt:       now,
+	}
+
+	data, err := json.Marshal(device)
+	if err != nil {
+		t.Fatalf("failed to marshal oauth device code: %v", err)
+	}
+
+	if got := string(data); got == "" {
+		t.Fatal("empty marshal output")
+	}
+
+	var unmarshaled models.OAuthDeviceCode
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal oauth device code: %v", err)
+	}
+	if unmarshaled.UserCodeDisplay != "ABCD-1234" {
+		t.Errorf("expected user code display ABCD-1234, got %s", unmarshaled.UserCodeDisplay)
+	}
+	if unmarshaled.DeviceCodeHash != "" {
+		t.Errorf("expected device_code_hash to be hidden, got %q", unmarshaled.DeviceCodeHash)
+	}
+	if unmarshaled.UserCodeHash != "" {
+		t.Errorf("expected user_code_hash to be hidden, got %q", unmarshaled.UserCodeHash)
+	}
+}
+
+func TestOAuthTokenResponseJSON(t *testing.T) {
+	resp := models.OAuthTokenResponse{
+		AccessToken:  "header.payload.sig",
+		TokenType:    "Bearer",
+		ExpiresIn:    3600,
+		RefreshToken: "rt-123",
+		Scope:        "kanban:read",
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to marshal oauth token response: %v", err)
+	}
+	var unmarshaled models.OAuthTokenResponse
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal oauth token response: %v", err)
+	}
+	if unmarshaled.AccessToken != resp.AccessToken {
+		t.Errorf("expected access_token %s, got %s", resp.AccessToken, unmarshaled.AccessToken)
+	}
+	if unmarshaled.TokenType != "Bearer" {
+		t.Errorf("expected token_type Bearer, got %s", unmarshaled.TokenType)
+	}
+	if unmarshaled.ExpiresIn != 3600 {
+		t.Errorf("expected expires_in 3600, got %d", unmarshaled.ExpiresIn)
+	}
+}
+
+func TestOAuthErrorResponseJSON(t *testing.T) {
+	resp := models.OAuthErrorResponse{
+		Error:            "invalid_request",
+		ErrorDescription: "client_id is required",
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to marshal oauth error response: %v", err)
+	}
+	if got := string(data); got == "" {
+		t.Fatal("empty marshal output")
+	}
+	var unmarshaled models.OAuthErrorResponse
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal oauth error response: %v", err)
+	}
+	if unmarshaled.Error != "invalid_request" {
+		t.Errorf("expected error invalid_request, got %s", unmarshaled.Error)
+	}
+}
+
+func TestDeviceAuthorizationResponseJSON(t *testing.T) {
+	resp := models.DeviceAuthorizationResponse{
+		DeviceCode:               "device-secret",
+		UserCode:                 "WXYZ-9876",
+		VerificationURI:          "http://localhost:8080/oauth/device",
+		VerificationURIComplete:  "http://localhost:8080/oauth/device?user_code=WXYZ-9876",
+		ExpiresIn:                600,
+		Interval:                 5,
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("failed to marshal device authorization response: %v", err)
+	}
+	var unmarshaled models.DeviceAuthorizationResponse
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal device authorization response: %v", err)
+	}
+	if unmarshaled.UserCode != "WXYZ-9876" {
+		t.Errorf("expected user_code WXYZ-9876, got %s", unmarshaled.UserCode)
+	}
+	if unmarshaled.Interval != 5 {
+		t.Errorf("expected interval 5, got %d", unmarshaled.Interval)
+	}
+}

@@ -1,0 +1,16 @@
+DROP INDEX idx_oauth_consents_user ON oauth_consents;
+DROP TABLE IF EXISTS oauth_consents;
+DROP INDEX idx_oauth_refresh_expires ON oauth_refresh_tokens;
+DROP INDEX idx_oauth_refresh_client ON oauth_refresh_tokens;
+DROP INDEX idx_oauth_refresh_user ON oauth_refresh_tokens;
+DROP TABLE IF EXISTS oauth_refresh_tokens;
+DROP INDEX idx_oauth_device_expires ON oauth_device_codes;
+DROP INDEX idx_oauth_device_status ON oauth_device_codes;
+DROP INDEX idx_oauth_device_client ON oauth_device_codes;
+DROP TABLE IF EXISTS oauth_device_codes;
+DROP INDEX idx_oauth_authcodes_expires ON oauth_authorization_codes;
+DROP INDEX idx_oauth_authcodes_user ON oauth_authorization_codes;
+DROP INDEX idx_oauth_authcodes_client ON oauth_authorization_codes;
+DROP TABLE IF EXISTS oauth_authorization_codes;
+DROP INDEX idx_oauth_clients_client_id ON oauth_clients;
+DROP TABLE IF EXISTS oauth_clients;
