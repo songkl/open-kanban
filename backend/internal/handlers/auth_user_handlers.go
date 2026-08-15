@@ -384,7 +384,7 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 		tokenKey := generateTokenKey()
 		tokenID := generateID()
 		_, err = db.Exec(
-			"INSERT INTO tokens (id, name, key, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO tokens (id, name, `key`, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 			tokenID, "default", tokenKey, agentID, now, now,
 		)
 		if err != nil {
@@ -495,7 +495,7 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 		db.Exec("DELETE FROM tokens WHERE user_id = ?", agentID)
 
 		_, err = db.Exec(
-			"INSERT INTO tokens (id, name, key, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO tokens (id, name, `key`, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 			tokenID, "default", tokenKey, agentID, now, now,
 		)
 		if err != nil {
@@ -581,7 +581,7 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 		tokenKey := generateTokenKey()
 		tokenID := generateID()
 		_, err = db.Exec(
-			"INSERT INTO tokens (id, name, key, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO tokens (id, name, `key`, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 			tokenID, "default", tokenKey, userID, now, now,
 		)
 		if err != nil {

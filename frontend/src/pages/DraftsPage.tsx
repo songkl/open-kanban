@@ -5,6 +5,7 @@ import type { Task, Board } from '@/types/kanban';
 import { draftsApi, columnsApi, boardsApi, tasksApi } from '@/services/api';
 import { showErrorToast } from '@/components/ErrorToast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { useSetupGuard } from '@/hooks/useSetupGuard';
 
 const FAILED_TASK_CREATIONS_KEY = 'failedTaskCreations';
 
@@ -33,6 +34,7 @@ export function DraftsPage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const boardIdFromUrl = searchParams.get('boardId');
+  useSetupGuard();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);

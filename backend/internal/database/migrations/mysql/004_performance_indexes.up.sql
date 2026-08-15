@@ -1,7 +1,7 @@
 -- Performance indexes for query optimization
 -- Indexes for tasks table
 CREATE INDEX idx_tasks_column_archived ON tasks(column_id, archived);
-CREATE INDEX idx_tasks_column_position ON tasks(column_id, position);
+-- idx_tasks_column_position is already created by 001_initial_schema
 
 -- Index for token expiration queries
 CREATE INDEX idx_tokens_expires_at ON tokens(expires_at);

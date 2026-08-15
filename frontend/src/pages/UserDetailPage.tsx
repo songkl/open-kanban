@@ -5,6 +5,7 @@ import { authApi, activitiesApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
 import type { User } from '../types/kanban';
+import { useSetupGuard } from '../hooks/useSetupGuard';
 
 type Tab = 'profile' | 'activities' | 'permissions' | 'boards';
 
@@ -41,6 +42,7 @@ export function UserDetailPage() {
   const { t } = useTranslation();
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  useSetupGuard();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [targetUser, setTargetUser] = useState<User | null>(null);

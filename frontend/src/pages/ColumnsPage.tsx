@@ -23,6 +23,7 @@ import { EditColumnModal } from '@/components/EditColumnModal';
 import { DeleteColumnModal } from '@/components/DeleteColumnModal';
 import { ColumnPermissionsModal } from '@/components/ColumnPermissionsModal';
 import type { Agent, Column } from '@/types/kanban';
+import { useSetupGuard } from '@/hooks/useSetupGuard';
 
 interface Board {
   id: string;
@@ -33,6 +34,7 @@ export function ColumnsPage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const boardIdFromUrl = searchParams.get('boardId');
+  useSetupGuard();
 
   const [boards, setBoards] = useState<Board[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);

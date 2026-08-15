@@ -137,7 +137,7 @@ func loadOrGenerateSalt() (string, error) {
 	defer db.Close()
 
 	var existingSalt string
-	err = db.QueryRow("SELECT value FROM app_config WHERE key = 'password_salt'").Scan(&existingSalt)
+	err = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'password_salt'").Scan(&existingSalt)
 	if err == nil && len(existingSalt) >= 32 {
 		return existingSalt, nil
 	}
@@ -148,7 +148,7 @@ func loadOrGenerateSalt() (string, error) {
 	}
 	newSalt := hex.EncodeToString(saltBytes)
 
-	_, err = db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('password_salt', ?)", newSalt)
+	_, err = db.Exec("REPLACE INTO app_config (`key`, value) VALUES ('password_salt', ?)", newSalt)
 	if err != nil {
 		return "", fmt.Errorf("failed to save salt: %w", err)
 	}
@@ -211,7 +211,7 @@ func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
 	var user models.User
 	var token models.Token
 	err := db.QueryRow(
-		"SELECT t.expires_at, u.id, u.username, u.nickname, u.avatar, u.type, u.role, u.enabled FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.key = ?",
+		"SELECT t.expires_at, u.id, u.username, u.nickname, u.avatar, u.type, u.role, u.enabled FROM tokens t JOIN users u ON t.user_id = u.id WHERE t.`key` = ?",
 		tokenKey,
 	).Scan(&token.ExpiresAt, &user.ID, &user.Username, &user.Nickname, &user.Avatar, &user.Type, &user.Role, &user.Enabled)
 	if err != nil {
@@ -253,7 +253,7 @@ func RequireAuth(db *sql.DB) gin.HandlerFunc {
 
 func isAuthEnabled(db *sql.DB) bool {
 	var authEnabled string
-	err := db.QueryRow("SELECT value FROM app_config WHERE key = 'authEnabled'").Scan(&authEnabled)
+	err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
 	if err != nil {
 		return true
 	}

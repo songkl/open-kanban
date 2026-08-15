@@ -69,7 +69,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 		var uploaderID *string
 		if cookie, err := c.Cookie("kanban-token"); err == nil && cookie != "" {
 			var userID string
-			err := db.QueryRow("SELECT user_id FROM tokens WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)", cookie, time.Now()).Scan(&userID)
+			err := db.QueryRow("SELECT user_id FROM tokens WHERE `key` = ? AND (expires_at IS NULL OR expires_at > ?)", cookie, time.Now()).Scan(&userID)
 			if err == nil {
 				uploaderID = &userID
 			}
@@ -240,7 +240,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 
 		if cookie, err := c.Cookie("kanban-token"); err == nil && cookie != "" {
 			var userID string
-			err := db.QueryRow("SELECT user_id FROM tokens WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)", cookie, time.Now()).Scan(&userID)
+			err := db.QueryRow("SELECT user_id FROM tokens WHERE `key` = ? AND (expires_at IS NULL OR expires_at > ?)", cookie, time.Now()).Scan(&userID)
 			if err == nil {
 				uploaderID = &userID
 			}

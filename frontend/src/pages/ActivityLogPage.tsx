@@ -6,6 +6,7 @@ import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
 import { TaskModal } from '../components/TaskModal';
 import type { User, Task } from '../types/kanban';
+import { useSetupGuard } from '../hooks/useSetupGuard';
 
 interface Activity {
   id: string;
@@ -46,6 +47,7 @@ const clickableActions = ['CREATE_TASK', 'ADD_COMMENT'];
 
 export function ActivityLogPage() {
   const { t } = useTranslation();
+  useSetupGuard();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);

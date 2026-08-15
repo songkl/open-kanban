@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Task, Board, User } from '@/types/kanban';
 import { archivedApi, tasksApi, boardsApi, authApi } from '@/services/api';
+import { useSetupGuard } from '@/hooks/useSetupGuard';
 
 const priorityColors: Record<string, string> = {
   high: 'bg-red-100 text-red-700',
@@ -14,6 +15,7 @@ export function HistoryPage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const boardIdFromUrl = searchParams.get('boardId');
+  useSetupGuard();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [boards, setBoards] = useState<Board[]>([]);

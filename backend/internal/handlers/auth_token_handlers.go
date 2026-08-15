@@ -24,7 +24,7 @@ func GetTokens(db *sql.DB) gin.HandlerFunc {
 		}
 
 		rows, err := db.Query(
-			"SELECT id, name, key, user_agent, expires_at, created_at, updated_at FROM tokens WHERE user_id = ? ORDER BY created_at DESC",
+			"SELECT id, name, `key`, user_agent, expires_at, created_at, updated_at FROM tokens WHERE user_id = ? ORDER BY created_at DESC",
 			user.ID,
 		)
 		if err != nil {
@@ -83,7 +83,7 @@ func CreateToken(db *sql.DB) gin.HandlerFunc {
 		}
 
 		_, err := db.Exec(
-			"INSERT INTO tokens (id, name, key, user_id, user_agent, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT INTO tokens (id, name, `key`, user_id, user_agent, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			tokenID, name, tokenKey, user.ID, c.Request.UserAgent(), req.ExpiresAt, time.Now(), time.Now(),
 		)
 		if err != nil {

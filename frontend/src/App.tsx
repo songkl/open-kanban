@@ -1,6 +1,7 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { LoadingScreen } from './components/LoadingScreen';
+import { authApi } from './services/api';
 
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const SetupPage = lazy(() => import('./pages/SetupPage').then(m => ({ default: m.SetupPage })));
@@ -16,11 +17,44 @@ const AgentActivityPage = lazy(() => import('./pages/AgentActivityPage').then(m 
 const UserDetailPage = lazy(() => import('./pages/UserDetailPage').then(m => ({ default: m.UserDetailPage })));
 const ColumnDetailPage = lazy(() => import('./pages/ColumnDetailPage').then(m => ({ default: m.ColumnDetailPage })));
 
+function HomeRedirect() {
+  const navigate = useNavigate();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    authApi
+      .me()
+      .then((data) => {
+        if (cancelled) return;
+        if (data.needsSetup) {
+          navigate('/setup', { replace: true });
+        } else if (data.user) {
+          navigate('/boards', { replace: true });
+        } else {
+          navigate('/login', { replace: true });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) navigate('/login', { replace: true });
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  if (!ready) return <LoadingScreen />;
+  return null;
+}
+
 function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        <Route path="/" element={<Navigate to="/boards" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/board/:boardId" element={<BoardPage />} />

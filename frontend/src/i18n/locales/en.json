@@ -665,7 +665,12 @@
     "serverPort": "Port",
     "allowedOrigins": "Allowed Origins (CORS)",
     "allowedOriginsHint": "Multiple origins separated by commas",
-    "configNote": "Note: These configurations need to be set via environment variables or .env file on the server side. Restart the server after making changes."
+    "configNote": "Note: These configurations need to be set via environment variables or .env file on the server side. Restart the server after making changes.",
+    "restartHint": "Advanced settings have been saved to {{path}}. Restart the server with: kanban-server -config {{path}}",
+    "restartingTitle": "Applying settings…",
+    "restartingBody": "The server is restarting with the new configuration. This usually takes a few seconds.",
+    "restartTimeout": "The server did not come back in time. You can try reloading the page manually.",
+    "continueAnyway": "Reload manually"
   },
   "userDetail": {
     "title": "User Detail",

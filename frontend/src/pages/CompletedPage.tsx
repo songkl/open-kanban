@@ -5,6 +5,7 @@ import { SafeMarkdown } from '@/components/SafeMarkdown';
 import type { Task, Column } from '@/types/kanban';
 import { boardsApi, columnsApi, tasksApi } from '@/services/api';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { useSetupGuard } from '@/hooks/useSetupGuard';
 
 interface TaskWithExtras extends Task {
   columnName: string;
@@ -19,6 +20,7 @@ const priorityColors: Record<string, string> = {
 
 export function CompletedPage() {
   const { t } = useTranslation();
+  useSetupGuard();
   const [tasks, setTasks] = useState<TaskWithExtras[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());

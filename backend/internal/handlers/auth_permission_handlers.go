@@ -154,9 +154,9 @@ func GetAppConfig(db *sql.DB) gin.HandlerFunc {
 		var allowRegistration bool = true
 		var requirePassword bool = false
 		var authEnabled bool = true
-		db.QueryRow("SELECT value FROM app_config WHERE key = 'allowRegistration'").Scan(&allowRegistration)
-		db.QueryRow("SELECT value FROM app_config WHERE key = 'requirePassword'").Scan(&requirePassword)
-		db.QueryRow("SELECT value FROM app_config WHERE key = 'authEnabled'").Scan(&authEnabled)
+		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowRegistration)
+		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePassword)
+		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
 
 		c.JSON(http.StatusOK, gin.H{
 			"allowRegistration": allowRegistration,
@@ -186,7 +186,7 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 
 		if req.AllowRegistration != nil {
 			_, err := db.Exec(
-				"INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', ?)",
+				"REPLACE INTO app_config (`key`, value) VALUES ('allowRegistration', ?)",
 				map[bool]string{true: "1", false: "0"}[*req.AllowRegistration],
 			)
 			if err != nil {
@@ -197,7 +197,7 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 
 		if req.RequirePassword != nil {
 			_, err := db.Exec(
-				"INSERT OR REPLACE INTO app_config (key, value) VALUES ('requirePassword', ?)",
+				"REPLACE INTO app_config (`key`, value) VALUES ('requirePassword', ?)",
 				map[bool]string{true: "1", false: "0"}[*req.RequirePassword],
 			)
 			if err != nil {
@@ -208,7 +208,7 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 
 		if req.AuthEnabled != nil {
 			_, err := db.Exec(
-				"INSERT OR REPLACE INTO app_config (key, value) VALUES ('authEnabled', ?)",
+				"REPLACE INTO app_config (`key`, value) VALUES ('authEnabled', ?)",
 				map[bool]string{true: "1", false: "0"}[*req.AuthEnabled],
 			)
 			if err != nil {

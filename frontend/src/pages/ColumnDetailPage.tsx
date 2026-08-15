@@ -6,12 +6,14 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { TaskModal } from '@/components/TaskModal';
 import { columnsApi, tasksApi, boardsApi, commentsApi } from '@/services/api';
 import type { Column, Task, Board } from '@/types/kanban';
+import { useSetupGuard } from '@/hooks/useSetupGuard';
 
 export function ColumnDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const params = useParams();
   const { boardId, columnId } = params;
+  useSetupGuard();
 
   const [columns, setColumns] = useState<Column[]>([]);
   const [column, setColumn] = useState<Column | null>(null);

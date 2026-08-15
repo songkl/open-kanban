@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS boards (
     deleted TINYINT(1) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    description TEXT DEFAULT ''
+    description TEXT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Board permissions table
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS `columns` (
     status VARCHAR(50),
     position INT DEFAULT 0,
     color VARCHAR(20) DEFAULT '#6b7280',
-    description TEXT DEFAULT '',
+    description TEXT,
     board_id VARCHAR(255) NOT NULL,
     owner_agent_id VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

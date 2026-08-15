@@ -11,6 +11,7 @@ import { BoardSelector } from '../components/BoardSelector';
 import { boardsApi } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
+import { useSetupGuard } from '../hooks/useSetupGuard';
 import { KeyboardNavigation } from '../components/KeyboardNavigation';
 import { BoardToolbar } from '../components/BoardToolbar';
 import { BoardActionsMenu } from '../components/BoardActionsMenu';
@@ -31,6 +32,7 @@ export function BoardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const params = useParams();
+  useSetupGuard();
   const [searchParams] = useSearchParams();
   const boardIdFromUrl = params.boardId as string;
   const taskIdFromUrl = searchParams.get('taskId');

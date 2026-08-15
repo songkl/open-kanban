@@ -68,6 +68,20 @@ func getEnvOrDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
+// buildMySQLDSN returns the DSN used for the application's MySQL connection.
+// multiStatements=true is required because golang-migrate sends each .sql
+// file as one Exec call; without it, MySQL rejects the file at the second
+// statement with a 1064 syntax error.
+func buildMySQLDSN(config *DBConfig) string {
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&multiStatements=true",
+		config.User, config.Password, config.Host, config.Port, config.Database)
+}
+
+// BuildMySQLDSNForTest exposes buildMySQLDSN for tests.
+func BuildMySQLDSNForTest(config *DBConfig) string {
+	return buildMySQLDSN(config)
+}
+
 func initMySQL(config *DBConfig) (*sql.DB, error) {
 	rootDSN := fmt.Sprintf("%s:%s@tcp(%s:%s)/",
 		config.User, config.Password, config.Host, config.Port)
@@ -83,8 +97,7 @@ func initMySQL(config *DBConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create MySQL database: %w", err)
 	}
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4",
-		config.User, config.Password, config.Host, config.Port, config.Database)
+	dsn := buildMySQLDSN(config)
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

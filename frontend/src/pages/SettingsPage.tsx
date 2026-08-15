@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
+import { useSetupGuard } from '../hooks/useSetupGuard';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
 import { TokensSettings } from '../components/settings/TokensSettings';
 import { ActivitiesSettings } from '../components/settings/ActivitiesSettings';
@@ -19,6 +20,7 @@ type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts
 export function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  useSetupGuard();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);

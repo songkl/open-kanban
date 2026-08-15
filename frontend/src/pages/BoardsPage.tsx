@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { boardsApi, templatesApi } from '../services/api';
+import { useSetupGuard } from '../hooks/useSetupGuard';
 import { ErrorToastContainer } from '../components/ErrorToast';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BoardCard } from '../components/BoardCard';
@@ -24,6 +25,7 @@ interface Template {
 
 export function BoardsPage() {
   const { t } = useTranslation();
+  useSetupGuard();
   const [boards, setBoards] = useState<Board[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [showModal, setShowModal] = useState(false);

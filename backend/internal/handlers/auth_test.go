@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -223,7 +224,7 @@ func TestInitHandler(t *testing.T) {
 		defer db.Close()
 
 		router := gin.New()
-		router.POST("/api/init", handlers.Init(db))
+		router.POST("/api/init", handlers.Init(db, nil))
 
 		body := map[string]interface{}{}
 		jsonBody, _ := json.Marshal(body)
@@ -250,7 +251,7 @@ func TestInitHandler(t *testing.T) {
 		defer db.Close()
 
 		router := gin.New()
-		router.POST("/api/init", handlers.Init(db))
+		router.POST("/api/init", handlers.Init(db, nil))
 
 		body := map[string]interface{}{
 			"username": "admin",
@@ -290,7 +291,7 @@ func TestInitHandler(t *testing.T) {
 		defer db.Close()
 
 		router := gin.New()
-		router.POST("/api/init", handlers.Init(db))
+		router.POST("/api/init", handlers.Init(db, nil))
 
 		setupTestUser(t, db, "existing", "", "ADMIN")
 
@@ -315,7 +316,7 @@ func TestInitHandler(t *testing.T) {
 		defer db.Close()
 
 		router := gin.New()
-		router.POST("/api/init", handlers.Init(db))
+		router.POST("/api/init", handlers.Init(db, nil))
 
 		body := map[string]interface{}{
 			"username":          "admin",
@@ -334,9 +335,271 @@ func TestInitHandler(t *testing.T) {
 		}
 
 		var allowReg string
-		err := db.QueryRow("SELECT value FROM app_config WHERE key = 'allowRegistration'").Scan(&allowReg)
+		err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowReg)
 		if err != nil || allowReg != "0" {
 			t.Errorf("expected allowRegistration to be '0', got %v", allowReg)
+		}
+	})
+
+	t.Run("init with mysql advanced config writes config file and fires callback", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		dir := t.TempDir()
+		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
+
+		var callbackPath string
+		var callbackCount int
+		callback := func(path string) {
+			callbackPath = path
+			callbackCount++
+		}
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(db, callback))
+
+		body := map[string]interface{}{
+			"username": "admin",
+			"password": "secret123",
+			"advanced": map[string]interface{}{
+				"dbType":         "mysql",
+				"dbHost":         "db.example.com",
+				"dbPort":         "3306",
+				"dbUser":         "kanban",
+				"dbPassword":     "p@ss",
+				"dbName":         "kanban_prod",
+				"serverPort":     "9090",
+				"allowedOrigins": "https://app.example.com",
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		// restartRequired is always false now: the server self-restarts on
+		// its own via the callback. configPath still reports where the
+		// file was written so callers can show diagnostics.
+		if resp["restartRequired"] != false {
+			t.Errorf("expected restartRequired=false, got %v", resp["restartRequired"])
+		}
+		configPath, _ := resp["configPath"].(string)
+		if configPath == "" {
+			t.Fatalf("expected configPath in response, got %v", resp)
+		}
+		if callbackCount != 1 {
+			t.Errorf("expected callback to fire once, got %d", callbackCount)
+		}
+		if callbackPath != configPath {
+			t.Errorf("callback path %q != response configPath %q", callbackPath, configPath)
+		}
+
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("failed to read config file: %v", err)
+		}
+		content := string(data)
+		expectedLines := []string{
+			"DB_TYPE=mysql",
+			"DB_HOST=db.example.com",
+			"DB_PORT=3306",
+			"DB_USER=kanban",
+			"DB_PASSWORD=p@ss",
+			"DB_NAME=kanban_prod",
+			"PORT=9090",
+			"ALLOWED_ORIGINS=https://app.example.com",
+		}
+		for _, line := range expectedLines {
+			if !strings.Contains(content, line) {
+				t.Errorf("expected config to contain %q, got:\n%s", line, content)
+			}
+		}
+	})
+
+	t.Run("init with sqlite advanced config writes database_url", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		dir := t.TempDir()
+		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(db, nil))
+
+		body := map[string]interface{}{
+			"username": "admin",
+			"advanced": map[string]interface{}{
+				"dbType": "sqlite",
+				"dbPath": "/var/data/kanban.db",
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		configPath, _ := resp["configPath"].(string)
+		if configPath == "" {
+			t.Fatalf("expected configPath in response, got %v", resp)
+		}
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("failed to read config file: %v", err)
+		}
+		content := string(data)
+		if !strings.Contains(content, "DB_TYPE=sqlite") {
+			t.Errorf("expected DB_TYPE=sqlite in config, got:\n%s", content)
+		}
+		if !strings.Contains(content, "DATABASE_URL=/var/data/kanban.db") {
+			t.Errorf("expected DATABASE_URL=/var/data/kanban.db in config, got:\n%s", content)
+		}
+		if strings.Contains(content, "DB_HOST=") {
+			t.Errorf("did not expect DB_HOST for sqlite config, got:\n%s", content)
+		}
+	})
+
+	t.Run("init without advanced config leaves restartRequired false", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(db, nil))
+
+		body := map[string]interface{}{
+			"username": "admin",
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["restartRequired"] != false {
+			t.Errorf("expected restartRequired=false, got %v", resp["restartRequired"])
+		}
+		if cfg, ok := resp["configPath"].(string); ok && cfg != "" {
+			t.Errorf("expected no configPath, got %q", cfg)
+		}
+	})
+
+	t.Run("init with invalid advanced dbType returns bad request", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		dir := t.TempDir()
+		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(db, nil))
+
+		body := map[string]interface{}{
+			"username": "admin",
+			"advanced": map[string]interface{}{
+				"dbType": "postgres",
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("init with mysql advanced but missing host returns bad request", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		dir := t.TempDir()
+		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(db, nil))
+
+		body := map[string]interface{}{
+			"username": "admin",
+			"advanced": map[string]interface{}{
+				"dbType": "mysql",
+				"dbName": "kanban",
+				"dbUser": "kanban",
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("init with invalid serverPort returns bad request", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		dir := t.TempDir()
+		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(db, nil))
+
+		body := map[string]interface{}{
+			"username": "admin",
+			"advanced": map[string]interface{}{
+				"serverPort": "not-a-port",
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 }

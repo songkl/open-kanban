@@ -5,6 +5,7 @@ import { authApi, activitiesApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
 import type { Agent } from '../types/kanban';
+import { useSetupGuard } from '../hooks/useSetupGuard';
 
 interface Activity {
   id: string;
@@ -44,6 +45,7 @@ const actionIcons: Record<string, string> = {
 export function AgentActivityPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  useSetupGuard();
   const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);

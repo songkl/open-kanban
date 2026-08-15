@@ -104,6 +104,18 @@ interface RetryOptions {
   retryOn?: (error: ApiError) => boolean;
 }
 
+export interface AdvancedConfig {
+  dbType?: 'sqlite' | 'mysql';
+  dbPath?: string;
+  dbHost?: string;
+  dbPort?: string;
+  dbUser?: string;
+  dbPassword?: string;
+  dbName?: string;
+  serverPort?: string;
+  allowedOrigins?: string;
+}
+
 async function fetchApiWithRetry<T>(
   path: string,
   options?: RequestInit & { skip401Handling?: boolean; signal?: AbortSignal },
@@ -329,10 +341,32 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ nickname, password, avatar }),
     }),
-  init: (username: string, password?: string, avatar?: string, allowRegistration = true, requirePassword = false, authEnabled = true) =>
-    fetchApi<{ user: User; token: string }>('auth/init', {
+  init: (
+    username: string,
+    password?: string,
+    avatar?: string,
+    allowRegistration = true,
+    requirePassword = false,
+    authEnabled = true,
+    advanced?: AdvancedConfig,
+  ) =>
+    fetchApi<{
+      user: User;
+      token: string;
+      requirePassword: boolean;
+      configPath?: string;
+      restartRequired?: boolean;
+    }>('auth/init', {
       method: 'POST',
-      body: JSON.stringify({ username, password, avatar, allowRegistration, requirePassword, authEnabled }),
+      body: JSON.stringify({
+        username,
+        password,
+        avatar,
+        allowRegistration,
+        requirePassword,
+        authEnabled,
+        advanced,
+      }),
     }),
   me: async () => {
     const res = await fetch(`${API_BASE}auth/me`, { credentials: 'include' });
@@ -353,6 +387,8 @@ export const authApi = {
     };
   },
   getConfig: () => fetchApi<{ allowRegistration: boolean; requirePassword: boolean; authEnabled: boolean }>('auth/config'),
+  getInitDefaults: () =>
+    fetchApi<AdvancedConfig>('auth/init-defaults'),
   updateConfig: (data: { allowRegistration?: boolean; requirePassword?: boolean; authEnabled?: boolean }) =>
     fetchApi<void>('auth/config', {
       method: 'PUT',

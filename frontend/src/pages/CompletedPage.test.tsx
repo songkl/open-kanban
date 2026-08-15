@@ -66,6 +66,9 @@ vi.mock('@/services/api', () => ({
     archive: vi.fn().mockResolvedValue({}),
     getById: vi.fn().mockResolvedValue({}),
   },
+  authApi: {
+    me: vi.fn().mockResolvedValue({ user: null, needsSetup: false }),
+  },
   setGlobalErrorHandler: vi.fn(),
 }));
 
