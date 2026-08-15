@@ -20,7 +20,9 @@
     "back": "返回",
     "sortBy": "排序",
     "sortAsc": "升序",
-    "sortDesc": "降序"
+    "sortDesc": "降序",
+    "delete": "删除",
+    "save": "保存"
   },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",

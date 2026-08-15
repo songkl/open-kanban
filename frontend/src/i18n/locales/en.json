@@ -20,7 +20,9 @@
     "back": "Back",
     "sortBy": "Sort by",
     "sortAsc": "Ascending",
-    "sortDesc": "Descending"
+    "sortDesc": "Descending",
+    "delete": "Delete",
+    "save": "Save"
   },
   "upload": {
     "fileTooLarge": "File too large, max 10MB",
