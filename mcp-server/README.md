@@ -11,6 +11,7 @@ MCP Server for Open Kanban board, enabling AI assistants to interact with kanban
 - Comment and subtask support
 - Draft task management
 - Native MCP SDK integration
+- **OAuth 2.1 (RFC 7591 + RFC 8628)**: zero-token setup, dynamic client registration, device authorization flow, automatic refresh — see below
 
 ## Installation
 
@@ -24,7 +25,29 @@ npm run build
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KANBAN_API_URL` | http://localhost:8080 | Kanban API server URL |
-| `KANBAN_MCP_TOKEN` | - | Authentication token |
+| `KANBAN_MCP_TOKEN` | _optional_ | Legacy: static bearer token. When omitted the server runs the OAuth device flow. |
+
+## OAuth 2.1 (default flow)
+
+On first launch, the MCP server will:
+
+1. Discover the authorization server via `GET /.well-known/oauth-authorization-server`
+2. Dynamically register itself via `POST /oauth/register` (RFC 7591, public client)
+3. Request a device code via `POST /oauth/device/code`
+4. Print the verification URL + user code to **stderr** so the AI host can surface it:
+
+   ```
+   [kanban-mcp] OAuth authorization required
+     Visit: http://localhost:8080/oauth/device
+     Enter code: HSXL-KQPR
+     Waiting for approval...
+   ```
+
+5. Poll `/oauth/token` until the user approves or the code expires
+6. Encrypt and persist tokens at `$XDG_CONFIG_HOME/kanban-mcp/credentials-<api>.json` (mode 0600)
+7. Auto-refresh access tokens via the refresh_token grant before they expire
+
+The legacy `KANBAN_MCP_TOKEN` continues to work as a fallback for CI / container deployments.
 
 ## Usage
 
@@ -34,6 +57,12 @@ npx -y open-kanban-mcp
 
 # Or run directly
 ./dist/index.js
+```
+
+## Tests
+
+```bash
+npx vitest run
 ```
 
 ## MCP Tools

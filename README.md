@@ -79,7 +79,25 @@ Add MCP configuration to Claude Code, Cursor, or OpenCode.
 
 在 Claude Code、Cursor 或 OpenCode 中添加 MCP 配置。
 
+> **OAuth 2.1 (推荐):** 自 `open-kanban-mcp@2.0.0` 起,只需配置 `KANBAN_API_URL`。MCP 进程会自动注册客户端并执行设备授权流程 —— 终端会打印验证 URL 和用户码,用户在浏览器中批准一次即可。后续调用自动续期,无需再手动复制 token。
+
 #### Claude Code / Open-Claw 配置
+
+```json
+{
+  "mcpServers": {
+    "kanban": {
+      "command": "npx",
+      "args": ["-y", "open-kanban-mcp@latest"],
+      "env": {
+        "KANBAN_API_URL": "http://localhost:8080"
+      }
+    }
+  }
+}
+```
+
+#### 旧版 token 模式(可选)
 
 ```json
 {
@@ -105,16 +123,15 @@ Add MCP configuration to Claude Code, Cursor, or OpenCode.
     "enabled": true,
     "type": "local",
     "environment": {
-      "KANBAN_API_URL": "http://localhost:8080",
-      "KANBAN_MCP_TOKEN": "YOUR_KANBAN_TOKEN"
+      "KANBAN_API_URL": "http://localhost:8080"
     }
   }
 }
 ```
 
-> **Note / 注意:** Generate your `KANBAN_MCP_TOKEN` via `GET /api/auth/token` after logging in, or use the CLI command `./kanban-server reset-password -user <nickname> -password <newpassword>` to reset your password.
+> **Note / 注意:** If you set `KANBAN_MCP_TOKEN` it takes precedence and skips OAuth. Generate it via `GET /api/auth/token` after logging in, or use the CLI command `./kanban-server reset-password -user <nickname> -password <newpassword>` to reset your password.
 >
-> 在登录后通过 `GET /api/auth/token` 获取 Token，或使用 CLI 命令重置密码。
+> 若设置了 `KANBAN_MCP_TOKEN` 则会跳过 OAuth,直接使用该 token。可在登录后通过 `GET /api/auth/token` 获取,或使用 CLI 命令重置密码。
 
 For detailed installation instructions (including OpenCode skill setup), see [Installation Guide](./docs/INSTALL_EN.md).
 详细安装指南（包括 OpenCode Skill 配置）请查看[安装文档](./docs/INSTALL.md)。
