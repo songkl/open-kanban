@@ -117,7 +117,7 @@ export function AttachmentList({
             {/* File Info */}
             <div className="min-w-0 flex-1">
               <div
-                className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer hover:text-blue-600"
+                className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-400 cursor-pointer hover:text-blue-600"
                 onClick={() => handlePreview(attachment)}
               >
                 {attachment.filename}

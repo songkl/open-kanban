@@ -54,7 +54,7 @@ export function AddSubtaskModal({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
+              className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200"
             >
               {t('subtask.cancel')}
             </button>

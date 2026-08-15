@@ -9,7 +9,7 @@ export function ShortcutsSettings() {
       <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('settings.shortcutsDescription')}</p>
       <div className="space-y-6">
         <div>
-          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.shortcutsGlobal')}</h3>
+          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('settings.shortcutsGlobal')}</h3>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-100 dark:divide-zinc-700">
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm text-zinc-600 dark:text-zinc-300">{t('settings.shortcutSearch')}</span>

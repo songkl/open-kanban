@@ -40,7 +40,7 @@ export function BatchOperationBar({
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl bg-zinc-800 dark:bg-zinc-700 px-4 py-3 shadow-2xl ring-1 ring-zinc-200/20 dark:ring-zinc-600/50">
-      <span className="text-sm text-zinc-200 dark:text-zinc-200 font-medium">
+      <span className="text-sm text-zinc-200 dark:text-zinc-400 font-medium">
         {t('task.selectedCount', { count: selectedTasks.size })}
       </span>
       <div className="h-4 w-px bg-zinc-600" />

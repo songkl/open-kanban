@@ -55,7 +55,7 @@ export function TemplateNameModal({
           {t('modal.templateNameHint', { boardName: initialBoardName })}
         </p>
         <div className="mb-6">
-          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
             {t('modal.templateName')}
           </label>
           <input

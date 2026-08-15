@@ -158,7 +158,7 @@ export function AddTaskModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('taskModal.description')}</label>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('taskModal.description')}</label>
             <div ref={descEditorRef} className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
               <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none dark:bg-zinc-700 dark:text-zinc-100" style={{ height: 250 }} disabled />}>
                 <MarkdownEditor
@@ -172,7 +172,7 @@ export function AddTaskModal({
 
           {boards.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('task.selectBoard')}</label>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('task.selectBoard')}</label>
               <CustomDropdown
                 options={boards.map(board => ({ value: board.id, label: board.name }))}
                 value={selectedBoardId}
@@ -184,7 +184,7 @@ export function AddTaskModal({
 
           {columns.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('task.selectColumn')}</label>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('task.selectColumn')}</label>
               <CustomDropdown
                 options={columns.map(col => ({ value: col.id, label: col.name }))}
                 value={selectedColumnId}
@@ -205,7 +205,7 @@ export function AddTaskModal({
           </label>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('taskModal.priority')}</label>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('taskModal.priority')}</label>
             <CustomDropdown
               options={[
                 { value: 'low', label: t('taskModal.priorityLow') },
@@ -222,7 +222,7 @@ export function AddTaskModal({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600"
+              className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600"
             >
               {t('task.cancel')}
             </button>

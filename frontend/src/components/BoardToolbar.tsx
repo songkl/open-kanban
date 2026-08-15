@@ -78,7 +78,7 @@ export function BoardToolbar({
           className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm ${
             hasActiveFilters
               ? 'bg-blue-100 text-blue-700 border border-blue-300'
-              : 'bg-zinc-200 text-zinc-700 dark:text-zinc-200 border border-transparent'
+              : 'bg-zinc-200 text-zinc-700 dark:text-zinc-400 border border-transparent'
           } hover:bg-zinc-300 dark:hover:bg-zinc-600`}
         >
           <svg

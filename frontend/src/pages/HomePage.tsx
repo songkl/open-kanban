@@ -120,7 +120,7 @@ export function HomePage() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                 {t('login.username')}
               </label>
               <input
@@ -134,7 +134,7 @@ export function HomePage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                 {t('login.password')}
               </label>
               <input

@@ -218,7 +218,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                             setShowMoreMenu(false);
                             setShowMoveSubmenu(false);
                           }}
-                          className="w-full text-left px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-600 first:rounded-t-md last:rounded-b-md"
+                          className="w-full text-left px-3 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-600 first:rounded-t-md last:rounded-b-md"
                         >
                           {col.name}
                         </button>

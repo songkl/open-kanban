@@ -262,7 +262,7 @@ export function ColumnBoard({
                     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors snap-center ${
                       activeMobileColumn === idx
                         ? 'bg-blue-500 text-white'
-                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
+                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
                     }`}
                   >
                     {column.name}
@@ -271,7 +271,7 @@ export function ColumnBoard({
               </div>
               <button
                 onClick={() => setMobileViewMode(mobileViewMode === 'tabs' ? 'scroll' : 'tabs')}
-                className="flex-shrink-0 p-2 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+                className="flex-shrink-0 p-2 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
                 title={mobileViewMode === 'tabs' ? t('mobile.switchToSlideView') : t('mobile.switchToListView')}
               >
                 {mobileViewMode === 'tabs' ? (

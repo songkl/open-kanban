@@ -58,7 +58,7 @@ export function AddColumnModal({
 
         <div className="space-y-5">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('column.columnName')}
             </label>
             <input
@@ -72,7 +72,7 @@ export function AddColumnModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('column.statusCode')}
             </label>
             <input
@@ -86,7 +86,7 @@ export function AddColumnModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('column.color')}
             </label>
             <div className="flex gap-3">
@@ -115,7 +115,7 @@ export function AddColumnModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('column.description')}
             </label>
             <textarea
@@ -129,7 +129,7 @@ export function AddColumnModal({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('column.ownerAgent')}
             </label>
             <select

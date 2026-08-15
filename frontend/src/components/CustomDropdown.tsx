@@ -88,7 +88,7 @@ export function CustomDropdown({
         className={`w-full rounded-md border px-3 py-1.5 text-left text-sm flex items-center justify-between ${
           disabled
             ? 'bg-zinc-100 dark:bg-zinc-700 border-zinc-200 dark:border-zinc-600 text-zinc-400 dark:text-zinc-500 cursor-not-allowed'
-            : 'bg-white dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-500'
+            : 'bg-white dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500'
         }`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -130,7 +130,7 @@ export function CustomDropdown({
               className={`w-full text-left px-3 py-2 text-sm ${
                 option.value === value
                   ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-600'
+                  : 'text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-600'
               } first:rounded-t-md last:rounded-b-md`}
               role="option"
               aria-selected={option.value === value}

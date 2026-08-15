@@ -655,7 +655,7 @@ export function TaskModal({
                       disabled={!isEditing}
                       className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-600"
                     />
-                    <span className={`flex-1 text-sm ${subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through' : 'text-zinc-700 dark:text-zinc-200'}`}>
+                    <span className={`flex-1 text-sm ${subtask.completed ? 'text-zinc-400 dark:text-zinc-500 line-through' : 'text-zinc-700 dark:text-zinc-400'}`}>
                       {subtask.title}
                     </span>
                     {isEditing && (
@@ -715,7 +715,7 @@ export function TaskModal({
                 <div key={comment.id} className="rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-3">
                   <div className="mb-1 flex items-center gap-2">
                     <UserAvatar username={comment.author} size="sm" />
-                    <span className="font-medium text-sm text-zinc-700 dark:text-zinc-200">{comment.author}</span>
+                    <span className="font-medium text-sm text-zinc-700 dark:text-zinc-400">{comment.author}</span>
                     <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-400">{formatCommentDate(t, comment.createdAt)}</span>
                   </div>
                   <div className="prose prose-sm max-w-none text-zinc-600 dark:text-zinc-300">
@@ -763,7 +763,7 @@ export function TaskModal({
                   value={commentAuthor}
                   onChange={(e) => handleAuthorChange(e.target.value)}
                   placeholder={t('taskModal.yourName')}
-                  className="w-full rounded-md border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200"
+                  className="w-full rounded-md border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-400"
                 />
               )}
               
@@ -790,7 +790,7 @@ export function TaskModal({
               
               {!isEditing && (
                 <>
-                  <label htmlFor="comment-input" className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  <label htmlFor="comment-input" className="text-sm font-medium text-zinc-700 dark:text-zinc-400">
                     {t('taskModal.addComment')}
                   </label>
                   <textarea
@@ -830,7 +830,7 @@ export function TaskModal({
               </button>
               <button
                 onClick={() => setIsEditing(false)}
-                className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
               >
                 {t('taskModal.cancel')}
               </button>
@@ -879,7 +879,7 @@ export function TaskModal({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirmModal(false)}
-                className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
+                className="flex-1 rounded-md bg-zinc-100 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200"
               >
                 {t('taskModal.cancel')}
               </button>

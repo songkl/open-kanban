@@ -61,7 +61,7 @@ export const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
                 key={board.id}
                 onClick={() => onSelectBoard(board.id)}
                 className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 ${
-                  board.id === boardIdFromUrl ? 'bg-blue-50 text-blue-700 font-medium' : 'text-zinc-700 dark:text-zinc-200'
+                  board.id === boardIdFromUrl ? 'bg-blue-50 text-blue-700 font-medium' : 'text-zinc-700 dark:text-zinc-400'
                 }`}
               >
                 {board.name}

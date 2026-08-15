@@ -59,7 +59,7 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
 
       {currentUser?.role === 'ADMIN' && (
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.filterConditions')}</h3>
+          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div>
               <label htmlFor="activityFilterAction" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.operationType')}</label>

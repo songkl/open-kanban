@@ -94,7 +94,7 @@ export function FilterPanelContent({
       <div className="flex gap-2 pt-2 border-t border-zinc-100">
         <button
           onClick={onClearFilters}
-          className="flex-1 rounded-md bg-zinc-100 px-2 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200"
+          className="flex-1 rounded-md bg-zinc-100 px-2 py-1.5 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200"
         >
           {t('filter.clear')}
         </button>

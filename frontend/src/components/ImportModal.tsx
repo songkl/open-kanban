@@ -83,7 +83,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
         <div className="space-y-5">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('modal.selectFile')}
             </label>
             <input
@@ -99,7 +99,7 @@ export function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('modal.boardId')}({t('modal.optional')})
             </label>
             <input

@@ -61,7 +61,7 @@ export function HeaderRightMenu({
                   }
                   onSetShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100"
               >
                 <span className={wsStatus === 'connected' ? 'text-green-600' : wsStatus === 'failed' ? 'text-red-500' : 'text-red-400'}>
                   {wsStatus === 'connected' ? '●' : '○'}
@@ -71,7 +71,7 @@ export function HeaderRightMenu({
                   {wsStatus === 'connected' ? t('status.connected') : wsStatus === 'failed' ? t('status.reconnect') : t('status.connecting')}
                 </span>
               </button>
-              <Link to="/settings" onClick={() => onSetShowUserMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100">
+              <Link to="/settings" onClick={() => onSetShowUserMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100">
                 {t('settings.title')}
               </Link>
               <button
@@ -80,7 +80,7 @@ export function HeaderRightMenu({
                   i18n.changeLanguage(newLang);
                   localStorage.setItem('language', newLang);
                 }}
-                className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100"
+                className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100"
               >
                 <span>{t('nav.language')}</span>
                 <span className="text-xs text-zinc-500 dark:text-zinc-500">{i18n.language === 'zh' ? t('language.en') : t('language.zh')}</span>
@@ -90,7 +90,7 @@ export function HeaderRightMenu({
                 onClick={() => {
                   onSetDarkMode(!darkMode);
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100"
               >
                 <span>{t('settings.darkMode')}</span>
                 <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">{darkMode ? '🌙' : '☀️'}</span>

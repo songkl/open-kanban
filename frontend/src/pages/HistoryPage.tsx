@@ -131,7 +131,7 @@ export function HistoryPage() {
         <div className="flex items-center gap-4">
           <Link
             to="/"
-            className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+            className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
           >
             {t('history.backToBoard')}
           </Link>

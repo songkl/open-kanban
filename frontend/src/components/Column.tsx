@@ -153,11 +153,11 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
               onChange={(e) => setEditName(e.target.value)}
               onBlur={handleSaveEdit}
               onKeyDown={handleKeyDown}
-              className="flex-1 px-1 py-0.5 text-sm font-semibold bg-white dark:bg-zinc-700 border border-blue-400 rounded text-zinc-700 dark:text-zinc-200 outline-none"
+              className="flex-1 px-1 py-0.5 text-sm font-semibold bg-white dark:bg-zinc-700 border border-blue-400 rounded text-zinc-700 dark:text-zinc-400 outline-none"
             />
           ) : (
             <h2
-              className="flex-1 font-semibold text-zinc-700 dark:text-zinc-200 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group flex items-center gap-1"
+              className="flex-1 font-semibold text-zinc-700 dark:text-zinc-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group flex items-center gap-1"
               onClick={handleStartEdit}
               title={onColumnRename ? t('column.clickToRename') : undefined}
             >
@@ -231,7 +231,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
           <div className="px-3 py-2 border-b border-zinc-200 dark:border-zinc-700/50">
             <button
               onClick={() => setShowDescription(!showDescription)}
-              className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-200 dark:hover:text-zinc-300 transition-colors"
+              className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${showDescription ? 'rotate-90' : ''}`}>
                 <polyline points="9 18 15 12 9 6"/>

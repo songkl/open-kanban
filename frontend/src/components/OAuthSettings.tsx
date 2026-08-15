@@ -202,7 +202,7 @@ export function OAuthSettings({ currentUser }: Props) {
               key={row.key}
               className="space-y-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4"
             >
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                 {row.key}
               </label>
               <p className="text-xs text-zinc-500 dark:text-zinc-500">{row.description}</p>

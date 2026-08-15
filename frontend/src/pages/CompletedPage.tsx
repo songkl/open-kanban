@@ -169,7 +169,7 @@ export function CompletedPage() {
         </div>
         <Link
           to="/"
-          className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+          className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
         >
           {t('completed.backToBoard')}
         </Link>
@@ -195,7 +195,7 @@ export function CompletedPage() {
 
         <button
           onClick={toggleSelectAll}
-          className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+          className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
         >
           {selectedTasks.size === tasks.length ? t('completed.deselectAll') : t('completed.selectAll')}
         </button>
@@ -239,7 +239,7 @@ export function CompletedPage() {
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-zinc-800 dark:text-zinc-100">{task.title}</span>
                   <span className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    priorityColors[task.priority] || 'bg-zinc-100 text-zinc-700 dark:text-zinc-200'
+                    priorityColors[task.priority] || 'bg-zinc-100 text-zinc-700 dark:text-zinc-400'
                   }`}>
                     {t(`task.priority.${task.priority}`)}
                   </span>

@@ -132,7 +132,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
       </div>
 
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600">
             <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
@@ -168,7 +168,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
 
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600">
               <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
             </svg>
@@ -252,7 +252,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
                   setNewPassword('');
                   setNewRole('MEMBER');
                 }}
-                className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 transition-colors"
+                className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -351,7 +351,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
       </div>
 
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-4 flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600">
             <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
           </svg>
@@ -376,7 +376,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
           <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-100">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-200 text-zinc-600 dark:text-zinc-300 text-xs font-bold">V</div>
             <div className="flex-1">
-              <div className="font-medium text-zinc-700 dark:text-zinc-200 text-sm">{t('settings.viewer')}</div>
+              <div className="font-medium text-zinc-700 dark:text-zinc-400 text-sm">{t('settings.viewer')}</div>
               <div className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">{t('settings.viewerRoleDesc')}</div>
             </div>
           </div>

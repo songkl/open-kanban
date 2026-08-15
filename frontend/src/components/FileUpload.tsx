@@ -256,7 +256,7 @@ export function FileUpload({
               <span className="text-blue-600 font-medium">{t('upload.dropToUpload')}</span>
             ) : (
               <>
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">{t('upload.clickToUpload')}</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-400">{t('upload.clickToUpload')}</span>
                 <span className="text-zinc-500 dark:text-zinc-500"> {t('upload.orDragHere')}</span>
               </>
             )}
@@ -307,7 +307,7 @@ export function FileUpload({
 
               {/* File Info */}
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                <div className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-400">
                   {file.file.name}
                 </div>
                 <div className="text-xs text-zinc-500 dark:text-zinc-500">

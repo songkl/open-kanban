@@ -60,7 +60,7 @@ export function ColumnPermissionsModal({
         ) : (
           <>
             <div className="mb-4">
-              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">{t('column.currentPermissions')}</h3>
+              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-3">{t('column.currentPermissions')}</h3>
               {permissions.length === 0 ? (
                 <p className="text-sm text-zinc-400 dark:text-zinc-500 py-4 text-center">{t('column.noPermissions')}</p>
               ) : (
@@ -89,7 +89,7 @@ export function ColumnPermissionsModal({
             </div>
 
             <div className="border-t border-zinc-100 pt-4">
-              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 mb-3">{t('column.addPermission')}</h3>
+              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-3">{t('column.addPermission')}</h3>
               <AddColumnPermissionForm
                 columnId={column.id}
                 onPermissionAdded={onPermissionAdded}

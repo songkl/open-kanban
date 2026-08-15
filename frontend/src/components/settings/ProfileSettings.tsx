@@ -35,7 +35,7 @@ export function ProfileSettings({ currentUser, onUserUpdate }: ProfileSettingsPr
       <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.profile')}</h2>
 
       <div>
-        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.avatar')}</label>
+        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('settings.avatar')}</label>
         <div className="space-y-4">
           <div className="flex items-center gap-4">
             <UserAvatar
@@ -68,7 +68,7 @@ export function ProfileSettings({ currentUser, onUserUpdate }: ProfileSettingsPr
                   <button
                     type="button"
                     onClick={() => setAvatar('')}
-                    className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+                    className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
                   >
                     {t('settings.useLetterAvatar')}
                   </button>
@@ -81,7 +81,7 @@ export function ProfileSettings({ currentUser, onUserUpdate }: ProfileSettingsPr
       </div>
 
       <div>
-        <label htmlFor="nickname" className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.nickname')}</label>
+        <label htmlFor="nickname" className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('settings.nickname')}</label>
         <input
           id="nickname"
           type="text"

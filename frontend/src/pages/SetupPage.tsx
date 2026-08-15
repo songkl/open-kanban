@@ -266,7 +266,7 @@ export function SetupPage() {
 
           <form onSubmit={handleSetup} className="space-y-6">
           <div>
-            <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
               {t('login.username')}
             </label>
             <input
@@ -280,7 +280,7 @@ export function SetupPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+            <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
               {t('login.password')}
             </label>
             <input
@@ -313,7 +313,7 @@ export function SetupPage() {
             {showAdvanced && (
               <div className="mt-4 space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                     {t('setup.dbType')}
                   </label>
                   <select
@@ -328,7 +328,7 @@ export function SetupPage() {
 
                 {advancedConfig.dbType === 'sqlite' ? (
                   <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                         {t('setup.dbPath')}
                       </label>
                       <input
@@ -344,7 +344,7 @@ export function SetupPage() {
                   <>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                           {t('setup.dbHost')}
                         </label>
                         <input
@@ -356,7 +356,7 @@ export function SetupPage() {
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                           {t('setup.dbPort')}
                         </label>
                         <input
@@ -369,7 +369,7 @@ export function SetupPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                         {t('setup.dbName')}
                       </label>
                       <input
@@ -382,7 +382,7 @@ export function SetupPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                           {t('setup.dbUser')}
                         </label>
                         <input
@@ -394,7 +394,7 @@ export function SetupPage() {
                         />
                       </div>
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                           {t('setup.dbPassword')}
                         </label>
                         <input
@@ -410,10 +410,10 @@ export function SetupPage() {
                 )}
 
                 <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4">
-                  <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('setup.serverSettings')}</h3>
+                  <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('setup.serverSettings')}</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                           {t('setup.serverPort')}
                       </label>
                       <input
@@ -425,7 +425,7 @@ export function SetupPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
                           {t('setup.allowedOrigins')}
                       </label>
                       <input

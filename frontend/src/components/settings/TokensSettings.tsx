@@ -128,7 +128,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
                   </button>
                   <button
                     onClick={() => setEditingTokenId(null)}
-                    className="rounded bg-zinc-200 dark:bg-zinc-700 px-2 py-1 text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                    className="rounded bg-zinc-200 dark:bg-zinc-700 px-2 py-1 text-xs text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
                   >
                     {t('settings.cancel')}
                   </button>

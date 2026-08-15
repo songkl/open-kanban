@@ -185,7 +185,7 @@ export function ActivityLogPage() {
         <header className="mb-6">
           <Link
             to="/"
-            className="mb-4 inline-block rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+            className="mb-4 inline-block rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
           >
             ← {t('nav.back')}
           </Link>
@@ -204,7 +204,7 @@ export function ActivityLogPage() {
         </header>
 
         <div className="mb-6 rounded-lg bg-white p-4 shadow dark:bg-zinc-800">
-          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{t('settings.filterConditions')}</h3>
+          <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div>
               <label htmlFor="filterAction" className="mb-1 block text-xs text-zinc-500 dark:text-zinc-500">{t('settings.operationType')}</label>

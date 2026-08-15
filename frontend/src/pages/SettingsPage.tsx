@@ -117,7 +117,7 @@ export function SettingsPage() {
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center gap-4">
-          <Link to="/" className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600">
+          <Link to="/" className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600">
             ← {t('settings.back')}
           </Link>
           <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('settings.title')}</h1>

@@ -301,7 +301,7 @@ export function AgentActivityPage() {
             <div className="border-b border-zinc-200 dark:border-zinc-700 p-4">
               <Link
                 to="/"
-                className="mb-4 inline-block rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                className="mb-4 inline-block rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
               >
                 ← {t('nav.back')}
               </Link>

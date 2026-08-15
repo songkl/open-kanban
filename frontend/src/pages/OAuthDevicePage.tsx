@@ -133,7 +133,7 @@ export function OAuthDevicePage() {
           {t('oauth.device.subtitle')}
         </p>
 
-        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-200" htmlFor="user-code">
+        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400" htmlFor="user-code">
           {t('oauth.device.codeLabel')}
         </label>
         <input
@@ -196,7 +196,7 @@ export function OAuthDevicePage() {
             type="button"
             disabled={!lookup || submitting || decided !== null}
             onClick={() => decide('deny')}
-            className="flex-1 rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50:bg-zinc-600"
+            className="flex-1 rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="deny-btn"
           >
             {t('oauth.device.deny')}

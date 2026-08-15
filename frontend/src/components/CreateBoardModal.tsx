@@ -61,7 +61,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+        <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
           {t('modal.boardName')}
         </label>
         <input
@@ -76,7 +76,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
 
       {isEditing && (
         <div>
-          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
             {t('board.description') || 'Description'}
           </label>
           <textarea
@@ -91,7 +91,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
 
       {!isEditing && (
         <div>
-          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
             {t('modal.boardId')}
           </label>
           <input
@@ -109,7 +109,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
 
       {!isEditing && templates.length > 0 && (
         <div>
-          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+          <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
             {t('modal.useTemplate')}
           </label>
           <select
