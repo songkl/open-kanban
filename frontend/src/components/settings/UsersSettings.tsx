@@ -139,7 +139,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
           {t('settings.registrationSettings')}
         </h3>
         <div className="space-y-3">
-          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 transition-colors">
+          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 transition-colors">
             <div>
               <div className="font-medium text-zinc-800 dark:text-zinc-100 text-sm">{t('settings.allowRegistration')}</div>
               <div className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">{t('settings.allowRegistrationDesc')}</div>
@@ -151,7 +151,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
               className="h-5 w-5 rounded border-zinc-300 dark:border-zinc-600 text-blue-600 focus:ring-blue-500"
             />
           </label>
-          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 transition-colors">
+          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100 dark:border-zinc-700 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 transition-colors">
             <div>
               <div className="font-medium text-zinc-800 dark:text-zinc-100 text-sm">{t('settings.requirePassword')}</div>
               <div className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">{t('settings.requirePasswordDesc')}</div>
@@ -344,7 +344,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
           </div>
         ))}
         {users.length === 0 && (
-          <div className="py-12 text-center rounded-xl bg-white dark:bg-zinc-700 border border-zinc-100 shadow-sm">
+          <div className="py-12 text-center rounded-xl bg-white dark:bg-zinc-700 border border-zinc-100 dark:border-zinc-700 shadow-sm">
             <p className="text-zinc-500 dark:text-zinc-500">{t('settings.noUsers')}</p>
           </div>
         )}
@@ -374,7 +374,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
             </div>
           </div>
           <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100">
-            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-200 text-zinc-600 dark:text-zinc-300 text-xs font-bold">V</div>
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 text-xs font-bold">V</div>
             <div className="flex-1">
               <div className="font-medium text-zinc-700 dark:text-zinc-400 text-sm">{t('settings.viewer')}</div>
               <div className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">{t('settings.viewerRoleDesc')}</div>

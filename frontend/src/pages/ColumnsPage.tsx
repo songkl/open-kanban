@@ -398,7 +398,7 @@ export function ColumnsPage() {
           )}
           <Link
             to={selectedBoard ? `/board/${selectedBoard.id}` : '/boards'}
-            className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 shadow-sm border border-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:border-zinc-700 transition-all"
+            className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:border-zinc-700 transition-all"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5M12 19l-7-7 7-7"/>

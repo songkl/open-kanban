@@ -76,7 +76,7 @@ export function BoardActionsMenu({
               </Link>
             </>
           )}
-          <div className="border-t border-zinc-100 my-1" />
+          <div className="border-t border-zinc-100 dark:border-zinc-700 my-1" />
           <div className="relative">
             <button
               onClick={() => onSetShowExportMenu(!showExportMenu)}
@@ -98,7 +98,7 @@ export function BoardActionsMenu({
               </div>
             )}
           </div>
-          <div className="border-t border-zinc-100 my-1" />
+          <div className="border-t border-zinc-100 dark:border-zinc-700 my-1" />
           <button
             onClick={() => {
               onReset();

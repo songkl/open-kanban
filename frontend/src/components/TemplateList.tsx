@@ -34,7 +34,7 @@ export function TemplateList({ templates, onDeleteTemplate }: TemplateListProps)
         {templates.map((template) => (
           <div
             key={template.id}
-            className="group rounded-2xl bg-white dark:bg-zinc-700 p-5 shadow-sm border border-zinc-100 hover:shadow-lg hover:border-zinc-200 dark:border-zinc-700 transition-all duration-300"
+            className="group rounded-2xl bg-white dark:bg-zinc-700 p-5 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:shadow-lg hover:border-zinc-200 dark:border-zinc-700 transition-all duration-300"
           >
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/10 to-purple-600/10 text-purple-600">

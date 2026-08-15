@@ -40,7 +40,7 @@ export function ColumnPermissionsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100 max-h-[80vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -88,7 +88,7 @@ export function ColumnPermissionsModal({
               )}
             </div>
 
-            <div className="border-t border-zinc-100 pt-4">
+            <div className="border-t border-zinc-100 dark:border-zinc-700 pt-4">
               <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-3">{t('column.addPermission')}</h3>
               <AddColumnPermissionForm
                 columnId={column.id}

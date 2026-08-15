@@ -46,7 +46,7 @@ export function ColumnCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-4 rounded-xl bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800 border border-zinc-100 hover:shadow-md hover:border-zinc-200 dark:border-zinc-700 transition-all duration-200"
+      className="group flex items-center gap-4 rounded-xl bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 hover:shadow-md hover:border-zinc-200 dark:border-zinc-700 transition-all duration-200"
     >
       <button
         {...attributes}

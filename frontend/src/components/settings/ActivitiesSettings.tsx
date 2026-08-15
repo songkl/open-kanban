@@ -125,7 +125,7 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
       <div className="h-[calc(100vh-380px)] overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
         <div className="p-4 space-y-3">
           {activities.map((activity) => (
-            <div key={activity.id} className="flex items-start gap-4 rounded-lg border border-zinc-100 p-4">
+            <div key={activity.id} className="flex items-start gap-4 rounded-lg border border-zinc-100 dark:border-zinc-700 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
                 {activity.action === 'CREATE_TASK' && <span className="text-lg">📝</span>}
                 {activity.action === 'COMPLETE_TASK' && <span className="text-lg">✅</span>}
