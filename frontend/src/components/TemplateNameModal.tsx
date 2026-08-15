@@ -38,7 +38,7 @@ export function TemplateNameModal({
     >
       <div className="absolute inset-0" />
       <div
-        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow dark:bg-zinc-800 border border-zinc-100"
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -63,7 +63,7 @@ export function TemplateNameModal({
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
             placeholder={t('modal.enterTemplateName')}
-            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white dark:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             autoFocus
           />
         </div>
@@ -71,7 +71,7 @@ export function TemplateNameModal({
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
+            className="flex-1 rounded-xl bg-zinc-100 dark:bg-zinc-700 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
           >
             {t('task.cancel')}
           </button>

@@ -29,13 +29,13 @@ export function DSStoreCard({
       className={`
         rounded-lg border p-4 cursor-pointer transition-all duration-200
         ${disabled
-          ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 opacity-60 cursor-not-allowed'
+          ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 opacity-60 cursor-not-allowed'
           : 'border-[#E7E7F5] hover:border-blue-500 bg-white'
         }
       `}
     >
       {(icon || iconUrls?.length || defaultIcon) && (
-        <div className="mb-3 flex items-center justify-center w-12 h-12 bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="mb-3 flex items-center justify-center w-12 h-12 bg-white dark:bg-zinc-700 rounded-lg shadow-sm overflow-hidden">
           {iconUrls?.[0] ? (
             <img src={iconUrls[0]} alt={title} className="w-full h-full object-cover" />
           ) : icon ? (

@@ -191,7 +191,7 @@ export function UserDetailPage() {
                 className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                   activeTab === 'profile'
                     ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                    : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
+                    : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                 }`}
               >
                 {t('userDetail.profile', 'Profile')}
@@ -202,7 +202,7 @@ export function UserDetailPage() {
                   className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                     activeTab === 'activities'
                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
+                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                   }`}
                 >
                   {t('userDetail.activities', 'Activities')}
@@ -214,7 +214,7 @@ export function UserDetailPage() {
                   className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                     activeTab === 'permissions'
                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
+                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                   }`}
                 >
                   {t('userDetail.permissions', 'Permissions')}
@@ -226,7 +226,7 @@ export function UserDetailPage() {
                   className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                     activeTab === 'boards'
                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
+                      : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800'
                   }`}
                 >
                   {t('userDetail.boards', 'Boards')}
@@ -262,7 +262,7 @@ export function UserDetailPage() {
                           ? 'bg-blue-100 text-blue-700'
                           : targetUser.role === 'MEMBER'
                           ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
+                          : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
                       }`}>
                         {targetUser.role === 'ADMIN' ? t('settings.admin') : targetUser.role === 'MEMBER' ? t('settings.member') : t('settings.viewer')}
                       </span>
@@ -272,7 +272,7 @@ export function UserDetailPage() {
                       <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium ${
                         targetUser.type === 'AGENT'
                           ? 'bg-violet-100 text-violet-700'
-                          : 'bg-zinc-100 text-zinc-500 dark:text-zinc-500'
+                          : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-500'
                       }`}>
                         {targetUser.type === 'AGENT' ? t('settings.agent') : t('settings.human')}
                       </span>
@@ -399,7 +399,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
+                            : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
                         }`}>
                           {perm.access === 'ADMIN' ? t('settings.admin') : perm.access === 'WRITE' ? t('settings.member') : t('settings.viewer')}
                         </span>
@@ -436,7 +436,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
+                            : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
                         }`}>
                           {perm.access === 'ADMIN' ? t('settings.admin') : perm.access === 'WRITE' ? t('settings.member') : t('settings.viewer')}
                         </span>
@@ -476,7 +476,7 @@ export function UserDetailPage() {
                             ? 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300'
                             : perm.access === 'WRITE'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300'
+                            : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
                         }`}>
                           {perm.access}
                         </span>

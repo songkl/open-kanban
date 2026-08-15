@@ -46,7 +46,7 @@ export function ColumnCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-4 rounded-xl bg-white p-4 shadow dark:bg-zinc-800 border border-zinc-100 hover:shadow-md hover:border-zinc-200 dark:border-zinc-700 transition-all duration-200"
+      className="group flex items-center gap-4 rounded-xl bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800 border border-zinc-100 hover:shadow-md hover:border-zinc-200 dark:border-zinc-700 transition-all duration-200"
     >
       <button
         {...attributes}
@@ -75,7 +75,7 @@ export function ColumnCard({
       />
       <span className="flex-1 font-semibold text-zinc-800 dark:text-zinc-100">{column.name}</span>
       {column.status && (
-        <span className="rounded-full bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 border border-zinc-100">
+        <span className="rounded-full bg-zinc-50 dark:bg-zinc-700 px-3 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 border border-zinc-100">
           {column.status}
         </span>
       )}

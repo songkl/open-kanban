@@ -40,7 +40,7 @@ export function HeaderRightMenu({
             onClick={() => {
               onSetShowUserMenu(!showUserMenu);
             }}
-            className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-zinc-100"
+            className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-600"
           >
             <UserAvatar username={currentUser.nickname} avatar={currentUser.avatar} size="sm" />
             <span className={`text-xs ${wsStatus === 'connected' ? 'text-green-600' : wsStatus === 'failed' ? 'text-red-500' : 'text-red-400'}`}>
@@ -61,7 +61,7 @@ export function HeaderRightMenu({
                   }
                   onSetShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-600"
               >
                 <span className={wsStatus === 'connected' ? 'text-green-600' : wsStatus === 'failed' ? 'text-red-500' : 'text-red-400'}>
                   {wsStatus === 'connected' ? '●' : '○'}
@@ -71,7 +71,7 @@ export function HeaderRightMenu({
                   {wsStatus === 'connected' ? t('status.connected') : wsStatus === 'failed' ? t('status.reconnect') : t('status.connecting')}
                 </span>
               </button>
-              <Link to="/settings" onClick={() => onSetShowUserMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100">
+              <Link to="/settings" onClick={() => onSetShowUserMenu(false)} className="block px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-600">
                 {t('settings.title')}
               </Link>
               <button
@@ -80,7 +80,7 @@ export function HeaderRightMenu({
                   i18n.changeLanguage(newLang);
                   localStorage.setItem('language', newLang);
                 }}
-                className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100"
+                className="w-full flex items-center justify-between px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-600"
               >
                 <span>{t('nav.language')}</span>
                 <span className="text-xs text-zinc-500 dark:text-zinc-500">{i18n.language === 'zh' ? t('language.en') : t('language.zh')}</span>
@@ -90,7 +90,7 @@ export function HeaderRightMenu({
                 onClick={() => {
                   onSetDarkMode(!darkMode);
                 }}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-600"
               >
                 <span>{t('settings.darkMode')}</span>
                 <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">{darkMode ? '🌙' : '☀️'}</span>
@@ -101,7 +101,7 @@ export function HeaderRightMenu({
                   localStorage.removeItem('token');
                   navigate('/login');
                 }}
-                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-zinc-100"
+                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-zinc-100 dark:hover:bg-zinc-600"
               >
                 {t('auth.logout')}
               </button>

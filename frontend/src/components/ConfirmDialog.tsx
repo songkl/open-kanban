@@ -59,7 +59,7 @@ export function ConfirmDialog({
       <div className="absolute inset-0" />
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow dark:bg-zinc-800 border border-zinc-100"
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
         tabIndex={-1}
       >
@@ -86,7 +86,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
+            className="flex-1 rounded-xl bg-zinc-100 dark:bg-zinc-700 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
           >
             {cancelText || t('task.cancel')}
           </button>

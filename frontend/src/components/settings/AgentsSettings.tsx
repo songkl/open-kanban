@@ -177,7 +177,7 @@ export function AgentsSettings() {
                   setEditingAgentNickname(agent.nickname);
                   setEditingAgentAvatar(agent.avatar || '');
                 }}
-                className="rounded bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200"
+                className="rounded bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600"
               >
                 {t('settings.edit')}
               </button>
@@ -237,10 +237,10 @@ export function AgentsSettings() {
       {showTokenModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
             <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.tokenGenerated')}</h2>
             <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-500">{t('settings.tokenGeneratedHint')}</p>
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-zinc-100 p-3">
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-zinc-100 dark:bg-zinc-700 p-3">
               <code className="flex-1 break-all font-mono text-sm">{newAgentToken}</code>
               <button
                 onClick={() => {
@@ -260,7 +260,7 @@ export function AgentsSettings() {
             </div>
             <button
               onClick={() => setShowTokenModal(false)}
-              className="w-full rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200"
+              className="w-full rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600"
             >
               {t('settings.close')}
             </button>
@@ -271,7 +271,7 @@ export function AgentsSettings() {
       {editingAgent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setEditingAgent(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
             <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.editAgent')}</h2>
             <form onSubmit={(e) => { e.preventDefault(); handleUpdateAgent(); }} className="space-y-4">
               <div>
@@ -308,7 +308,7 @@ export function AgentsSettings() {
                           <button
                             type="button"
                             onClick={() => setEditingAgentAvatar('')}
-                            className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+                            className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700"
                           >
                             {t('settings.useLetterAvatar')}
                           </button>
@@ -340,7 +340,7 @@ export function AgentsSettings() {
                 <button
                   type="button"
                   onClick={() => setEditingAgent(null)}
-                  className="flex-1 rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200"
+                  className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600"
                 >
                   {t('settings.cancel')}
                 </button>

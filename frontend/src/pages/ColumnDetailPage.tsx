@@ -236,7 +236,7 @@ export function ColumnDetailPage() {
               {column.name}
             </h1>
             {column.status && (
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-500 dark:bg-zinc-700">
+              <span className="rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-500 dark:bg-zinc-700">
                 {column.status}
               </span>
             )}
@@ -322,7 +322,7 @@ export function ColumnDetailPage() {
 
       <main className="p-6">
         {column.description && (
-          <div className="mb-6 rounded-lg bg-white p-4 text-sm text-zinc-600 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700">
+          <div className="mb-6 rounded-lg bg-white dark:bg-zinc-700 p-4 text-sm text-zinc-600 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700">
             <p>{column.description}</p>
           </div>
         )}

@@ -94,7 +94,7 @@ export function FilterPanelContent({
       <div className="flex gap-2 pt-2 border-t border-zinc-100">
         <button
           onClick={onClearFilters}
-          className="flex-1 rounded-md bg-zinc-100 px-2 py-1.5 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200"
+          className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-2 py-1.5 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600"
         >
           {t('filter.clear')}
         </button>
@@ -122,7 +122,7 @@ export function FilterPanelContent({
                 <div key={preset.id} className="flex items-center justify-between group">
                   <button
                     onClick={() => onApplyPreset(preset)}
-                    className="flex-1 text-left px-2 py-1 text-sm rounded hover:bg-zinc-100"
+                    className="flex-1 text-left px-2 py-1 text-sm rounded hover:bg-zinc-100 dark:hover:bg-zinc-600"
                   >
                     {preset.name}
                   </button>

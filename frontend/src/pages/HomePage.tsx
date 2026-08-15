@@ -111,7 +111,7 @@ export function HomePage() {
   if (showInitModal) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-100">
-        <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg dark:bg-zinc-800">
+        <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-8 shadow-lg dark:bg-zinc-800">
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('app.title')}</h1>
             <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">{t('login.welcome')}</p>

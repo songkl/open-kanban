@@ -103,8 +103,8 @@ export function OAuthDevicePage() {
 
   if (needsLogin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 px-4 dark:bg-zinc-900">
-        <div className="w-full max-w-md rounded-xl bg-white p-6 text-center shadow-lg dark:bg-zinc-800">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">
+        <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 text-center shadow-lg dark:bg-zinc-800">
           <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
             {t('oauth.device.title')}
           </h1>
@@ -124,8 +124,8 @@ export function OAuthDevicePage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-100 px-4 dark:bg-zinc-900">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow dark:bg-zinc-800 dark:bg-zinc-800">
+    <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">
+      <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
         <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
           {t('oauth.device.title')}
         </h1>

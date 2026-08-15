@@ -140,7 +140,7 @@ export function HistoryPage() {
             <select
               value={selectedBoard}
               onChange={(e) => handleBoardChange(e.target.value)}
-              className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm"
+              className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm"
             >
               {boards.map((board) => (
                 <option key={board.id} value={board.id}>
@@ -166,7 +166,7 @@ export function HistoryPage() {
           <div className="text-zinc-500 dark:text-zinc-500">{t('history.loading')}</div>
         </div>
       ) : tasks.length === 0 ? (
-        <div className="rounded-lg bg-white p-8 text-center text-zinc-500 dark:text-zinc-500">
+        <div className="rounded-lg bg-white dark:bg-zinc-700 p-8 text-center text-zinc-500 dark:text-zinc-500">
           {t('history.empty')}
         </div>
       ) : (
@@ -174,7 +174,7 @@ export function HistoryPage() {
           {tasks.map((task) => (
             <div
               key={task.id}
-              className="group relative w-80 cursor-grab rounded-lg bg-white p-3 shadow-sm transition-all hover:shadow-md"
+              className="group relative w-80 cursor-grab rounded-lg bg-white dark:bg-zinc-700 p-3 shadow-sm transition-all hover:shadow-md"
             >
               <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100">
                 <span className="h-0.5 w-1 rounded-full bg-zinc-400" />

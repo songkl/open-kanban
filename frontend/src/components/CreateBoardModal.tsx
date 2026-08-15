@@ -69,7 +69,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
           value={boardName}
           onChange={(e) => setBoardName(e.target.value)}
           placeholder={t('modal.enterBoardName')}
-          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white dark:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           autoFocus
         />
       </div>
@@ -84,7 +84,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
             onChange={(e) => setBoardDescription(e.target.value)}
             placeholder={t('board.descriptionPlaceholder')}
             rows={4}
-            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white dark:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
           />
         </div>
       )}
@@ -99,7 +99,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
             value={boardId}
             onChange={(e) => setBoardId(e.target.value.replace(/\//g, ''))}
             placeholder={t('modal.autoGenerate')}
-            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white dark:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
           <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">
             {t('modal.boardIdHint')}
@@ -115,7 +115,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
           <select
             value={selectedTemplate}
             onChange={(e) => setSelectedTemplate(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 px-4 py-3 text-zinc-800 dark:text-zinc-100 transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 px-4 py-3 text-zinc-800 dark:text-zinc-100 transition-all focus:border-blue-500 focus:bg-white dark:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           >
             <option value="">{t('modal.noTemplate')}</option>
             {templates.map((template) => (
@@ -131,7 +131,7 @@ function BoardForm({ editingBoard, templates, onClose, onSubmit, t }: BoardFormP
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-xl bg-zinc-100 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
+          className="flex-1 rounded-xl bg-zinc-100 dark:bg-zinc-700 px-4 py-3 font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
         >
           {t('task.cancel')}
         </button>
@@ -167,7 +167,7 @@ export function CreateBoardModal({
     >
       <div className="absolute inset-0" />
       <div
-        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow dark:bg-zinc-800 border border-zinc-100"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">

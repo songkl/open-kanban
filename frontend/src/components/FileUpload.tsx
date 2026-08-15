@@ -215,8 +215,8 @@ export function FileUpload({
             isDragging
               ? 'border-blue-500 bg-blue-50'
               : canUpload
-              ? 'border-zinc-300 dark:border-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700'
-              : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 cursor-not-allowed'
+              ? 'border-zinc-300 dark:border-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'
+              : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 cursor-not-allowed'
           }
         `}
       >
@@ -233,7 +233,7 @@ export function FileUpload({
         <div className="flex flex-col items-center gap-2 text-center">
           <div
             className={`rounded-full p-3 ${
-              isDragging ? 'bg-blue-100 text-blue-600' : 'bg-zinc-100 text-zinc-500 dark:text-zinc-500'
+              isDragging ? 'bg-blue-100 text-blue-600' : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-500'
             }`}
           >
             <svg
@@ -368,7 +368,7 @@ export function FileUpload({
               {file.status === 'uploading' && file.abort && (
                 <button
                   onClick={() => file.abort?.()}
-                  className="flex-shrink-0 rounded p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-orange-500"
+                  className="flex-shrink-0 rounded p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:text-orange-500"
                   title={t('upload.cancelUpload')}
                 >
                   <svg
@@ -390,7 +390,7 @@ export function FileUpload({
               {file.status !== 'uploading' && (
                 <button
                   onClick={() => handleRemove(file.id)}
-                  className="flex-shrink-0 rounded p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300"
+                  className="flex-shrink-0 rounded p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:text-zinc-600 dark:text-zinc-300"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"

@@ -40,7 +40,7 @@ export function ColumnPermissionsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow dark:bg-zinc-800 border border-zinc-100 max-h-[80vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -66,7 +66,7 @@ export function ColumnPermissionsModal({
               ) : (
                 <div className="space-y-2">
                   {permissions.map((perm) => (
-                    <div key={perm.id} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                    <div key={perm.id} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-700 rounded-xl border border-zinc-100">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-xs font-bold">
                           {perm.userNickname.charAt(0).toUpperCase()}
@@ -101,7 +101,7 @@ export function ColumnPermissionsModal({
         <div className="mt-6 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-xl bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors"
+            className="rounded-xl bg-zinc-100 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
           >
             {t('common.close')}
           </button>

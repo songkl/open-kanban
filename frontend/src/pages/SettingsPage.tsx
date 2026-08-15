@@ -142,14 +142,14 @@ export function SettingsPage() {
             <nav className="space-y-1">
               <button
                 onClick={() => switchToTab('profile')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'profile' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'profile' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
               >
                 {t('settings.profile')}
               </button>
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('tokens')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'tokens' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'tokens' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.tokens')}
                 </button>
@@ -157,7 +157,7 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('activities')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'activities' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'activities' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.activitiesTitle')}
                 </button>
@@ -165,7 +165,7 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('agents')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'agents' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'agents' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.agents')}
                 </button>
@@ -173,27 +173,27 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('users')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'users' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'users' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
                 >
                   {t('settings.users')}
                 </button>
               )}
               <button
                 onClick={() => switchToTab('shortcuts')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'shortcuts' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'shortcuts' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
               >
                 {t('settings.shortcuts')}
               </button>
               <button
                 onClick={() => switchToTab('oauth')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'oauth' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'oauth' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
                 data-testid="tab-oauth"
               >
                 {t('oauth.admin.title')}
               </button>
               <button
                 onClick={() => switchToTab('theme')}
-                className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
+                className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
               >
                 <span>{t('nav.theme')}</span>
                 {darkMode ? (
@@ -220,7 +220,7 @@ export function SettingsPage() {
                     localStorage.removeItem('token');
                     navigate('/login');
                   }}
-                  className="w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-zinc-100"
+                  className="w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-zinc-100 dark:hover:bg-zinc-600"
                 >
                   {t('auth.logout')}
                 </button>
@@ -228,7 +228,7 @@ export function SettingsPage() {
             </nav>
           </div>
 
-          <div className="flex-1 rounded-lg bg-white p-6 shadow dark:bg-zinc-800">
+          <div className="flex-1 rounded-lg bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
             {activeTab === 'profile' && currentUser && (
               <ProfileSettings
                 currentUser={currentUser}

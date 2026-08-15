@@ -341,7 +341,7 @@ export function AgentActivityPage() {
                       className={`w-full flex items-center gap-3 rounded-lg p-2 text-left transition-colors ${
                         selectedAgentId === agent.id
                           ? 'bg-blue-100 ring-1 ring-blue-300'
-                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'
                       }`}
                     >
                       <div className="relative">
@@ -400,7 +400,7 @@ export function AgentActivityPage() {
               </label>
               <button
                 onClick={() => loadActivities(selectedAgentId || undefined)}
-                className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200"
+                className="rounded-md bg-zinc-100 dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600"
               >
                 {t('settings.agentActivity.refresh')}
               </button>
@@ -426,7 +426,7 @@ export function AgentActivityPage() {
                   return (
                     <div
                       key={activity.id}
-                      className="flex items-start gap-4 rounded-lg bg-white p-4 shadow dark:bg-zinc-800"
+                      className="flex items-start gap-4 rounded-lg bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800"
                     >
                       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">
                         <span className="text-lg">{actionIcons[activity.action] || '📌'}</span>

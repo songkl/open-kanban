@@ -177,7 +177,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
                 e.stopPropagation();
                 setShowMoreMenu(!showMoreMenu);
               }}
-              className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
+              className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
               title={t('taskCard.moreActions')}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -271,7 +271,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               e.stopPropagation();
               onClick();
             }}
-            className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
+            className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-300 z-10 relative transition-colors"
             title={t('taskCard.viewDetails')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

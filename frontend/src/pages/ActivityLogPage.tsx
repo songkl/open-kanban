@@ -203,7 +203,7 @@ export function ActivityLogPage() {
           </div>
         </header>
 
-        <div className="mb-6 rounded-lg bg-white p-4 shadow dark:bg-zinc-800">
+        <div className="mb-6 rounded-lg bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800">
           <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div>
@@ -264,7 +264,7 @@ export function ActivityLogPage() {
               </button>
               <button
                 onClick={handleClearFilter}
-                className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+                className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700"
               >
                 {t('filter.clear')}
               </button>
@@ -277,7 +277,7 @@ export function ActivityLogPage() {
             <div className="text-zinc-500 dark:text-zinc-500">{t('settings.loading')}</div>
           </div>
         ) : activities.length === 0 ? (
-          <div className="rounded-lg bg-white p-8 text-center text-zinc-500 dark:text-zinc-500 shadow">
+          <div className="rounded-lg bg-white dark:bg-zinc-700 p-8 text-center text-zinc-500 dark:text-zinc-500 shadow">
             {t('settings.noActivities')}
           </div>
         ) : (
@@ -287,7 +287,7 @@ export function ActivityLogPage() {
               return (
                 <div
                   key={activity.id}
-                  className={`flex items-start gap-4 rounded-lg bg-white p-4 shadow dark:bg-zinc-800 ${isClickable ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-700' : ''}`}
+                  className={`flex items-start gap-4 rounded-lg bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800 ${isClickable ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700' : ''}`}
                   onClick={() => handleActivityClick(activity)}
                 >
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">

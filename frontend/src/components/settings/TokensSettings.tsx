@@ -149,7 +149,7 @@ export function TokensSettings({ onLoadTokens }: TokensSettingsProps) {
                   setEditingTokenId(token.id);
                   setEditingTokenName(token.name);
                 }}
-                className="rounded bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200"
+                className="rounded bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600"
               >
                 {t('settings.rename')}
               </button>

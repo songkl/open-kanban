@@ -26,7 +26,7 @@ export function BoardCard({
   const navigate = useNavigate();
 
   return (
-    <div className="group rounded-2xl bg-white p-5 shadow-sm border border-zinc-100 hover:shadow-xl hover:border-zinc-200 dark:border-zinc-700 transition-all duration-300">
+    <div className="group rounded-2xl bg-white dark:bg-zinc-700 p-5 shadow-sm border border-zinc-100 hover:shadow-xl hover:border-zinc-200 dark:border-zinc-700 transition-all duration-300">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 text-blue-600">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -53,7 +53,7 @@ export function BoardCard({
         </button>
         <Link
           to={`/columns?boardId=${board.id}`}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-300 border border-zinc-100 hover:bg-zinc-100 hover:border-zinc-200 dark:border-zinc-700 transition-all"
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-700 px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-300 border border-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:border-zinc-200 dark:border-zinc-700 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="5" height="18"/>

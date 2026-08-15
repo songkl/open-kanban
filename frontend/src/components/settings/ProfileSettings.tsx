@@ -68,7 +68,7 @@ export function ProfileSettings({ currentUser, onUserUpdate }: ProfileSettingsPr
                   <button
                     type="button"
                     onClick={() => setAvatar('')}
-                    className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+                    className="rounded-md border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700"
                   >
                     {t('settings.useLetterAvatar')}
                   </button>

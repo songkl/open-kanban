@@ -34,7 +34,7 @@ export function BoardSkeleton() {
               {Array.from({ length: 3 + (index % 2) }).map((_, taskIndex) => (
                 <div
                   key={taskIndex}
-                  className="animate-pulse rounded-lg bg-zinc-100 p-3"
+                  className="animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-700 p-3"
                 >
                   <div className="mb-2 h-5 w-full animate-pulse rounded bg-zinc-300" />
                   <div className="mb-3 h-4 w-3/4 animate-pulse rounded bg-zinc-300" />
@@ -71,7 +71,7 @@ export function Spinner({ className = '' }: { className?: string }) {
 export function LoadingOverlay({ message }: { message?: string }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
-      <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-4 shadow-lg">
+      <div className="flex flex-col items-center gap-3 rounded-xl bg-white dark:bg-zinc-700 px-6 py-4 shadow-lg">
         <Spinner className="h-8 w-8 text-blue-500" />
         <span className="text-sm text-zinc-600 dark:text-zinc-300">{message}</span>
       </div>

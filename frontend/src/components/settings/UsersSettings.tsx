@@ -139,7 +139,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
           {t('settings.registrationSettings')}
         </h3>
         <div className="space-y-3">
-          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-100 cursor-pointer hover:bg-zinc-100 transition-colors">
+          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 transition-colors">
             <div>
               <div className="font-medium text-zinc-800 dark:text-zinc-100 text-sm">{t('settings.allowRegistration')}</div>
               <div className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">{t('settings.allowRegistrationDesc')}</div>
@@ -151,7 +151,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
               className="h-5 w-5 rounded border-zinc-300 dark:border-zinc-600 text-blue-600 focus:ring-blue-500"
             />
           </label>
-          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-100 cursor-pointer hover:bg-zinc-100 transition-colors">
+          <label className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 transition-colors">
             <div>
               <div className="font-medium text-zinc-800 dark:text-zinc-100 text-sm">{t('settings.requirePassword')}</div>
               <div className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">{t('settings.requirePasswordDesc')}</div>
@@ -185,7 +185,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
         </div>
 
         {showAddUser && (
-          <div className="space-y-3 p-4 rounded-xl bg-zinc-50 border border-zinc-200 dark:border-zinc-700">
+          <div className="space-y-3 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-700">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="newUsername" className="block text-xs font-medium text-zinc-600 dark:text-zinc-300 mb-1">{t('settings.username')} *</label>
@@ -252,7 +252,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
                   setNewPassword('');
                   setNewRole('MEMBER');
                 }}
-                className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 transition-colors"
+                className="rounded-lg bg-zinc-100 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
               >
                 {t('common.cancel')}
               </button>
@@ -297,13 +297,13 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
                       });
                     }}
                     disabled={user.id === currentUser?.id}
-                    className={`rounded-lg px-2 py-1 text-xs border font-medium ${user.role === 'ADMIN' ? 'bg-blue-100 text-blue-700 border-blue-200' : user.role === 'MEMBER' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'} ${user.id === currentUser?.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    className={`rounded-lg px-2 py-1 text-xs border font-medium ${user.role === 'ADMIN' ? 'bg-blue-100 text-blue-700 border-blue-200' : user.role === 'MEMBER' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'} ${user.id === currentUser?.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <option value="ADMIN">{t('settings.admin')}</option>
                     <option value="MEMBER">{t('settings.member')}</option>
                     <option value="VIEWER">{t('settings.viewer')}</option>
                   </select>
-                  <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs font-medium ${user.type === 'AGENT' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-100 text-zinc-500 dark:text-zinc-500'}`}>
+                  <span className={`inline-flex items-center rounded-lg px-2 py-1 text-xs font-medium ${user.type === 'AGENT' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-500'}`}>
                     {user.type === 'AGENT' ? t('settings.agent') : t('settings.human')}
                   </span>
                 </div>
@@ -344,7 +344,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
           </div>
         ))}
         {users.length === 0 && (
-          <div className="py-12 text-center rounded-xl bg-white border border-zinc-100 shadow-sm">
+          <div className="py-12 text-center rounded-xl bg-white dark:bg-zinc-700 border border-zinc-100 shadow-sm">
             <p className="text-zinc-500 dark:text-zinc-500">{t('settings.noUsers')}</p>
           </div>
         )}
@@ -373,7 +373,7 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
               <div className="text-xs text-emerald-600 mt-0.5">{t('settings.memberRoleDesc')}</div>
             </div>
           </div>
-          <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-100">
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-700 border border-zinc-100">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-200 text-zinc-600 dark:text-zinc-300 text-xs font-bold">V</div>
             <div className="flex-1">
               <div className="font-medium text-zinc-700 dark:text-zinc-400 text-sm">{t('settings.viewer')}</div>
