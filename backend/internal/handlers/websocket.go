@@ -37,6 +37,32 @@ func IsOriginAllowedForTest(origin string) bool {
 	return isOriginAllowed(origin)
 }
 
+func AddClientForTest(conn *websocket.Conn) {
+	clientsMux.Lock()
+	clients[conn] = &sync.Mutex{}
+	clientsMux.Unlock()
+}
+
+func RemoveAllClientsForTest() {
+	clientsMux.Lock()
+	for conn := range clients {
+		delete(clients, conn)
+	}
+	clientsMux.Unlock()
+}
+
+func SafeRemoveClientForTest(conn *websocket.Conn) {
+	safeRemoveClient(conn)
+}
+
+func GetClientWriteLockForTest(conn *websocket.Conn) *sync.Mutex {
+	return getClientWriteLock(conn)
+}
+
+func BroadcastRefreshForTest() {
+	BroadcastRefresh()
+}
+
 var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -47,7 +73,7 @@ var (
 			return isOriginAllowed(origin)
 		},
 	}
-	clients          = make(map[*websocket.Conn]bool)
+	clients          = make(map[*websocket.Conn]*sync.Mutex)
 	clientsMux       sync.RWMutex
 	userConnCount    = make(map[string]int)
 	userConnCountMux sync.Mutex
@@ -242,8 +268,9 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			return nil
 		})
 
+		writeMux := &sync.Mutex{}
 		clientsMux.Lock()
-		clients[conn] = true
+		clients[conn] = writeMux
 		clientsMux.Unlock()
 		connCounter.IncrTotal()
 		incrementUserConnCount(userID)
@@ -267,7 +294,10 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 					return
 				case <-pingTicker.C:
 					conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
-					if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					writeMux.Lock()
+					err := conn.WriteMessage(websocket.PingMessage, nil)
+					writeMux.Unlock()
+					if err != nil {
 						slog.Warn("Failed to send ping to client", "request_id", requestID, "user_id", userID, "error", err)
 						return
 					}
@@ -290,7 +320,10 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 			}
 			if msgType == websocket.TextMessage {
 				conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
-				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`)); err != nil {
+				writeMux.Lock()
+				err = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`))
+				writeMux.Unlock()
+				if err != nil {
 					slog.Warn("Failed to send heartbeat_ack to client", "request_id", requestID, "user_id", userID, "error", err)
 					break
 				}

@@ -38,7 +38,7 @@ func LogActivity(db *sql.DB, userID, action, targetType, targetID, targetTitle, 
 	if err != nil {
 		slog.Error("Failed to insert activity", "error", err, "userID", userID, "action", action, "targetType", targetType, "targetID", targetID)
 	}
-	_, err = db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", userID)
+	_, err = db.Exec("UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?", userID)
 	if err != nil {
 		slog.Error("Failed to update user last_active_at", "error", err, "userID", userID)
 	}

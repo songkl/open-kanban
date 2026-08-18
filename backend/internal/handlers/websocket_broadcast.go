@@ -81,11 +81,24 @@ func processBroadcast(msg broadcastMessage) {
 
 	for _, conn := range conns {
 		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		writeMux := getClientWriteLock(conn)
+		if writeMux == nil {
+			continue
+		}
+		writeMux.Lock()
+		err := conn.WriteMessage(websocket.TextMessage, data)
+		writeMux.Unlock()
+		if err != nil {
 			slog.Warn("Failed to broadcast to client", "error", err)
 			safeRemoveClient(conn)
 		}
 	}
+}
+
+func getClientWriteLock(conn *websocket.Conn) *sync.Mutex {
+	clientsMux.RLock()
+	defer clientsMux.RUnlock()
+	return clients[conn]
 }
 
 func safeRemoveClient(conn *websocket.Conn) {
