@@ -39,6 +39,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    reuseExistingServer: true,
     proxy: {
       '/api/v1': 'http://localhost:8081',
       '/ws': { target: 'ws://localhost:8081', ws: true }

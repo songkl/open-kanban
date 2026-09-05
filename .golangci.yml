@@ -1,0 +1,56 @@
+run:
+  go: '1.24'
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gofmt
+    - misspell
+    - unconvert
+    - usestdlibvars
+    - unparam
+    - noctx
+    - duration
+    - bodyclose
+    - asciicheck
+    - copyloopref
+
+linters-settings:
+  govet:
+    enable:
+      - nilint
+  gofmt:
+    simplify: true
+  revive:
+    rules:
+      - name: blank-imports
+        severity: ignored
+      - name: context-as-argument
+        severity: ignored
+      - name: errorf
+        severity: ignored
+      - name: var-naming
+        severity: ignored
+
+issues:
+  exclude-rules:
+    # Exclude golangci-lint's built-in default exclusions for golint
+    - path: _test\.go
+      linters:
+        - dupl
+        - goconst
+        - perfsprint
+        - tparallel
+        - paralleltest
+    - path: internal/handlers/.*
+      linters:
+        - dupl
+    - path: internal/repositories/.*
+      linters:
+        - dupl

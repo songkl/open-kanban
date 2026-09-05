@@ -281,11 +281,8 @@ jobs:
           /tmp/server &
           sleep 5
 
-      - name: Start frontend dev server
-        run: |
-          cd frontend
-          npm run dev &
-          sleep 10
+      # Playwright's webServer (in playwright.config.ts) starts
+      # the Vite dev server automatically — no manual start needed.
 
       - name: Run Playwright E2E tests
         run: |

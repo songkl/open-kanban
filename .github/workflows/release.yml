@@ -2,8 +2,6 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
 
@@ -82,17 +80,10 @@ jobs:
           mkdir -p release/skill
           cp mcp/MCP_SETUP.md release/skill/ 2>/dev/null || true
 
-      - name: Determine Release Type
-        id: release_type
+      - name: Extract Tag
+        id: extract_tag
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo "type=tag" >> $GITHUB_OUTPUT
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "type=merge" >> $GITHUB_OUTPUT
-            commit_hash=$(git rev-parse --short HEAD)
-            echo "tag=main-${commit_hash}" >> $GITHUB_OUTPUT
-          fi
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         id: create_release
@@ -100,9 +91,9 @@ jobs:
         with:
           files: |
             release/*
-          tag: ${{ steps.release_type.outputs.tag }}
+          tag: ${{ steps.extract_tag.outputs.tag }}
           draft: false
-          prerelease: ${{ steps.release_type.outputs.type == 'merge' }}
+          prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
