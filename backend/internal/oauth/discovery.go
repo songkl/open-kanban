@@ -20,7 +20,7 @@ var SupportedGrantTypes = []string{
 
 // SupportedAuthMethods lists the token endpoint authentication methods.
 var SupportedAuthMethods = []string{
-	"none",             // public client (MCP)
+	"none", // public client (MCP)
 	"client_secret_basic",
 	"client_secret_post",
 }
@@ -55,30 +55,30 @@ func DiscoveryIssuerFromRequest(c *gin.Context) string {
 
 // DiscoveryMetadata is RFC 8414's authorization server metadata document.
 type DiscoveryMetadata struct {
-	Issuer                            string   `json:"issuer"`
-	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
-	TokenEndpoint                     string   `json:"token_endpoint"`
-	IntrospectionEndpoint             string   `json:"introspection_endpoint,omitempty"`
-	RevocationEndpoint                string   `json:"revocation_endpoint,omitempty"`
-	JWKSURI                           string   `json:"jwks_uri"`
-	RegistrationEndpoint              string   `json:"registration_endpoint,omitempty"`
-	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint,omitempty"`
-	GrantTypesSupported               []string `json:"grant_types_supported"`
-	ResponseTypesSupported            []string `json:"response_types_supported"`
-	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported,omitempty"`
-	ScopesSupported                   []string `json:"scopes_supported"`
-	AuthorizationResponseIssuedAtSupported bool `json:"authorization_response_issued_at_supported,omitempty"`
+	Issuer                                 string   `json:"issuer"`
+	AuthorizationEndpoint                  string   `json:"authorization_endpoint"`
+	TokenEndpoint                          string   `json:"token_endpoint"`
+	IntrospectionEndpoint                  string   `json:"introspection_endpoint,omitempty"`
+	RevocationEndpoint                     string   `json:"revocation_endpoint,omitempty"`
+	JWKSURI                                string   `json:"jwks_uri"`
+	RegistrationEndpoint                   string   `json:"registration_endpoint,omitempty"`
+	DeviceAuthorizationEndpoint            string   `json:"device_authorization_endpoint,omitempty"`
+	GrantTypesSupported                    []string `json:"grant_types_supported"`
+	ResponseTypesSupported                 []string `json:"response_types_supported"`
+	TokenEndpointAuthMethodsSupported      []string `json:"token_endpoint_auth_methods_supported"`
+	CodeChallengeMethodsSupported          []string `json:"code_challenge_methods_supported,omitempty"`
+	ScopesSupported                        []string `json:"scopes_supported"`
+	AuthorizationResponseIssuedAtSupported bool     `json:"authorization_response_issued_at_supported,omitempty"`
 }
 
 // ProtectedResourceMetadata is RFC 8707's resource server metadata.
 type ProtectedResourceMetadata struct {
-	Resource               string   `json:"resource"`
-	AuthorizationServers   []string `json:"authorization_servers"`
-	JWKSURI                string   `json:"jwks_uri,omitempty"`
-	BearerMethodsSupported []string `json:"bearer_methods_supported"`
+	Resource                          string   `json:"resource"`
+	AuthorizationServers              []string `json:"authorization_servers"`
+	JWKSURI                           string   `json:"jwks_uri,omitempty"`
+	BearerMethodsSupported            []string `json:"bearer_methods_supported"`
 	ResourceSigningAlgValuesSupported []string `json:"resource_signing_alg_values_supported,omitempty"`
-	ResourceDocumentation  string   `json:"resource_documentation,omitempty"`
+	ResourceDocumentation             string   `json:"resource_documentation,omitempty"`
 }
 
 // DiscoveryHandler returns a gin handler that emits the OAuth authorization
@@ -88,19 +88,19 @@ func DiscoveryHandler(registerDevicePath string) gin.HandlerFunc {
 		issuer := DiscoveryIssuerFromRequest(c)
 		audience := GetConfiguredAudience(c)
 		md := DiscoveryMetadata{
-			Issuer:                                issuer,
-			AuthorizationEndpoint:                 issuer + "/oauth/authorize",
-			TokenEndpoint:                         issuer + "/oauth/token",
-			IntrospectionEndpoint:                 issuer + "/oauth/introspect",
-			RevocationEndpoint:                    issuer + "/oauth/revoke",
-			JWKSURI:                               issuer + "/.well-known/jwks.json",
-			RegistrationEndpoint:                  issuer + "/oauth/register",
-			DeviceAuthorizationEndpoint:           issuer + registerDevicePath,
-			GrantTypesSupported:                   SupportedGrantTypes,
-			ResponseTypesSupported:                SupportedResponseTypes,
-			TokenEndpointAuthMethodsSupported:     SupportedAuthMethods,
-			CodeChallengeMethodsSupported:         SupportedCodeChallengeMethods,
-			ScopesSupported:                       SupportedScopes(),
+			Issuer:                                 issuer,
+			AuthorizationEndpoint:                  issuer + "/oauth/authorize",
+			TokenEndpoint:                          issuer + "/oauth/token",
+			IntrospectionEndpoint:                  issuer + "/oauth/introspect",
+			RevocationEndpoint:                     issuer + "/oauth/revoke",
+			JWKSURI:                                issuer + "/.well-known/jwks.json",
+			RegistrationEndpoint:                   issuer + "/oauth/register",
+			DeviceAuthorizationEndpoint:            issuer + registerDevicePath,
+			GrantTypesSupported:                    SupportedGrantTypes,
+			ResponseTypesSupported:                 SupportedResponseTypes,
+			TokenEndpointAuthMethodsSupported:      SupportedAuthMethods,
+			CodeChallengeMethodsSupported:          SupportedCodeChallengeMethods,
+			ScopesSupported:                        SupportedScopes(),
 			AuthorizationResponseIssuedAtSupported: true,
 		}
 		c.Header("Cache-Control", "public, max-age=300")
@@ -115,12 +115,12 @@ func ProtectedResourceHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		issuer := DiscoveryIssuerFromRequest(c)
 		md := ProtectedResourceMetadata{
-			Resource:                               issuer + "/api/v1",
-			AuthorizationServers:                   []string{issuer},
-			JWKSURI:                                issuer + "/.well-known/jwks.json",
-			BearerMethodsSupported:                 []string{"header"},
-			ResourceSigningAlgValuesSupported:      []string{"RS256"},
-			ResourceDocumentation:                  issuer + "/docs/api",
+			Resource:                          issuer + "/api/v1",
+			AuthorizationServers:              []string{issuer},
+			JWKSURI:                           issuer + "/.well-known/jwks.json",
+			BearerMethodsSupported:            []string{"header"},
+			ResourceSigningAlgValuesSupported: []string{"RS256"},
+			ResourceDocumentation:             issuer + "/docs/api",
 		}
 		c.Header("Cache-Control", "public, max-age=300")
 		c.JSON(http.StatusOK, md)

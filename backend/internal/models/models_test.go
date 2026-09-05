@@ -465,12 +465,12 @@ func TestOAuthErrorResponseJSON(t *testing.T) {
 
 func TestDeviceAuthorizationResponseJSON(t *testing.T) {
 	resp := models.DeviceAuthorizationResponse{
-		DeviceCode:               "device-secret",
-		UserCode:                 "WXYZ-9876",
-		VerificationURI:          "http://localhost:8080/oauth/device",
-		VerificationURIComplete:  "http://localhost:8080/oauth/device?user_code=WXYZ-9876",
-		ExpiresIn:                600,
-		Interval:                 5,
+		DeviceCode:              "device-secret",
+		UserCode:                "WXYZ-9876",
+		VerificationURI:         "http://localhost:8080/oauth/device",
+		VerificationURIComplete: "http://localhost:8080/oauth/device?user_code=WXYZ-9876",
+		ExpiresIn:               600,
+		Interval:                5,
 	}
 	data, err := json.Marshal(resp)
 	if err != nil {

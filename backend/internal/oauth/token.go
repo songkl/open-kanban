@@ -215,12 +215,12 @@ func handleRefreshTokenGrant(c *gin.Context, db *sql.DB, signer *Signer, req *To
 		hash,
 	)
 	var (
-		id         string
-		clientID   string
-		userID     string
-		scope      string
-		expiresAt  time.Time
-		revokedAt  sql.NullTime
+		id        string
+		clientID  string
+		userID    string
+		scope     string
+		expiresAt time.Time
+		revokedAt sql.NullTime
 	)
 	if err := row.Scan(&id, &clientID, &userID, &scope, &expiresAt, &revokedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

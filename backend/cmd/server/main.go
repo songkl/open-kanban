@@ -96,6 +96,7 @@ func mysqlNeedsLazySetup() bool {
 	}
 	return os.Getenv("DB_HOST") == "" && os.Getenv("DB_USER") == ""
 }
+
 // args and returns it together with the args surrounding it (before AND
 // after, so flags like -yes that come after the subcommand still reach
 // the subcommand's FlagSet). If none is found the empty string is

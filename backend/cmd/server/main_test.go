@@ -196,10 +196,10 @@ func TestTriggerSelfRestartSpawnsProcess(t *testing.T) {
 
 func TestDetectSubcommand(t *testing.T) {
 	tests := []struct {
-		name      string
-		args      []string
-		wantCmd   string
-		wantRest  []string
+		name     string
+		args     []string
+		wantCmd  string
+		wantRest []string
 	}{
 		{name: "no subcommand", args: []string{"-config", "a.env"}, wantCmd: ""},
 		{name: "reset-system first", args: []string{"reset-system", "-yes"}, wantCmd: "reset-system", wantRest: []string{}},

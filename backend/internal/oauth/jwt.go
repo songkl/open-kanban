@@ -20,23 +20,23 @@ import (
 
 // Standard JWT claim names and grant identifiers used across the package.
 const (
-	ClaimIssuer        = "iss"
-	ClaimSubject       = "sub"
-	ClaimAudience      = "aud"
-	ClaimExpiry        = "exp"
-	ClaimIssuedAt      = "iat"
-	ClaimJWTID         = "jti"
-	ClaimClientID      = "client_id"
-	ClaimScope         = "scope"
-	ClaimTokenType     = "token_type"
-	ClaimAuthTime      = "auth_time"
-	ClaimClientName    = "client_name"
-	TokenTypeAccess    = "access"
-	TokenTypeRefresh   = "refresh"
-	GrantTypeDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
-	GrantTypeRefresh   = "refresh_token"
+	ClaimIssuer          = "iss"
+	ClaimSubject         = "sub"
+	ClaimAudience        = "aud"
+	ClaimExpiry          = "exp"
+	ClaimIssuedAt        = "iat"
+	ClaimJWTID           = "jti"
+	ClaimClientID        = "client_id"
+	ClaimScope           = "scope"
+	ClaimTokenType       = "token_type"
+	ClaimAuthTime        = "auth_time"
+	ClaimClientName      = "client_name"
+	TokenTypeAccess      = "access"
+	TokenTypeRefresh     = "refresh"
+	GrantTypeDeviceCode  = "urn:ietf:params:oauth:grant-type:device_code"
+	GrantTypeRefresh     = "refresh_token"
 	GrantTypeClientCreds = "client_credentials"
-	GrantTypeAuthCode  = "authorization_code"
+	GrantTypeAuthCode    = "authorization_code"
 )
 
 // Errors returned by the JWT utilities.
@@ -62,11 +62,11 @@ type AccessTokenClaims struct {
 
 // SigningKey is the JSON-serialisable RSA key material stored in app_config.
 type SigningKey struct {
-	KID         string `json:"kid"`
-	Algorithm   string `json:"alg"`
-	PrivateKey  string `json:"private_key_pem"`
-	PublicKey   string `json:"public_key_pem"`
-	CreatedAt   int64  `json:"created_at"`
+	KID        string `json:"kid"`
+	Algorithm  string `json:"alg"`
+	PrivateKey string `json:"private_key_pem"`
+	PublicKey  string `json:"public_key_pem"`
+	CreatedAt  int64  `json:"created_at"`
 }
 
 // JWK is the RFC 7517 representation of a public key.
@@ -86,12 +86,12 @@ type JWKS struct {
 
 // Signer loads and persists the RSA signing key for the OAuth server.
 type Signer struct {
-	mu          sync.RWMutex
-	key         *rsa.PrivateKey
-	kid         string
-	algorithm   string
-	db          *sql.DB
-	configKeyID string // app_config key for kid
+	mu           sync.RWMutex
+	key          *rsa.PrivateKey
+	kid          string
+	algorithm    string
+	db           *sql.DB
+	configKeyID  string // app_config key for kid
 	configKeyJWK string // app_config key for serialized SigningKey
 }
 

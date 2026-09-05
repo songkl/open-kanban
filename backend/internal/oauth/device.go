@@ -19,13 +19,13 @@ import (
 // Device flow configuration keys & defaults (read once per request from
 // app_config; missing keys fall back to defaults).
 const (
-	defaultDeviceCodeTTLSeconds  = 600
-	defaultDevicePollIntervalSec = 5
-	defaultAccessTokenTTLSeconds = 3600
+	defaultDeviceCodeTTLSeconds   = 600
+	defaultDevicePollIntervalSec  = 5
+	defaultAccessTokenTTLSeconds  = 3600
 	defaultRefreshTokenTTLSeconds = 2592000
-	defaultAuthCodeTTLSeconds    = 120
-	defaultPKCERequired          = "1"
-	defaultDCREnabled            = "1"
+	defaultAuthCodeTTLSeconds     = 120
+	defaultPKCERequired           = "1"
+	defaultDCREnabled             = "1"
 )
 
 // DeviceCodeRequest is the RFC 8628 §3.1 request body.

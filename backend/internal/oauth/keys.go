@@ -27,7 +27,7 @@ func encodeSigningKey(priv *rsa.PrivateKey, kid, alg string) (SigningKey, error)
 		KID:        kid,
 		Algorithm:  alg,
 		PrivateKey: string(pem.EncodeToMemory(block)),
-		PublicKey:  string(pem.EncodeToMemory(&pem.Block{
+		PublicKey: string(pem.EncodeToMemory(&pem.Block{
 			Type:  "PUBLIC KEY",
 			Bytes: mustMarshalPublicKey(&priv.PublicKey),
 		})),

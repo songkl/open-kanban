@@ -38,13 +38,13 @@ type AdvancedConfig struct {
 }
 
 type InitRequest struct {
-	Username          string         `json:"username" validate:"required,max=50"`
-	Nickname          string         `json:"nickname" validate:"omitempty,max=50"`
-	Password          string         `json:"password" validate:"required,max=100"`
-	Avatar            string         `json:"avatar" validate:"omitempty,max=500"`
-	AllowRegistration bool           `json:"allowRegistration"`
-	RequirePassword   bool           `json:"requirePassword"`
-	AuthEnabled       *bool          `json:"authEnabled"`
+	Username          string          `json:"username" validate:"required,max=50"`
+	Nickname          string          `json:"nickname" validate:"omitempty,max=50"`
+	Password          string          `json:"password" validate:"required,max=100"`
+	Avatar            string          `json:"avatar" validate:"omitempty,max=500"`
+	AllowRegistration bool            `json:"allowRegistration"`
+	RequirePassword   bool            `json:"requirePassword"`
+	AuthEnabled       *bool           `json:"authEnabled"`
 	Advanced          *AdvancedConfig `json:"advanced"`
 }
 

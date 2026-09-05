@@ -46,7 +46,7 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 		user := currentUserOrUnauthorized(c, db)
 		if user == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "unauthenticated",
+				"error":             "unauthenticated",
 				"error_description": "You must be logged in to approve the request",
 			})
 			return
@@ -62,9 +62,9 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 			// Record consent for this client/scope so future requests auto-grant.
 			upsertConsent(db, user.ID, dc.ClientID, dc.Scope)
 			c.JSON(http.StatusOK, gin.H{
-				"approved": true,
-				"clientId": dc.ClientID,
-				"scope":    dc.Scope,
+				"approved":  true,
+				"clientId":  dc.ClientID,
+				"scope":     dc.Scope,
 				"expiresAt": dc.ExpiresAt,
 			})
 		case "deny":
