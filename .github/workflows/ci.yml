@@ -234,6 +234,7 @@ jobs:
 
   frontend-e2e:
     name: Frontend E2E Tests
+    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -254,10 +255,13 @@ jobs:
           cd frontend
           npx playwright install --with-deps chromium
 
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm run build
+      # Download the frontend build artifact produced by the frontend-build
+      # job so the backend //go:embed web directive has files to embed.
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
 
       # The //go:embed web directive in cmd/server/main.go requires actual
       # files in backend/cmd/server/web.  Copy the frontend build output so
@@ -267,10 +271,13 @@ jobs:
           mkdir -p backend/cmd/server/web
           cp -r frontend/dist/. backend/cmd/server/web/
 
+      # Start Go server on port 8081 so the Vite dev server proxy
+      # (configured in vite.config.ts -> server.proxy) can forward
+      # /api/v1 and /ws requests to it.
       - name: Start backend server
         run: |
           cd backend
-          go build -o /tmp/server ./cmd/server
+          PORT=8081 go build -o /tmp/server ./cmd/server
           /tmp/server &
           sleep 5
 
