@@ -7,6 +7,36 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 ### Bug Fixes
+
+### Improvements
+
+### Documentation
+
+#### Fixed
+  - fix: tone down borders + the VIEWER badge in dark mode
+  - fix: stop hiding more-menu icons in dark mode
+  - fix: give SearchBar input explicit text + placeholder colors
+  - fix: stop leaving bg-zinc-100/-50 buttons as 'whitish cards' in dark mode
+  - fix: stop giving bg-zinc-200 secondary buttons white text in dark mode
+  - fix: repair malformed Tailwind classes left over from dark-mode sweep
+  - fix: keep SettingsPage tab in sync with the URL query string
+  - fix: extend dark mode to all page wrappers, cards, borders, and text
+  - fix: enable dark mode in Tailwind v4 via @custom-variant dark
+  - fix: align OAuth page styles with the rest of the app
+  - fix: add missing common.delete / common.save i18n keys
+  - fix: default ALLOWED_ORIGINS
+  - fix: some bug
+
+#### Documentation
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+
+## [0.2.0]
+
+### Features
+
+### Bug Fixes
   - T-0001: MySQL setup wizard now auto-redirects to /setup on first boot; release-mode binary sets GIN_MODE=release so logs stay quiet; MySQL-only build forces the advanced form open so the DB config can't be skipped
   - T-0002: Consolidate all SQL migrations into a single initial schema (no more in-place upgrade path; fresh install only); MySQL startup self-heals missing tables (e.g. column_permissions on a DB created by a pre-consolidation build) instead of hard-failing
   - T-0003: /auth/init 400 on body double-bind fixed; kanban.env is now always written on init, with PORT and ALLOWED_ORIGINS lines present even when empty
