@@ -46,6 +46,9 @@ logs/
 *.tmp
 *.temp
 .cache/
+kanban.env
+backend/kanban.env
+**/kanban.env
 
 .swarm/
 devDoc/*.md
