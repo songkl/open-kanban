@@ -17,6 +17,16 @@ interface AdvancedFormConfig extends AdvancedConfig {
   allowedOrigins: string;
 }
 
+// currentOrigin() returns the browser's current origin (e.g.
+// "http://localhost:8080") for use as the default CORS allowed
+// origin. In jsdom (tests) the URL is "http://localhost:3000" by
+// default, which is what the SetupPage tests rely on. We guard
+// against SSR / non-browser environments by falling back to ''.
+function currentOrigin(): string {
+  if (typeof window === 'undefined' || !window.location) return '';
+  return window.location.origin;
+}
+
 const DEFAULT_ADVANCED: AdvancedFormConfig = {
   dbType: 'sqlite',
   dbPath: 'kanban.db',
@@ -26,7 +36,11 @@ const DEFAULT_ADVANCED: AdvancedFormConfig = {
   dbPassword: '',
   dbName: 'kanban',
   serverPort: '8080',
-  allowedOrigins: '',
+  // Pre-fill with the browser's current origin so a user setting up
+  // the server from its own UI is allowed by CORS out of the box. The
+  // user can append more origins (comma-separated) if they also need
+  // to access the API from a different host.
+  allowedOrigins: currentOrigin(),
 };
 
 const ALREADY_INITIALIZED_PATTERN = /already\s*initialized|system\s+already/i;
@@ -43,6 +57,25 @@ function pickDbType(raw: AdvancedConfig['dbType']): DbType {
   return raw === 'mysql' ? 'mysql' : 'sqlite';
 }
 
+// All DB types the setup wizard knows how to render. The dropdown is
+// filtered against the server's `supportedDbTypes` so users on a
+// MySQL-only build can't pick SQLite (and vice versa).
+const ALL_DB_TYPES: DbType[] = ['sqlite', 'mysql'];
+
+// pickSupportedDbType returns the first type that is both in
+// `supported` and in `ALL_DB_TYPES`. Falls back to `fallback` when the
+// server didn't send a supported list (legacy / unversioned).
+export function pickSupportedDbType(
+  raw: AdvancedConfig['dbType'] | undefined,
+  supported: AdvancedConfig['supportedDbTypes'] | undefined,
+  fallback: DbType
+): DbType {
+  const allowed = supported && supported.length > 0 ? supported : ALL_DB_TYPES;
+  const requested = pickDbType(raw);
+  if (allowed.includes(requested)) return requested;
+  return allowed[0] ?? fallback;
+}
+
 export function SetupPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -52,6 +85,7 @@ export function SetupPage() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advancedConfig, setAdvancedConfig] = useState<AdvancedFormConfig>(DEFAULT_ADVANCED);
+  const [supportedDbTypes, setSupportedDbTypes] = useState<DbType[]>(ALL_DB_TYPES);
   const [prefilled, setPrefilled] = useState(false);
   const submittingRef = useRef(false);
   const [restarting, setRestarting] = useState(false);
@@ -86,8 +120,13 @@ export function SetupPage() {
       .getInitDefaults()
       .then((data) => {
         if (prefilled) return;
+        const supported =
+          data.supportedDbTypes && data.supportedDbTypes.length > 0
+            ? (data.supportedDbTypes as DbType[])
+            : ALL_DB_TYPES;
+        setSupportedDbTypes(supported);
         setAdvancedConfig({
-          dbType: pickDbType(data.dbType),
+          dbType: pickSupportedDbType(data.dbType, data.supportedDbTypes, DEFAULT_ADVANCED.dbType),
           dbPath: data.dbPath ?? DEFAULT_ADVANCED.dbPath,
           dbHost: data.dbHost ?? DEFAULT_ADVANCED.dbHost,
           dbPort: data.dbPort ?? DEFAULT_ADVANCED.dbPort,
@@ -95,7 +134,11 @@ export function SetupPage() {
           dbPassword: data.dbPassword ?? DEFAULT_ADVANCED.dbPassword,
           dbName: data.dbName ?? DEFAULT_ADVANCED.dbName,
           serverPort: data.serverPort ?? DEFAULT_ADVANCED.serverPort,
-          allowedOrigins: data.allowedOrigins ?? DEFAULT_ADVANCED.allowedOrigins,
+          // If the server has no ALLOWED_ORIGINS env var configured,
+          // keep the frontend default (the current origin) rather
+          // than blanking the field. Operators who set ALLOWED_ORIGINS
+          // explicitly get their value, even if it's a single host.
+          allowedOrigins: data.allowedOrigins?.trim() || DEFAULT_ADVANCED.allowedOrigins,
         });
         setPrefilled(true);
       })
@@ -294,35 +337,48 @@ export function SetupPage() {
           </div>
 
           <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex w-full items-center justify-between text-sm font-medium text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-100"
-            >
-              <span>{t('setup.advancedSettings')}</span>
-              <svg
-                className={`h-5 w-5 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
+            {/* When the running binary only supports a single DB engine
+                (e.g. the MySQL-only release), the advanced form is the
+                only path to a working setup — there is no other engine
+                to fall back to. Force it open and hide the collapse
+                toggle so the user can't skip past it. */}
+            {supportedDbTypes.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex w-full items-center justify-between text-sm font-medium text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-100"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+                <span>{t('setup.advancedSettings')}</span>
+                <svg
+                  className={`h-5 w-5 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            )}
 
-            {showAdvanced && (
+            {(supportedDbTypes.length === 1 || showAdvanced) && (
               <div className="mt-4 space-y-4">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                    {t('setup.dbType')}
+                    {supportedDbTypes.length === 1
+                      ? t('setup.dbTypeFixed', { type: supportedDbTypes[0].toUpperCase() })
+                      : t('setup.dbType')}
                   </label>
                   <select
                     value={advancedConfig.dbType}
                     onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbType: e.target.value as DbType })}
-                    className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                    disabled={supportedDbTypes.length === 1}
+                    className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <option value="sqlite">SQLite</option>
-                    <option value="mysql">MySQL</option>
+                    {ALL_DB_TYPES.filter((t) => supportedDbTypes.includes(t)).map((t) => (
+                      <option key={t} value={t}>
+                        {t === 'sqlite' ? 'SQLite' : 'MySQL'}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -425,10 +481,14 @@ export function SetupPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
+                      <label
+                        htmlFor="setup-allowed-origins"
+                        className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400"
+                      >
                           {t('setup.allowedOrigins')}
                       </label>
                       <input
+                        id="setup-allowed-origins"
                         type="text"
                         value={advancedConfig.allowedOrigins}
                         onChange={(e) => setAdvancedConfig({ ...advancedConfig, allowedOrigins: e.target.value })}

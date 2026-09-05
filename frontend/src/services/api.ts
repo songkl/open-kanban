@@ -114,6 +114,10 @@ export interface AdvancedConfig {
   dbName?: string;
   serverPort?: string;
   allowedOrigins?: string;
+  // Engines compiled into the running server binary. The setup wizard
+  // hides / disables any dbType not present in this list so users on a
+  // MySQL-only build can't pick SQLite (and vice versa).
+  supportedDbTypes?: ('sqlite' | 'mysql')[];
 }
 
 async function fetchApiWithRetry<T>(

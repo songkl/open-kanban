@@ -655,6 +655,7 @@
   "setup": {
     "advancedSettings": "高级设置",
     "dbType": "数据库类型",
+    "dbTypeFixed": "数据库类型（当前构建仅支持 {{type}}）",
     "dbPath": "数据库文件路径",
     "dbPathHint": "SQLite 数据库文件路径",
     "dbHost": "数据库主机",
