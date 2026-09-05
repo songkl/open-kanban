@@ -283,5 +283,4 @@ func init() {
 
 	go cleanupRateLimitMap()
 	go cleanupGlobalRateLimitMap()
-	go cleanupTokenCache()
 }

@@ -12,10 +12,26 @@ import (
 	"testing"
 	"time"
 
+	"open-kanban/internal/database"
 	"open-kanban/internal/handlers"
 
 	"github.com/gin-gonic/gin"
 )
+
+// mysqlSupportedInThisBuild reports whether the running test binary
+// has the MySQL driver compiled in. Used by tests that hardcode
+// dbType: "mysql" to skip themselves on sqlite-only / default
+// builds where the advanced-config validator would otherwise
+// reject the request. The check is intentionally cheap: it walks
+// the small slice returned by database.SupportedDBTypes().
+func mysqlSupportedInThisBuild() bool {
+	for _, t := range database.SupportedDBTypes() {
+		if t == "mysql" {
+			return true
+		}
+	}
+	return false
+}
 
 func init() {
 	gin.SetMode(gin.TestMode)
@@ -342,6 +358,9 @@ func TestInitHandler(t *testing.T) {
 	})
 
 	t.Run("init with mysql advanced config writes config file and fires callback", func(t *testing.T) {
+		if !mysqlSupportedInThisBuild() {
+			t.Skip("this subtest exercises the mysql advanced config flow; skipping on non-mysql builds")
+		}
 		db := setupTestDB(t)
 		defer db.Close()
 

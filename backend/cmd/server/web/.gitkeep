@@ -1,0 +1,11 @@
+# Keep the web/ directory in git even when empty.
+#
+# The Go embed directive `//go:embed web` in cmd/server/main.go
+# requires the pattern to match at least one file at compile time.
+# In a fresh clone (e.g. CI before the frontend has been built),
+# `web/` is empty because everything in it is generated. Without
+# this file, `go build` / `go test` fails with:
+#   pattern web: no matching files found
+# Once `release.sh` (or `frontend` build) runs, it populates `web/`
+# with the real SPA bundle, and this `.gitkeep` is harmless leftover
+# that the static middleware never serves.

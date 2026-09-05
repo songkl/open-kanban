@@ -55,7 +55,8 @@ devDoc/*.md
 !devDoc/.gitkeep
 logs/
 tmp/
-backend/cmd/server/web/
+backend/cmd/server/web/*
+!backend/cmd/server/web/.gitkeep
 kanban.db.*
 # Coverage and generated types
 coverage/

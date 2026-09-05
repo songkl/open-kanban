@@ -338,20 +338,12 @@ func initTokenCache() {
 	})
 }
 
-func cleanupTokenCache() {
-	if _, ok := tokenCache.(*memoryTokenCache); !ok {
-		return
-	}
-	for {
-		time.Sleep(5 * time.Minute)
-	}
-}
-
+// ResetTokenCacheForTest swaps the token cache for a fresh in-memory
+// instance. Tests use it to start from a known-empty state.
 func ResetTokenCacheForTest() {
 	tokenCache = &memoryTokenCache{}
 }
 
 func init() {
 	initTokenCache()
-	go cleanupTokenCache()
 }
