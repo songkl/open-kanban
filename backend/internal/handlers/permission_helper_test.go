@@ -466,6 +466,89 @@ func TestRequireNonViewer(t *testing.T) {
 	})
 }
 
+func TestIsLastAdmin(t *testing.T) {
+	t.Run("sole enabled admin returns true", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		last, err := IsLastAdmin(db, "u1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !last {
+			t.Error("expected sole admin u1 to be reported as last admin")
+		}
+	})
+
+	t.Run("multiple enabled admins returns false", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, role, enabled) VALUES ('u4', 'admin2', 'admin2', 'ADMIN', 1)`); err != nil {
+			t.Fatalf("failed to insert second admin: %v", err)
+		}
+
+		last, err := IsLastAdmin(db, "u1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if last {
+			t.Error("expected u1 NOT to be reported as last admin when u4 also admin")
+		}
+	})
+
+	t.Run("disabled admin does not count", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, role, enabled) VALUES ('u4', 'admin2', 'admin2', 'ADMIN', 0)`); err != nil {
+			t.Fatalf("failed to insert disabled admin: %v", err)
+		}
+
+		last, err := IsLastAdmin(db, "u1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !last {
+			t.Error("expected sole enabled admin u1 to still be reported as last admin when u4 is disabled")
+		}
+	})
+
+	t.Run("non-admin user with no other admins returns true", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if _, err := db.Exec(`UPDATE users SET enabled = 0 WHERE id = 'u1'`); err != nil {
+			t.Fatalf("failed to disable admin u1: %v", err)
+		}
+
+		last, err := IsLastAdmin(db, "u2")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !last {
+			t.Error("expected no enabled admins, IsLastAdmin should return true")
+		}
+	})
+
+	t.Run("agent with ADMIN role counts toward admin pool", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, role, type, enabled) VALUES ('agent-admin', 'agent-admin', 'Agent Admin', 'ADMIN', 'AGENT', 1)`); err != nil {
+			t.Fatalf("failed to insert agent admin: %v", err)
+		}
+
+		last, err := IsLastAdmin(db, "u1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if last {
+			t.Error("expected u1 NOT to be last admin when an AGENT with ADMIN role exists")
+		}
+	})
+}
+
 func TestCanModifyTask(t *testing.T) {
 	t.Run("ADMIN 任意任务通过", func(t *testing.T) {
 		db := setupPermissionTestDB(t)

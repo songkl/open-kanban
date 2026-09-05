@@ -712,6 +712,76 @@ func TestUpdateUserHandler(t *testing.T) {
 			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("demoting the last admin returns 400", func(t *testing.T) {
+		// Guard rail: when there is exactly one enabled ADMIN, demoting
+		// that admin to a non-ADMIN role must be rejected so the system
+		// never becomes unmanageable.
+		handlers.ResetTokenCacheForTest()
+		if _, err := db.Exec(`UPDATE users SET role = 'MEMBER', enabled = 1 WHERE id = 'member1'`); err != nil {
+			t.Fatalf("failed to reset member1 role: %v", err)
+		}
+
+		body := map[string]interface{}{"targetUserId": "admin1", "role": "MEMBER"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("PUT", "/api/users", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var role string
+		if err := db.QueryRow("SELECT role FROM users WHERE id = ?", "admin1").Scan(&role); err != nil {
+			t.Fatalf("failed to read admin1 role: %v", err)
+		}
+		if role != "ADMIN" {
+			t.Errorf("expected admin1 role to remain ADMIN, got %s", role)
+		}
+	})
+
+	t.Run("demoting a non-last admin succeeds", func(t *testing.T) {
+		// Two-admins case: admin1 demotes admin2 to MEMBER while
+		// admin1 stays ADMIN, so the system still has an enabled
+		// admin after the change.
+		handlers.ResetTokenCacheForTest()
+		if _, err := db.Exec(`UPDATE users SET role = 'MEMBER', enabled = 1 WHERE id = 'member1'`); err != nil {
+			t.Fatalf("failed to reset member1 role: %v", err)
+		}
+		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar, type) VALUES ('admin2', 'admin2', 'admin2', 'pass', 'ADMIN', 1, '', 'HUMAN')`); err != nil {
+			t.Fatalf("failed to insert second admin: %v", err)
+		}
+		if _, err := db.Exec(`INSERT INTO tokens (id, name, key, user_id, created_at, updated_at) VALUES ('token-admin2', 'default', 'admin2-token', 'admin2', datetime('now'), datetime('now'))`); err != nil {
+			t.Fatalf("failed to insert admin2 token: %v", err)
+		}
+
+		body := map[string]interface{}{"targetUserId": "admin2", "role": "MEMBER"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("PUT", "/api/users", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var role string
+		if err := db.QueryRow("SELECT role FROM users WHERE id = ?", "admin2").Scan(&role); err != nil {
+			t.Fatalf("failed to read admin2 role: %v", err)
+		}
+		if role != "MEMBER" {
+			t.Errorf("expected admin2 role=MEMBER, got %s", role)
+		}
+	})
 }
 
 func TestSetUserEnabledHandler(t *testing.T) {
@@ -799,6 +869,37 @@ func TestSetUserEnabledHandler(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("cannot disable the last admin returns 400", func(t *testing.T) {
+		// Guard rail: when there is exactly one enabled ADMIN, disabling
+		// that admin must be rejected so the system stays manageable.
+		handlers.ResetTokenCacheForTest()
+		if _, err := db.Exec(`UPDATE users SET enabled = 1 WHERE id = 'member1'`); err != nil {
+			t.Fatalf("failed to reset member1 enabled: %v", err)
+		}
+
+		body := map[string]interface{}{"userId": "admin1", "enabled": false}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/users/enabled", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var enabled bool
+		if err := db.QueryRow("SELECT enabled FROM users WHERE id = ?", "admin1").Scan(&enabled); err != nil {
+			t.Fatalf("failed to read admin1 enabled: %v", err)
+		}
+		if !enabled {
+			t.Error("expected admin1 to remain enabled after rejected disable")
 		}
 	})
 }
