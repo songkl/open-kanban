@@ -34,6 +34,14 @@ type DBConfig struct {
 	ConnMaxLifetime int
 }
 
+func init() {
+	// The default build (no build tags) ships both drivers, so register
+	// both. The mysql-only and sqlite-only build variants register their
+	// single driver in db_mysql.go / db_sqlite.go instead.
+	registerDBType("mysql")
+	registerDBType("sqlite")
+}
+
 func GetDBConfig() *DBConfig {
 	dbType := strings.ToLower(os.Getenv("DB_TYPE"))
 	if dbType == "" {
@@ -206,7 +214,11 @@ func runSQLiteMigrations(db *sql.DB) error {
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
-			if forceErr := m.Force(7); forceErr != nil {
+			// With the consolidated schema there is only one migration
+			// (version 1). Forcing the dirty flag back to "no migrations
+			// applied" lets the next startup re-run it from scratch
+			// rather than getting stuck in a half-applied state.
+			if forceErr := m.Force(0); forceErr != nil {
 				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
 			}
 		} else {

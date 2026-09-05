@@ -6,9 +6,15 @@ type VersionMigration struct {
 	To      int
 }
 
+// VersionMigrationMap maps each released git tag to the migration
+// numbers it covers. With the schema consolidated into a single
+// initial migration, every current release sits at migration 1.
+// Future releases that add schema changes should bump `To` to the
+// new migration number; never edit history in place — add a new
+// migration file under mysql/ and sqlite/ and bump the map.
 var VersionMigrationMap = []VersionMigration{
-	{Version: "0.1.0", From: 1, To: 8},
-	{Version: "0.1.1", From: 8, To: 8},
+	{Version: "0.1.0", From: 1, To: 1},
+	{Version: "0.1.1", From: 1, To: 1},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

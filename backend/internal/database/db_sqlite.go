@@ -29,6 +29,10 @@ type DBConfig struct {
 	ConnMaxLifetime int
 }
 
+func init() {
+	registerDBType("sqlite")
+}
+
 func GetDBConfig() *DBConfig {
 	dbType := strings.ToLower(os.Getenv("DB_TYPE"))
 	if dbType == "" {
