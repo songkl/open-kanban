@@ -75,7 +75,14 @@
     "createNew": "Create New Board",
     "contactAdmin": "Contact Admin",
     "descriptionPlaceholder": "Board description in Markdown format...",
-    "description": "Description"
+    "description": "Description",
+    "permissions": "Board Permissions",
+    "currentPermissions": "Current Authorizations",
+    "noPermissions": "No authorizations yet",
+    "addPermission": "Add Authorization",
+    "add": "Add",
+    "selectUser": "Select user",
+    "permissionAddFailed": "Failed to add authorization"
   },
   "task": {
     "addTask": "Add Task",

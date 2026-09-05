@@ -145,6 +145,23 @@ func SetColumnPermission(db *sql.DB) gin.HandlerFunc {
 		var columnName string
 		db.QueryRow("SELECT name FROM columns WHERE id = ?", req.ColumnID).Scan(&columnName)
 
+		// Invalidate every cached session for the target user so they
+		// see the new column access on the next request instead of
+		// getting stale permission state from the in-memory cache.
+		tokenCache.DeleteByUserID(req.UserID)
+
+		LogActivity(
+			db,
+			user.ID,
+			"PERMISSION_GRANT",
+			"COLUMN",
+			req.ColumnID,
+			columnName,
+			"user="+req.UserID+" access="+req.Access,
+			c.ClientIP(),
+			getRequestSource(c),
+		)
+
 		c.JSON(http.StatusOK, gin.H{
 			"permission": gin.H{
 				"id":         permID,
@@ -175,11 +192,47 @@ func DeleteColumnPermission(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Capture the affected user / column before the DELETE so we
+		// can (a) invalidate the right cache entries and (b) record
+		// an activity row that references the column by name.
+		var targetUserID, columnID, columnName string
+		if err := db.QueryRow(`
+			SELECT cp.user_id, cp.column_id, COALESCE(col.name, '')
+			FROM column_permissions cp
+			LEFT JOIN columns col ON cp.column_id = col.id
+			WHERE cp.id = ?
+		`, permID).Scan(&targetUserID, &columnID, &columnName); err != nil {
+			// Row already gone — treat as success, just skip the
+			// side-effects so the operator gets a clean idempotent
+			// response instead of a 500 on retry.
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusOK, gin.H{"success": true})
+				return
+			}
+			log.Printf("[DeleteColumnPermission] failed to load permission %s: %v", permID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
+			return
+		}
+
 		_, err := db.Exec("DELETE FROM column_permissions WHERE id = ?", permID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
+
+		tokenCache.DeleteByUserID(targetUserID)
+
+		LogActivity(
+			db,
+			user.ID,
+			"PERMISSION_REVOKE",
+			"COLUMN",
+			columnID,
+			columnName,
+			"user="+targetUserID,
+			c.ClientIP(),
+			getRequestSource(c),
+		)
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}

@@ -75,7 +75,14 @@
     "createNew": "创建新看板",
     "contactAdmin": "联系管理员",
     "descriptionPlaceholder": "Markdown格式的看板说明...",
-    "description": "描述"
+    "description": "描述",
+    "permissions": "权限管理",
+    "currentPermissions": "当前授权",
+    "noPermissions": "暂无授权",
+    "addPermission": "添加授权",
+    "add": "添加",
+    "selectUser": "选择用户",
+    "permissionAddFailed": "添加授权失败"
   },
   "task": {
     "addTask": "添加任务",

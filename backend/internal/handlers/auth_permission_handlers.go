@@ -24,6 +24,7 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 
 		targetUserID := user.ID
 		requestedUserID := c.Query("userId")
+		requestedBoardID := c.Query("boardId")
 
 		if requestedUserID != "" && isAdmin(user) {
 			targetUserID = requestedUserID
@@ -32,12 +33,30 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		rows, err := db.Query(`
-			SELECT bp.id, bp.board_id, b.name, bp.access
-			FROM board_permissions bp
-			JOIN boards b ON bp.board_id = b.id
-			WHERE bp.user_id = ?
-		`, targetUserID)
+		if requestedBoardID != "" && !isAdmin(user) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can list permissions by board"})
+			return
+		}
+
+		var rows *sql.Rows
+		var err error
+
+		if requestedBoardID != "" {
+			rows, err = db.Query(`
+				SELECT bp.id, bp.board_id, b.name, bp.access, u.id, u.nickname
+				FROM board_permissions bp
+				JOIN boards b ON bp.board_id = b.id
+				JOIN users u ON bp.user_id = u.id
+				WHERE bp.board_id = ?
+			`, requestedBoardID)
+		} else {
+			rows, err = db.Query(`
+				SELECT bp.id, bp.board_id, b.name, bp.access
+				FROM board_permissions bp
+				JOIN boards b ON bp.board_id = b.id
+				WHERE bp.user_id = ?
+			`, targetUserID)
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
@@ -46,14 +65,28 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 
 		var permissions []gin.H
 		for rows.Next() {
-			var id, boardID, boardName, access string
-			if err := rows.Scan(&id, &boardID, &boardName, &access); err == nil {
-				permissions = append(permissions, gin.H{
-					"id":        id,
-					"boardId":   boardID,
-					"boardName": boardName,
-					"access":    access,
-				})
+			if requestedBoardID != "" {
+				var id, boardID, boardName, access, userID, userNickname string
+				if err := rows.Scan(&id, &boardID, &boardName, &access, &userID, &userNickname); err == nil {
+					permissions = append(permissions, gin.H{
+						"id":           id,
+						"boardId":      boardID,
+						"boardName":    boardName,
+						"access":       access,
+						"userId":       userID,
+						"userNickname": userNickname,
+					})
+				}
+			} else {
+				var id, boardID, boardName, access string
+				if err := rows.Scan(&id, &boardID, &boardName, &access); err == nil {
+					permissions = append(permissions, gin.H{
+						"id":        id,
+						"boardId":   boardID,
+						"boardName": boardName,
+						"access":    access,
+					})
+				}
 			}
 		}
 
@@ -124,6 +157,23 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 		var boardName string
 		db.QueryRow("SELECT name FROM boards WHERE id = ?", req.BoardID).Scan(&boardName)
 
+		// Invalidate every cached session for the target user so they
+		// see the new board access on the next request instead of
+		// getting stale permission state from the in-memory cache.
+		tokenCache.DeleteByUserID(req.UserID)
+
+		LogActivity(
+			db,
+			user.ID,
+			"PERMISSION_GRANT",
+			"BOARD",
+			req.BoardID,
+			boardName,
+			"user="+req.UserID+" access="+req.Access,
+			c.ClientIP(),
+			getRequestSource(c),
+		)
+
 		c.JSON(http.StatusOK, gin.H{
 			"permission": gin.H{
 				"id":        permID,
@@ -154,11 +204,47 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Capture the affected user / board before the DELETE so we
+		// can (a) invalidate the right cache entries and (b) record
+		// an activity row that references the board by name.
+		var targetUserID, boardID, boardName string
+		if err := db.QueryRow(`
+			SELECT bp.user_id, bp.board_id, COALESCE(b.name, '')
+			FROM board_permissions bp
+			LEFT JOIN boards b ON bp.board_id = b.id
+			WHERE bp.id = ?
+		`, permID).Scan(&targetUserID, &boardID, &boardName); err != nil {
+			// Row already gone — treat as success, just skip the
+			// side-effects so the operator gets a clean idempotent
+			// response instead of a 500 on retry.
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusOK, gin.H{"success": true})
+				return
+			}
+			log.Printf("[DeletePermission] failed to load permission %s: %v", permID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
+			return
+		}
+
 		_, err := db.Exec("DELETE FROM board_permissions WHERE id = ?", permID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
+
+		tokenCache.DeleteByUserID(targetUserID)
+
+		LogActivity(
+			db,
+			user.ID,
+			"PERMISSION_REVOKE",
+			"BOARD",
+			boardID,
+			boardName,
+			"user="+targetUserID,
+			c.ClientIP(),
+			getRequestSource(c),
+		)
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"open-kanban/internal/handlers"
@@ -112,7 +113,7 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 	CREATE TABLE activities (
 		id TEXT PRIMARY KEY,
 		user_id TEXT NOT NULL,
-		action TEXT NOT NULL CHECK(action IN ('CREATE_TASK', 'UPDATE_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'ADD_COMMENT', 'LOGIN', 'LOGOUT', 'BOARD_CREATE', 'BOARD_UPDATE', 'BOARD_DELETE', 'COLUMN_CREATE', 'COLUMN_UPDATE', 'COLUMN_DELETE', 'USER_CREATE', 'USER_UPDATE', 'BOARD_COPY', 'TEMPLATE_CREATE', 'TEMPLATE_DELETE', 'BOARD_IMPORT', 'APP_CONFIG_UPDATE')),
+		action TEXT NOT NULL CHECK(action IN ('CREATE_TASK', 'UPDATE_TASK', 'DELETE_TASK', 'COMPLETE_TASK', 'ADD_COMMENT', 'LOGIN', 'LOGOUT', 'BOARD_CREATE', 'BOARD_UPDATE', 'BOARD_DELETE', 'COLUMN_CREATE', 'COLUMN_UPDATE', 'COLUMN_DELETE', 'USER_CREATE', 'USER_UPDATE', 'BOARD_COPY', 'TEMPLATE_CREATE', 'TEMPLATE_DELETE', 'BOARD_IMPORT', 'APP_CONFIG_UPDATE', 'PERMISSION_GRANT', 'PERMISSION_REVOKE')),
 		target_type TEXT NOT NULL CHECK(target_type IN ('TASK', 'COMMENT', 'BOARD', 'COLUMN', 'USER', 'SYSTEM', 'TEMPLATE')),
 		target_id TEXT,
 		target_title TEXT,
@@ -213,6 +214,7 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 }
 
 func TestGetPermissionsHandler(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
 	defer db.Close()
 
@@ -249,6 +251,78 @@ func TestGetPermissionsHandler(t *testing.T) {
 
 		if w.Code != http.StatusForbidden {
 			t.Errorf("expected 403, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("admin listing by boardId returns user info for each grant", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/permissions?boardId=board1", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp struct {
+			Permissions []struct {
+				ID           string `json:"id"`
+				BoardID      string `json:"boardId"`
+				BoardName    string `json:"boardName"`
+				Access       string `json:"access"`
+				UserID       string `json:"userId"`
+				UserNickname string `json:"userNickname"`
+			} `json:"permissions"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if len(resp.Permissions) != 1 {
+			t.Fatalf("expected 1 permission, got %d", len(resp.Permissions))
+		}
+		p := resp.Permissions[0]
+		if p.UserID != "admin1" {
+			t.Errorf("expected userId=admin1, got %q", p.UserID)
+		}
+		if p.UserNickname != "admin" {
+			t.Errorf("expected userNickname=admin, got %q", p.UserNickname)
+		}
+		if p.BoardID != "board1" {
+			t.Errorf("expected boardId=board1, got %q", p.BoardID)
+		}
+		if p.Access != "ADMIN" {
+			t.Errorf("expected access=ADMIN, got %q", p.Access)
+		}
+	})
+
+	t.Run("member cannot list permissions by boardId", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/permissions?boardId=board1", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "member-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected 403, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("admin listing by unknown boardId returns empty list", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/permissions?boardId=missing-board", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Permissions []map[string]interface{} `json:"permissions"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+		if len(resp.Permissions) != 0 {
+			t.Errorf("expected 0 permissions for unknown board, got %d", len(resp.Permissions))
 		}
 	})
 }
@@ -396,6 +470,192 @@ func TestDeletePermissionHandler(t *testing.T) {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+}
+
+func TestSetPermission_LogsActivity(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/permissions", handlers.SetPermission(db))
+
+	body := map[string]interface{}{"userId": "member1", "boardId": "board1", "access": "WRITE"}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/permissions", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var action, targetType, targetID, details, userID string
+	err := db.QueryRow(`
+		SELECT action, target_type, target_id, details, user_id
+		FROM activities
+		WHERE action = 'PERMISSION_GRANT'
+	`).Scan(&action, &targetType, &targetID, &details, &userID)
+	if err != nil {
+		t.Fatalf("expected PERMISSION_GRANT activity row, got: %v", err)
+	}
+	if action != "PERMISSION_GRANT" {
+		t.Errorf("expected action=PERMISSION_GRANT, got %q", action)
+	}
+	if targetType != "BOARD" {
+		t.Errorf("expected target_type=BOARD, got %q", targetType)
+	}
+	if targetID != "board1" {
+		t.Errorf("expected target_id=board1, got %q", targetID)
+	}
+	if userID != "admin1" {
+		t.Errorf("expected actor user_id=admin1, got %q", userID)
+	}
+	if !strings.Contains(details, "user=member1") || !strings.Contains(details, "access=WRITE") {
+		t.Errorf("expected details to encode user+access, got %q", details)
+	}
+}
+
+func TestSetPermission_InvalidatesTokenCache(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/permissions", handlers.SetPermission(db))
+
+	// Seed two cached sessions for member1 to mimic "user is logged
+	// in from multiple devices". After the SetPermission call both
+	// must be invalidated so the next request reloads the new
+	// permission state from the DB.
+	handlers.SeedTokenCacheForTest("member-tok-1", "member1", "MEMBER")
+	handlers.SeedTokenCacheForTest("member-tok-2", "member1", "MEMBER")
+	handlers.SeedTokenCacheForTest("admin-tok", "admin1", "ADMIN")
+
+	body := map[string]interface{}{"userId": "member1", "boardId": "board1", "access": "WRITE"}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/permissions", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if _, ok := handlers.PeekTokenCache("member-tok-1"); ok {
+		t.Errorf("expected member-tok-1 cache entry to be invalidated after SetPermission")
+	}
+	if _, ok := handlers.PeekTokenCache("member-tok-2"); ok {
+		t.Errorf("expected member-tok-2 cache entry to be invalidated after SetPermission")
+	}
+	// Admin's session must be left alone — they didn't lose any
+	// permission.
+	if _, ok := handlers.PeekTokenCache("admin-tok"); !ok {
+		t.Errorf("admin's own cache entry must not be invalidated by SetPermission for another user")
+	}
+}
+
+func TestDeletePermission_LogsActivity(t *testing.T) {
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('perm-del-1', 'member1', 'board1', 'WRITE')`)
+	if err != nil {
+		t.Fatalf("failed to seed permission: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.DELETE("/api/permissions", handlers.DeletePermission(db))
+
+	req, _ := http.NewRequest("DELETE", "/api/permissions?id=perm-del-1", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var action, targetType, targetID, details, userID string
+	err = db.QueryRow(`
+		SELECT action, target_type, target_id, details, user_id
+		FROM activities
+		WHERE action = 'PERMISSION_REVOKE'
+	`).Scan(&action, &targetType, &targetID, &details, &userID)
+	if err != nil {
+		t.Fatalf("expected PERMISSION_REVOKE activity row, got: %v", err)
+	}
+	if targetType != "BOARD" {
+		t.Errorf("expected target_type=BOARD, got %q", targetType)
+	}
+	if targetID != "board1" {
+		t.Errorf("expected target_id=board1, got %q", targetID)
+	}
+	if userID != "admin1" {
+		t.Errorf("expected actor user_id=admin1, got %q", userID)
+	}
+	if !strings.Contains(details, "user=member1") {
+		t.Errorf("expected details to encode the affected user, got %q", details)
+	}
+
+	// Idempotency: deleting an already-gone permission must not
+	// duplicate the activity log. The first delete already
+	// removed the row, so a retry is a no-op that should still
+	// return 200 but not log a second PERMISSION_REVOKE.
+	req2, _ := http.NewRequest("DELETE", "/api/permissions?id=perm-del-1", nil)
+	req2.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected idempotent 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var revokeCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM activities WHERE action = 'PERMISSION_REVOKE'").Scan(&revokeCount); err != nil {
+		t.Fatalf("count query failed: %v", err)
+	}
+	if revokeCount != 1 {
+		t.Errorf("expected exactly 1 PERMISSION_REVOKE row, got %d", revokeCount)
+	}
+}
+
+func TestDeletePermission_InvalidatesTokenCache(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('perm-cache-del', 'member1', 'board1', 'WRITE')`)
+	if err != nil {
+		t.Fatalf("failed to seed permission: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.DELETE("/api/permissions", handlers.DeletePermission(db))
+
+	handlers.SeedTokenCacheForTest("member-tok", "member1", "MEMBER")
+	if _, ok := handlers.PeekTokenCache("member-tok"); !ok {
+		t.Fatalf("pre-condition: cached entry for member-tok must exist")
+	}
+
+	req, _ := http.NewRequest("DELETE", "/api/permissions?id=perm-cache-del", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if _, ok := handlers.PeekTokenCache("member-tok"); ok {
+		t.Errorf("expected member-tok cache entry to be invalidated after DeletePermission")
+	}
 }
 
 func TestUpdateAppConfigHandler(t *testing.T) {
@@ -1529,6 +1789,176 @@ func TestDeleteColumnPermissionHandler(t *testing.T) {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+}
+
+func TestSetColumnPermission_LogsActivity(t *testing.T) {
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/columns/permissions", handlers.SetColumnPermission(db))
+
+	body := map[string]interface{}{"columnId": "col1", "userId": "member1", "access": "WRITE"}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/columns/permissions", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var action, targetType, targetID, details, userID string
+	err := db.QueryRow(`
+		SELECT action, target_type, target_id, details, user_id
+		FROM activities
+		WHERE action = 'PERMISSION_GRANT'
+	`).Scan(&action, &targetType, &targetID, &details, &userID)
+	if err != nil {
+		t.Fatalf("expected PERMISSION_GRANT activity row for column permission, got: %v", err)
+	}
+	if targetType != "COLUMN" {
+		t.Errorf("expected target_type=COLUMN, got %q", targetType)
+	}
+	if targetID != "col1" {
+		t.Errorf("expected target_id=col1, got %q", targetID)
+	}
+	if userID != "admin1" {
+		t.Errorf("expected actor user_id=admin1, got %q", userID)
+	}
+	if !strings.Contains(details, "user=member1") || !strings.Contains(details, "access=WRITE") {
+		t.Errorf("expected details to encode user+access, got %q", details)
+	}
+}
+
+func TestSetColumnPermission_InvalidatesTokenCache(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/columns/permissions", handlers.SetColumnPermission(db))
+
+	handlers.SeedTokenCacheForTest("member-tok-col", "member1", "MEMBER")
+	handlers.SeedTokenCacheForTest("admin-tok-col", "admin1", "ADMIN")
+
+	body := map[string]interface{}{"columnId": "col1", "userId": "member1", "access": "WRITE"}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/columns/permissions", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if _, ok := handlers.PeekTokenCache("member-tok-col"); ok {
+		t.Errorf("expected member-tok-col cache entry to be invalidated after SetColumnPermission")
+	}
+	if _, ok := handlers.PeekTokenCache("admin-tok-col"); !ok {
+		t.Errorf("admin's own cache entry must not be invalidated by SetColumnPermission for another user")
+	}
+}
+
+func TestDeleteColumnPermission_LogsActivity(t *testing.T) {
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access) VALUES ('cp-del-1', 'member1', 'col1', 'WRITE')`)
+	if err != nil {
+		t.Fatalf("failed to seed column permission: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.DELETE("/api/columns/permissions", handlers.DeleteColumnPermission(db))
+
+	req, _ := http.NewRequest("DELETE", "/api/columns/permissions?id=cp-del-1", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var action, targetType, targetID, details, userID string
+	err = db.QueryRow(`
+		SELECT action, target_type, target_id, details, user_id
+		FROM activities
+		WHERE action = 'PERMISSION_REVOKE'
+	`).Scan(&action, &targetType, &targetID, &details, &userID)
+	if err != nil {
+		t.Fatalf("expected PERMISSION_REVOKE activity row for column permission, got: %v", err)
+	}
+	if targetType != "COLUMN" {
+		t.Errorf("expected target_type=COLUMN, got %q", targetType)
+	}
+	if targetID != "col1" {
+		t.Errorf("expected target_id=col1, got %q", targetID)
+	}
+	if userID != "admin1" {
+		t.Errorf("expected actor user_id=admin1, got %q", userID)
+	}
+	if !strings.Contains(details, "user=member1") {
+		t.Errorf("expected details to encode the affected user, got %q", details)
+	}
+
+	// Idempotency: a second delete on the same (now missing) id
+	// must NOT log a second PERMISSION_REVOKE row.
+	req2, _ := http.NewRequest("DELETE", "/api/columns/permissions?id=cp-del-1", nil)
+	req2.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected idempotent 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var revokeCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM activities WHERE action = 'PERMISSION_REVOKE'").Scan(&revokeCount); err != nil {
+		t.Fatalf("count query failed: %v", err)
+	}
+	if revokeCount != 1 {
+		t.Errorf("expected exactly 1 PERMISSION_REVOKE row, got %d", revokeCount)
+	}
+}
+
+func TestDeleteColumnPermission_InvalidatesTokenCache(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access) VALUES ('cp-cache-del', 'member1', 'col1', 'WRITE')`)
+	if err != nil {
+		t.Fatalf("failed to seed column permission: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.DELETE("/api/columns/permissions", handlers.DeleteColumnPermission(db))
+
+	handlers.SeedTokenCacheForTest("member-tok-cp", "member1", "MEMBER")
+	if _, ok := handlers.PeekTokenCache("member-tok-cp"); !ok {
+		t.Fatalf("pre-condition: cached entry for member-tok-cp must exist")
+	}
+
+	req, _ := http.NewRequest("DELETE", "/api/columns/permissions?id=cp-cache-del", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	if _, ok := handlers.PeekTokenCache("member-tok-cp"); ok {
+		t.Errorf("expected member-tok-cp cache entry to be invalidated after DeleteColumnPermission")
+	}
 }
 
 func TestGlobalRateLimitMiddleware(t *testing.T) {

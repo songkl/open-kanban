@@ -15,6 +15,10 @@ type VersionMigration struct {
 var VersionMigrationMap = []VersionMigration{
 	{Version: "0.1.0", From: 1, To: 1},
 	{Version: "0.1.1", From: 1, To: 1},
+	// 0.2.0 added migration 002 to extend the activities.action CHECK
+	// constraint with PERMISSION_GRANT / PERMISSION_REVOKE so the
+	// Set*/Delete* permission handlers can log their activity rows.
+	{Version: "0.2.0", From: 1, To: 2},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {
