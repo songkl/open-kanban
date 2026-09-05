@@ -31,6 +31,37 @@ All notable changes to this project will be documented in this file.
   - docs: update changelog [skip ci]
   - docs: update changelog [skip ci]
   - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+
+## [0.2.0]
+
+### Features
+
+### Bug Fixes
+
+### Improvements
+
+### Documentation
+
+#### Fixed
+  - fix: tone down borders + the VIEWER badge in dark mode
+  - fix: stop hiding more-menu icons in dark mode
+  - fix: give SearchBar input explicit text + placeholder colors
+  - fix: stop leaving bg-zinc-100/-50 buttons as 'whitish cards' in dark mode
+  - fix: stop giving bg-zinc-200 secondary buttons white text in dark mode
+  - fix: repair malformed Tailwind classes left over from dark-mode sweep
+  - fix: keep SettingsPage tab in sync with the URL query string
+  - fix: extend dark mode to all page wrappers, cards, borders, and text
+  - fix: enable dark mode in Tailwind v4 via @custom-variant dark
+  - fix: align OAuth page styles with the rest of the app
+  - fix: add missing common.delete / common.save i18n keys
+  - fix: default ALLOWED_ORIGINS
+  - fix: some bug
+
+#### Documentation
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
+  - docs: update changelog [skip ci]
 
 ## [0.2.0]
 
