@@ -126,10 +126,13 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 // upsertConsent records the user+client+scope consent so subsequent device
 // flows for the same client can pre-populate the approval.
 func upsertConsent(db *sql.DB, userID, clientID, scope string) {
+	// Portable upsert via REPLACE INTO (works on both MySQL and
+	// SQLite). The UNIQUE (user_id, client_id) constraint on
+	// oauth_consents makes this atomic. No FK references
+	// oauth_consents.id so the row id rotating on update is safe.
 	_, _ = db.Exec(
-		`INSERT INTO oauth_consents (id, user_id, client_id, scope, granted_at)
-		 VALUES (?, ?, ?, ?, ?)
-		 ON CONFLICT(user_id, client_id) DO UPDATE SET scope = excluded.scope, granted_at = excluded.granted_at`,
+		`REPLACE INTO oauth_consents (id, user_id, client_id, scope, granted_at)
+		 VALUES (?, ?, ?, ?, ?)`,
 		generateOpaqueID(), userID, clientID, scope, time.Now(),
 	)
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -107,14 +108,38 @@ func SetColumnPermission(db *sql.DB) gin.HandlerFunc {
 		}
 
 		permID := generateID()
+		// Portable upsert: REPLACE INTO works on both MySQL and SQLite
+		// (ON CONFLICT…DO UPDATE is SQLite/PostgreSQL-only and silently
+		// fails on MySQL with a syntax error, which is what was
+		// returning 500 from /api/v1/auth/permissions/columns). The
+		// (user_id, column_id) UNIQUE constraint on the table makes
+		// this atomic; no FK references column_permissions.id so the
+		// row id rotating on update is safe.
 		_, err := db.Exec(`
-			INSERT INTO column_permissions (id, user_id, column_id, access)
+			REPLACE INTO column_permissions (id, user_id, column_id, access)
 			VALUES (?, ?, ?, ?)
-			ON CONFLICT(user_id, column_id) DO UPDATE SET access = excluded.access
 		`, permID, req.UserID, req.ColumnID, req.Access)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
+			// Surface the driver error in the response (and the log)
+			// so operators can tell FK violations from "table missing"
+			// from charset mismatches instead of seeing a flat 500.
+			log.Printf("[SetColumnPermission] REPLACE INTO column_permissions failed (user=%s column=%s access=%s): %v", req.UserID, req.ColumnID, req.Access, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to set column permission: " + err.Error(),
+			})
 			return
+		}
+
+		// After REPLACE the row id is whatever the engine just wrote
+		// (the new permID on first insert; potentially a fresh id on
+		// update if the engine decided to delete-and-recreate). Read
+		// it back so the response always reflects the actual row.
+		var actualID string
+		if err := db.QueryRow(
+			"SELECT id FROM column_permissions WHERE user_id = ? AND column_id = ?",
+			req.UserID, req.ColumnID,
+		).Scan(&actualID); err == nil {
+			permID = actualID
 		}
 
 		var columnName string

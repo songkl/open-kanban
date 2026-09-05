@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -90,14 +91,34 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 		}
 
 		permID := generateID()
+		// Portable upsert: REPLACE INTO works on both MySQL and SQLite
+		// (ON CONFLICT…DO UPDATE is SQLite/PostgreSQL-only and silently
+		// fails on MySQL with a syntax error). The (user_id, board_id)
+		// UNIQUE constraint on the table makes this atomic; no FK
+		// references board_permissions.id so the row id rotating on
+		// update is safe.
 		_, err := db.Exec(`
-			INSERT INTO board_permissions (id, user_id, board_id, access)
+			REPLACE INTO board_permissions (id, user_id, board_id, access)
 			VALUES (?, ?, ?, ?)
-			ON CONFLICT(user_id, board_id) DO UPDATE SET access = excluded.access
 		`, permID, req.UserID, req.BoardID, req.Access)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
+			log.Printf("[SetPermission] REPLACE INTO board_permissions failed (user=%s board=%s access=%s): %v", req.UserID, req.BoardID, req.Access, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to set board permission: " + err.Error(),
+			})
 			return
+		}
+
+		// After REPLACE the row id is whatever the engine just wrote
+		// (the new permID on first insert; potentially a fresh id on
+		// update if the engine decided to delete-and-recreate). Read
+		// it back so the response always reflects the actual row.
+		var actualID string
+		if err := db.QueryRow(
+			"SELECT id FROM board_permissions WHERE user_id = ? AND board_id = ?",
+			req.UserID, req.BoardID,
+		).Scan(&actualID); err == nil {
+			permID = actualID
 		}
 
 		var boardName string
