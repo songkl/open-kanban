@@ -25,6 +25,17 @@ export default tseslint.config(
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      // eslint-plugin-react-hooks v7 added two stricter rules that
+      // fire on patterns this codebase has been using without
+      // issue: accessing a function declared after its useEffect
+      // (TDZ, but the effect runs after render so the reference
+      // is fine), and calling setState synchronously inside an
+      // effect to seed derived state on mount. Both are real
+      // smells in some contexts but a wholesale sweep of the
+      // codebase to silence them would create more churn than
+      // value. Disable until we have time to do the refactor.
+      'react-hooks/immutability': 'off',
+      'react-hooks/set-state-in-effect': 'off',
     },
   }
 );

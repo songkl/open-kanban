@@ -273,7 +273,6 @@ export function TaskModal({
   useEffect(() => {
     const deps = [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate];
     if (handleSaveRefDeps.current.join() !== deps.join()) {
-      // eslint-disable-next-line react-hooks/immutability
       handleSaveRef.current = handleSave;
       handleSaveRefDeps.current = deps;
     }

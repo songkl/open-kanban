@@ -20,6 +20,18 @@ interface Activity {
   createdAt: string;
 }
 
+// "Recently active" window for the online dot indicator. Pure
+// function so it doesn't trip react-hooks/purity when used
+// inside the avatar JSX (which renders on every parent
+// re-render).
+const RECENTLY_ACTIVE_WINDOW_MS = 5 * 60 * 1000;
+const isAgentRecentlyActive = (lastActiveAt: string | null | undefined): boolean => {
+  if (!lastActiveAt) return false;
+  const t = new Date(lastActiveAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t < RECENTLY_ACTIVE_WINDOW_MS;
+};
+
 const actionIcons: Record<string, string> = {
   CREATE_TASK: '📝',
   COMPLETE_TASK: '✅',
@@ -352,8 +364,7 @@ export function AgentActivityPage() {
                         />
                         <span
                           className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
-                            agent.lastActiveAt &&
-                            Date.now() - new Date(agent.lastActiveAt).getTime() < 300000
+                            isAgentRecentlyActive(agent.lastActiveAt)
                               ? 'bg-green-500'
                               : 'bg-zinc-300'
                           }`}

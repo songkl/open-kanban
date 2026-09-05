@@ -57,6 +57,7 @@ logs/
 tmp/
 backend/cmd/server/web/*
 !backend/cmd/server/web/.gitkeep
+!backend/cmd/server/web/README.md
 kanban.db.*
 # Coverage and generated types
 coverage/
