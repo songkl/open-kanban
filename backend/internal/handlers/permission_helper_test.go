@@ -2,10 +2,14 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"open-kanban/internal/models"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -131,7 +135,12 @@ func setupPermissionTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to insert column permission: %v", err)
 	}
 
-	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id) VALUES ('task1', 'Task 1', 'c1')`)
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Task 1', 'c1', 'u2')`)
+	if err != nil {
+		t.Fatalf("failed to insert task: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task2', 'Task 2', 'c1', 'u1')`)
 	if err != nil {
 		t.Fatalf("failed to insert task: %v", err)
 	}
@@ -382,6 +391,180 @@ func TestGetBoardIDForColumn(t *testing.T) {
 		_, err := getBoardIDForColumn(db, "nonexistent")
 		if err == nil {
 			t.Error("expected error for nonexistent column")
+		}
+	})
+}
+
+func newTestGinContext() (*gin.Context, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	return c, w
+}
+
+func TestRequireNonViewer(t *testing.T) {
+	t.Run("VIEWER 角色返回 403", func(t *testing.T) {
+		c, w := newTestGinContext()
+		user := &models.User{ID: "u3", Role: "VIEWER"}
+
+		blocked := requireNonViewer(c, user)
+
+		if !blocked {
+			t.Error("expected requireNonViewer to return true for VIEWER")
+		}
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403, got %d", w.Code)
+		}
+		var body map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("failed to parse response body: %v", err)
+		}
+		if body["error"] == "" {
+			t.Error("expected error message in response body")
+		}
+	})
+
+	t.Run("MEMBER 角色不拦截", func(t *testing.T) {
+		c, w := newTestGinContext()
+		user := &models.User{ID: "u2", Role: "MEMBER"}
+
+		blocked := requireNonViewer(c, user)
+
+		if blocked {
+			t.Error("expected requireNonViewer to return false for MEMBER")
+		}
+		if w.Code != http.StatusOK && w.Code != 0 {
+			t.Errorf("expected no error response, got status %d", w.Code)
+		}
+	})
+
+	t.Run("ADMIN 角色不拦截", func(t *testing.T) {
+		c, w := newTestGinContext()
+		user := &models.User{ID: "u1", Role: "ADMIN"}
+
+		blocked := requireNonViewer(c, user)
+
+		if blocked {
+			t.Error("expected requireNonViewer to return false for ADMIN")
+		}
+		if w.Code != http.StatusOK && w.Code != 0 {
+			t.Errorf("expected no error response, got status %d", w.Code)
+		}
+	})
+
+	t.Run("nil 用户视为 VIEWER 并返回 403", func(t *testing.T) {
+		c, w := newTestGinContext()
+
+		blocked := requireNonViewer(c, nil)
+
+		if !blocked {
+			t.Error("expected requireNonViewer to block nil user")
+		}
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected status 403, got %d", w.Code)
+		}
+	})
+}
+
+func TestCanModifyTask(t *testing.T) {
+	t.Run("ADMIN 任意任务通过", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		admin := &models.User{ID: "u1", Role: "ADMIN"}
+		allowed, err := canModifyTask(db, admin, "task1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !allowed {
+			t.Error("expected ADMIN to be allowed to modify any task")
+		}
+	})
+
+	t.Run("VIEWER 任意任务拒绝", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		viewer := &models.User{ID: "u3", Role: "VIEWER"}
+		allowed, err := canModifyTask(db, viewer, "task1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if allowed {
+			t.Error("expected VIEWER to be denied modification")
+		}
+	})
+
+	t.Run("MEMBER 自己创建 通过", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		member := &models.User{ID: "u2", Role: "MEMBER"}
+		allowed, err := canModifyTask(db, member, "task1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !allowed {
+			t.Error("expected MEMBER to be allowed to modify own task")
+		}
+	})
+
+	t.Run("MEMBER 他人创建 拒绝", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		member := &models.User{ID: "u2", Role: "MEMBER"}
+		allowed, err := canModifyTask(db, member, "task2")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if allowed {
+			t.Error("expected MEMBER to be denied modification of someone else's task")
+		}
+	})
+
+	t.Run("任务不存在 返回错误", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		member := &models.User{ID: "u2", Role: "MEMBER"}
+		_, err := canModifyTask(db, member, "nonexistent")
+		if err == nil {
+			t.Error("expected error for nonexistent task")
+		}
+		if err != sql.ErrNoRows {
+			t.Errorf("expected sql.ErrNoRows, got %v", err)
+		}
+	})
+
+	t.Run("MEMBER 任务无 created_by 拒绝", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id) VALUES ('task3', 'Orphan Task', 'c1')`); err != nil {
+			t.Fatalf("failed to insert orphan task: %v", err)
+		}
+
+		member := &models.User{ID: "u2", Role: "MEMBER"}
+		allowed, err := canModifyTask(db, member, "task3")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if allowed {
+			t.Error("expected MEMBER to be denied modification of task without created_by")
+		}
+	})
+
+	t.Run("nil 用户拒绝", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		allowed, err := canModifyTask(db, nil, "task1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if allowed {
+			t.Error("expected nil user to be denied modification")
 		}
 	})
 }

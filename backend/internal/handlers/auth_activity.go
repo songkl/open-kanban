@@ -115,7 +115,7 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 			baseQuery += " JOIN users u ON a.user_id = u.id AND u.type = 'AGENT'"
 		}
 
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			filterUserID = user.ID
 		}
 

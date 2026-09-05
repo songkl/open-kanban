@@ -27,7 +27,7 @@ func GetUsers(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can view"})
 			return
 		}
@@ -140,6 +140,24 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role, valid values are: ADMIN, MEMBER, VIEWER"})
 					return
 				}
+				if oldUser.Role == "ADMIN" && req.Role != "ADMIN" {
+					var enabled bool
+					if err := db.QueryRow("SELECT enabled FROM users WHERE id = ?", req.TargetUserID).Scan(&enabled); err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check user status"})
+						return
+					}
+					if enabled {
+						last, err := IsLastAdmin(db, req.TargetUserID)
+						if err != nil {
+							c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check admin status"})
+							return
+						}
+						if last {
+							c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot demote the last admin"})
+							return
+						}
+					}
+				}
 				changes = append(changes, fmt.Sprintf("角色: '%s' → '%s'", oldUser.Role, req.Role))
 			}
 			if req.Type != "" && req.Type != oldUser.Type {
@@ -230,7 +248,7 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if currentUser.Role != "ADMIN" {
+		if !isAdmin(currentUser) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can enable/disable users"})
 			return
 		}
@@ -256,6 +274,26 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 		if !exists {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
+		}
+
+		if !req.Enabled {
+			var targetRole string
+			var targetEnabled bool
+			if err := db.QueryRow("SELECT role, enabled FROM users WHERE id = ?", req.UserID).Scan(&targetRole, &targetEnabled); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check user status"})
+				return
+			}
+			if targetRole == "ADMIN" && targetEnabled {
+				last, err := IsLastAdmin(db, req.UserID)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check admin status"})
+					return
+				}
+				if last {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot disable the last admin"})
+					return
+				}
+			}
 		}
 
 		now := time.Now()
@@ -338,7 +376,7 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can create Agent"})
 			return
 		}
@@ -430,7 +468,7 @@ func DeleteAgent(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can delete Agent"})
 			return
 		}
@@ -446,6 +484,24 @@ func DeleteAgent(db *sql.DB) gin.HandlerFunc {
 		if err != nil || userType != "AGENT" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Agent not found"})
 			return
+		}
+
+		var agentRole string
+		var agentEnabled bool
+		if err := db.QueryRow("SELECT role, enabled FROM users WHERE id = ?", agentID).Scan(&agentRole, &agentEnabled); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check agent status"})
+			return
+		}
+		if agentRole == "ADMIN" && agentEnabled {
+			last, err := IsLastAdmin(db, agentID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check admin status"})
+				return
+			}
+			if last {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete the last admin"})
+				return
+			}
 		}
 
 		_, err = db.Exec("DELETE FROM users WHERE id = ?", agentID)
@@ -465,7 +521,7 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can reset Token"})
 			return
 		}
@@ -519,7 +575,7 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if currentUser.Role != "ADMIN" {
+		if !isAdmin(currentUser) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can create users"})
 			return
 		}

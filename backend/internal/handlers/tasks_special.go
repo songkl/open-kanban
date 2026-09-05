@@ -18,8 +18,7 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot archive tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -40,13 +39,10 @@ func ArchiveTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "MEMBER" {
-			var createdBy string
-			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
-			if err != nil || createdBy != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Can only archive tasks you created"})
-				return
-			}
+		allowed, err := canModifyTask(db, user, id)
+		if err != nil || !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Can only archive tasks you created"})
+			return
 		}
 
 		var req ArchiveTaskRequest
@@ -88,8 +84,7 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot complete tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -110,13 +105,10 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "MEMBER" {
-			var createdBy string
-			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
-			if err != nil || createdBy != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Can only complete tasks you created"})
-				return
-			}
+		allowed, err := canModifyTask(db, user, id)
+		if err != nil || !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Can only complete tasks you created"})
+			return
 		}
 
 		taskService := services.NewTaskService(db)

@@ -2,12 +2,32 @@ package handlers
 
 import (
 	"database/sql"
+	"net/http"
 
 	"open-kanban/internal/models"
+
+	"github.com/gin-gonic/gin"
 )
 
 func isAdmin(user *models.User) bool {
 	return user != nil && user.Role == "ADMIN"
+}
+
+// IsLastAdmin reports whether targetUserID is the last enabled
+// ADMIN user in the system. Returns true when removing targetUserID
+// from the enabled ADMIN set would leave zero admins. This is used to
+// guard against demoting, disabling or deleting the last admin so the
+// system never becomes unmanageable.
+func IsLastAdmin(db *sql.DB, targetUserID string) (bool, error) {
+	var count int
+	err := db.QueryRow(
+		"SELECT COUNT(*) FROM users WHERE role = 'ADMIN' AND enabled = 1 AND id != ?",
+		targetUserID,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
 }
 
 func checkBoardAccess(db *sql.DB, userID, boardID, requiredAccess string, userRole string) bool {
@@ -84,4 +104,30 @@ func getBoardIDForColumn(db *sql.DB, columnID string) (string, error) {
 		columnID,
 	).Scan(&boardID)
 	return boardID, err
+}
+
+func requireNonViewer(c *gin.Context, user *models.User) bool {
+	if user == nil || user.Role == "VIEWER" {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot perform this action"})
+		return true
+	}
+	return false
+}
+
+func canModifyTask(db *sql.DB, user *models.User, taskID string) (bool, error) {
+	if user == nil {
+		return false, nil
+	}
+	switch user.Role {
+	case "ADMIN":
+		return true, nil
+	case "VIEWER":
+		return false, nil
+	}
+	var createdBy sql.NullString
+	err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", taskID).Scan(&createdBy)
+	if err != nil {
+		return false, err
+	}
+	return createdBy.Valid && createdBy.String == user.ID, nil
 }

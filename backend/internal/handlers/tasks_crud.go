@@ -19,8 +19,7 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot create tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -114,8 +113,7 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot modify tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -136,13 +134,14 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "MEMBER" {
-			var createdBy string
-			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
-			if err != nil || createdBy != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Can only modify tasks you created"})
-				return
-			}
+		allowed, err := canModifyTask(db, user, id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+			return
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Can only modify tasks you created"})
+			return
 		}
 
 		var req UpdateTaskRequest
@@ -224,8 +223,7 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -242,8 +240,7 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if user.Role == "MEMBER" {
-			var createdBy sql.NullString
-			err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", id).Scan(&createdBy)
+			allowed, err := canModifyTask(db, user, id)
 			if err != nil {
 				if err == sql.ErrNoRows {
 					c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
@@ -252,7 +249,7 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to query task: %v", err)})
 				return
 			}
-			if !createdBy.Valid || createdBy.String != user.ID {
+			if !allowed {
 				c.JSON(http.StatusForbidden, gin.H{"error": "Can only delete tasks you created"})
 				return
 			}

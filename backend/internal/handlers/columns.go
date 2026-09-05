@@ -595,7 +595,7 @@ func SetColumnAgent(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can configure"})
 			return
 		}
@@ -651,7 +651,7 @@ func DeleteColumnAgent(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if user.Role != "ADMIN" {
+		if !isAdmin(user) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can configure"})
 			return
 		}
