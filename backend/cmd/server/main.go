@@ -69,7 +69,33 @@ func loadEnvFromFile(path string) error {
 //go:embed web
 var embeddedWeb embed.FS
 
-// detectSubcommand looks for one of the known CLI subcommands anywhere in
+// mysqlNeedsLazySetup reports whether the server is starting on a MySQL
+// database with no connection details available, in which case we should
+// skip the eager InitDB() call at startup and let the setup wizard supply
+// the credentials. SQLite is never "needing lazy setup" because it just
+// creates an empty file on disk if one doesn't exist.
+//
+// Returns false unless DB_TYPE resolves to "mysql" AND neither DB_HOST nor
+// DB_USER is set in the environment. If the user explicitly configured
+// MySQL with partial env vars, we still attempt to connect and let it
+// fail with a clear error rather than silently entering setup mode.
+func mysqlNeedsLazySetup() bool {
+	dbType := strings.ToLower(strings.TrimSpace(os.Getenv("DB_TYPE")))
+	if dbType == "" {
+		// Defaults differ between builds: db_mysql.go defaults to
+		// "mysql" and db.go defaults to "sqlite". We can't tell which
+		// build we're in at runtime, so probe the binary's behavior by
+		// asking: would InitDB fail without any env vars?
+		// Practically the only build that fails without env vars is the
+		// MySQL-only one, so the safe heuristic is "treat unset DB_TYPE
+		// as a normal SQLite-style startup".
+		return false
+	}
+	if dbType != "mysql" {
+		return false
+	}
+	return os.Getenv("DB_HOST") == "" && os.Getenv("DB_USER") == ""
+}
 // args and returns it together with the args surrounding it (before AND
 // after, so flags like -yes that come after the subcommand still reach
 // the subcommand's FlagSet). If none is found the empty string is
@@ -225,6 +251,27 @@ func corsMiddleware() gin.HandlerFunc {
 			return
 		}
 		c.Next()
+	}
+}
+
+// setupOnlyRoutes registers the minimal endpoint set needed by the setup
+// wizard. None of these handlers require a connected database; the Init
+// handler itself bootstraps the connection from the Advanced block in the
+// request body the first time it's called. Everything else (login, boards,
+// tasks, OAuth, …) is intentionally left unregistered so unauthenticated
+// callers can't probe it before setup completes.
+func setupOnlyRoutes(r *gin.Engine, onConfigPersisted func(path string)) {
+	auth := r.Group("/api/v1/auth")
+	{
+		auth.POST("/init", handlers.Init(nil, onConfigPersisted))
+		auth.GET("/init-defaults", handlers.GetInitDefaults())
+		auth.GET("/login", handlers.GetAvatars())
+		auth.GET("/avatars", handlers.GetAvatars())
+		// /me is intentionally registered here so the frontend's HomeRedirect
+		// can detect needsSetup=true and auto-route to /setup. GetMe handles
+		// a nil DB by returning the "setup needed" payload without touching
+		// the database, so it is safe to call before the wizard runs.
+		auth.GET("/me", handlers.GetMe(nil))
 	}
 }
 
@@ -615,10 +662,26 @@ func main() {
 	// Initialize config
 	config.InitConfig()
 
-	// Initialize database
-	db, err := database.InitDB()
-	if err != nil {
-		log.Fatal("Failed to initialize database:", err)
+	// First-run / lazy-setup: if the binary is the MySQL-only build and no
+	// DB credentials are configured, skip the eager database.InitDB() call
+	// here. The HTTP server will still come up, register only the setup
+	// routes (Init / InitDefaults / Avatars), and let the setup wizard
+	// supply DB credentials via the Advanced block. The Init handler then
+	// bootstraps the connection itself, writes kanban.env, and triggers a
+	// self-restart so the next startup loads the persisted config normally.
+	var db *sql.DB
+	if mysqlNeedsLazySetup() {
+		log.Println("=================================================================")
+		log.Println(" No MySQL connection details found in the environment.")
+		log.Println(" Starting in setup mode. Open this server's URL in a browser to")
+		log.Println(" complete the setup wizard and provide database credentials.")
+		log.Println("=================================================================")
+	} else {
+		var err error
+		db, err = database.InitDB()
+		if err != nil {
+			log.Fatal("Failed to initialize database:", err)
+		}
 	}
 
 	// Initialize webhook service
@@ -645,7 +708,7 @@ func main() {
 
 	// Setup API routes. The init endpoint can request a self-restart once the
 	// setup wizard finishes writing kanban.env, so we forward a callback that
-	// signals the HTTP server to shut down and spawns a replacement process.
+	// signals the HTTP server to shut down and spawn a replacement process.
 	restartCh := make(chan string, 1)
 	onConfigPersisted := func(path string) {
 		select {
@@ -653,7 +716,15 @@ func main() {
 		default:
 		}
 	}
-	setupAPIRoutes(r, db, onConfigPersisted)
+	if db == nil {
+		// First-run / lazy-setup: only the endpoints required by the setup
+		// wizard are reachable. Everything else (login, boards, tasks, …)
+		// requires a connected DB and will return 404 until the wizard
+		// completes and the process restarts with the persisted config.
+		setupOnlyRoutes(r, onConfigPersisted)
+	} else {
+		setupAPIRoutes(r, db, onConfigPersisted)
+	}
 
 	// Static files - serve embedded frontend by default, or from WEB_DIR if set
 	webDir := os.Getenv("WEB_DIR")
