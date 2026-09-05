@@ -199,20 +199,11 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 
 		LogActivity(db, currentUser.ID, "USER_UPDATE", "USER", req.TargetUserID, updatedUser.Nickname, details, c.ClientIP(), getRequestSource(c))
 
-		var tokenKey string
-		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
-			}
-		}
-		if tokenKey == "" {
-			if cookie, err := c.Cookie("kanban-token"); err == nil {
-				tokenKey = cookie
-			}
-		}
-		if tokenKey != "" {
-			tokenCache.Delete(tokenKey)
-		}
+		// Invalidate every cached session for the target user so the
+		// change is visible on the next request — no need to log out
+		// and back in. This covers the current request's token AND
+		// any other active sessions the target user has open.
+		tokenCache.DeleteByUserID(req.TargetUserID)
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
@@ -276,6 +267,10 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Operation failed"})
 			return
 		}
+
+		// Invalidate every cached session for the target user so the
+		// enable/disable takes effect on the next request.
+		tokenCache.DeleteByUserID(req.UserID)
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}

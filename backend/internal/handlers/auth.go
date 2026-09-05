@@ -28,6 +28,11 @@ type tokenCacheStore interface {
 	Load(token string) (*cachedUser, bool)
 	Store(token string, entry *cachedUser)
 	Delete(token string)
+	// DeleteByUserID drops every cached entry whose user.ID matches.
+	// Called when an admin updates a user's role / enabled flag so
+	// the target user sees the change on the next request without
+	// having to log out and back in.
+	DeleteByUserID(userID string) int
 }
 
 type memoryTokenCache struct {
@@ -49,6 +54,28 @@ func (m *memoryTokenCache) Store(token string, entry *cachedUser) {
 
 func (m *memoryTokenCache) Delete(token string) {
 	m.cache.Delete(token)
+}
+
+// DeleteByUserID walks the in-memory map and drops every entry whose
+// cached user matches userID. O(n) over the cache size, which is
+// bounded by the number of live tokens (one per active session).
+func (m *memoryTokenCache) DeleteByUserID(userID string) int {
+	if userID == "" {
+		return 0
+	}
+	deleted := 0
+	m.cache.Range(func(key, value interface{}) bool {
+		entry, ok := value.(*cachedUser)
+		if !ok || entry == nil || entry.user == nil {
+			return true
+		}
+		if entry.user.ID == userID {
+			m.cache.Delete(key)
+			deleted++
+		}
+		return true
+	})
+	return deleted
 }
 
 type redisTokenCacheStore struct {
@@ -90,6 +117,28 @@ func (r *redisTokenCacheStore) Store(token string, entry *cachedUser) {
 
 func (r *redisTokenCacheStore) Delete(token string) {
 	r.cache.Delete(token)
+}
+
+// DeleteByUserID SCANs Redis for `token:*` keys, fetches each, and
+// drops the ones whose UserID matches. Acceptable for the typical
+// session-count-per-user (1-3); if the deployment scales to millions
+// of live tokens per user, swap in a `user:<id>:tokens` reverse
+// index set on Store.
+func (r *redisTokenCacheStore) DeleteByUserID(userID string) int {
+	if userID == "" {
+		return 0
+	}
+	keys, err := r.cache.ScanUserTokens(userID)
+	if err != nil {
+		return 0
+	}
+	deleted := 0
+	for _, k := range keys {
+		if err := r.cache.Delete(k); err == nil {
+			deleted++
+		}
+	}
+	return deleted
 }
 
 var (

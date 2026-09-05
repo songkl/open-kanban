@@ -636,6 +636,67 @@ func TestUpdateUserHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("updating a role invalidates the target user's cached token so they see the change on next request", func(t *testing.T) {
+		// Regression guard: previously the only cache invalidation on
+		// user update was for the admin's own token, so a user whose
+		// role was changed would still get the stale role from cache
+		// and had to log out and back in to see the change. The fix
+		// calls tokenCache.DeleteByUserID(targetUserID) so every
+		// active session for that user is invalidated at once.
+		// Pretend a request from member1 happened earlier and primed
+		// the cache with their current (MEMBER) role.
+		handlers.ResetTokenCacheForTest()
+		handlers.SeedTokenCacheForTest("member-token", "member1", "MEMBER")
+
+		// Pre-condition: the cache should now report MEMBER for member1.
+		if entry, ok := handlers.PeekTokenCache("member-token"); !ok || entry == nil || entry.Role != "MEMBER" {
+			t.Fatalf("pre-condition: expected cached role=MEMBER, got %+v ok=%v", entry, ok)
+		}
+
+		// Admin promotes member1 to ADMIN.
+		body := map[string]interface{}{"targetUserId": "member1", "role": "ADMIN"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("PUT", "/api/users", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200 from PUT /api/users, got %d: %s", w.Code, w.Body.String())
+		}
+
+		// The cache entry for member1's token must be gone so the
+		// next request reads the new role from the DB.
+		if _, ok := handlers.PeekTokenCache("member-token"); ok {
+			t.Errorf("expected member-token cache entry to be invalidated after role change")
+		}
+
+		// And the next /me call should report the fresh ADMIN role.
+		meReq, _ := http.NewRequest("GET", "/api/auth/me", nil)
+		meReq.AddCookie(&http.Cookie{Name: "kanban-token", Value: "member-token"})
+		meW := httptest.NewRecorder()
+		routerMe := gin.New()
+		routerMe.GET("/api/auth/me", handlers.GetMe(db))
+		routerMe.ServeHTTP(meW, meReq)
+		if meW.Code != http.StatusOK {
+			t.Fatalf("expected 200 from /me, got %d: %s", meW.Code, meW.Body.String())
+		}
+		var meResp map[string]interface{}
+		_ = json.Unmarshal(meW.Body.Bytes(), &meResp)
+		if meResp["needsSetup"] != false {
+			t.Errorf("expected needsSetup=false on /me, got %v", meResp["needsSetup"])
+		}
+		if user, _ := meResp["user"].(map[string]interface{}); user == nil || user["role"] != "ADMIN" {
+			role := "<nil>"
+			if user != nil {
+				role, _ = user["role"].(string)
+			}
+			t.Errorf("expected member1 role=ADMIN after role change, got %s", role)
+		}
+	})
+
 	t.Run("update with invalid role returns 400", func(t *testing.T) {
 		body := map[string]interface{}{"targetUserId": "member1", "role": "INVALID"}
 		jsonBody, _ := json.Marshal(body)
@@ -1179,6 +1240,57 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("set column permission surfaces SQL errors instead of generic 500", func(t *testing.T) {
+		// Regression guard: previously the handler returned a flat
+		// `{"error":"Failed to set"}` 500 for any DB-side failure
+		// (FK violation, missing table, charset mismatch, …), which
+		// made "the column_permissions table doesn't exist on this
+		// upgrade" indistinguishable from "the columnId is stale".
+		// The new error path includes the driver message and logs it.
+		// We force a real failure by dropping the column_permissions
+		// table out from under the handler — that reproduces the
+		// exact "table doesn't exist" condition operators hit when
+		// upgrading from a pre-consolidation build.
+		if _, err := db.Exec("DROP TABLE column_permissions"); err != nil {
+			t.Fatalf("failed to drop column_permissions for test setup: %v", err)
+		}
+		// Re-create the table before any subsequent subtests so the
+		// order of t.Run entries doesn't matter.
+		t.Cleanup(func() {
+			_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS column_permissions (
+				id TEXT PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				column_id TEXT NOT NULL,
+				access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+				FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
+				UNIQUE(user_id, column_id)
+			)`)
+		})
+
+		body := map[string]interface{}{"columnId": "col1", "userId": "member1", "access": "WRITE"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/columns/permissions", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
+		errMsg, _ := resp["error"].(string)
+		if errMsg == "" || errMsg == "Failed to set" {
+			t.Errorf("expected error message to include the driver error, got %q", errMsg)
+		}
+	})
+
 	t.Run("set column permission with invalid access returns 400", func(t *testing.T) {
 		body := map[string]interface{}{"columnId": "col1", "userId": "member1", "access": "INVALID"}
 		jsonBody, _ := json.Marshal(body)
@@ -1208,6 +1320,55 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 
 		if w.Code != http.StatusOK {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("upsert: setting the same permission twice updates rather than errors", func(t *testing.T) {
+		// Regression guard for the MySQL `ON CONFLICT` syntax bug. The
+		// upsert used to be `INSERT ... ON CONFLICT(...) DO UPDATE`
+		// which is SQLite/PostgreSQL-only and returned 500 on MySQL.
+		// The fix uses `REPLACE INTO` which is portable. This subtest
+		// calls the endpoint twice with the same (userId, columnId)
+		// pair and verifies the row is updated, not duplicated.
+		for _, access := range []string{"WRITE", "ADMIN", "READ"} {
+			body := map[string]interface{}{"columnId": "col-upsert", "userId": "member-upsert", "access": access}
+			jsonBody, _ := json.Marshal(body)
+
+			req, _ := http.NewRequest("POST", "/api/columns/permissions", bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("[access=%s] expected 200, got %d: %s", access, w.Code, w.Body.String())
+				continue
+			}
+		}
+
+		// Exactly one row should exist for the (userId, columnId) pair.
+		var count int
+		if err := db.QueryRow(
+			"SELECT COUNT(*) FROM column_permissions WHERE user_id = ? AND column_id = ?",
+			"member-upsert", "col-upsert",
+		).Scan(&count); err != nil {
+			t.Fatalf("count query failed: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("expected 1 row after upsert, got %d", count)
+		}
+
+		// And the final access level should be the last one we sent.
+		var gotAccess string
+		if err := db.QueryRow(
+			"SELECT access FROM column_permissions WHERE user_id = ? AND column_id = ?",
+			"member-upsert", "col-upsert",
+		).Scan(&gotAccess); err != nil {
+			t.Fatalf("select failed: %v", err)
+		}
+		if gotAccess != "READ" {
+			t.Errorf("expected final access=READ, got %q", gotAccess)
 		}
 	})
 }

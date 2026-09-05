@@ -153,6 +153,58 @@ func (r *RedisTokenCache) Delete(token string) error {
 	return r.client.Del(r.ctx, key).Err()
 }
 
+// ScanUserTokens walks Redis for token cache entries that belong to
+// the given user and returns their underlying token strings (without
+// the "token:" prefix). Used by the auth handlers when an admin
+// updates a user's role / enabled flag, to invalidate every cached
+// session for that user in one shot. Returns an empty slice (not an
+// error) when Redis is unavailable so the caller can treat the
+// operation as a best-effort invalidation.
+func (r *RedisTokenCache) ScanUserTokens(userID string) ([]string, error) {
+	if userID == "" {
+		return nil, nil
+	}
+	if r.client == nil {
+		return nil, nil
+	}
+	var (
+		cursor  uint64
+		tokens  []string
+		prefix  = "token:"
+		scanCtx = r.ctx
+	)
+	for {
+		var (
+			batch []string
+			err   error
+		)
+		batch, cursor, err = r.client.Scan(scanCtx, cursor, prefix+"*", 100).Result()
+		if err != nil {
+			return tokens, err
+		}
+		for _, k := range batch {
+			val, gerr := r.client.Get(scanCtx, k).Result()
+			if gerr == redis.Nil {
+				continue
+			}
+			if gerr != nil {
+				continue
+			}
+			var entry TokenCacheEntry
+			if decodeJSON(val, &entry) != nil {
+				continue
+			}
+			if entry.UserID == userID {
+				tokens = append(tokens, k[len(prefix):])
+			}
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	return tokens, nil
+}
+
 type RedisConnectionCounter struct {
 	client *redis.Client
 	ctx    context.Context
