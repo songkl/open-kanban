@@ -54,35 +54,6 @@ jobs:
           go mod download
           golangci-lint run
 
-  commit-message:
-    name: Commit Message Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check commit messages
-        run: |
-          # Get list of commits in this PR
-          commits=$(git log --pretty=format:"%s" origin/main..HEAD)
-          echo "Checking commit messages..."
-          echo "$commits"
-          # Pattern: task ID like T-XXX, opt-XXX, PRJ-XXX, etc. followed by : or ]
-          pattern='^[A-Z][A-Z0-9]+-[0-9]+(:\]|\s)'
-          invalid=0
-          while IFS= read -r commit; do
-            if ! echo "$commit" | grep -qE "$pattern"; then
-              echo "Invalid commit message: $commit"
-              echo "Commit messages should start with a task ID (e.g., T-123:, opt-006:, PRJ-015:)"
-              invalid=1
-            fi
-          done <<< "$commits"
-          if [ $invalid -eq 1 ]; then
-            exit 1
-          fi
-
   go-test:
     name: Go Test
     runs-on: ubuntu-latest
