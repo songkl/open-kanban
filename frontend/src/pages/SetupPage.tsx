@@ -252,10 +252,10 @@ export function SetupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-900">
-      <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-8 shadow-lg">
+    <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-900 py-8 px-4">
+      <div className="w-full max-w-lg rounded-xl bg-white dark:bg-zinc-800 shadow-lg">
         {restarting ? (
-          <div className="py-8 text-center" data-testid="restart-status">
+          <div className="px-8 py-12 text-center" data-testid="restart-status">
             <svg
               className="mx-auto h-10 w-10 animate-spin text-blue-500"
               xmlns="http://www.w3.org/2000/svg"
@@ -279,11 +279,11 @@ export function SetupPage() {
             <h2 className="mt-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">
               {t('setup.restartingTitle')}
             </h2>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
               {t('setup.restartingBody')}
             </p>
             {restartError && (
-              <div className="mt-4 rounded-md bg-amber-50 dark:bg-amber-900/30 p-3 text-sm text-amber-700 dark:text-amber-300">
+              <div className="mt-6 rounded-md bg-amber-50 dark:bg-amber-900/30 p-3 text-sm text-amber-700 dark:text-amber-300">
                 {restartError}
                 <button
                   type="button"
@@ -292,7 +292,7 @@ export function SetupPage() {
                     setRestartError(null);
                     navigate('/');
                   }}
-                  className="mt-2 block w-full rounded-md bg-amber-500 py-2 text-white hover:bg-amber-600"
+                  className="mt-3 block w-full rounded-md bg-amber-500 py-2 text-white hover:bg-amber-600"
                 >
                   {t('setup.continueAnyway')}
                 </button>
@@ -301,226 +301,267 @@ export function SetupPage() {
           </div>
         ) : (
           <>
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('app.title')}</h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">{t('login.welcome')}</p>
-          <p className="mt-1 text-xs text-blue-500 dark:text-blue-400">{t('login.firstUserAdmin')}</p>
-        </div>
-
-          <form onSubmit={handleSetup} className="space-y-6">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-              {t('login.username')}
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={t('login.enterUsername')}
-              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-              maxLength={50}
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-              {t('login.password')}
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('login.enterPassword')}
-              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-3 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-            />
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-400">{t('login.passwordHint')}</p>
-          </div>
-
-          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4">
-            {/* When the running binary only supports a single DB engine
-                (e.g. the MySQL-only release), the advanced form is the
-                only path to a working setup — there is no other engine
-                to fall back to. Force it open and hide the collapse
-                toggle so the user can't skip past it. */}
-            {supportedDbTypes.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex w-full items-center justify-between text-sm font-medium text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-100"
-              >
-                <span>{t('setup.advancedSettings')}</span>
-                <svg
-                  className={`h-5 w-5 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            )}
-
-            {(supportedDbTypes.length === 1 || showAdvanced) && (
-              <div className="mt-4 space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                    {supportedDbTypes.length === 1
-                      ? t('setup.dbTypeFixed', { type: supportedDbTypes[0].toUpperCase() })
-                      : t('setup.dbType')}
-                  </label>
-                  <select
-                    value={advancedConfig.dbType}
-                    onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbType: e.target.value as DbType })}
-                    disabled={supportedDbTypes.length === 1}
-                    className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {ALL_DB_TYPES.filter((t) => supportedDbTypes.includes(t)).map((t) => (
-                      <option key={t} value={t}>
-                        {t === 'sqlite' ? 'SQLite' : 'MySQL'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {advancedConfig.dbType === 'sqlite' ? (
-                  <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                        {t('setup.dbPath')}
-                      </label>
-                      <input
-                        type="text"
-                        value={advancedConfig.dbPath}
-                        onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPath: e.target.value })}
-                        placeholder="kanban.db"
-                        className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                      />
-                      <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-400">{t('setup.dbPathHint')}</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                          {t('setup.dbHost')}
-                        </label>
-                        <input
-                          type="text"
-                          value={advancedConfig.dbHost}
-                          onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbHost: e.target.value })}
-                          placeholder="localhost"
-                          className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                          {t('setup.dbPort')}
-                        </label>
-                        <input
-                          type="text"
-                          value={advancedConfig.dbPort}
-                          onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPort: e.target.value })}
-                          placeholder="3306"
-                          className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                        {t('setup.dbName')}
-                      </label>
-                      <input
-                        type="text"
-                        value={advancedConfig.dbName}
-                        onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbName: e.target.value })}
-                        placeholder="kanban"
-                        className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                          {t('setup.dbUser')}
-                        </label>
-                        <input
-                          type="text"
-                          value={advancedConfig.dbUser}
-                          onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbUser: e.target.value })}
-                          placeholder="root"
-                          className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                          {t('setup.dbPassword')}
-                        </label>
-                        <input
-                          type="password"
-                          value={advancedConfig.dbPassword}
-                          onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPassword: e.target.value })}
-                          placeholder="********"
-                          className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4">
-                  <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('setup.serverSettings')}</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-                          {t('setup.serverPort')}
-                      </label>
-                      <input
-                        type="text"
-                        value={advancedConfig.serverPort}
-                        onChange={(e) => setAdvancedConfig({ ...advancedConfig, serverPort: e.target.value })}
-                        placeholder="8080"
-                        className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="setup-allowed-origins"
-                        className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-400"
-                      >
-                          {t('setup.allowedOrigins')}
-                      </label>
-                      <input
-                        id="setup-allowed-origins"
-                        type="text"
-                        value={advancedConfig.allowedOrigins}
-                        onChange={(e) => setAdvancedConfig({ ...advancedConfig, allowedOrigins: e.target.value })}
-                        placeholder="http://localhost:5173, http://localhost:3000"
-                        className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                      />
-                      <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-400">{t('setup.allowedOriginsHint')}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-md bg-blue-50 dark:bg-blue-900/30 p-3 text-xs text-blue-700 dark:text-blue-300">
-                  <p>{t('setup.configNote')}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {loginError && (
-            <div className="rounded-md bg-red-50 dark:bg-red-900/30 p-3 text-sm text-red-600 dark:text-red-400">
-              {loginError}
+            <div className="border-b border-zinc-200 dark:border-zinc-700 px-8 pt-8 pb-6 text-center">
+              <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('app.title')}</h1>
+              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('setup.welcome')}</p>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loginLoading || !username.trim()}
-            className="w-full rounded-md bg-blue-500 py-3 font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
-          >
-            {loginLoading ? t('login.loggingIn') : t('login.start')}
-          </button>
-        </form>
+            <form onSubmit={handleSetup} className="space-y-8 px-8 py-6">
+              <section className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="setup-username"
+                    className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    {t('login.username')}
+                  </label>
+                  <input
+                    id="setup-username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={t('login.enterUsername')}
+                    className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                    maxLength={50}
+                  />
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('login.firstUserAdmin')}</p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="setup-password"
+                    className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    {t('login.password')}
+                  </label>
+                  <input
+                    id="setup-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('login.enterPassword')}
+                    className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('login.passwordHint')}</p>
+                </div>
+              </section>
+
+              <section>
+                <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6">
+                  {supportedDbTypes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      className="flex w-full items-center justify-between text-sm font-medium text-zinc-700 dark:text-zinc-300 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+                    >
+                      <span>{t('setup.advancedSettings')}</span>
+                      <svg
+                        className={`h-5 w-5 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {(supportedDbTypes.length === 1 || showAdvanced) && (
+                    <div className="mt-6 space-y-6">
+                      <div className="space-y-4">
+                        <div>
+                          <label
+                            htmlFor="setup-db-type"
+                            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                          >
+                            {supportedDbTypes.length === 1
+                              ? t('setup.dbTypeFixed', { type: supportedDbTypes[0].toUpperCase() })
+                              : t('setup.dbType')}
+                          </label>
+                          <select
+                            id="setup-db-type"
+                            value={advancedConfig.dbType}
+                            onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbType: e.target.value as DbType })}
+                            disabled={supportedDbTypes.length === 1}
+                            className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {ALL_DB_TYPES.filter((tt) => supportedDbTypes.includes(tt)).map((tt) => (
+                              <option key={tt} value={tt}>
+                                {tt === 'sqlite' ? 'SQLite' : 'MySQL'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {advancedConfig.dbType === 'sqlite' ? (
+                          <div>
+                            <label
+                              htmlFor="setup-db-path"
+                              className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {t('setup.dbPath')}
+                            </label>
+                            <input
+                              id="setup-db-path"
+                              type="text"
+                              value={advancedConfig.dbPath}
+                              onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPath: e.target.value })}
+                              placeholder="kanban.db"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                            />
+                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('setup.dbPathHint')}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                              <div className="sm:col-span-2">
+                                <label
+                                  htmlFor="setup-db-host"
+                                  className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                                >
+                                  {t('setup.dbHost')}
+                                </label>
+                                <input
+                                  id="setup-db-host"
+                                  type="text"
+                                  value={advancedConfig.dbHost}
+                                  onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbHost: e.target.value })}
+                                  placeholder="localhost"
+                                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                                />
+                              </div>
+                              <div>
+                                <label
+                                  htmlFor="setup-db-port"
+                                  className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                                >
+                                  {t('setup.dbPort')}
+                                </label>
+                                <input
+                                  id="setup-db-port"
+                                  type="text"
+                                  value={advancedConfig.dbPort}
+                                  onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPort: e.target.value })}
+                                  placeholder="3306"
+                                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label
+                                htmlFor="setup-db-name"
+                                className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                              >
+                                {t('setup.dbName')}
+                              </label>
+                              <input
+                                id="setup-db-name"
+                                type="text"
+                                value={advancedConfig.dbName}
+                                onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbName: e.target.value })}
+                                placeholder="kanban"
+                                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                              <div>
+                                <label
+                                  htmlFor="setup-db-user"
+                                  className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                                >
+                                  {t('setup.dbUser')}
+                                </label>
+                                <input
+                                  id="setup-db-user"
+                                  type="text"
+                                  value={advancedConfig.dbUser}
+                                  onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbUser: e.target.value })}
+                                  placeholder="root"
+                                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                                />
+                              </div>
+                              <div>
+                                <label
+                                  htmlFor="setup-db-password"
+                                  className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                                >
+                                  {t('setup.dbPassword')}
+                                </label>
+                                <input
+                                  id="setup-db-password"
+                                  type="password"
+                                  value={advancedConfig.dbPassword}
+                                  onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPassword: e.target.value })}
+                                  placeholder="********"
+                                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4 border-t border-zinc-200 dark:border-zinc-700 pt-6">
+                        <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('setup.serverSettings')}</h3>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor="setup-server-port"
+                              className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {t('setup.serverPort')}
+                            </label>
+                            <input
+                              id="setup-server-port"
+                              type="text"
+                              value={advancedConfig.serverPort}
+                              onChange={(e) => setAdvancedConfig({ ...advancedConfig, serverPort: e.target.value })}
+                              placeholder="8080"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="setup-allowed-origins"
+                              className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {t('setup.allowedOrigins')}
+                            </label>
+                            <input
+                              id="setup-allowed-origins"
+                              type="text"
+                              value={advancedConfig.allowedOrigins}
+                              onChange={(e) => setAdvancedConfig({ ...advancedConfig, allowedOrigins: e.target.value })}
+                              placeholder="http://localhost:5173, http://localhost:3000"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                            />
+                            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('setup.allowedOriginsHint')}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-md bg-blue-50 dark:bg-blue-900/30 p-3 text-xs text-blue-700 dark:text-blue-300">
+                        {t('setup.configNote')}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {loginError && (
+                <div className="rounded-md bg-red-50 dark:bg-red-900/30 p-3 text-sm text-red-600 dark:text-red-400">
+                  {loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loginLoading || !username.trim()}
+                className="w-full rounded-md bg-blue-500 py-3 font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
+              >
+                {loginLoading ? t('login.loggingIn') : t('login.start')}
+              </button>
+            </form>
           </>
         )}
       </div>
