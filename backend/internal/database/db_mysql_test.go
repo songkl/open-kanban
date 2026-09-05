@@ -111,3 +111,12 @@ func TestGetDBConfig_MySQL(t *testing.T) {
 		t.Errorf("expected ConnMaxLifetime 600, got %d", config.ConnMaxLifetime)
 	}
 }
+
+// TestSupportedDBTypes_MySQLOnlyBuild verifies the mysql-only build
+// reports ONLY mysql so the setup wizard hides the SQLite option.
+func TestSupportedDBTypes_MySQLOnlyBuild(t *testing.T) {
+	got := database.SupportedDBTypes()
+	if len(got) != 1 || got[0] != "mysql" {
+		t.Errorf("expected mysql-only build to register exactly [mysql], got %v", got)
+	}
+}

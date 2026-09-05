@@ -152,3 +152,12 @@ func TestInitDB_SQLiteWithPath(t *testing.T) {
 
 	os.Remove("/tmp/test_kanban.db")
 }
+
+// TestSupportedDBTypes_SQLiteOnlyBuild verifies the sqlite-only build
+// reports ONLY sqlite so the setup wizard hides the MySQL option.
+func TestSupportedDBTypes_SQLiteOnlyBuild(t *testing.T) {
+	got := database.SupportedDBTypes()
+	if len(got) != 1 || got[0] != "sqlite" {
+		t.Errorf("expected sqlite-only build to register exactly [sqlite], got %v", got)
+	}
+}

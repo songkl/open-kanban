@@ -11,7 +11,7 @@ echo "=== Building open-kanban ==="
 echo ""
 echo "--- Building Frontend ---"
 cd "$PROJECT_DIR/frontend"
-npm install
+npm install --legacy-peer-deps
 npm run build
 
 # Copy dist to release directory
@@ -28,7 +28,7 @@ cp -r "$PROJECT_DIR/frontend/dist/." "$PROJECT_DIR/backend/cmd/server/web/"
 echo ""
 echo "--- Building MCP Server ---"
 cd "$PROJECT_DIR/mcp-server"
-npm install
+npm install --legacy-peer-deps
 npm run build
 
 # Build backend for current platform

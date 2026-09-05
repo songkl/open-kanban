@@ -7,7 +7,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 echo "=== Building Frontend ==="
 
 cd "$PROJECT_DIR/frontend"
-npm install
+npm install --legacy-peer-deps
 npm run build
 
 # Copy dist to backend/cmd/server/web for embedding

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -244,5 +245,82 @@ func TestExtractFlag(t *testing.T) {
 				t.Errorf("val: got %q, want %q", val, tt.wantVal)
 			}
 		})
+	}
+}
+
+func TestMysqlNeedsLazySetup(t *testing.T) {
+	// mysqlNeedsLazySetup only returns true when DB_TYPE is "mysql" AND
+	// neither DB_HOST nor DB_USER is set. Any other combination (sqlite,
+	// partial config, full config) must return false so we don't silently
+	// enter setup mode when the user explicitly configured the server.
+	tests := []struct {
+		name    string
+		dbType  string
+		dbHost  string
+		dbUser  string
+		setType bool
+		setHost bool
+		setUser bool
+		want    bool
+	}{
+		{name: "mysql with no creds → lazy setup", dbType: "mysql", want: true},
+		{name: "MYSQL (uppercase) with no creds → lazy setup", dbType: "MYSQL", want: true},
+		{name: "mysql with host but no user → not lazy", dbType: "mysql", setHost: true, want: false},
+		{name: "mysql with user but no host → not lazy", dbType: "mysql", setUser: true, want: false},
+		{name: "mysql with full creds → not lazy", dbType: "mysql", setHost: true, setUser: true, want: false},
+		{name: "sqlite with no creds → not lazy", dbType: "sqlite", want: false},
+		{name: "empty db type → not lazy", dbType: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			unsetEnv(t, "DB_TYPE")
+			unsetEnv(t, "DB_HOST")
+			unsetEnv(t, "DB_USER")
+			if tt.setType {
+				_ = os.Setenv("DB_TYPE", tt.dbType)
+			} else if tt.dbType != "" {
+				_ = os.Setenv("DB_TYPE", tt.dbType)
+			}
+			if tt.setHost {
+				_ = os.Setenv("DB_HOST", "127.0.0.1")
+			}
+			if tt.setUser {
+				_ = os.Setenv("DB_USER", "root")
+			}
+
+			if got := mysqlNeedsLazySetup(); got != tt.want {
+				t.Errorf("mysqlNeedsLazySetup() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetupOnlyRoutesRegistersMe(t *testing.T) {
+	// setupOnlyRoutes is what the server registers when it cannot connect
+	// to a database at startup (MySQL build, no creds). The SPA's
+	// HomeRedirect calls /api/v1/auth/me to decide whether to forward to
+	// /setup, so /me MUST be present here. Without it, /me 404s and the
+	// user lands on /login instead of being sent to the setup wizard.
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	setupOnlyRoutes(router, func(string) {})
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /api/v1/auth/me to be registered in setupOnlyRoutes, got status %d body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse /me response: %v", err)
+	}
+	if resp["needsSetup"] != true {
+		t.Errorf("expected needsSetup=true from /me in setupOnlyRoutes, got %v", resp["needsSetup"])
+	}
+	if resp["user"] != nil {
+		t.Errorf("expected nil user from /me in setupOnlyRoutes, got %v", resp["user"])
 	}
 }

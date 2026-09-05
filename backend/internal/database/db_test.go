@@ -227,3 +227,21 @@ func TestBuildMySQLDSNIncludesMultiStatements(t *testing.T) {
 		}
 	}
 }
+
+// TestSupportedDBTypes_DefaultBuild verifies the default (no build
+// tag) binary registers BOTH drivers so the setup wizard can offer
+// either choice.
+func TestSupportedDBTypes_DefaultBuild(t *testing.T) {
+	got := database.SupportedDBTypes()
+	want := map[string]bool{"sqlite": false, "mysql": false}
+	for _, t := range got {
+		if _, ok := want[t]; ok {
+			want[t] = true
+		}
+	}
+	for k, present := range want {
+		if !present {
+			t.Errorf("expected default build to register %q, got %v", k, got)
+		}
+	}
+}
