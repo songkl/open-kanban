@@ -480,7 +480,15 @@ func TestInitHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("init without advanced config leaves restartRequired false", func(t *testing.T) {
+	t.Run("init without advanced config still writes a complete kanban.env", func(t *testing.T) {
+		// Init must always produce a full kanban.env (DB_TYPE, PORT,
+		// ALLOWED_ORIGINS, ...) so the on-disk file is a complete
+		// reference of every knob, not a partial subset. Previously
+		// the handler only wrote the file when `advanced` was present.
+		dir := t.TempDir()
+		configPath := dir + "/kanban.env"
+		t.Setenv("INIT_CONFIG_OUTPUT", configPath)
+
 		db := setupTestDB(t)
 		defer db.Close()
 
@@ -509,8 +517,24 @@ func TestInitHandler(t *testing.T) {
 		if resp["restartRequired"] != false {
 			t.Errorf("expected restartRequired=false, got %v", resp["restartRequired"])
 		}
-		if cfg, ok := resp["configPath"].(string); ok && cfg != "" {
-			t.Errorf("expected no configPath, got %q", cfg)
+		if got, _ := resp["configPath"].(string); got != configPath {
+			t.Errorf("expected configPath=%q, got %q", configPath, got)
+		}
+
+		// kanban.env must contain the full set of knobs (even when
+		// advanced was omitted, defaults are filled in).
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("expected kanban.env at %s, got %v", configPath, err)
+		}
+		for _, want := range []string{
+			"DB_TYPE=",
+			"PORT=",
+			"ALLOWED_ORIGINS=",
+		} {
+			if !strings.Contains(string(data), want) {
+				t.Errorf("expected %q in kanban.env, got:\n%s", want, string(data))
+			}
 		}
 	})
 
@@ -967,6 +991,34 @@ func TestGetMeHandler(t *testing.T) {
 			t.Errorf("expected status 401, got %d", w.Code)
 		}
 	})
+
+	t.Run("get me with nil db (lazy setup) returns needsSetup=true", func(t *testing.T) {
+		// In lazy-setup mode (mysqlNeedsLazySetup), the server has no
+		// connected database and registers /me against a nil DB. The
+		// handler must still answer so the SPA's HomeRedirect can
+		// forward the user to /setup instead of /login.
+		router := gin.New()
+		router.GET("/api/auth/me", handlers.GetMe(nil))
+
+		req, _ := http.NewRequest("GET", "/api/auth/me", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		if resp["user"] != nil {
+			t.Errorf("expected nil user, got %v", resp["user"])
+		}
+		if resp["needsSetup"] != true {
+			t.Errorf("expected needsSetup=true in lazy-setup mode, got %v", resp["needsSetup"])
+		}
+	})
 }
 
 func TestGetTokensHandler(t *testing.T) {
@@ -1178,6 +1230,126 @@ func TestGetAppConfigHandler(t *testing.T) {
 		}
 		if resp["requirePassword"] != true {
 			t.Errorf("expected requirePassword=true, got %v", resp["requirePassword"])
+		}
+	})
+
+	t.Run("lazy connect bootstraps sqlite from advanced config when db is nil", func(t *testing.T) {
+		// Simulates the first-run flow: main.go skipped the eager
+		// InitDB() because no kanban.env / DB env vars were present, so
+		// the route is registered with db==nil. The Init handler must
+		// read the Advanced block, apply it to the environment, open the
+		// database itself, and create the admin user.
+		dir := t.TempDir()
+		dbPath := dir + "/kanban.db"
+		configPath := dir + "/kanban.env"
+		t.Setenv("INIT_CONFIG_OUTPUT", configPath)
+		// Make sure we don't inherit anything from the test runner env.
+		t.Setenv("DB_TYPE", "")
+		t.Setenv("DATABASE_URL", "")
+		t.Setenv("DB_HOST", "")
+		t.Setenv("DB_USER", "")
+
+		var callbackCount int
+		callback := func(string) { callbackCount++ }
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(nil, callback))
+
+		body := map[string]interface{}{
+			"username": "admin",
+			"password": "secret123",
+			"avatar":   "🚀",
+			"advanced": map[string]interface{}{
+				"dbType": "sqlite",
+				"dbPath": dbPath,
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if resp["user"] == nil || resp["token"] == nil {
+			t.Fatalf("expected user + token in response, got %v", resp)
+		}
+
+		// kanban.env must have been written so subsequent startups
+		// skip setup mode and go straight into the normal flow.
+		if _, err := os.Stat(configPath); err != nil {
+			t.Fatalf("expected kanban.env to be written at %s: %v", configPath, err)
+		}
+		envData, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", configPath, err)
+		}
+		env := string(envData)
+		if !strings.Contains(env, "DB_TYPE=sqlite") {
+			t.Errorf("expected DB_TYPE=sqlite in kanban.env, got:\n%s", env)
+		}
+		if !strings.Contains(env, "DATABASE_URL="+dbPath) {
+			t.Errorf("expected DATABASE_URL=%s in kanban.env, got:\n%s", dbPath, env)
+		}
+
+		// The user must actually be persisted to the bootstrapped DB.
+		db, err := sql.Open("sqlite3", dbPath)
+		if err != nil {
+			t.Fatalf("failed to open bootstrapped db: %v", err)
+		}
+		defer db.Close()
+		var username, role string
+		if err := db.QueryRow("SELECT username, role FROM users").Scan(&username, &role); err != nil {
+			t.Fatalf("expected admin user in bootstrapped db: %v", err)
+		}
+		if username != "admin" || role != "ADMIN" {
+			t.Errorf("expected admin/ADMIN, got %s/%s", username, role)
+		}
+
+		if callbackCount != 1 {
+			t.Errorf("expected restart callback to fire once, got %d", callbackCount)
+		}
+	})
+
+	t.Run("lazy connect returns 400 when advanced config is invalid", func(t *testing.T) {
+		// Without a usable Advanced block, the lazy-connect branch
+		// should reject the request up front instead of attempting a
+		// doomed database.InitDB() call.
+		dir := t.TempDir()
+		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
+		t.Setenv("DB_TYPE", "")
+		t.Setenv("DATABASE_URL", "")
+		t.Setenv("DB_HOST", "")
+		t.Setenv("DB_USER", "")
+
+		router := gin.New()
+		router.POST("/api/init", handlers.Init(nil, nil))
+
+		body := map[string]interface{}{
+			"username": "admin",
+			"advanced": map[string]interface{}{
+				"dbType": "postgres", // unsupported
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/init", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 }

@@ -13,6 +13,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"open-kanban/internal/config"
+	"open-kanban/internal/database"
 	"open-kanban/internal/models"
 )
 
@@ -46,12 +48,26 @@ type InitRequest struct {
 	Advanced          *AdvancedConfig `json:"advanced"`
 }
 
+// supportedDBTypesForValidation is a test seam so unit tests can pin
+// the list of drivers without rebuilding the binary. In production it
+// always returns database.SupportedDBTypes().
+var supportedDBTypesForValidation = database.SupportedDBTypes
+
 func validateAdvancedConfig(cfg *AdvancedConfig) (string, bool) {
 	if cfg == nil {
 		return "", true
 	}
-	if cfg.DBType != "" && cfg.DBType != "sqlite" && cfg.DBType != "mysql" {
-		return "advanced.dbType must be 'sqlite' or 'mysql'", false
+	if cfg.DBType != "" {
+		supported := false
+		for _, t := range supportedDBTypesForValidation() {
+			if t == cfg.DBType {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return "advanced.dbType " + cfg.DBType + " is not supported by this build (supported: " + strings.Join(supportedDBTypesForValidation(), ", ") + ")", false
+		}
 	}
 	if cfg.DBType == "mysql" {
 		if strings.TrimSpace(cfg.DBHost) == "" {
@@ -77,6 +93,43 @@ func validateAdvancedConfig(cfg *AdvancedConfig) (string, bool) {
 	return "", true
 }
 
+// applyAdvancedToEnv mirrors renderAdvancedConfigEnv into the live process
+// environment so the database package can read the freshly-supplied
+// credentials when Init runs in first-run (db==nil) mode and bootstraps the
+// connection itself. Only sets vars that are non-empty in cfg so it doesn't
+// silently wipe pre-existing values.
+func applyAdvancedToEnv(cfg *AdvancedConfig) {
+	if cfg == nil {
+		return
+	}
+	if v := strings.TrimSpace(cfg.DBType); v != "" {
+		_ = os.Setenv("DB_TYPE", v)
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.DBType), "mysql") {
+		if v := strings.TrimSpace(cfg.DBHost); v != "" {
+			_ = os.Setenv("DB_HOST", v)
+		}
+		if v := strings.TrimSpace(cfg.DBPort); v != "" {
+			_ = os.Setenv("DB_PORT", v)
+		}
+		if v := strings.TrimSpace(cfg.DBUser); v != "" {
+			_ = os.Setenv("DB_USER", v)
+		}
+		_ = os.Setenv("DB_PASSWORD", cfg.DBPassword)
+		if v := strings.TrimSpace(cfg.DBName); v != "" {
+			_ = os.Setenv("DB_NAME", v)
+		}
+	} else if v := strings.TrimSpace(cfg.DBPath); v != "" {
+		_ = os.Setenv("DATABASE_URL", v)
+	}
+	if v := strings.TrimSpace(cfg.ServerPort); v != "" {
+		_ = os.Setenv("PORT", v)
+	}
+	if v := strings.TrimSpace(cfg.AllowedOrigins); v != "" {
+		_ = os.Setenv("ALLOWED_ORIGINS", v)
+	}
+}
+
 func renderAdvancedConfigEnv(cfg *AdvancedConfig) string {
 	if cfg == nil {
 		return ""
@@ -97,12 +150,16 @@ func renderAdvancedConfigEnv(cfg *AdvancedConfig) string {
 	} else if cfg.DBPath != "" {
 		b.WriteString(fmt.Sprintf("DATABASE_URL=%s\n", cfg.DBPath))
 	}
-	if cfg.ServerPort != "" {
-		b.WriteString(fmt.Sprintf("PORT=%s\n", cfg.ServerPort))
+	// Always emit PORT and ALLOWED_ORIGINS, even when empty, so the
+	// generated kanban.env is a complete reference of every knob the
+	// setup wizard surfaced. Operators can edit the file later without
+	// having to remember which fields exist.
+	serverPort := cfg.ServerPort
+	if serverPort == "" {
+		serverPort = "8080"
 	}
-	if cfg.AllowedOrigins != "" {
-		b.WriteString(fmt.Sprintf("ALLOWED_ORIGINS=%s\n", cfg.AllowedOrigins))
-	}
+	b.WriteString(fmt.Sprintf("PORT=%s\n", serverPort))
+	b.WriteString(fmt.Sprintf("ALLOWED_ORIGINS=%s\n", cfg.AllowedOrigins))
 	return b.String()
 }
 
@@ -139,6 +196,30 @@ func writeAdvancedConfig(cfg *AdvancedConfig) (string, error) {
 	return path, nil
 }
 
+// defaultAdvancedForInit returns the AdvancedConfig the setup wizard
+// would pre-fill if the operator had not touched the form. Used to
+// make `init` always write a complete kanban.env — even when the
+// caller omits the `advanced` field, the file ends up containing the
+// same DB_TYPE / PORT / ALLOWED_ORIGINS the wizard would have
+// produced.
+func defaultAdvancedForInit() *AdvancedConfig {
+	dbType := strings.ToLower(strings.TrimSpace(os.Getenv("DB_TYPE")))
+	if dbType != "mysql" && dbType != "sqlite" {
+		dbType = "sqlite"
+	}
+	return &AdvancedConfig{
+		DBType:         dbType,
+		DBPath:         getEnvDefault("DATABASE_URL", "kanban.db"),
+		DBHost:         getEnvDefault("DB_HOST", "localhost"),
+		DBPort:         getEnvDefault("DB_PORT", "3306"),
+		DBUser:         getEnvDefault("DB_USER", "root"),
+		DBPassword:     os.Getenv("DB_PASSWORD"),
+		DBName:         getEnvDefault("DB_NAME", "kanban"),
+		ServerPort:     getEnvDefault("PORT", "8080"),
+		AllowedOrigins: os.Getenv("ALLOWED_ORIGINS"),
+	}
+}
+
 // GetInitDefaults returns the server's currently-loaded config values so the
 // setup wizard can pre-fill its advanced form. Values come from the process
 // environment (which the kanban.env file has already populated at startup),
@@ -159,15 +240,16 @@ func GetInitDefaults() gin.HandlerFunc {
 			dbPort = "3306"
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"dbType":         dbType,
-			"dbPath":         getEnvDefault("DATABASE_URL", "kanban.db"),
-			"dbHost":         getEnvDefault("DB_HOST", "localhost"),
-			"dbPort":         dbPort,
-			"dbUser":         getEnvDefault("DB_USER", "root"),
-			"dbPassword":     os.Getenv("DB_PASSWORD"),
-			"dbName":         getEnvDefault("DB_NAME", "kanban"),
-			"serverPort":     port,
-			"allowedOrigins": os.Getenv("ALLOWED_ORIGINS"),
+			"dbType":           dbType,
+			"dbPath":           getEnvDefault("DATABASE_URL", "kanban.db"),
+			"dbHost":           getEnvDefault("DB_HOST", "localhost"),
+			"dbPort":           dbPort,
+			"dbUser":           getEnvDefault("DB_USER", "root"),
+			"dbPassword":       os.Getenv("DB_PASSWORD"),
+			"dbName":           getEnvDefault("DB_NAME", "kanban"),
+			"serverPort":       port,
+			"allowedOrigins":   os.Getenv("ALLOWED_ORIGINS"),
+			"supportedDbTypes": database.SupportedDBTypes(),
 		})
 	}
 }
@@ -181,6 +263,44 @@ func getEnvDefault(key, fallback string) string {
 
 func Init(db *sql.DB, onConfigPersisted func(path string)) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Bind the request body ONCE. c.ShouldBindJSON consumes the
+		// body stream, so a second call (as in earlier revisions that
+		// peeked the body when db==nil) would fail with "Invalid
+		// request format" and surface as a confusing 400 to the
+		// setup wizard.
+		var req InitRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+			return
+		}
+
+		// First-run mode: the server couldn't connect to any database at
+		// startup (no kanban.env / no DB env vars), so it skipped the
+		// eager InitDB() call and registered only the setup routes.
+		// Bootstrap a connection from the Advanced block in this request,
+		// then proceed with the regular init flow on the now-connected db.
+		if db == nil {
+			if msg, ok := validateAdvancedConfig(req.Advanced); !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+				return
+			}
+			applyAdvancedToEnv(req.Advanced)
+			// Re-read non-DB config so server-side knobs (rate limit,
+			// websocket, etc.) match the values the user just chose.
+			config.InitConfig()
+
+			newDB, err := database.InitDB()
+			if err != nil {
+				log.Printf("[Init] failed to bootstrap database from advanced config: %v", err)
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": "Failed to connect to the database using the supplied Advanced settings. " +
+						"Verify DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME and that the server is reachable: " + err.Error(),
+				})
+				return
+			}
+			db = newDB
+		}
+
 		var userCount int
 		err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&userCount)
 		if err != nil {
@@ -193,30 +313,32 @@ func Init(db *sql.DB, onConfigPersisted func(path string)) gin.HandlerFunc {
 			return
 		}
 
-		var req InitRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
-			return
-		}
-
 		if req.Username == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
 			return
 		}
 
 		var configPath string
-		if msg, ok := validateAdvancedConfig(req.Advanced); !ok {
+		// Always persist kanban.env during init, even when the caller
+		// omitted the `advanced` block, so the resulting config file is
+		// a complete reference of every knob (DB_TYPE, PORT,
+		// ALLOWED_ORIGINS, …) instead of a partial subset. Operators
+		// can then edit the file later without wondering which fields
+		// are missing.
+		advancedToWrite := req.Advanced
+		if advancedToWrite == nil {
+			advancedToWrite = defaultAdvancedForInit()
+		}
+		if msg, ok := validateAdvancedConfig(advancedToWrite); !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 			return
 		}
-		if req.Advanced != nil {
-			path, err := writeAdvancedConfig(req.Advanced)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save advanced config: " + err.Error()})
-				return
-			}
-			configPath = path
+		path, err := writeAdvancedConfig(advancedToWrite)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save advanced config: " + err.Error()})
+			return
 		}
+		configPath = path
 
 		nickname := req.Nickname
 		if nickname == "" {
@@ -522,6 +644,19 @@ func GetAvatars() gin.HandlerFunc {
 
 func GetMe(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Lazy-setup mode: the server skipped InitDB() at startup because no
+		// MySQL credentials were configured. We have no DB to query, so
+		// signal the SPA that the wizard must run. The frontend's
+		// HomeRedirect relies on needsSetup=true to forward to /setup.
+		if db == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"user":              nil,
+				"needsSetup":        true,
+				"allowRegistration": true,
+			})
+			return
+		}
+
 		var requirePasswordVal string
 		var isRequirePassword bool = false
 		if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePasswordVal); err == nil {
