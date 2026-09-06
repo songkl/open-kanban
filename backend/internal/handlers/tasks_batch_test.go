@@ -645,6 +645,12 @@ func TestBatchCreateTasksPermissionDenied(t *testing.T) {
 	db := setupBatchTasksDB(t)
 	defer db.Close()
 
+	// The permission cache is a process-global; without a reset a
+	// prior test in the same binary that populated u2:b1 → WRITE
+	// would short-circuit the freshly-seeded READ grant below.
+	handlers.ResetPermissionCacheForTest()
+	t.Cleanup(handlers.ResetPermissionCacheForTest)
+
 	_, err := db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar) VALUES ('u2', 'member', 'member', 'pass', 'MEMBER', 1, '')`)
 	if err != nil {
 		t.Fatalf("failed to insert test member user: %v", err)

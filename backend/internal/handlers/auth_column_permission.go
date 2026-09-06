@@ -149,6 +149,11 @@ func SetColumnPermission(db *sql.DB) gin.HandlerFunc {
 		// see the new column access on the next request instead of
 		// getting stale permission state from the in-memory cache.
 		tokenCache.DeleteByUserID(req.UserID)
+		// Drop the cached column-permission entry for this user +
+		// column. Resource invalidation also clears any (other
+		// user, this column) entries that may be stale.
+		permissionCache.InvalidateUser(req.UserID)
+		permissionCache.InvalidateResource(req.ColumnID)
 
 		LogActivity(
 			db,
@@ -221,6 +226,11 @@ func DeleteColumnPermission(db *sql.DB) gin.HandlerFunc {
 		}
 
 		tokenCache.DeleteByUserID(targetUserID)
+		// Mirror SetColumnPermission: drop cached access entries
+		// for this user + column so the revoke takes effect
+		// immediately on the next request.
+		permissionCache.InvalidateUser(targetUserID)
+		permissionCache.InvalidateResource(columnID)
 
 		LogActivity(
 			db,

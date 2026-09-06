@@ -342,6 +342,11 @@ func initTokenCache() {
 // instance. Tests use it to start from a known-empty state.
 func ResetTokenCacheForTest() {
 	tokenCache = &memoryTokenCache{}
+	// Reset the permission cache too so tests that previously
+	// only flushed the token cache still see a clean permission
+	// surface. The two caches hold independent global state but
+	// are invalidated together by the same auth/permission flows.
+	permissionCache = &memoryPermissionCache{}
 }
 
 func init() {

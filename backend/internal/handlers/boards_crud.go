@@ -55,6 +55,21 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Stamp the creator as the board owner. owner_agent_id on
+		// board_permissions grants the row's user ADMIN on the
+		// board regardless of their global role — a MEMBER who
+		// creates a board can still manage its permissions,
+		// columns, and tasks. Without this row, only global
+		// ADMINs would have board-management rights.
+		_, err = tx.Exec(
+			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES (?, ?, ?, ?, 'ADMIN')",
+			generateID(), user.ID, boardID, user.ID,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant creator ownership"})
+			return
+		}
+
 		for _, col := range defaultColumns {
 			colID := generateColumnIDForTx(tx, col.Name, boardID)
 			_, err = tx.Exec(
@@ -168,6 +183,14 @@ func DeleteBoard(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Capture the column IDs that belong to this board BEFORE
+		// the soft-delete (or the cascading purge) so we can flush
+		// their cache entries. Soft-delete doesn't touch column
+		// rows today, but a future "hard delete with cascade" path
+		// would otherwise leave stale (user, columnID) entries
+		// pointing at IDs that no longer resolve to a column.
+		columnIDs := collectColumnIDsForBoard(db, id)
+
 		now := time.Now()
 		_, err := db.Exec(
 			"UPDATE boards SET deleted = ?, updated_at = ? WHERE id = ?",
@@ -178,8 +201,34 @@ func DeleteBoard(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Invalidate the cached (user, board) entry for every
+		// affected user (resource-wide) AND every (user, column)
+		// entry tied to the cascaded columns. Without this, a
+		// user hitting the deleted board would keep getting
+		// stale access from cache until the 5-minute TTL.
+		permissionCache.InvalidateResource(id)
+		for _, colID := range columnIDs {
+			permissionCache.InvalidateResource(colID)
+		}
+
 		LogActivity(db, user.ID, "BOARD_DELETE", "BOARD", id, "", "", c.ClientIP(), getRequestSource(c))
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}
+}
+
+func collectColumnIDsForBoard(db *sql.DB, boardID string) []string {
+	rows, err := db.Query("SELECT id FROM columns WHERE board_id = ?", boardID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }

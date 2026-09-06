@@ -222,6 +222,11 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 		// and back in. This covers the current request's token AND
 		// any other active sessions the target user has open.
 		tokenCache.DeleteByUserID(req.TargetUserID)
+		// Drop every cached (user, board) / (user, column) entry
+		// for this user so the role change / nickname change
+		// takes effect immediately (in case any caller short-
+		// circuited on a stale empty access).
+		permissionCache.InvalidateUser(req.TargetUserID)
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
@@ -309,6 +314,12 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 		// Invalidate every cached session for the target user so the
 		// enable/disable takes effect on the next request.
 		tokenCache.DeleteByUserID(req.UserID)
+		// Mirror UpdateUser: drop every cached permission entry
+		// for this user. Disabling can flip previously-cached
+		// positive access to "deny" via the token cache; we still
+		// flush the permission cache so the first request after
+		// re-enable re-reads fresh state.
+		permissionCache.InvalidateUser(req.UserID)
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}

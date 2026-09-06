@@ -33,9 +33,15 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Owners of a board need to see who currently has access
+		// to manage grants. Without this branch, an owner who can
+		// set/revoke via SetPermission / DeletePermission would
+		// still be unable to enumerate the existing rows.
 		if requestedBoardID != "" && !isAdmin(user) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can list permissions by board"})
-			return
+			if !canManageBoardPermissions(db, user, requestedBoardID) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can list permissions by board"})
+				return
+			}
 		}
 
 		var rows *sql.Rows
@@ -101,10 +107,6 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if !isAdmin(user) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can assign permissions"})
-			return
-		}
 
 		var req SetPermissionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -120,6 +122,17 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 		validAccesses := map[string]bool{"READ": true, "WRITE": true, "ADMIN": true}
 		if !validAccesses[req.Access] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid permission value"})
+			return
+		}
+
+		// Authorize: global ADMIN or the board's owner can grant
+		// per-board access. Non-owners (even with ADMIN row access
+		// granted by another admin) cannot manage permissions — the
+		// owner short-circuit in loadBoardAccess gives them ADMIN
+		// access for resource checks but SetPermission is a
+		// meta-permission that the spec restricts to owner-or-global.
+		if !canManageBoardPermissions(db, user, req.BoardID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can assign permissions"})
 			return
 		}
 
@@ -161,6 +174,13 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 		// see the new board access on the next request instead of
 		// getting stale permission state from the in-memory cache.
 		tokenCache.DeleteByUserID(req.UserID)
+		// Drop every cached (user, board) / (user, column) entry
+		// for this user + board so the new access takes effect
+		// immediately. Resource-wide invalidation covers any other
+		// user whose cached board access was stale (defensive, the
+		// spec asks for both invalidations).
+		permissionCache.InvalidateUser(req.UserID)
+		permissionCache.InvalidateResource(req.BoardID)
 
 		LogActivity(
 			db,
@@ -193,10 +213,6 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
-		if !isAdmin(user) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can delete permissions"})
-			return
-		}
 
 		permID := c.Query("id")
 		if permID == "" {
@@ -226,6 +242,26 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Authorize: global ADMIN or the board's owner can revoke
+		// per-board access. Owners get implicit admin rights via
+		// the owner_agent_id field recorded when the board was
+		// created.
+		if !canManageBoardPermissions(db, user, boardID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can delete permissions"})
+			return
+		}
+
+		// Refuse to remove the owner's own permission row — the
+		// board must always have an owner that can manage it. The
+		// owner cannot demote or revoke themselves.
+		var ownerID sql.NullString
+		if err := db.QueryRow(
+			"SELECT owner_agent_id FROM board_permissions WHERE id = ?", permID,
+		).Scan(&ownerID); err == nil && ownerID.Valid && ownerID.String == targetUserID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Cannot revoke the board owner's permission"})
+			return
+		}
+
 		_, err := db.Exec("DELETE FROM board_permissions WHERE id = ?", permID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
@@ -233,6 +269,11 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 		}
 
 		tokenCache.DeleteByUserID(targetUserID)
+		// Mirror SetPermission: drop cached access entries for
+		// this user and this board so the revoke takes effect
+		// immediately on the next request.
+		permissionCache.InvalidateUser(targetUserID)
+		permissionCache.InvalidateResource(boardID)
 
 		LogActivity(
 			db,
