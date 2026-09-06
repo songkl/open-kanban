@@ -105,3 +105,22 @@ This document tracks changes to the Open-Kanban API specification.
 - Optional HMAC-SHA256 signature verification (disabled by default)
 - Role-based access control (ADMIN, MEMBER, VIEWER)
 - Board-level and column-level permissions
+
+## [1.1.0] - 2026-09-06
+
+### Added
+
+- **Permission cache** — `(user_id, board_id | column_id)` → `access` cache with 5-minute TTL. Avoids a DB roundtrip on every request when the access decision is unchanged. Backend hot-path: `internal/handlers/permission_cache.go`.
+- **Permission change immediate effect** — `SetPermission`, `DeletePermission`, `SetColumnPermission`, `DeleteColumnPermission`, `UpdateUser`, `SetUserEnabled` now invalidate `tokenCache` + `permissionCache` for the affected user and resource. The next request reads the new permission state without requiring the user to log out.
+
+### Behavior
+
+- **Board owner short-circuit** — `board_permissions.owner_agent_id` records the user who created the board. `loadBoardAccess` treats that user as ADMIN on the board even if their `users.role` is MEMBER or VIEWER, so the creator can always manage their own board.
+- **Column permission overrides board permission** — `column_permissions` row, when present for a `(user_id, column_id)` pair, is authoritative. It does NOT take the max of column vs board access — it simply replaces it. This lets a board owner narrow access on a single sensitive column without revoking the user's board grant.
+- **Last admin protection** — `UpdateUser`, `SetUserEnabled`, and `DeleteAgent` call `IsLastAdmin(db, targetUserID)` before committing any change that would leave the system with zero enabled ADMINs. When the target is the last admin, the request is rejected with HTTP 400 and one of:
+  - `Cannot demote the last admin`
+  - `Cannot disable the last admin`
+  - `Cannot delete the last admin`
+- **Self enable/disable blocked** — `SetUserEnabled` returns 400 `Cannot enable/disable yourself` when the requester targets their own user ID, to avoid an admin accidentally locking themselves out.
+- **Owner cannot self-revoke** — `DeletePermission` refuses to remove a board's owner row (`owner_agent_id == targetUserID`) with 403 `Cannot revoke the board owner's permission`. The board must always have a manageable owner.
+- **Permission management is a meta-capability** — `SetPermission` / `DeletePermission` require either `users.role == 'ADMIN'` or `IsBoardOwner(db, user.ID, boardID) == true`. A user who has been granted `ADMIN` access to a board by another admin (without being the recorded owner) cannot manage permissions — they can use the board, but cannot change who else can use it. This is intentional: permission management is reserved to the creator and global admins.

@@ -112,6 +112,31 @@ jobs:
             exit 1
           fi
 
+      - name: Check permission code coverage
+        run: |
+          cd backend
+          # Permission-related code (auth_permission_handlers, auth_column_permission,
+          # permission_helper, permission_cache) must stay ≥ 85% line coverage per
+          # docs/PERMISSION_MATRIX.md § 6. Average the per-function coverage reported
+          # by `go tool cover -func` for these files and fail if the average drops
+          # below the threshold.
+          PERM_FILES="auth_permission_handlers.go auth_column_permission.go permission_helper.go permission_cache.go"
+          TOTAL=0
+          COUNT=0
+          FUNC_REPORT=$(go tool cover -func=coverage.out)
+          for f in $PERM_FILES; do
+            PCT=$(echo "$FUNC_REPORT" | grep "open-kanban/internal/handlers/${f}:" | awk '{ gsub("%","",$NF); sum+=$NF; n++ } END { if (n>0) printf "%.2f", sum/n; else print "0" }')
+            echo "$f: $PCT%"
+            TOTAL=$(echo "$TOTAL + $PCT" | bc -l)
+            COUNT=$((COUNT + 1))
+          done
+          AVG=$(echo "scale=2; $TOTAL / $COUNT" | bc -l)
+          echo "Permission-related average coverage: $AVG%"
+          if (( $(echo "$AVG < 85" | bc -l) )); then
+            echo "Permission code coverage is below 85% threshold"
+            exit 1
+          fi
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:

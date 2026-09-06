@@ -19,6 +19,12 @@ var VersionMigrationMap = []VersionMigration{
 	// constraint with PERMISSION_GRANT / PERMISSION_REVOKE so the
 	// Set*/Delete* permission handlers can log their activity rows.
 	{Version: "0.2.0", From: 1, To: 2},
+	// 0.3.0 added migration 003 to backfill board_permissions.
+	// owner_agent_id on legacy boards so the owner-aware permission
+	// checks (IsBoardOwner / loadBoardAccess owner short-circuit) and
+	// the new "owner can manage permissions" branch in
+	// SetPermission / DeletePermission have a real owner to act on.
+	{Version: "0.3.0", From: 1, To: 3},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {
