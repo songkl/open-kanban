@@ -89,7 +89,13 @@
     "private": "Private",
     "publicHint": "Visible to everyone, including anonymous users",
     "privateHint": "Only invited users can see this board",
-    "privateBadge": "Private"
+    "privateBadge": "Private",
+    "role": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "viewer": "Viewer"
+    }
   },
   "task": {
     "addTask": "Add Task",

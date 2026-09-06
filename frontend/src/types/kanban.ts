@@ -70,11 +70,36 @@ export interface Column {
   updatedAt: string;
 }
 
+export type PermissionAccess = 'READ' | 'WRITE' | 'ADMIN';
+export type UserType = 'HUMAN' | 'AGENT';
+
+export interface BoardPermission {
+  id: string;
+  userId: string;
+  userNickname: string;
+  userType: UserType;
+  boardId: string;
+  boardName: string;
+  access: PermissionAccess;
+  ownerAgentId?: string | null;
+}
+
+export interface ColumnPermission {
+  id: string;
+  userId: string;
+  userNickname: string;
+  userType: UserType;
+  columnId: string;
+  columnName: string;
+  access: PermissionAccess;
+}
+
 export interface Board {
   id: string;
   name: string;
   description?: string;
   isPublic?: boolean;
+  ownerAgentId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

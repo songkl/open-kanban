@@ -1,15 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { Board } from '@/types/kanban';
+import type { Board, BoardPermission } from '@/types/kanban';
 import { AddBoardPermissionForm } from '@/components/AddBoardPermissionForm';
-
-interface BoardPermission {
-  id: string;
-  boardId: string;
-  boardName: string;
-  access: string;
-  userId: string;
-  userNickname: string;
-}
 
 interface BoardPermissionsModalProps {
   isOpen: boolean;

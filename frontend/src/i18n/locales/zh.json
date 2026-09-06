@@ -89,7 +89,13 @@
     "private": "私有",
     "publicHint": "所有人（包括未登录用户）都可以看到",
     "privateHint": "只有被授权的用户才能看到此看板",
-    "privateBadge": "私有"
+    "privateBadge": "私有",
+    "role": {
+      "owner": "所有者",
+      "admin": "管理员",
+      "member": "成员",
+      "viewer": "查看者"
+    }
   },
   "task": {
     "addTask": "添加任务",

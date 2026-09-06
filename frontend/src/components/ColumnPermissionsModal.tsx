@@ -1,15 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { Column } from '@/types/kanban';
+import type { Column, ColumnPermission } from '@/types/kanban';
 import { AddColumnPermissionForm } from '@/components/AddColumnPermissionForm';
-
-interface ColumnPermission {
-  id: string;
-  columnId: string;
-  columnName: string;
-  access: string;
-  userId: string;
-  userNickname: string;
-}
 
 interface ColumnPermissionsModalProps {
   isOpen: boolean;

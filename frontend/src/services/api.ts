@@ -1,12 +1,26 @@
-import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry } from '@/types/kanban';
+import type {
+  Board,
+  Column,
+  Task,
+  Comment,
+  Subtask,
+  Attachment,
+  Token,
+  User,
+  Agent,
+  OAuthClient,
+  OAuthConsent,
+  OAuthConfigEntry,
+  BoardPermission,
+  ColumnPermission,
+} from '@/types/kanban';
 import i18n from '@/i18n';
 
-export interface Permission {
-  id: string;
-  boardId: string;
-  boardName: string;
-  access: string;
-}
+/**
+ * @deprecated Use {@link BoardPermission} from `@/types/kanban` instead.
+ * Retained as an alias for backward compatibility.
+ */
+export type Permission = BoardPermission;
 
 // Vite environment variables type declaration
 declare global {
@@ -455,9 +469,9 @@ export const authApi = {
     }),
   getBoards: () => fetchApi<Board[]>('boards'),
   getPermissions: (userId: string) =>
-    fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string }> }>(`auth/permissions?userId=${userId}`),
+    fetchApi<{ permissions: BoardPermission[] }>(`auth/permissions?userId=${userId}`),
   getBoardPermissions: (boardId: string) =>
-    fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string; userId: string; userNickname: string }> }>(`auth/permissions?boardId=${boardId}`),
+    fetchApi<{ permissions: BoardPermission[] }>(`auth/permissions?boardId=${boardId}`),
   getMyBoardPermissions: (boardId: string) =>
     fetchApi<{
       boardId: string;
@@ -467,18 +481,18 @@ export const authApi = {
       canManageColumnPermissions: boolean;
     }>(`auth/me/board-permissions?boardId=${encodeURIComponent(boardId)}`),
   setPermission: (userId: string, boardId: string, access: string) =>
-    fetchApi<{ permission: { id: string; userId: string; boardId: string; boardName: string; access: string } }>('auth/permissions', {
+    fetchApi<{ permission: BoardPermission }>('auth/permissions', {
       method: 'POST',
       body: JSON.stringify({ userId, boardId, access }),
     }),
   deletePermission: (id: string) =>
     fetchApi<void>(`auth/permissions?id=${id}`, { method: 'DELETE' }),
   getColumnPermissions: (userId?: string, columnId?: string) =>
-    fetchApi<{ permissions: Array<{ id: string; columnId: string; columnName: string; access: string; userId: string; userNickname: string }> }>(
+    fetchApi<{ permissions: ColumnPermission[] }>(
       `auth/permissions/columns${userId ? `?userId=${userId}` : columnId ? `?columnId=${columnId}` : ''}`
     ),
   setColumnPermission: (userId: string, columnId: string, access: string) =>
-    fetchApi<{ permission: { id: string; userId: string; columnId: string; columnName: string; access: string } }>('auth/permissions/columns', {
+    fetchApi<{ permission: ColumnPermission }>('auth/permissions/columns', {
       method: 'POST',
       body: JSON.stringify({ userId, columnId, access }),
     }),
