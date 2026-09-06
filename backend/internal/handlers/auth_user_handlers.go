@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -651,28 +652,7 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		rows, _ := db.Query("SELECT id FROM boards WHERE deleted = false")
-		if rows != nil {
-			defer rows.Close()
-			var boardIDs []string
-			for rows.Next() {
-				var boardID string
-				if err := rows.Scan(&boardID); err == nil {
-					boardIDs = append(boardIDs, boardID)
-				}
-			}
-			if len(boardIDs) > 0 {
-				args := make([]interface{}, 0, len(boardIDs)*4)
-				placeholders := make([]string, len(boardIDs))
-				for i, boardID := range boardIDs {
-					permID := generateID()
-					placeholders[i] = "(?, ?, ?, ?)"
-					args = append(args, permID, userID, boardID, "WRITE")
-				}
-				query := "INSERT INTO board_permissions (id, user_id, board_id, access) VALUES " + strings.Join(placeholders, ", ")
-				db.Exec(query, args...)
-			}
-		}
+		grantPublicBoardRead(db, userID)
 
 		LogActivity(db, currentUser.ID, "USER_CREATE", "USER", userID, req.Nickname, "", c.ClientIP(), getRequestSource(c))
 
@@ -688,4 +668,61 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 			},
 		})
 	}
+}
+
+// grantPublicBoardRead inserts one board_permissions row per
+// public, non-deleted board so a freshly created HUMAN user can
+// see every board the system already exposes to anonymous
+// callers. Private (is_public=0) boards stay hidden and must be
+// granted explicitly by their owner.
+//
+// The cache invalidation that follows is defensive: brand new
+// users have no permission_cache entries, but if a future caller
+// pre-warms the cache before inserting the permission rows the
+// InvalidateUser call still drops the stale state so the first
+// effectiveAccess lookup reads the freshly-written rows.
+//
+// The query deliberately mirrors the public-board filter that
+// GetBoards / writeAnonymousBoards use (`deleted = 0 AND
+// is_public = 1`) so the inserted rows line up 1:1 with the
+// boards the user will actually see when they call GetBoards.
+func grantPublicBoardRead(db *sql.DB, userID string) {
+	if userID == "" {
+		return
+	}
+	rows, err := db.Query("SELECT id FROM boards WHERE deleted = false AND is_public = 1")
+	if err != nil {
+		log.Printf("[grantPublicBoardRead] failed to list public boards: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var boardIDs []string
+	for rows.Next() {
+		var boardID string
+		if err := rows.Scan(&boardID); err == nil {
+			boardIDs = append(boardIDs, boardID)
+		}
+	}
+	if len(boardIDs) == 0 {
+		return
+	}
+
+	args := make([]interface{}, 0, len(boardIDs)*4)
+	placeholders := make([]string, len(boardIDs))
+	for i, boardID := range boardIDs {
+		permID := generateID()
+		placeholders[i] = "(?, ?, ?, ?)"
+		args = append(args, permID, userID, boardID, "READ")
+	}
+	query := "INSERT INTO board_permissions (id, user_id, board_id, access) VALUES " + strings.Join(placeholders, ", ")
+	if _, err := db.Exec(query, args...); err != nil {
+		log.Printf("[grantPublicBoardRead] failed to insert board_permissions: %v", err)
+		return
+	}
+
+	// Drop any cached (user, board) entries so the new rows are
+	// visible on the very next permission lookup, even if the
+	// caller has pre-warmed the cache from a different code path.
+	permissionCache.InvalidateUser(userID)
 }
