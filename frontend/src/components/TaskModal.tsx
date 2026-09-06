@@ -445,7 +445,7 @@ export function TaskModal({
 
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 min-w-[28rem] overflow-y-auto p-6">
             {/* Title - only show input when editing, title is in header otherwise */}
             {isEditing && (
               <input

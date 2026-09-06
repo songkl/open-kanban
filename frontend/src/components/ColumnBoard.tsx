@@ -15,6 +15,7 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Column } from './Column';
 import { DragLayer } from './DragLayer';
 import { AddTaskModal } from './AddTaskModal';
+import { TaskModalSkeleton } from './Skeleton';
 import type { Board, Column as ColumnType, Task } from '@/types/kanban';
 
 const TaskModal = lazy(() => import('./TaskModal').then(m => ({ default: m.TaskModal })));
@@ -419,11 +420,7 @@ export function ColumnBoard({
       </DndContext>
 
       {selectedTask && (
-        <Suspense fallback={
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        }>
+        <Suspense fallback={<TaskModalSkeleton />}>
           <TaskModal
             task={selectedTask}
             columnName={columns.find((col) => col.tasks.some((t) => t.id === selectedTask.id))?.name}

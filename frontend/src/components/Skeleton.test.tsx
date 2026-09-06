@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { BoardSkeleton, Spinner, LoadingOverlay } from './Skeleton';
+import { BoardSkeleton, Spinner, LoadingOverlay, TaskModalSkeleton } from './Skeleton';
 
 describe('BoardSkeleton', () => {
   it('renders board skeleton with header', () => {
@@ -75,5 +75,54 @@ describe('LoadingOverlay', () => {
   it('renders with correct structure', () => {
     render(<LoadingOverlay message="Loading data..." />);
     expect(screen.getByText('Loading data...')).toBeInTheDocument();
+  });
+});
+
+describe('TaskModalSkeleton', () => {
+  it('renders skeleton with test id', () => {
+    render(<TaskModalSkeleton />);
+    expect(screen.getByTestId('task-modal-skeleton')).toBeInTheDocument();
+  });
+
+  it('renders skeleton as a fixed overlay', () => {
+    render(<TaskModalSkeleton />);
+    const skeleton = screen.getByTestId('task-modal-skeleton');
+    expect(skeleton.className).toContain('fixed');
+    expect(skeleton.className).toContain('inset-0');
+  });
+
+  it('renders modal container with constrained size', () => {
+    render(<TaskModalSkeleton />);
+    const skeleton = screen.getByTestId('task-modal-skeleton');
+    const container = skeleton.querySelector('.max-w-7xl');
+    expect(container).toBeInTheDocument();
+  });
+
+  it('renders animated pulse placeholders', () => {
+    render(<TaskModalSkeleton />);
+    const pulses = document.querySelectorAll('.animate-pulse');
+    expect(pulses.length).toBeGreaterThan(10);
+  });
+
+  it('matches TaskModal layout with two-column body', () => {
+    render(<TaskModalSkeleton />);
+    const mainContent = document.querySelector('.min-w-\\[28rem\\]');
+    const sidebar = document.querySelector('.w-1\\/3.min-w-80');
+    expect(mainContent).toBeInTheDocument();
+    expect(sidebar).toBeInTheDocument();
+  });
+
+  it('renders comments sidebar with multiple comment placeholders', () => {
+    render(<TaskModalSkeleton />);
+    const sidebar = document.querySelector('.w-1\\/3.min-w-80');
+    expect(sidebar).toBeInTheDocument();
+    const commentBlocks = sidebar?.querySelectorAll('.rounded-lg.bg-zinc-50, .rounded-lg.dark\\:bg-zinc-700\\/50');
+    expect(commentBlocks && commentBlocks.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('renders header, body and footer regions', () => {
+    render(<TaskModalSkeleton />);
+    const borders = document.querySelectorAll('.border-b, .border-t');
+    expect(borders.length).toBeGreaterThanOrEqual(3);
   });
 });
