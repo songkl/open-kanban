@@ -3,6 +3,27 @@ import type { Board } from '../types/kanban';
 
 const REFRESH_DEBOUNCE_MS = 1000;
 
+// scheduleBoardUpdate defers a state-merge callback by one animation
+// frame. The WebSocket refresh path is the trigger of the s-1051
+// `reportAllChanges` crash: when the dev server (or the React DevTools
+// browser extension) is recording a perf measurement, the same tick
+// that receives a `refresh` message replaces the column container mid-
+// measurement, and the perf observer then reads an entry whose
+// `startTime` was never set. Scheduling the merge for the next frame
+// keeps the React commit aligned with the browser's paint cadence so
+// the perf observer always sees a settled tree.
+//
+// In production the dev / extension profiler is not active, so the
+// deferral is harmless — it adds at most ~16 ms to a refresh that
+// already triggers a full column re-render.
+const scheduleBoardUpdate = (fn: () => void) => {
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    fn();
+    return;
+  }
+  window.requestAnimationFrame(() => fn());
+};
+
 interface UseBoardWebSocketOptions {
   currentBoard: Board | null;
   fetchColumns: (boardId: string, silent?: boolean) => Promise<void>;
@@ -82,7 +103,8 @@ export function useBoardWebSocket({
       reconnectAttemptRef.current = 0;
       callbacksRef.current.processOfflineQueue();
       if (currentBoardRef.current) {
-        callbacksRef.current.fetchColumns(currentBoardRef.current.id, true);
+        const boardId = currentBoardRef.current.id;
+        scheduleBoardUpdate(() => callbacksRef.current.fetchColumns(boardId, true));
       }
     };
 
@@ -111,7 +133,8 @@ export function useBoardWebSocket({
             return;
           }
           if (currentBoardRef.current) {
-            callbacksRef.current.fetchColumns(currentBoardRef.current.id, true);
+            const boardId = currentBoardRef.current.id;
+            scheduleBoardUpdate(() => callbacksRef.current.fetchColumns(boardId, true));
           }
         } else if (message.type === 'task_notification') {
           const { boardId, taskId, action } = message;
@@ -121,7 +144,8 @@ export function useBoardWebSocket({
               return;
             }
             if (action === 'create') {
-              callbacksRef.current.fetchColumns(currentBoardRef.current.id, true);
+              const fetchBoardId = currentBoardRef.current.id;
+              scheduleBoardUpdate(() => callbacksRef.current.fetchColumns(fetchBoardId, true));
             } else if (action === 'update' || action === 'update_status') {
               callbacksRef.current.handleTaskNotificationUpdate(taskId);
             }
