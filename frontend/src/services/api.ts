@@ -458,6 +458,14 @@ export const authApi = {
     fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string }> }>(`auth/permissions?userId=${userId}`),
   getBoardPermissions: (boardId: string) =>
     fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string; userId: string; userNickname: string }> }>(`auth/permissions?boardId=${boardId}`),
+  getMyBoardPermissions: (boardId: string) =>
+    fetchApi<{
+      boardId: string;
+      effectiveAccess: string;
+      isOwner: boolean;
+      canManageBoardPermissions: boolean;
+      canManageColumnPermissions: boolean;
+    }>(`auth/me/board-permissions?boardId=${encodeURIComponent(boardId)}`),
   setPermission: (userId: string, boardId: string, access: string) =>
     fetchApi<{ permission: { id: string; userId: string; boardId: string; boardName: string; access: string } }>('auth/permissions', {
       method: 'POST',

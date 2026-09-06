@@ -77,6 +77,8 @@
     "descriptionPlaceholder": "Board description in Markdown format...",
     "description": "Description",
     "permissions": "Board Permissions",
+    "permissionsOwner": "Manage board permissions (board owner)",
+    "permissionsAdmin": "Manage board permissions (admin)",
     "currentPermissions": "Current Authorizations",
     "noPermissions": "No authorizations yet",
     "addPermission": "Add Authorization",

@@ -77,6 +77,8 @@
     "descriptionPlaceholder": "Markdown格式的看板说明...",
     "description": "描述",
     "permissions": "权限管理",
+    "permissionsOwner": "管理看板权限（看板所有者）",
+    "permissionsAdmin": "管理看板权限（管理员）",
     "currentPermissions": "当前授权",
     "noPermissions": "暂无授权",
     "addPermission": "添加授权",

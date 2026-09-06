@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Board } from '../types/kanban';
 import { authApi } from '@/services/api';
+import { useBoardPermission } from '@/hooks/useBoardPermission';
 import { BoardPermissionsModal } from './BoardPermissionsModal';
 
 interface BoardPermission {
@@ -27,8 +28,19 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
   const [permissions, setPermissions] = useState<BoardPermission[]>([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
 
-  const isAdmin = currentUser?.role === 'ADMIN';
   const activeBoard = currentBoard || boards.find((b) => b.id === boardIdFromUrl) || null;
+  const activeBoardId = activeBoard?.id ?? null;
+  const {
+    canManageBoardPermissions,
+    isOwner,
+    loading: permissionLoading2,
+  } = useBoardPermission(activeBoardId);
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const permissionsTooltip = isAdmin
+    ? t('board.permissionsAdmin')
+    : isOwner
+    ? t('board.permissionsOwner')
+    : t('board.permissions');
 
   const handleOpenPermissionModal = async () => {
     if (!activeBoard) return;
@@ -94,12 +106,12 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
           </svg>
         </button>
       </div>
-      {isAdmin && activeBoard && (
+      {!permissionLoading2 && canManageBoardPermissions && activeBoard && (
         <button
           onClick={handleOpenPermissionModal}
           className="flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-          title={t('board.permissions')}
-          aria-label={t('board.permissions')}
+          title={permissionsTooltip}
+          aria-label={permissionsTooltip}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
