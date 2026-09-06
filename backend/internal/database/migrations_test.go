@@ -132,7 +132,7 @@ func TestSQLiteMigrationsAllowNewPermissionActions(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	for _, action := range []string{"PERMISSION_GRANT", "PERMISSION_REVOKE", "PERMISSION_TRANSFER"} {
+	for _, action := range []string{"PERMISSION_GRANT", "PERMISSION_REVOKE", "PERMISSION_TRANSFER", "PERMISSION_BULK_GRANT"} {
 		if _, err := db.Exec(
 			"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, ?, 'BOARD', 'b1', 'web')",
 			"a-"+action, "u1", action,

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -295,6 +297,263 @@ type UpdateAppConfigRequest struct {
 	AllowRegistration *bool `json:"allowRegistration"`
 	RequirePassword   *bool `json:"requirePassword"`
 	AuthEnabled       *bool `json:"authEnabled"`
+}
+
+type BulkSetPermissionsRequest struct {
+	BoardID string   `json:"boardId"`
+	UserIDs []string `json:"userIds"`
+	Access  string   `json:"access"`
+}
+
+// bulkPermissionMaxUsers caps the number of users accepted in a
+// single BulkSetPermissions call. The handler does a single
+// SELECT … IN (?) lookup and N REPLACE statements inside one
+// transaction, so the upper bound is mostly about preventing an
+// accidentally-large request from holding a write lock too long.
+// 200 was chosen because it comfortably exceeds the realistic size
+// of a single board's collaborator list (boards in this project are
+// typically shared with a single-digit-to-low-double-digit number of
+// users) without forcing callers to chunk legitimate bulk grants.
+const bulkPermissionMaxUsers = 200
+
+// BulkSetPermissions grants the same access level to many users on
+// a single board in one round trip. The endpoint is the bulk
+// counterpart of SetPermission and exists so the UI does not have to
+// fire 50 sequential POST /permissions requests when a board owner
+// onboards a whole team at once.
+//
+// Validation order matters and is mirrored on SetPermission /
+// DeletePermission so the behaviour is consistent across the
+// permission-management surface:
+//
+//  1. Auth: getCurrentUser must resolve, else 401.
+//  2. Body shape: boardId / userIds / access must all be present
+//     and non-empty, else 400.
+//  3. Size cap: more than bulkPermissionMaxUsers users in one
+//     request is rejected up-front so an oversized request can't
+//     hold a transaction open for too long.
+//  4. Access enum: access must be one of {READ, WRITE, ADMIN}.
+//  5. Deduplication: empty strings are dropped and duplicates are
+//     collapsed before any DB work, so the loop and the activity
+//     row both reflect the final user set.
+//  6. Authorization: the caller must own the board or be a global
+//     ADMIN — the same rule SetPermission enforces via
+//     canManageBoardPermissions.
+//  7. Owner row protection: if the board's owner_agent_id is in
+//     the batch, the entire request is rejected 403. Mirrors
+//     DeletePermission's owner-protection semantics: bulk-modify
+//     could otherwise silently overwrite the owner stamp in a way
+//     that is hard to audit after the fact.
+//  8. Existence checks: every requested userId must resolve to a
+//     row in users (missing ids are returned together in a single
+//     400 so the UI can surface them at once); the board must
+//     exist (404 otherwise).
+//
+// The whole rewrite runs in a single transaction so a partial
+// failure cannot leave the board with half-applied grants. After
+// commit, every cached (user, board) entry and every cached token
+// for the affected users is evicted so the new access takes effect
+// on the next request. A single PERMISSION_BULK_GRANT activity row
+// is recorded — one row per batch, not one per user — so the audit
+// log stays readable even for very large grants.
+func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		var req BulkSetPermissionsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
+			return
+		}
+		if req.BoardID == "" || req.Access == "" || len(req.UserIDs) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
+			return
+		}
+
+		if len(req.UserIDs) > bulkPermissionMaxUsers {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Too many users in one request"})
+			return
+		}
+
+		validAccesses := map[string]bool{"READ": true, "WRITE": true, "ADMIN": true}
+		if !validAccesses[req.Access] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid permission value"})
+			return
+		}
+
+		// Deduplicate and drop empty ids in a single pass so the
+		// downstream loop, the unknown-user check, and the activity
+		// row all see the same set. Stable order is not required —
+		// the caller already submitted a list, not a map.
+		seen := make(map[string]struct{}, len(req.UserIDs))
+		cleaned := make([]string, 0, len(req.UserIDs))
+		for _, uid := range req.UserIDs {
+			if uid == "" {
+				continue
+			}
+			if _, ok := seen[uid]; ok {
+				continue
+			}
+			seen[uid] = struct{}{}
+			cleaned = append(cleaned, uid)
+		}
+		if len(cleaned) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
+			return
+		}
+
+		if !canManageBoardPermissions(db, user, req.BoardID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can assign permissions"})
+			return
+		}
+
+		// Board must exist (404 if not) and owner_agent_id must
+		// not be in the batch (403 if it is). Both checks are
+		// pre-flight so we never start a transaction only to
+		// roll it back for a deterministic validation failure.
+		var ownerID sql.NullString
+		var boardName string
+		err := db.QueryRow(
+			"SELECT b.name, (SELECT bp.owner_agent_id FROM board_permissions bp WHERE bp.board_id = b.id AND bp.owner_agent_id IS NOT NULL LIMIT 1) FROM boards b WHERE b.id = ?",
+			req.BoardID,
+		).Scan(&boardName, &ownerID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Board not found"})
+				return
+			}
+			log.Printf("[BulkSetPermissions] failed to load board %s: %v", req.BoardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load board"})
+			return
+		}
+		if ownerID.Valid {
+			for _, uid := range cleaned {
+				if uid == ownerID.String {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Cannot bulk-modify owner's permission row"})
+					return
+				}
+			}
+		}
+
+		// Existence check: build one IN-list query and report every
+		// missing id at once so the UI can correct them in a
+		// single round-trip. The placeholder count must match the
+		// cleaned slice — any mismatch is a bug we want to surface.
+		placeholders := strings.Repeat("?,", len(cleaned))
+		placeholders = placeholders[:len(placeholders)-1]
+		args := make([]interface{}, len(cleaned))
+		for i, uid := range cleaned {
+			args[i] = uid
+		}
+		existingRows, err := db.Query(
+			"SELECT id FROM users WHERE id IN ("+placeholders+")", args...,
+		)
+		if err != nil {
+			log.Printf("[BulkSetPermissions] failed to query users: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify users"})
+			return
+		}
+		found := make(map[string]struct{}, len(cleaned))
+		for existingRows.Next() {
+			var id string
+			if err := existingRows.Scan(&id); err == nil {
+				found[id] = struct{}{}
+			}
+		}
+		existingRows.Close()
+		var missing []string
+		for _, uid := range cleaned {
+			if _, ok := found[uid]; !ok {
+				missing = append(missing, uid)
+			}
+		}
+		if len(missing) > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":          "Unknown user ids",
+				"unknownUserIds": missing,
+			})
+			return
+		}
+
+		// Transaction: REPLACE INTO is portable across MySQL and
+		// SQLite (see SetPermission for the long version). Each
+		// row's id is freshly generated — the (user_id, board_id)
+		// UNIQUE constraint makes the upsert atomic, and no FK
+		// references board_permissions.id so the row id rotating
+		// on update is safe.
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("[BulkSetPermissions] failed to begin tx: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk set permissions"})
+			return
+		}
+		defer tx.Rollback()
+
+		stmt, err := tx.Prepare(`REPLACE INTO board_permissions (id, user_id, board_id, access) VALUES (?, ?, ?, ?)`)
+		if err != nil {
+			log.Printf("[BulkSetPermissions] failed to prepare statement: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk set permissions"})
+			return
+		}
+		defer stmt.Close()
+
+		granted := make([]gin.H, 0, len(cleaned))
+		for _, uid := range cleaned {
+			permID := generateID()
+			if _, err := stmt.Exec(permID, uid, req.BoardID, req.Access); err != nil {
+				log.Printf("[BulkSetPermissions] REPLACE INTO failed for user=%s board=%s: %v", uid, req.BoardID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "Failed to bulk set permissions: " + err.Error(),
+				})
+				return
+			}
+			granted = append(granted, gin.H{
+				"userId": uid,
+				"access": req.Access,
+			})
+		}
+
+		if err := tx.Commit(); err != nil {
+			log.Printf("[BulkSetPermissions] commit failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk set permissions"})
+			return
+		}
+
+		// Cache invalidation runs after commit so a partial failure
+		// cannot evict cache entries for users whose grant never
+		// landed. InvalidateUser drops every cached (user, *) entry
+		// for the affected user, and InvalidateResource is fired
+		// once at the end so any third party's stale (?, boardId)
+		// entry is dropped too.
+		for _, uid := range cleaned {
+			tokenCache.DeleteByUserID(uid)
+			permissionCache.InvalidateUser(uid)
+		}
+		permissionCache.InvalidateResource(req.BoardID)
+
+		LogActivity(
+			db,
+			user.ID,
+			"PERMISSION_BULK_GRANT",
+			"BOARD",
+			req.BoardID,
+			boardName,
+			"user_count="+strconv.Itoa(len(cleaned))+" access="+req.Access,
+			c.ClientIP(),
+			getRequestSource(c),
+		)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"boardId": req.BoardID,
+			"granted": granted,
+			"count":   len(granted),
+		})
+	}
 }
 
 type TransferOwnershipRequest struct {

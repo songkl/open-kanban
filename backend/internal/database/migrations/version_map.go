@@ -36,6 +36,11 @@ var VersionMigrationMap = []VersionMigration{
 	// record its activity row when a board owner hands ownership to
 	// another user. See docs/PERMISSION_MATRIX.md section 4.8.
 	{Version: "0.5.0", From: 1, To: 5},
+	// 0.6.0 added migration 006 to extend the activities.action CHECK
+	// constraint with PERMISSION_BULK_GRANT so the new
+	// BulkSetPermissions handler (POST /api/v1/auth/permissions/bulk)
+	// can record a single activity row per batch grant.
+	{Version: "0.6.0", From: 1, To: 6},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {
