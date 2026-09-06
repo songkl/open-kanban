@@ -49,6 +49,16 @@ On first launch, the MCP server will:
 
 The legacy `KANBAN_MCP_TOKEN` continues to work as a fallback for CI / container deployments.
 
+## Permissions
+
+The MCP server defers board-level authorization to the Kanban API:
+
+- `list_boards` returns only the boards the calling user has at least `READ` access to (the backend filters by `effectiveAccess`).
+- `get_board` returns the board only when the API responds with a non-empty `effectiveAccess` (`"READ"`, `"WRITE"`, or `"ADMIN"`). An empty `effectiveAccess` (no grant / anonymous) raises a friendly error: `No access to board <id>`.
+- Write tools (`create_task`, `update_task`, `delete_task`, `publish_task`, `archive_task`, ...) rely on the API to enforce `WRITE` / `ADMIN`. The MCP layer surfaces API errors as-is.
+
+If you add a new board-write tool, call `assertBoardAccess(board, boardId)` from `tools/boards.ts` first to centralize the access check.
+
 ## Usage
 
 ```bash
