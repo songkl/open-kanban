@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskModal } from './TaskModal';
+import { commentsApi } from '@/services/api';
 import type { Task } from '@/types/kanban';
 
 const mockTask: Task = {
@@ -292,6 +293,114 @@ describe('TaskModal', () => {
         fireEvent.click(sendButton);
       });
       expect(defaultProps.onAddComment).toHaveBeenCalledWith('task-1', 'New comment', 'TestUser');
+    });
+
+    it('preserves existing comments when adding a new one to a paginated task', async () => {
+      const manyComments = Array.from({ length: 12 }, (_, i) => ({
+        id: `comment-${i + 1}`,
+        content: `Comment ${i + 1}`,
+        author: 'Jane',
+        taskId: 'task-1',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      }));
+      const paginatedTask = { ...mockTask, comments: manyComments };
+      render(<TaskModal {...defaultProps} task={paginatedTask} />);
+
+      expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(12\)/);
+
+      const textarea = screen.getByPlaceholderText(/taskModal\.addComment/);
+      await userEvent.type(textarea, 'Brand new comment');
+      const sendButton = screen.getByText('taskModal.send');
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(13\)/);
+      });
+      expect(screen.getByText('Brand new comment')).toBeInTheDocument();
+    });
+
+    it('keeps optimistic comment visible when parent updates task.comments to an empty array', async () => {
+      const manyComments = Array.from({ length: 12 }, (_, i) => ({
+        id: `comment-${i + 1}`,
+        content: `Comment ${i + 1}`,
+        author: 'Jane',
+        taskId: 'task-1',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      }));
+      const paginatedTask = { ...mockTask, comments: manyComments };
+      const { rerender } = render(<TaskModal {...defaultProps} task={paginatedTask} />);
+
+      const textarea = screen.getByPlaceholderText(/taskModal\.addComment/);
+      await userEvent.type(textarea, 'Optimistic comment');
+      const sendButton = screen.getByText('taskModal.send');
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(13\)/);
+      });
+
+      rerender(<TaskModal {...defaultProps} task={{ ...paginatedTask, comments: [] }} />);
+
+      expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(13\)/);
+      expect(screen.getByText('Optimistic comment')).toBeInTheDocument();
+    });
+
+    it('does not refetch comments when parent updates the task with the same id', async () => {
+      const { rerender } = render(<TaskModal {...defaultProps} />);
+      const initialCalls = (commentsApi.getByTask as ReturnType<typeof vi.fn>).mock.calls.length;
+      rerender(<TaskModal {...defaultProps} task={{ ...mockTask, title: 'Updated Title' }} />);
+      await waitFor(() => {
+        expect((commentsApi.getByTask as ReturnType<typeof vi.fn>).mock.calls.length).toBe(initialCalls);
+      });
+    });
+
+    it('does not overwrite existing comments when parent updates task.comments with only the new comment', async () => {
+      const serverComments = Array.from({ length: 12 }, (_, i) => ({
+        id: `comment-${i + 1}`,
+        content: `Comment ${i + 1}`,
+        author: 'Jane',
+        taskId: 'task-1',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      }));
+      vi.mocked(commentsApi.getByTask).mockResolvedValue(serverComments);
+
+      const taskWithoutComments = { ...mockTask, comments: [] };
+      const { rerender } = render(<TaskModal {...defaultProps} task={taskWithoutComments} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(12\)/);
+      });
+
+      const textarea = screen.getByPlaceholderText(/taskModal\.addComment/);
+      await userEvent.type(textarea, 'My optimistic comment');
+      const sendButton = screen.getByText('taskModal.send');
+      await act(async () => {
+        fireEvent.click(sendButton);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(13\)/);
+      });
+
+      rerender(
+        <TaskModal
+          {...defaultProps}
+          task={{
+            ...taskWithoutComments,
+            comments: [{ id: 'server-new', content: 'My optimistic comment', author: 'TestUser', taskId: 'task-1', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
+          }}
+        />
+      );
+
+      expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(13\)/);
+      expect(screen.getByText('My optimistic comment')).toBeInTheDocument();
     });
   });
 

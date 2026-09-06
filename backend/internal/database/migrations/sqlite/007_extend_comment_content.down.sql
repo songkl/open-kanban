@@ -1,0 +1,5 @@
+-- No-op down migration for SQLite: 007_extend_comment_content did
+-- not alter any schema (see the .up.sql file for the rationale —
+-- SQLite TEXT is already variable-length). The file exists to keep
+-- the up/down pair symmetric and so that golang-migrate does not
+-- complain about a missing counterpart on rollback.

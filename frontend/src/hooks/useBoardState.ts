@@ -7,6 +7,8 @@ import { useTasks } from './useTasks';
 import { useBoardWebSocket } from './useBoardWebSocket';
 import { useBoardRefresh } from './useBoardRefresh';
 import { useFilters } from './useFilters';
+import { useColumnPermissions } from './useColumnPermissions';
+import type { ColumnAccess } from './useColumnPermissions';
 import type { FilterState, FilterPreset } from './useFilters';
 import type { Board, Column as ColumnType, Task, User } from '../types/kanban';
 
@@ -88,6 +90,16 @@ interface UseBoardStateReturn {
   offlineQueueRef: React.MutableRefObject<Array<{ action: string; data: unknown; timestamp: number }>>;
   isProcessingQueueRef: React.MutableRefObject<boolean>;
   processOfflineQueue: () => Promise<void>;
+  // Per-column permission gating (s-1053): the create-task
+  // affordances (toolbar button, column empty-state, modal
+  // submit, keyboard shortcuts) read from these instead of
+  // asking the user to click first and discover a 403.
+  columnAccess: Record<string, ColumnAccess>;
+  columnPermissionsLoading: boolean;
+  columnPermissionsError: string | null;
+  canCreateTaskInColumn: (columnId: string) => boolean;
+  canCreateTaskAnywhere: boolean;
+  refreshColumnPermissions: () => void;
 }
 
 export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOptions = {}): UseBoardStateReturn {
@@ -164,6 +176,15 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     columns,
     onColumnsChange: setColumns,
   });
+
+  const {
+    columnAccess,
+    loading: columnPermissionsLoading,
+    error: columnPermissionsError,
+    canCreateAnywhere: canCreateTaskAnywhere,
+    canCreateIn: canCreateTaskInColumn,
+    refresh: refreshColumnPermissions,
+  } = useColumnPermissions(currentBoard?.id);
 
   const {
     wsStatus,
@@ -316,5 +337,11 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     isProcessingQueueRef,
     processOfflineQueue,
     setColumns,
+    columnAccess,
+    columnPermissionsLoading,
+    columnPermissionsError,
+    canCreateTaskInColumn,
+    canCreateTaskAnywhere,
+    refreshColumnPermissions,
   };
 }

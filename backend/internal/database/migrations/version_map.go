@@ -41,6 +41,27 @@ var VersionMigrationMap = []VersionMigration{
 	// BulkSetPermissions handler (POST /api/v1/auth/permissions/bulk)
 	// can record a single activity row per batch grant.
 	{Version: "0.6.0", From: 1, To: 6},
+	// 0.7.0 added migration 007 to widen comments.content from TEXT
+	// (max 65,535 bytes on MySQL) to LONGTEXT (max 4 GiB) so the
+	// CreateComment handler can accept arbitrarily long comment bodies
+	// without the storage layer truncating or rejecting the INSERT.
+	// SQLite side is documentation-only because SQLite TEXT is already
+	// variable-length. Tracked as s-1018.
+	{Version: "0.7.0", From: 1, To: 7},
+	// 0.8.0 added migration 008 to add audit / lifecycle columns to
+	// board_permissions and column_permissions:
+	//   - granted_by_user_id  (FK users.id NULLABLE)
+	//   - expires_at          (DATETIME NULLABLE)
+	//   - revoked_at          (DATETIME NULLABLE)
+	//   - revoked_by_user_id  (FK users.id NULLABLE)
+	//   - notes (TEXT DEFAULT '', board_permissions only)
+	// Existing rows are backfilled with NULL / '' defaults so the
+	// migration is non-destructive. The SetPermission /
+	// DeletePermission / SetColumnPermission / DeleteColumnPermission
+	// handlers now stamp granted_by_user_id / revoked_by_user_id on
+	// write, and DELETE was replaced with a soft-delete UPDATE so the
+	// audit trail survives revoke. Tracked as s-1037.
+	{Version: "0.8.0", From: 1, To: 8},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

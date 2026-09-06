@@ -17,14 +17,36 @@ export function AddBoardPermissionForm({ boardId, onPermissionAdded }: AddBoardP
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    let cancelled = false;
+    loadUsers(cancelled);
+    return () => {
+      cancelled = true;
+    };
+    // boardId is the picker scope; refetch if the form is reused for a different board.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardId]);
 
-  const loadUsers = async () => {
+  const loadUsers = async (cancelled = false) => {
+    // Prefer the board-scoped candidates endpoint: it works for the
+    // global admin AND for a non-admin board owner, since the backend
+    // accepts ?boardId= from both. If it fails (e.g. a deployment
+    // without the new endpoint, or a 403 for an unexpected caller),
+    // fall back to the legacy admin-only getUsers() so admins can
+    // still operate the modal.
+    try {
+      const data = await authApi.listVisibleUsers(boardId);
+      if (cancelled) return;
+      setUsers(data || []);
+      return;
+    } catch (err) {
+      console.error('listVisibleUsers failed, falling back to getUsers:', err);
+    }
     try {
       const data = await authApi.getUsers();
+      if (cancelled) return;
       setUsers(data || []);
     } catch (err) {
+      if (cancelled) return;
       console.error('Failed to load users:', err);
     }
   };

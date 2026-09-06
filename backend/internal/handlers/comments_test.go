@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -61,6 +62,11 @@ func setupCommentsDB(t *testing.T) *sql.DB {
 		board_id TEXT NOT NULL,
 		owner_agent_id TEXT,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
+		notes TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -71,6 +77,10 @@ func setupCommentsDB(t *testing.T) *sql.DB {
 		user_id TEXT NOT NULL,
 		column_id TEXT NOT NULL,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -596,5 +606,240 @@ func TestCreateCommentPersistsFullContent(t *testing.T) {
 	}
 	if stored != longContent {
 		t.Errorf("stored content length = %d, want %d", len(stored), len(longContent))
+	}
+}
+
+// TestCreateComment400ErrorMessages locks down the exact text of
+// each 400 the CreateComment handler can return. The kanban task
+// s-1018 explicitly asked for "明确原因" (a clear reason) on the
+// 400s coming back from POST /api/v1/comments, so these messages are
+// part of the public contract and should not silently change. If a
+// future refactor rewrites any of these strings, the diff will show
+// up here as a test failure.
+func TestCreateComment400ErrorMessages(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetRateLimitMapForTest()
+	db := setupCommentsDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/comments", handlers.CreateComment(db))
+
+	tests := []struct {
+		name        string
+		body        map[string]interface{}
+		wantStatus  int
+		wantErrMsg  string
+		description string
+	}{
+		{
+			name:        "missing content yields 'content is required'",
+			body:        map[string]interface{}{"taskId": "task1"},
+			wantStatus:  http.StatusBadRequest,
+			wantErrMsg:  "content is required",
+			description: "validator `required` on CreateCommentRequest.Content",
+		},
+		{
+			name:        "empty content yields 'content is required'",
+			body:        map[string]interface{}{"content": "", "taskId": "task1"},
+			wantStatus:  http.StatusBadRequest,
+			wantErrMsg:  "content is required",
+			description: "empty string also trips the `required` tag",
+		},
+		{
+			name:        "missing taskId yields 'taskId is required'",
+			body:        map[string]interface{}{"content": "hello"},
+			wantStatus:  http.StatusBadRequest,
+			wantErrMsg:  "taskId is required",
+			description: "validator `required` on CreateCommentRequest.TaskID",
+		},
+		{
+			name:        "empty taskId yields 'taskId is required'",
+			body:        map[string]interface{}{"content": "hello", "taskId": ""},
+			wantStatus:  http.StatusBadRequest,
+			wantErrMsg:  "taskId is required",
+			description: "empty string also trips the `required` tag",
+		},
+		{
+			name:        "unknown taskId yields 'Invalid task ID'",
+			body:        map[string]interface{}{"content": "hello", "taskId": "no-such-task"},
+			wantStatus:  http.StatusBadRequest,
+			wantErrMsg:  "Invalid task ID",
+			description: "getBoardIDForTask returns an error for a missing task",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlers.ResetRateLimitMapForTest()
+			jsonBody, err := json.Marshal(tt.body)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			req, _ := http.NewRequest("POST", "/api/comments", bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status: got %d want %d (body=%s)", w.Code, tt.wantStatus, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal: %v (body=%s)", err, w.Body.String())
+			}
+			gotMsg, _ := resp["error"].(string)
+			if gotMsg != tt.wantErrMsg {
+				t.Errorf("error message: got %q want %q (%s)", gotMsg, tt.wantErrMsg, tt.description)
+			}
+		})
+	}
+}
+
+// TestCreateCommentBeyondMySQLTextLimit exercises content sizes that
+// would have failed on MySQL TEXT (max 65,535 bytes) before
+// migration 007_extend_comment_content widened the column to
+// LONGTEXT. On SQLite, TEXT is already variable-length, so the same
+// test passes either way; the test simply guarantees that any future
+// regression introducing a length cap is caught at the unit-test layer
+// rather than as a 500 in production.
+func TestCreateCommentBeyondMySQLTextLimit(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetRateLimitMapForTest()
+	db := setupCommentsDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/comments", handlers.CreateComment(db))
+
+	tests := []struct {
+		name       string
+		content    string
+		taskID     string
+		wantStatus int
+	}{
+		{
+			// MySQL TEXT boundary; one byte over would error on TEXT.
+			name:       "exactly MySQL TEXT max (65535 bytes) is accepted",
+			content:    strings.Repeat("a", 65535),
+			taskID:     "task1",
+			wantStatus: http.StatusOK,
+		},
+		{
+			// One byte over the TEXT cap — the motivating case for
+			// migration 007.
+			name:       "65536 bytes (one over TEXT cap) is accepted",
+			content:    strings.Repeat("b", 65536),
+			taskID:     "task1",
+			wantStatus: http.StatusOK,
+		},
+		{
+			// Comfortably inside LONGTEXT (4 GiB cap) territory.
+			name:       "1 MiB content is accepted",
+			content:    strings.Repeat("c", 1024*1024),
+			taskID:     "task1",
+			wantStatus: http.StatusOK,
+		},
+		{
+			// Multibyte characters at >64 KiB to verify utf8mb4 storage
+			// on MySQL stays healthy.
+			name:       "multibyte content above TEXT cap is accepted",
+			content:    strings.Repeat("你好世界🌍", 20000),
+			taskID:     "task1",
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlers.ResetRateLimitMapForTest()
+			body := map[string]interface{}{"content": tt.content, "taskId": tt.taskID}
+			jsonBody, err := json.Marshal(body)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			req, _ := http.NewRequest("POST", "/api/comments", bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status: got %d want %d (body=%s)", w.Code, tt.wantStatus, w.Body.String())
+			}
+
+			if tt.wantStatus != http.StatusOK {
+				return
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			gotContent, _ := resp["content"].(string)
+			if gotContent != tt.content {
+				t.Errorf("content round-trip: stored %d bytes, want %d", len(gotContent), len(tt.content))
+			}
+
+			commentID, _ := resp["id"].(string)
+			var stored string
+			if err := db.QueryRow("SELECT content FROM comments WHERE id = ?", commentID).Scan(&stored); err != nil {
+				t.Fatalf("read back: %v", err)
+			}
+			if stored != tt.content {
+				t.Errorf("db round-trip: stored %d bytes, want %d", len(stored), len(tt.content))
+			}
+		})
+	}
+}
+
+// TestCreateCommentContentIsNot400 guards against any future
+// regression that adds a length-based `max=` validator tag or a
+// server-side length cap. The contract documented in s-1018 is that
+// content length is NEVER a 400 condition: oversized payloads
+// either succeed (up to storage cap) or fail with 5xx, never with
+// 400. This test pins the contract down.
+func TestCreateCommentContentLengthIsNot400(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetRateLimitMapForTest()
+	db := setupCommentsDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/comments", handlers.CreateComment(db))
+
+	// Sizes picked to bracket every prior known limit:
+	//   - 2000  : former validator `max=2000` cap (removed in s-1025).
+	//   - 65535  : MySQL TEXT cap (widened in s-1018).
+	//   - 65536  : first byte past MySQL TEXT cap.
+	sizes := []int{2000, 2001, 65535, 65536}
+
+	for _, size := range sizes {
+		t.Run(t.Name()+"/"+strconv.Itoa(size)+"bytes", func(t *testing.T) {
+			handlers.ResetRateLimitMapForTest()
+			content := strings.Repeat("x", size)
+			body := map[string]interface{}{"content": content, "taskId": "task1"}
+			jsonBody, err := json.Marshal(body)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			req, _ := http.NewRequest("POST", "/api/comments", bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code == http.StatusBadRequest {
+				t.Fatalf("size=%d returned 400; length must not be a 400 condition (body=%s)", size, w.Body.String())
+			}
+			if w.Code != http.StatusOK {
+				t.Fatalf("size=%d returned %d (body=%s)", size, w.Code, w.Body.String())
+			}
+		})
 	}
 }

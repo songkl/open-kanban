@@ -38,12 +38,12 @@ func TestGetMyBoardPermissions_AllRoles(t *testing.T) {
 	}
 
 	cases := []struct {
-		name      string
-		token     string
-		userRole  string
-		boardID   string
-		override  func(t *testing.T, db *sql.DB)
-		want      want
+		name     string
+		token    string
+		userRole string
+		boardID  string
+		override func(t *testing.T, db *sql.DB)
+		want     want
 	}{
 		{
 			// admin1 owns board2 via owner_agent_id AND is a global
@@ -85,11 +85,7 @@ func TestGetMyBoardPermissions_AllRoles(t *testing.T) {
 			// owner1 is recorded as the owner of board1 but their
 			// global role is MEMBER. The handler must report
 			// effectiveAccess=ADMIN (owner short-circuit), isOwner
-			// =true, and canManageBoardPermissions=true (owner
-			// qualifies for permission management). Column
-			// permission management is intentionally NOT granted
-			// to non-global-admin owners — the existing column
-			// permission handler still requires global ADMIN.
+			// =true, and both permission-management flags=true.
 			name:     "board owner with MEMBER global role",
 			token:    "owner1-token",
 			userRole: "MEMBER",
@@ -99,7 +95,7 @@ func TestGetMyBoardPermissions_AllRoles(t *testing.T) {
 				effectiveAccess:            "ADMIN",
 				isOwner:                    true,
 				canManageBoardPermissions:  true,
-				canManageColumnPermissions: false,
+				canManageColumnPermissions: true,
 			},
 		},
 		{
@@ -142,9 +138,9 @@ func TestGetMyBoardPermissions_AllRoles(t *testing.T) {
 			// setupPermissionIntegrationDB seeds member2 with
 			// a non-owner row). Member2 promoted to owner of
 			// board1 (overriding the existing setup) — proves
-			// the MEMBER-as-owner branch surfaces the same
-			// canManageBoardPermissions=true a MEMBER-as-owner
-			// does, regardless of the row's `access` value.
+			// the MEMBER-as-owner branch surfaces both
+			// permission-management flags=true regardless of the
+			// row's `access` value.
 			name:     "MEMBER promoted to owner mid-test",
 			token:    "member2-token",
 			userRole: "MEMBER",
@@ -161,7 +157,7 @@ func TestGetMyBoardPermissions_AllRoles(t *testing.T) {
 				effectiveAccess:            "ADMIN",
 				isOwner:                    true,
 				canManageBoardPermissions:  true,
-				canManageColumnPermissions: false,
+				canManageColumnPermissions: true,
 			},
 		},
 	}

@@ -22,6 +22,49 @@ import i18n from '@/i18n';
  */
 export type Permission = BoardPermission;
 
+/**
+ * Shape returned by GET /api/v1/auth/users-visible. The backend uses
+ * `userId` instead of `id` and omits avatar / enabled / timestamps
+ * because the endpoint is only used as a permission-management
+ * candidate list. We map it back to {@link User} via `toUser` so the
+ * existing form components keep working.
+ */
+interface VisibleUser {
+  userId: string;
+  username?: string;
+  nickname: string;
+  type: 'HUMAN' | 'AGENT';
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}
+
+/**
+ * A user that can still be invited to a board, as returned in the
+ * `candidates` array of GET /api/v1/auth/permissions?boardId=X. The
+ * backend emits the same shape as /api/v1/auth/users-visible, i.e.
+ * `userId` instead of `id`, so the field set mirrors {@link VisibleUser}.
+ * The array is only present when the request is scoped to a board.
+ */
+export interface PermissionCandidate {
+  userId: string;
+  username?: string;
+  nickname: string;
+  type: 'HUMAN' | 'AGENT';
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}
+
+function toUser(u: VisibleUser): User {
+  return {
+    id: u.userId,
+    nickname: u.nickname,
+    avatar: null,
+    role: u.role,
+    type: u.type,
+    enabled: true,
+    createdAt: '',
+    updatedAt: '',
+  };
+}
+
 // Vite environment variables type declaration
 declare global {
   interface ImportMetaEnv {
@@ -432,6 +475,12 @@ export const authApi = {
   deleteToken: (id: string) =>
     fetchApi<void>(`auth/token?id=${id}`, { method: 'DELETE' }),
   getUsers: () => fetchApi<{ users: User[] }>('auth/users').then(res => res.users),
+  listVisibleUsers: (boardId?: string) => {
+    const query = boardId ? `?boardId=${encodeURIComponent(boardId)}` : '';
+    return fetchApi<{ users: VisibleUser[] }>(`auth/users-visible${query}`).then((res) =>
+      (res.users || []).map(toUser)
+    );
+  },
   updateUser: (id: string, data: { nickname?: string; avatar?: string | null; role?: 'ADMIN' | 'MEMBER' | 'VIEWER' }) =>
     fetchApi<User>('auth/users', {
       method: 'PUT',
@@ -471,7 +520,9 @@ export const authApi = {
   getPermissions: (userId: string) =>
     fetchApi<{ permissions: BoardPermission[] }>(`auth/permissions?userId=${userId}`),
   getBoardPermissions: (boardId: string) =>
-    fetchApi<{ permissions: BoardPermission[] }>(`auth/permissions?boardId=${boardId}`),
+    fetchApi<{ permissions: BoardPermission[]; candidates?: PermissionCandidate[] }>(
+      `auth/permissions?boardId=${encodeURIComponent(boardId)}`
+    ),
   getMyBoardPermissions: (boardId: string) =>
     fetchApi<{
       boardId: string;
@@ -480,10 +531,35 @@ export const authApi = {
       canManageBoardPermissions: boolean;
       canManageColumnPermissions: boolean;
     }>(`auth/me/board-permissions?boardId=${encodeURIComponent(boardId)}`),
+  getMyColumnAccess: (boardId: string) =>
+    fetchApi<{
+      boardId: string;
+      boardAccess: string;
+      isOwner: boolean;
+      columns: Record<
+        string,
+        {
+          effectiveAccess: string;
+          canCreateTask: boolean;
+          canModify: boolean;
+          canDelete: boolean;
+        }
+      >;
+    }>(`auth/me/column-access?boardId=${encodeURIComponent(boardId)}`),
   setPermission: (userId: string, boardId: string, access: string) =>
     fetchApi<{ permission: BoardPermission }>('auth/permissions', {
       method: 'POST',
       body: JSON.stringify({ userId, boardId, access }),
+    }),
+  bulkSetPermissions: (boardId: string, userIds: string[], access: string) =>
+    fetchApi<{
+      success: boolean;
+      boardId: string;
+      granted: string[];
+      count: number;
+    }>('auth/permissions/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ boardId, userIds, access }),
     }),
   deletePermission: (id: string) =>
     fetchApi<void>(`auth/permissions?id=${id}`, { method: 'DELETE' }),

@@ -1435,3 +1435,293 @@ func TestBulkSetPermissions_TransactionRollbackOnMidFailure(t *testing.T) {
 		t.Error("expected bulk-rb1/board1 cache entry to survive the rolled-back failure")
 	}
 }
+
+// TestDeletePermission_RevokeStampsAuditColumns is the s-1037
+// REVOKE audit-trail contract: the DELETE endpoint is now a soft
+// delete that writes revoked_at + revoked_by_user_id on the
+// board_permissions row instead of removing the row. Three
+// post-conditions are pinned:
+//
+//  1. The row count is unchanged (audit trail survives revoke).
+//  2. revoked_at is non-NULL on the affected row.
+//  3. revoked_by_user_id is set to the caller's user ID (the
+//     actor who performed the revoke), not the target user.
+//
+// The fourth contract — loadBoardAccess treats the revoked row as
+// "no access" — is locked down separately so a future regression
+// in the effective-access filter is caught.
+func TestDeletePermission_RevokeStampsAuditColumns(t *testing.T) {
+	ResetTokenCacheForTest()
+	ResetPermissionCacheForTest()
+
+	db := setupBoardOwnerDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(RequireAuth(db))
+	router.DELETE("/api/v1/auth/permissions", DeletePermission(db))
+
+	// member1 has a pre-seeded WRITE row on board1 (fixture). Count
+	// it before so we can verify the row count stays unchanged.
+	var bpBefore int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM board_permissions`).Scan(&bpBefore); err != nil {
+		t.Fatalf("count before: %v", err)
+	}
+
+	// Capture the row's primary key (the fixture seeds it as
+	// "bp-member1-board1").
+	var permID string
+	if err := db.QueryRow(
+		`SELECT id FROM board_permissions WHERE user_id = 'member1' AND board_id = 'board1'`,
+	).Scan(&permID); err != nil {
+		t.Fatalf("locate fixture perm row: %v", err)
+	}
+
+	req, _ := http.NewRequest("DELETE", "/api/v1/auth/permissions?id="+permID, nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from DELETE, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// (1) Row count is unchanged: the soft-delete keeps the row in
+	// place. A regression to a hard DELETE would surface here.
+	var bpAfter int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM board_permissions`).Scan(&bpAfter); err != nil {
+		t.Fatalf("count after: %v", err)
+	}
+	if bpAfter != bpBefore {
+		t.Errorf("soft-delete must preserve row count: before=%d after=%d", bpBefore, bpAfter)
+	}
+
+	// (2) + (3): revoked_at and revoked_by_user_id are stamped
+	// with the right values. revoked_by_user_id must point at the
+	// caller ("admin1"), not the affected user ("member1") — that
+	// distinction is what makes the audit log meaningful for
+	// non-self revokes.
+	var revokedAt, revokedBy sql.NullString
+	if err := db.QueryRow(
+		`SELECT revoked_at, revoked_by_user_id FROM board_permissions WHERE id = ?`, permID,
+	).Scan(&revokedAt, &revokedBy); err != nil {
+		t.Fatalf("read revoke columns: %v", err)
+	}
+	if !revokedAt.Valid || revokedAt.String == "" {
+		t.Errorf("expected revoked_at stamped after REVOKE, got %v", revokedAt)
+	}
+	if !revokedBy.Valid || revokedBy.String != "admin1" {
+		t.Errorf("expected revoked_by_user_id=admin1 (the caller), got %v", revokedBy)
+	}
+
+	// Effective access is gone: loadBoardAccess's `revoked_at IS
+	// NULL` filter must treat the soft-deleted row as inactive so
+	// the cache invalidation that the handler issued actually
+	// takes effect on the next read.
+	ResetPermissionCacheForTest()
+	if got := loadBoardAccess(db, "member1", "board1"); got != "" {
+		t.Errorf("expected empty effective access after revoke, got %q", got)
+	}
+
+	// Idempotency: a second DELETE on the same row must NOT
+	// re-stamp revoked_at (which would corrupt the original
+	// timestamp) and must NOT log a duplicate PERMISSION_REVOKE
+	// activity row.
+	var firstRevokedAt string
+	if err := db.QueryRow(
+		`SELECT revoked_at FROM board_permissions WHERE id = ?`, permID,
+	).Scan(&firstRevokedAt); err != nil {
+		t.Fatalf("read first revoked_at: %v", err)
+	}
+
+	req2, _ := http.NewRequest("DELETE", "/api/v1/auth/permissions?id="+permID, nil)
+	req2.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected idempotent 200 on retry, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	var secondRevokedAt string
+	if err := db.QueryRow(
+		`SELECT revoked_at FROM board_permissions WHERE id = ?`, permID,
+	).Scan(&secondRevokedAt); err != nil {
+		t.Fatalf("read second revoked_at: %v", err)
+	}
+	if secondRevokedAt != firstRevokedAt {
+		t.Errorf("second DELETE must preserve original revoked_at: first=%q second=%q",
+			firstRevokedAt, secondRevokedAt)
+	}
+
+	var revokeCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM activities WHERE action = 'PERMISSION_REVOKE' AND target_id = 'board1'`,
+	).Scan(&revokeCount); err != nil {
+		t.Fatalf("count activity rows: %v", err)
+	}
+	if revokeCount != 1 {
+		t.Errorf("expected exactly 1 PERMISSION_REVOKE activity row, got %d (idempotency broke)", revokeCount)
+	}
+}
+
+// TestDeletePermission_GrantResetsRevokeTombstone locks down the
+// re-grant path: after a row has been soft-deleted (revoked_at set),
+// a follow-up SetPermission must clear the tombstone so the user
+// gets effective access again. This is the audit-trail "reactivate"
+// behaviour the migration's docstring calls out.
+func TestDeletePermission_GrantResetsRevokeTombstone(t *testing.T) {
+	ResetTokenCacheForTest()
+	ResetPermissionCacheForTest()
+
+	db := setupBoardOwnerDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(RequireAuth(db))
+	router.DELETE("/api/v1/auth/permissions", DeletePermission(db))
+	router.POST("/api/v1/auth/permissions", SetPermission(db))
+
+	// Revoke first.
+	req, _ := http.NewRequest("DELETE", "/api/v1/auth/permissions?id=bp-member1-board1", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected revoke 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Sanity-check: the row is revoked.
+	ResetPermissionCacheForTest()
+	if got := loadBoardAccess(db, "member1", "board1"); got != "" {
+		t.Fatalf("expected empty access after revoke, got %q", got)
+	}
+
+	// Re-grant: SetPermission uses REPLACE INTO, which deletes the
+	// soft-deleted row and recreates it with revoked_at = NULL.
+	body := map[string]interface{}{
+		"userId":  "member1",
+		"boardId": "board1",
+		"access":  "WRITE",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	grantReq, _ := http.NewRequest("POST", "/api/v1/auth/permissions", bytes.NewBuffer(jsonBody))
+	grantReq.Header.Set("Content-Type", "application/json")
+	grantReq.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, grantReq)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected re-grant 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	// Read back: revoked_at must be NULL again and granted_by must
+	// be set to the actor (admin1). The tombstone is cleared on
+	// re-grant so the audit trail records the latest grantor,
+	// not the original.
+	var (
+		revokedAt, grantedBy sql.NullString
+		newAccess            string
+	)
+	if err := db.QueryRow(
+		`SELECT revoked_at, granted_by_user_id, access FROM board_permissions WHERE user_id = 'member1' AND board_id = 'board1'`,
+	).Scan(&revokedAt, &grantedBy, &newAccess); err != nil {
+		t.Fatalf("read re-granted row: %v", err)
+	}
+	if revokedAt.Valid {
+		t.Errorf("expected revoked_at cleared on re-grant, got %v", revokedAt)
+	}
+	if !grantedBy.Valid || grantedBy.String != "admin1" {
+		t.Errorf("expected granted_by_user_id=admin1 on re-grant, got %v", grantedBy)
+	}
+	if newAccess != "WRITE" {
+		t.Errorf("expected access=WRITE on re-grant, got %q", newAccess)
+	}
+
+	// Effective access restored.
+	ResetPermissionCacheForTest()
+	if got := loadBoardAccess(db, "member1", "board1"); got != "WRITE" {
+		t.Errorf("expected WRITE access after re-grant, got %q", got)
+	}
+}
+
+// TestDeleteColumnPermission_RevokeStampsAuditColumns is the
+// s-1037 column-side mirror of the board-side revoke test: the
+// DELETE endpoint writes revoked_at + revoked_by_user_id instead
+// of removing the row, the row count is preserved, and a follow-up
+// effective-access check returns "" so loadColumnAccess treats the
+// grant as inactive.
+func TestDeleteColumnPermission_RevokeStampsAuditColumns(t *testing.T) {
+	ResetTokenCacheForTest()
+	ResetPermissionCacheForTest()
+
+	db := setupBoardOwnerDB(t)
+	defer db.Close()
+
+	// Seed a column on board1 and a column-permission row.
+	if _, err := db.Exec(
+		`INSERT INTO columns (id, name, board_id) VALUES ('col-revoke', 'Col Revoke', 'board1')`,
+	); err != nil {
+		t.Fatalf("seed column: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO column_permissions (id, user_id, column_id, access) VALUES ('cp-revoke', 'member1', 'col-revoke', 'WRITE')`,
+	); err != nil {
+		t.Fatalf("seed column permission: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(RequireAuth(db))
+	router.DELETE("/api/v1/auth/permissions/columns", DeleteColumnPermission(db))
+
+	var cpBefore int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM column_permissions`).Scan(&cpBefore); err != nil {
+		t.Fatalf("count before: %v", err)
+	}
+
+	req, _ := http.NewRequest("DELETE", "/api/v1/auth/permissions/columns?id=cp-revoke", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 from column DELETE, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// (1) Row count is preserved.
+	var cpAfter int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM column_permissions`).Scan(&cpAfter); err != nil {
+		t.Fatalf("count after: %v", err)
+	}
+	if cpAfter != cpBefore {
+		t.Errorf("column soft-delete must preserve row count: before=%d after=%d", cpBefore, cpAfter)
+	}
+
+	// (2) + (3): revoked_at and revoked_by_user_id are stamped.
+	var revokedAt, revokedBy sql.NullString
+	if err := db.QueryRow(
+		`SELECT revoked_at, revoked_by_user_id FROM column_permissions WHERE id = 'cp-revoke'`,
+	).Scan(&revokedAt, &revokedBy); err != nil {
+		t.Fatalf("read revoke columns: %v", err)
+	}
+	if !revokedAt.Valid || revokedAt.String == "" {
+		t.Errorf("expected revoked_at stamped after column REVOKE, got %v", revokedAt)
+	}
+	if !revokedBy.Valid || revokedBy.String != "admin1" {
+		t.Errorf("expected revoked_by_user_id=admin1 (the caller), got %v", revokedBy)
+	}
+
+	// Effective access is gone: loadColumnAccess's filter must
+	// treat the soft-deleted row as inactive.
+	ResetPermissionCacheForTest()
+	if got := loadColumnAccess(db, "member1", "col-revoke"); got != "" {
+		t.Errorf("expected empty effective column access after revoke, got %q", got)
+	}
+}

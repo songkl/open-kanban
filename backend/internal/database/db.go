@@ -187,42 +187,43 @@ func runSQLiteMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create SQLite migrate instance: %w", err)
 	}
 
-	gitVersion := version.GetGitVersion()
-	if gitVersion != "" {
-		if fromMig, toMig, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
-			log.Printf("[SQLite] Running migrations from version %s (migrations %d to %d)", gitVersion, fromMig, toMig)
-			if err := m.Migrate(uint(toMig)); err != nil && err != migrate.ErrNoChange {
-				if strings.Contains(err.Error(), "Dirty") {
-					if forceErr := m.Force(toMig); forceErr != nil {
-						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
-					}
-				} else if strings.Contains(err.Error(), "no migration found") {
-					log.Printf("[SQLite] Migration %d not found, forcing to current version", toMig)
-					if forceErr := m.Force(toMig - 1); forceErr != nil {
-						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
-					}
-				} else {
-					return fmt.Errorf("failed to run SQLite migrations: %w", err)
-				}
-			}
-			if err := storeSchemaVersion(db, gitVersion); err != nil {
-				log.Printf("[SQLite] Warning: failed to store schema version: %v", err)
-			}
-			return nil
-		}
-	}
-
+	// Always apply every pending migration. The migration files are
+	// embedded in the binary, so the runner can only see migrations
+	// the binary ships with; capping the run at the version map's
+	// `toMig` (e.g. "0.2.0" → 2) would strand a fresh install on a
+	// stale git tag and leave the schema out of sync with the code
+	// that needs migration 4+ (boards.is_public, audit columns, ...).
+	// m.Migrate(toMig) is also dangerous when the DB is already past
+	// toMig: golang-migrate would try to migrate DOWN, dropping
+	// tables and data. m.Up() only ever moves forward.
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
-			// With the consolidated schema there is only one migration
-			// (version 1). Forcing the dirty flag back to "no migrations
-			// applied" lets the next startup re-run it from scratch
-			// rather than getting stuck in a half-applied state.
+			// Forcing the dirty flag back to "no migrations
+			// applied" lets the next startup re-run the full set
+			// from scratch rather than getting stuck in a
+			// half-applied state. The migration files are written
+			// to be idempotent (CREATE TABLE IF NOT EXISTS, etc.)
+			// so re-running them is safe.
 			if forceErr := m.Force(0); forceErr != nil {
 				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
 			}
 		} else {
 			return fmt.Errorf("failed to run SQLite migrations: %w", err)
+		}
+	}
+
+	// Record the binary's git version for observability / upgrade
+	// tracking, but only when it's a known release. An unknown
+	// version (e.g. "0.2.0-81-gff98edc" from a development
+	// checkout) would write a misleading row, so we leave the
+	// existing schema_version alone in that case.
+	if gitVersion := version.GetGitVersion(); gitVersion != "" {
+		if _, _, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			if err := storeSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[SQLite] Warning: failed to store schema version: %v", err)
+			}
+		} else {
+			log.Printf("[SQLite] Skipping schema_version write for unknown git version %q", gitVersion)
 		}
 	}
 
@@ -263,38 +264,26 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 		return fmt.Errorf("failed to create MySQL migrate instance: %w", err)
 	}
 
-	gitVersion := version.GetGitVersion()
-	if gitVersion != "" {
-		if fromMig, toMig, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
-			log.Printf("[MySQL] Running migrations from version %s (migrations %d to %d)", gitVersion, fromMig, toMig)
-			if err := m.Migrate(uint(toMig)); err != nil && err != migrate.ErrNoChange {
-				if strings.Contains(err.Error(), "Dirty") {
-					if forceErr := m.Force(toMig); forceErr != nil {
-						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
-					}
-				} else if strings.Contains(err.Error(), "no migration found") {
-					log.Printf("[MySQL] Migration %d not found, forcing to current version", toMig)
-					if forceErr := m.Force(toMig - 1); forceErr != nil {
-						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
-					}
-				} else {
-					return fmt.Errorf("failed to run MySQL migrations: %w", err)
-				}
-			}
-			if err := storeMySQLSchemaVersion(db, gitVersion); err != nil {
-				log.Printf("[MySQL] Warning: failed to store schema version: %v", err)
-			}
-			return nil
-		}
-	}
-
+	// Always apply every pending migration (same rationale as the
+	// SQLite path: see the comment in runSQLiteMigrations). The
+	// version map is used only for the schema_version log row.
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
-			if forceErr := m.Force(7); forceErr != nil {
+			if forceErr := m.Force(0); forceErr != nil {
 				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
 			}
 		} else {
 			return fmt.Errorf("failed to run MySQL migrations: %w", err)
+		}
+	}
+
+	if gitVersion := version.GetGitVersion(); gitVersion != "" {
+		if _, _, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			if err := storeMySQLSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[MySQL] Warning: failed to store schema version: %v", err)
+			}
+		} else {
+			log.Printf("[MySQL] Skipping schema_version write for unknown git version %q", gitVersion)
 		}
 	}
 

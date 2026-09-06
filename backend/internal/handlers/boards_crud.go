@@ -68,10 +68,14 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 		// board regardless of their global role — a MEMBER who
 		// creates a board can still manage its permissions,
 		// columns, and tasks. Without this row, only global
-		// ADMINs would have board-management rights.
+		// ADMINs would have board-management rights. The audit
+		// columns (granted_by / expires / revoked_*) are written
+		// as NULL defaults so the row starts in its "active"
+		// state; granted_by_user_id is the creator because the
+		// owner grant is self-issued at create-time.
 		_, err = tx.Exec(
-			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES (?, ?, ?, ?, 'ADMIN')",
-			generateID(), user.ID, boardID, user.ID,
+			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES (?, ?, ?, ?, 'ADMIN', ?, NULL, NULL, NULL, '')",
+			generateID(), user.ID, boardID, user.ID, user.ID,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant creator ownership"})

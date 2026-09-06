@@ -115,22 +115,31 @@ type Subtask struct {
 
 // BoardPermission represents user permissions for a board
 type BoardPermission struct {
-	ID      string `json:"id"`
-	UserID  string `json:"userId"`
-	BoardID string `json:"boardId"`
-	Access  string `json:"access"` // READ, WRITE, ADMIN
-	Board   *Board `json:"board,omitempty"`
-	User    *User  `json:"user,omitempty"`
+	ID              string     `json:"id"`
+	UserID          string     `json:"userId"`
+	BoardID         string     `json:"boardId"`
+	Access          string     `json:"access"` // READ, WRITE, ADMIN
+	GrantedByUserID *string    `json:"grantedByUserId,omitempty"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt       *time.Time `json:"revokedAt,omitempty"`
+	RevokedByUserID *string    `json:"revokedByUserId,omitempty"`
+	Notes           string     `json:"notes,omitempty"`
+	Board           *Board     `json:"board,omitempty"`
+	User            *User      `json:"user,omitempty"`
 }
 
 // ColumnPermission represents user permissions for a column
 type ColumnPermission struct {
-	ID       string  `json:"id"`
-	UserID   string  `json:"userId"`
-	ColumnID string  `json:"columnId"`
-	Access   string  `json:"access"` // READ, WRITE, ADMIN
-	Column   *Column `json:"column,omitempty"`
-	User     *User   `json:"user,omitempty"`
+	ID              string     `json:"id"`
+	UserID          string     `json:"userId"`
+	ColumnID        string     `json:"columnId"`
+	Access          string     `json:"access"` // READ, WRITE, ADMIN
+	GrantedByUserID *string    `json:"grantedByUserId,omitempty"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt       *time.Time `json:"revokedAt,omitempty"`
+	RevokedByUserID *string    `json:"revokedByUserId,omitempty"`
+	Column          *Column    `json:"column,omitempty"`
+	User            *User      `json:"user,omitempty"`
 }
 
 // Attachment represents a file attachment

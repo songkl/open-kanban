@@ -62,8 +62,8 @@ func CreateBoardFromTemplate(db *sql.DB) gin.HandlerFunc {
 		}
 
 		_, err = tx.Exec(
-			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES (?, ?, ?, ?, 'ADMIN')",
-			generateID(), user.ID, boardID, user.ID,
+			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES (?, ?, ?, ?, 'ADMIN', ?, NULL, NULL, NULL, '')",
+			generateID(), user.ID, boardID, user.ID, user.ID,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant creator ownership"})

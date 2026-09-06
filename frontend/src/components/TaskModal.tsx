@@ -224,16 +224,21 @@ export function TaskModal({
     }
   }, [task.id]);
 
+  const lastTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!task.id) return;
-    if (!task.comments || task.comments.length === 0) {
-      commentsApi.getByTask(task.id)
-        .then((data) => setTaskComments(data || []))
-        .catch(console.error);
-    } else {
-      setTaskComments(task.comments);
+    if (lastTaskIdRef.current !== task.id) {
+      lastTaskIdRef.current = task.id;
+      setCommentsPage(1);
+      if (task.comments && task.comments.length > 0) {
+        setTaskComments(task.comments);
+      } else {
+        commentsApi.getByTask(task.id)
+          .then((data) => setTaskComments(data || []))
+          .catch(console.error);
+      }
     }
-  }, [task.id, JSON.stringify(task.comments)]);
+  }, [task.id, task.comments]);
 
   useEffect(() => {
     if (commentsRef.current) {
@@ -280,7 +285,22 @@ export function TaskModal({
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
-    onAddComment(task.id, newComment.trim(), commentAuthor);
+    const trimmed = newComment.trim();
+    const optimisticComment: Comment = {
+      id: `temp-${Date.now()}`,
+      content: trimmed,
+      author: commentAuthor,
+      taskId: task.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setTaskComments((prev) => {
+      const next = [...prev, optimisticComment];
+      const totalPages = Math.max(1, Math.ceil(next.length / COMMENTS_PER_PAGE));
+      setCommentsPage(totalPages);
+      return next;
+    });
+    onAddComment(task.id, trimmed, commentAuthor);
     setNewComment('');
   };
 

@@ -332,6 +332,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.POST("/agents/reset-token", handlers.ResetAgentToken(db))
 		authProtected.DELETE("/agents", handlers.DeleteAgent(db))
 		authProtected.GET("/users", handlers.GetUsers(db))
+		authProtected.GET("/users-visible", handlers.GetUsersVisible(db))
 		authProtected.PUT("/users", handlers.UpdateUser(db))
 		authProtected.POST("/users", handlers.CreateUser(db))
 		authProtected.POST("/users/enabled", handlers.SetUserEnabled(db))
@@ -339,12 +340,14 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.POST("/permissions", handlers.SetPermission(db))
 		authProtected.DELETE("/permissions", handlers.DeletePermission(db))
 		authProtected.POST("/permissions/bulk", handlers.BulkSetPermissions(db))
+		authProtected.POST("/permissions/bulk-grant", handlers.BulkGrantPermissions(db))
 		authProtected.POST("/permissions/transfer-ownership", handlers.TransferOwnership(db))
 		authProtected.GET("/permissions/columns", handlers.GetColumnPermissions(db))
 		authProtected.POST("/permissions/columns", handlers.SetColumnPermission(db))
 		authProtected.DELETE("/permissions/columns", handlers.DeleteColumnPermission(db))
 		authProtected.PUT("/config", handlers.UpdateAppConfig(db))
 		authProtected.GET("/me/board-permissions", handlers.GetMyBoardPermissions(db))
+		authProtected.GET("/me/column-access", handlers.GetMyColumnAccess(db))
 		// OAuth 2.1 admin endpoints
 		authProtected.GET("/oauth/clients", oauth.ListAdminClientsHandler(db))
 		authProtected.DELETE("/oauth/clients", oauth.DeleteAdminClientHandler(db))
@@ -353,6 +356,17 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.GET("/oauth/config", oauth.GetOAuthConfigHandler(db))
 		authProtected.PUT("/oauth/config", oauth.UpdateOAuthConfigHandler(db))
 	}
+
+	// Permission audit log endpoint: surfaces PERMISSION_GRANT /
+	// REVOKE / TRANSFER rows to global admins and board owners.
+	// Lives at /api/v1/activities (not under /api/v1/auth) so the
+	// audit surface area is independent from the per-user activity
+	// feed at /api/v1/auth/activities.
+	r.GET("/api/v1/activities",
+		handlers.RequireSignatureVerification(),
+		handlers.RequireAuth(db),
+		handlers.GetPermissionActivities(db),
+	)
 
 	boards := r.Group("/api/v1/boards")
 	{

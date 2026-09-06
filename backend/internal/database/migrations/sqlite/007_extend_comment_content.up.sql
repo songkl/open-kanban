@@ -1,0 +1,17 @@
+-- Document that comments.content is intentionally unlimited.
+--
+-- SQLite has no per-type size cap on TEXT — values are stored as
+-- variable-length BLOBs up to ~1 GiB by default (configurable via
+-- SQLITE_MAX_LENGTH at compile time). The schema in
+-- 001_initial_schema.up.sql already declares the column as TEXT, so
+-- nothing structural needs to change. This migration exists only to
+-- (a) keep the migration sequence in lock-step with the MySQL side
+-- (which widens TEXT → LONGTEXT in 007) and (b) record, in source
+-- control, the explicit decision that comment length is unbounded
+-- at the storage layer on SQLite as well.
+--
+-- The .down.sql is empty for the same reason: there is no schema
+-- change to roll back.
+--
+-- See internal/handlers/comments.go CreateComment for the matching
+-- application-level decision (no validator max=… tag on Content).

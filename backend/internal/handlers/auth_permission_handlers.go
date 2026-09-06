@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,6 +15,64 @@ type SetPermissionRequest struct {
 	UserID  string `json:"userId"`
 	BoardID string `json:"boardId"`
 	Access  string `json:"access"`
+}
+
+// PermissionRow is the canonical, unified row returned by
+// GET /api/v1/auth/permissions for both ?userId= and ?boardId=.
+//
+// Prior to s-1041 the two branches of GetPermissions projected
+// different shapes: the boardId variant returned {id, boardId,
+// boardName, access, userId, userNickname} while the userId variant
+// only returned {id, boardId, boardName, access}. Downstream code
+// had to defensively probe both keys per row, which was fragile.
+//
+// The unified row carries the full set of fields needed by either
+// caller side:
+//
+//	userId          — id of the granted user
+//	username        — login name of the granted user
+//	nickname        — display name of the granted user
+//	userType        — HUMAN | AGENT
+//	userRole        — ADMIN | MEMBER | VIEWER
+//	boardId         — id of the board
+//	boardName       — name of the board
+//	access          — READ | WRITE | ADMIN
+//	grantedByUserId   — id of the actor who issued the grant (audit)
+//	grantedByUsername — login name of the granting actor (audit)
+//	grantedByNickname — display name of the granting actor (audit)
+//	grantedAt         — when the row was created (audit)
+//	expiresAt         — optional access expiry (null = never)
+//	revokedAt         — soft-delete tombstone (null = active)
+//
+// The frontend (BoardPermission in types/kanban.ts) keys off
+// `nickname`, `userType`, `id`, `userId`, `boardId`, `boardName`,
+// `access` and (for the owner badge) `ownerAgentId`. ownerAgentId
+// and id are kept on the row for delete + owner-badge rendering
+// even though the task spec lists them as implicit.
+//
+// Nullable audit columns are projected as *string without
+// `omitempty` so the JSON encoder always emits the key (with a
+// null value when the DB column is NULL). This is what locks the
+// field set identical between the two query modes — a key that
+// is sometimes present and sometimes missing is the same
+// regression the task spec is fixing.
+type PermissionRow struct {
+	UserID            string  `json:"userId"`
+	Username          string  `json:"username"`
+	Nickname          string  `json:"nickname"`
+	UserType          string  `json:"userType"`
+	UserRole          string  `json:"userRole"`
+	BoardID           string  `json:"boardId"`
+	BoardName         string  `json:"boardName"`
+	Access            string  `json:"access"`
+	ID                string  `json:"id"`
+	OwnerAgentID      *string `json:"ownerAgentId"`
+	GrantedByUserID   *string `json:"grantedByUserId"`
+	GrantedByUsername *string `json:"grantedByUsername"`
+	GrantedByNickname *string `json:"grantedByNickname"`
+	GrantedAt         *string `json:"grantedAt"`
+	ExpiresAt         *string `json:"expiresAt"`
+	RevokedAt         *string `json:"revokedAt"`
 }
 
 func GetPermissions(db *sql.DB) gin.HandlerFunc {
@@ -46,23 +105,48 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
+		// Unified query (s-1041). Both ?userId= and ?boardId=
+		// join the users + boards tables so the projected row
+		// always carries userNickname / userType / userRole /
+		// grantedByUserId / expiresAt / revokedAt. The branch is
+		// only the WHERE clause, never the projection — keeping
+		// the field set identical is the contract the task spec
+		// calls out.
+		//
+		// LEFT JOIN on users / boards is not used: an orphaned
+		// board_permissions row (FK CASCADE makes this extremely
+		// unlikely in practice) would surface as empty
+		// username/nickname and confuse the UI. INNER JOIN drops
+		// orphans, which is the desired behaviour for a
+		// management surface.
 		var rows *sql.Rows
 		var err error
 
 		if requestedBoardID != "" {
 			rows, err = db.Query(`
-				SELECT bp.id, bp.board_id, b.name, bp.access, u.id, u.nickname
+				SELECT bp.id, bp.user_id, u.username, u.nickname, u.type, u.role,
+				       bp.board_id, b.name, bp.access, bp.owner_agent_id,
+				       bp.granted_by_user_id, g.username, g.nickname,
+				       bp.created_at, bp.expires_at, bp.revoked_at
 				FROM board_permissions bp
 				JOIN boards b ON bp.board_id = b.id
-				JOIN users u ON bp.user_id = u.id
+				JOIN users u  ON bp.user_id  = u.id
+				LEFT JOIN users g ON g.id = bp.granted_by_user_id
 				WHERE bp.board_id = ?
+				ORDER BY bp.created_at ASC, bp.id ASC
 			`, requestedBoardID)
 		} else {
 			rows, err = db.Query(`
-				SELECT bp.id, bp.board_id, b.name, bp.access
+				SELECT bp.id, bp.user_id, u.username, u.nickname, u.type, u.role,
+				       bp.board_id, b.name, bp.access, bp.owner_agent_id,
+				       bp.granted_by_user_id, g.username, g.nickname,
+				       bp.created_at, bp.expires_at, bp.revoked_at
 				FROM board_permissions bp
 				JOIN boards b ON bp.board_id = b.id
+				JOIN users u  ON bp.user_id  = u.id
+				LEFT JOIN users g ON g.id = bp.granted_by_user_id
 				WHERE bp.user_id = ?
+				ORDER BY bp.created_at ASC, bp.id ASC
 			`, targetUserID)
 		}
 		if err != nil {
@@ -71,35 +155,142 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var permissions []gin.H
+		// Pre-allocate as empty (not nil) so the JSON encoder
+		// emits "permissions":[] instead of "permissions":null on
+		// a user with no grants. The CLAUDE API style guide
+		// requires [] over null.
+		permissions := make([]PermissionRow, 0)
 		for rows.Next() {
-			if requestedBoardID != "" {
-				var id, boardID, boardName, access, userID, userNickname string
-				if err := rows.Scan(&id, &boardID, &boardName, &access, &userID, &userNickname); err == nil {
-					permissions = append(permissions, gin.H{
-						"id":           id,
-						"boardId":      boardID,
-						"boardName":    boardName,
-						"access":       access,
-						"userId":       userID,
-						"userNickname": userNickname,
-					})
-				}
-			} else {
-				var id, boardID, boardName, access string
-				if err := rows.Scan(&id, &boardID, &boardName, &access); err == nil {
-					permissions = append(permissions, gin.H{
-						"id":        id,
-						"boardId":   boardID,
-						"boardName": boardName,
-						"access":    access,
-					})
-				}
+			var (
+				id, userID, username, nickname, userType, userRole,
+				boardID, boardName, access string
+				ownerAgentID                sql.NullString
+				grantedByUserID             sql.NullString
+				grantedByUsername           sql.NullString
+				grantedByNickname           sql.NullString
+				grantedAt, expiresAt, revoked sql.NullTime
+			)
+			if err := rows.Scan(
+				&id, &userID, &username, &nickname, &userType, &userRole,
+				&boardID, &boardName, &access, &ownerAgentID,
+				&grantedByUserID, &grantedByUsername, &grantedByNickname,
+				&grantedAt, &expiresAt, &revoked,
+			); err != nil {
+				log.Printf("[GetPermissions] row scan failed: %v", err)
+				continue
 			}
+			row := PermissionRow{
+				UserID:    userID,
+				Username:  username,
+				Nickname:  nickname,
+				UserType:  userType,
+				UserRole:  userRole,
+				BoardID:   boardID,
+				BoardName: boardName,
+				Access:    access,
+				ID:        id,
+			}
+			if ownerAgentID.Valid {
+				s := ownerAgentID.String
+				row.OwnerAgentID = &s
+			}
+			if grantedByUserID.Valid {
+				s := grantedByUserID.String
+				row.GrantedByUserID = &s
+			}
+			if grantedByUsername.Valid {
+				s := grantedByUsername.String
+				row.GrantedByUsername = &s
+			}
+			if grantedByNickname.Valid {
+				s := grantedByNickname.String
+				row.GrantedByNickname = &s
+			}
+			if grantedAt.Valid {
+				s := grantedAt.Time.UTC().Format(time.RFC3339)
+				row.GrantedAt = &s
+			}
+			if expiresAt.Valid {
+				s := expiresAt.Time.UTC().Format(time.RFC3339)
+				row.ExpiresAt = &s
+			}
+			if revoked.Valid {
+				s := revoked.Time.UTC().Format(time.RFC3339)
+				row.RevokedAt = &s
+			}
+			permissions = append(permissions, row)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
+			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"permissions": permissions})
+		// When the caller scopes the request to a single board,
+		// also return the "invitable" candidate list (s-1039): every
+		// user that does NOT yet hold effective access on the
+		// board. The auth gate already enforced canManageBoardPermissions
+		// above for non-admin callers, so it is safe to expose the
+		// same shape as /api/v1/auth/users-visible. We keep the
+		// existing `permissions` field unchanged so this endpoint
+		// stays backwards compatible.
+		var candidates []gin.H
+		if requestedBoardID != "" {
+			candidates = loadPermissionCandidates(db, requestedBoardID)
+		}
+
+		response := gin.H{"permissions": permissions}
+		if candidates != nil {
+			response["candidates"] = candidates
+		}
+
+		c.JSON(http.StatusOK, response)
 	}
+}
+
+// loadPermissionCandidates returns the set of users that can still be
+// invited to the named board — i.e. anyone without an effective
+// board_permissions row. "Effective" mirrors the contract used by
+// /api/v1/auth/users-visible: access set, not revoked, not past
+// expiry. The board owner is excluded because their own row already
+// grants ADMIN access via owner_agent_id.
+//
+// Returned as []gin.H to keep the response shape identical to the
+// users-visible endpoint (userId / username / nickname / type / role).
+// An empty slice — not nil — is returned for a board with no
+// candidates so JSON consumers always see an array.
+func loadPermissionCandidates(db *sql.DB, boardID string) []gin.H {
+	rows, err := db.Query(`
+		SELECT u.id, u.username, u.nickname, u.type, u.role
+		FROM users u
+		LEFT JOIN board_permissions bp
+			ON bp.user_id = u.id
+			AND bp.board_id = ?
+			AND bp.access IS NOT NULL
+			AND bp.revoked_at IS NULL
+			AND (bp.expires_at IS NULL OR bp.expires_at > ?)
+		WHERE bp.id IS NULL
+		ORDER BY u.created_at DESC
+	`, boardID, time.Now())
+	if err != nil {
+		log.Printf("[GetPermissions] candidates query failed (board=%s): %v", boardID, err)
+		return []gin.H{}
+	}
+	defer rows.Close()
+
+	candidates := make([]gin.H, 0)
+	for rows.Next() {
+		var id, username, nickname, userType, role string
+		if err := rows.Scan(&id, &username, &nickname, &userType, &role); err == nil {
+			candidates = append(candidates, gin.H{
+				"userId":   id,
+				"username": username,
+				"nickname": nickname,
+				"type":     userType,
+				"role":     role,
+			})
+		}
+	}
+	return candidates
 }
 
 func SetPermission(db *sql.DB) gin.HandlerFunc {
@@ -144,11 +335,16 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 		// fails on MySQL with a syntax error). The (user_id, board_id)
 		// UNIQUE constraint on the table makes this atomic; no FK
 		// references board_permissions.id so the row id rotating on
-		// update is safe.
+		// update is safe. The audit columns are populated so a
+		// re-grant clears any prior revoked_at / revoked_by stamp —
+		// granting is a reactivation, not a new add.
 		_, err := db.Exec(`
-			REPLACE INTO board_permissions (id, user_id, board_id, access)
-			VALUES (?, ?, ?, ?)
-		`, permID, req.UserID, req.BoardID, req.Access)
+			REPLACE INTO board_permissions (
+				id, user_id, board_id, access,
+				granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes
+			)
+			VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, '')
+		`, permID, req.UserID, req.BoardID, req.Access, user.ID)
 		if err != nil {
 			log.Printf("[SetPermission] REPLACE INTO board_permissions failed (user=%s board=%s access=%s): %v", req.UserID, req.BoardID, req.Access, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -208,6 +404,18 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// DeletePermission revokes a board permission row. The endpoint is
+// a soft-delete: the row stays in board_permissions but its
+// revoked_at / revoked_by_user_id columns are stamped so loadBoardAccess
+// (and the loadPermissionCandidates filter) treat the grant as
+// inactive. The audit trail survives the revoke — a follow-up
+// re-grant clears the tombstone via the REPLACE in SetPermission.
+//
+// "Row already gone" stays a 200 idempotent response (the operator
+// retrying after a network blip should not see a 500). A "row
+// already revoked" state is also treated as a no-op: the activity
+// log records one PERMISSION_REVOKE row per distinct revoke, never
+// one per retry.
 func DeletePermission(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -222,16 +430,21 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Capture the affected user / board before the DELETE so we
-		// can (a) invalidate the right cache entries and (b) record
-		// an activity row that references the board by name.
-		var targetUserID, boardID, boardName string
+		// Capture the affected user / board / revocation state
+		// before the UPDATE so we can (a) enforce the
+		// already-revoked idempotency rule and (b) record an
+		// activity row that references the board by name.
+		var (
+			targetUserID, boardID, boardName string
+			ownerID, existingRevokedAt       sql.NullString
+		)
 		if err := db.QueryRow(`
-			SELECT bp.user_id, bp.board_id, COALESCE(b.name, '')
+			SELECT bp.user_id, bp.board_id, COALESCE(b.name, ''),
+			       bp.owner_agent_id, bp.revoked_at
 			FROM board_permissions bp
 			LEFT JOIN boards b ON bp.board_id = b.id
 			WHERE bp.id = ?
-		`, permID).Scan(&targetUserID, &boardID, &boardName); err != nil {
+		`, permID).Scan(&targetUserID, &boardID, &boardName, &ownerID, &existingRevokedAt); err != nil {
 			// Row already gone — treat as success, just skip the
 			// side-effects so the operator gets a clean idempotent
 			// response instead of a 500 on retry.
@@ -256,17 +469,48 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 		// Refuse to remove the owner's own permission row — the
 		// board must always have an owner that can manage it. The
 		// owner cannot demote or revoke themselves.
-		var ownerID sql.NullString
-		if err := db.QueryRow(
-			"SELECT owner_agent_id FROM board_permissions WHERE id = ?", permID,
-		).Scan(&ownerID); err == nil && ownerID.Valid && ownerID.String == targetUserID {
+		if ownerID.Valid && ownerID.String == targetUserID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Cannot revoke the board owner's permission"})
 			return
 		}
 
-		_, err := db.Exec("DELETE FROM board_permissions WHERE id = ?", permID)
+		// Idempotent soft delete: a row that is already revoked
+		// (revoked_at NOT NULL) is treated as a no-op so retrying
+		// the same DELETE does not stamp a new revoked_at /
+		// revoked_by pair and does not log a duplicate
+		// PERMISSION_REVOKE activity row. The check happens before
+		// the UPDATE so the original revoked_at timestamp is
+		// preserved exactly.
+		if existingRevokedAt.Valid {
+			c.JSON(http.StatusOK, gin.H{"success": true})
+			return
+		}
+
+		// Soft-delete: stamp revoked_at + revoked_by_user_id so
+		// loadBoardAccess's `revoked_at IS NULL` filter treats the
+		// row as inactive, but the audit trail (granted_by /
+		// original access / timestamps) stays intact for the
+		// permission-activities endpoint. The where clause is the
+		// safety net: if the row was deleted between the load and
+		// the UPDATE (e.g. concurrent request), the UPDATE matches
+		// zero rows and we surface a 500 so the caller can retry.
+		res, err := db.Exec(`
+			UPDATE board_permissions
+			SET revoked_at = CURRENT_TIMESTAMP,
+			    revoked_by_user_id = ?
+			WHERE id = ?
+			  AND revoked_at IS NULL
+		`, user.ID, permID)
 		if err != nil {
+			log.Printf("[DeletePermission] UPDATE board_permissions failed (id=%s): %v", permID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
+			return
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			// Another concurrent request revoked the row between
+			// our load and our UPDATE. Treat as a successful
+			// idempotent delete — same outcome the caller wanted.
+			c.JSON(http.StatusOK, gin.H{"success": true})
 			return
 		}
 
@@ -493,7 +737,10 @@ func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
 		}
 		defer tx.Rollback()
 
-		stmt, err := tx.Prepare(`REPLACE INTO board_permissions (id, user_id, board_id, access) VALUES (?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(`REPLACE INTO board_permissions (
+			id, user_id, board_id, access,
+			granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes
+		) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, '')`)
 		if err != nil {
 			log.Printf("[BulkSetPermissions] failed to prepare statement: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk set permissions"})
@@ -504,7 +751,7 @@ func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
 		granted := make([]gin.H, 0, len(cleaned))
 		for _, uid := range cleaned {
 			permID := generateID()
-			if _, err := stmt.Exec(permID, uid, req.BoardID, req.Access); err != nil {
+			if _, err := stmt.Exec(permID, uid, req.BoardID, req.Access, user.ID); err != nil {
 				log.Printf("[BulkSetPermissions] REPLACE INTO failed for user=%s board=%s: %v", uid, req.BoardID, err)
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"error": "Failed to bulk set permissions: " + err.Error(),
@@ -559,6 +806,381 @@ func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
 type TransferOwnershipRequest struct {
 	BoardID        string `json:"boardId"`
 	NewOwnerUserID string `json:"newOwnerUserId"`
+}
+
+// BulkGrantEntry is one element of the grants:[] body field. Each
+// entry describes a single (user, board) permission grant. expires_at
+// is optional; when present the handler stamps it onto the row so the
+// existing expires_at filter (loadBoardAccess, GetMyBoardPermissions,
+// loadPermissionCandidates) treats the grant as expired automatically.
+//
+// expires_at is intentionally kept as *string here (not time.Time) so
+// the handler can validate the string explicitly and report bad
+// values via the skipped list rather than failing the entire request.
+type BulkGrantEntry struct {
+	UserID    string  `json:"userId"`
+	Access    string  `json:"access"`
+	ExpiresAt *string `json:"expiresAt,omitempty"`
+}
+
+type BulkGrantPermissionsRequest struct {
+	BoardID string           `json:"boardId"`
+	Grants  []BulkGrantEntry `json:"grants"`
+}
+
+// bulkGrantMaxEntries caps the number of grants accepted in a
+// single BulkGrantPermissions call. The cap is intentionally lower
+// than the bulk-set endpoint (which uses 200) because this endpoint
+// targets the "onboarding a whole team" use case where per-grant
+// variation matters and the row-count growth of a single call is
+// expected to stay in the low double digits. 50 is small enough to
+// keep the transaction window tight while leaving comfortable room
+// for real onboarding scenarios.
+const bulkGrantMaxEntries = 50
+
+// BulkGrantPermissions grants board access to many users in one
+// round trip, with per-grant access level and optional expires_at.
+// Unlike BulkSetPermissions (which uniformly overwrites every
+// target's access on a single board), this endpoint is an
+// "onboarding" surface: it preserves any row the target user
+// already holds and returns the survivors in the skipped list with
+// a reason, so the UI can show the operator exactly which users
+// were added vs which were already present.
+//
+// Body shape:
+//
+//	{
+//	  "boardId": "...",
+//	  "grants": [
+//	    {"userId": "u1", "access": "READ"},
+//	    {"userId": "u2", "access": "WRITE", "expiresAt": "2027-01-01T00:00:00Z"}
+//	  ]
+//	}
+//
+// Response (always 200 unless a hard validation fails before any DB
+// work): { granted: [userId, ...], skipped: [{userId, reason}, ...] }
+//
+// Reason codes used in skipped[]:
+//   - "unknown_user"      the userId does not resolve to any users row
+//   - "invalid_access"    access is not one of {READ, WRITE, ADMIN}
+//   - "invalid_expires_at"  expiresAt is present but unparseable / in the past
+//   - "owner_protected"   the userId is the board's recorded owner
+//   - "already_granted"   a non-revoked, non-expired row already exists
+//
+// Validation order:
+//  1. Auth (401).
+//  2. Body shape: boardId / grants must be present, grants non-empty
+//     after dedupe (400).
+//  3. Cap: more than bulkGrantMaxEntries → 400 (the request itself
+//     is rejected; we don't silently truncate).
+//  4. Authorization: caller must own the board or be a global ADMIN
+//     (403). Mirrors SetPermission / BulkSetPermissions / DeletePermission.
+//  5. Board existence (404 if missing).
+//  6. Per-entry validation: dedupe, classify each entry as
+//     granted-or-skipped with a reason. The transaction only sees
+//     the granted subset; skipped entries never touch the DB.
+//  7. Owner protection: any grant targeting the board's owner is
+//     demoted to skipped with reason "owner_protected" before
+//     commit (instead of rejecting the whole batch). The board
+//     must always have exactly one owner; overwriting it via a
+//     bulk grant would silently corrupt the owner stamp.
+//
+// The whole rewrite runs in a single transaction so a partial
+// failure cannot leave the board with half-applied grants. Cache
+// invalidation runs only after commit, mirroring BulkSetPermissions.
+// One PERMISSION_BULK_GRANT activity row is recorded per call with
+// the count of granted + skipped entries.
+func BulkGrantPermissions(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		var req BulkGrantPermissionsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
+			return
+		}
+		if req.BoardID == "" || len(req.Grants) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
+			return
+		}
+		if len(req.Grants) > bulkGrantMaxEntries {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Too many grants in one request"})
+			return
+		}
+
+		if !canManageBoardPermissions(db, user, req.BoardID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can assign permissions"})
+			return
+		}
+
+		// Board must exist (404 if not). Owner_agent_id is read in
+		// the same round trip so the per-entry owner-protection
+		// check below doesn't need a second query.
+		var ownerID sql.NullString
+		var boardName string
+		err := db.QueryRow(
+			"SELECT b.name, (SELECT bp.owner_agent_id FROM board_permissions bp WHERE bp.board_id = b.id AND bp.owner_agent_id IS NOT NULL LIMIT 1) FROM boards b WHERE b.id = ?",
+			req.BoardID,
+		).Scan(&boardName, &ownerID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Board not found"})
+				return
+			}
+			log.Printf("[BulkGrantPermissions] failed to load board %s: %v", req.BoardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load board"})
+			return
+		}
+
+		validAccesses := map[string]bool{"READ": true, "WRITE": true, "ADMIN": true}
+
+		// Pre-validation pass. Each entry ends up in exactly one
+		// of three buckets:
+		//   - applied:    will be inserted in the transaction
+		//   - skipped:    reason reported in the response
+		//   - duplicate:  collapsed against an earlier entry
+		//
+		// Duplicates keep the FIRST entry's access / expiresAt so
+		// the response is deterministic. Order in the response
+		// mirrors the request order so the UI can correlate
+		// line-by-line.
+		type pending struct {
+			access    string
+			expiresAt sql.NullTime
+		}
+		applied := make([]pending, 0, len(req.Grants))
+		grantedIDs := make([]string, 0, len(req.Grants))
+		skipped := make([]gin.H, 0)
+		seen := make(map[string]int, len(req.Grants)) // userId → index in applied or skipped
+
+		// Bulk-resolve every userId in one IN-list query so the
+		// "unknown_user" check is a single round trip regardless of
+		// batch size. The placeholder count must match the request
+		// length — any mismatch is a bug we want to surface.
+		placeholders := strings.Repeat("?,", len(req.Grants))
+		placeholders = placeholders[:len(placeholders)-1]
+		argList := make([]interface{}, len(req.Grants))
+		for i, g := range req.Grants {
+			argList[i] = g.UserID
+		}
+		existingRows, err := db.Query(
+			"SELECT id FROM users WHERE id IN ("+placeholders+")", argList...,
+		)
+		if err != nil {
+			log.Printf("[BulkGrantPermissions] failed to query users: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify users"})
+			return
+		}
+		found := make(map[string]struct{}, len(req.Grants))
+		for existingRows.Next() {
+			var id string
+			if err := existingRows.Scan(&id); err == nil {
+				found[id] = struct{}{}
+			}
+		}
+		existingRows.Close()
+
+		// Bulk-resolve existing rows on this board so the
+		// "already_granted" classification is one query. We
+		// consider a row "already granted" when it is
+		// non-revoked AND not past its expires_at, mirroring the
+		// effective-access semantics used by loadPermissionCandidates.
+		existingRows2, err := db.Query(
+			"SELECT user_id FROM board_permissions WHERE board_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?) AND user_id IN ("+placeholders+")",
+			append([]interface{}{req.BoardID, time.Now()}, argList...)...,
+		)
+		if err != nil {
+			log.Printf("[BulkGrantPermissions] failed to query existing rows: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify existing rows"})
+			return
+		}
+		alreadyGranted := make(map[string]struct{}, len(req.Grants))
+		for existingRows2.Next() {
+			var id string
+			if err := existingRows2.Scan(&id); err == nil {
+				alreadyGranted[id] = struct{}{}
+			}
+		}
+		existingRows2.Close()
+
+		for _, g := range req.Grants {
+			if g.UserID == "" {
+				continue
+			}
+			if _, dup := seen[g.UserID]; dup {
+				continue
+			}
+			seen[g.UserID] = len(applied) + len(skipped)
+
+			// Unknown user: not in the bulk-resolved found map.
+			if _, ok := found[g.UserID]; !ok {
+				skipped = append(skipped, gin.H{"userId": g.UserID, "reason": "unknown_user"})
+				continue
+			}
+			if !validAccesses[g.Access] {
+				skipped = append(skipped, gin.H{"userId": g.UserID, "reason": "invalid_access"})
+				continue
+			}
+			// Owner protection: never overwrite the owner stamp.
+			// We surface this as a skip rather than a 403 because
+			// the rest of the batch is still safe to apply and the
+			// operator usually wants to know the owner was excluded
+			// instead of seeing the whole request fail.
+			if ownerID.Valid && g.UserID == ownerID.String {
+				skipped = append(skipped, gin.H{"userId": g.UserID, "reason": "owner_protected"})
+				continue
+			}
+			if _, ok := alreadyGranted[g.UserID]; ok {
+				skipped = append(skipped, gin.H{"userId": g.UserID, "reason": "already_granted"})
+				continue
+			}
+			// expires_at, if provided, must be parseable and in
+			// the future. An unparseable value is the operator's
+			// bug, not a server fault, so we report it via
+			// skipped instead of failing the whole batch.
+			var expiresAt sql.NullTime
+			if g.ExpiresAt != nil && *g.ExpiresAt != "" {
+				t, perr := parseGrantExpiresAt(*g.ExpiresAt)
+				if perr != nil || !t.After(time.Now()) {
+					skipped = append(skipped, gin.H{"userId": g.UserID, "reason": "invalid_expires_at"})
+					continue
+				}
+				expiresAt = sql.NullTime{Time: t, Valid: true}
+			}
+			applied = append(applied, pending{access: g.Access, expiresAt: expiresAt})
+			grantedIDs = append(grantedIDs, g.UserID)
+		}
+
+		// No-op batch: every entry was skipped. Return 200 with
+		// empty granted list so the UI can still update its
+		// progress display without treating this as a failure.
+		if len(applied) == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"boardId": req.BoardID,
+				"granted": []string{},
+				"skipped": skipped,
+			})
+			return
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("[BulkGrantPermissions] failed to begin tx: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk grant permissions"})
+			return
+		}
+		defer tx.Rollback()
+
+		// REPLACE INTO is portable across MySQL and SQLite (see
+		// SetPermission for the long version). The bulk-resolved
+		// "already_granted" check above guarantees no entry in
+		// `applied` collides with a row that currently has
+		// effective access, but a row that already exists with
+		// revoked_at set or expires_at in the past IS eligible
+		// for re-grant — REPLACE rewrites that row in place,
+		// clearing the soft-delete tombstone / refreshing the
+		// expiry. The (user_id, board_id) UNIQUE constraint is
+		// the safety net if that assumption ever breaks: a
+		// duplicate would still resolve to the same row without
+		// losing data, just with a fresh id.
+		stmt, err := tx.Prepare(`REPLACE INTO board_permissions (
+			id, user_id, board_id, access,
+			granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes
+		) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, '')`)
+		if err != nil {
+			log.Printf("[BulkGrantPermissions] failed to prepare statement: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk grant permissions"})
+			return
+		}
+		defer stmt.Close()
+
+		for i, p := range applied {
+			uid := grantedIDs[i]
+			permID := generateID()
+			var expiresArg interface{}
+			if p.expiresAt.Valid {
+				expiresArg = p.expiresAt.Time
+			}
+			if _, err := stmt.Exec(permID, uid, req.BoardID, p.access, user.ID, expiresArg); err != nil {
+				log.Printf("[BulkGrantPermissions] REPLACE INTO failed for user=%s board=%s: %v", uid, req.BoardID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "Failed to bulk grant permissions: " + err.Error(),
+				})
+				return
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			log.Printf("[BulkGrantPermissions] commit failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk grant permissions"})
+			return
+		}
+
+		// Cache invalidation runs after commit so a partial failure
+		// cannot evict cache entries for users whose grant never
+		// landed. tokenCache / permissionCache hold the only state
+		// that's stale until the new access is reflected, so we
+		// drop both for every granted user.
+		for _, uid := range grantedIDs {
+			tokenCache.DeleteByUserID(uid)
+			permissionCache.InvalidateUser(uid)
+		}
+		permissionCache.InvalidateResource(req.BoardID)
+
+		LogActivity(
+			db,
+			user.ID,
+			"PERMISSION_BULK_GRANT",
+			"BOARD",
+			req.BoardID,
+			boardName,
+			"granted_count="+strconv.Itoa(len(applied))+" skipped_count="+strconv.Itoa(len(skipped)),
+			c.ClientIP(),
+			getRequestSource(c),
+		)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"boardId": req.BoardID,
+			"granted": grantedIDs,
+			"skipped": skipped,
+		})
+	}
+}
+
+// parseGrantExpiresAt accepts the formats the UI is expected to
+// send and rejects everything else. We deliberately stay strict
+// here: an unparseable expires_at is reported via the skipped list
+// (reason "invalid_expires_at") instead of silently defaulting to
+// never-expires, because a silently-stripped expiry on a
+// permission grant would be a security-relevant surprise.
+func parseGrantExpiresAt(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05", s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t, nil
+	}
+	return time.Time{}, errGrantExpiresAt
+}
+
+var errGrantExpiresAt = &grantExpiresAtErr{}
+
+type grantExpiresAtErr struct{}
+
+func (e *grantExpiresAtErr) Error() string {
+	return "invalid expires_at format"
 }
 
 // TransferOwnership hands ownership of a board from the current

@@ -39,7 +39,7 @@ ADMIN = 3
 | 删除任务                              | ✅    | ⛔ WRITE on column     | ✗     |
 | 添加评论                              | ✅    | ⛔ READ on board/column | ✗     |
 | 给看板授权（`POST /permissions`）     | ✅    | ⛔ owner of board      | ✗     |
-| 给列授权（`POST /permissions/columns`）| ✅   | ✗                     | ✗     |
+| 给列授权（`POST /permissions/columns`）| ✅   | ⛔ owner of board      | ✗     |
 | 转移看板所有权（`POST /permissions/transfer-ownership`）| ✅ | ⛔ owner of board | ✗     |
 | 创建 / 删除用户 / 智能体              | ✅    | ✗                     | ✗     |
 | 修改他人角色 / 启用 / 停用            | ✅    | ✗                     | ✗     |
@@ -104,7 +104,7 @@ cp-user-columnX  = (不存在)
 ```
 
 → 用户在 board1 上是 ADMIN，可在 board 内任意列写任务。
-→ 想授权别人在 columnX 上 ADMIN，需要调用 `POST /api/permissions/columns`，仅 ADMIN 可调用。
+→ 想授权别人在 columnX 上 ADMIN，需要调用 `POST /api/permissions/columns`；仅全局 ADMIN 或 board owner 可调用。
 
 ### 4.4 看板所有者撤销自己的授权
 
@@ -112,6 +112,8 @@ cp-user-columnX  = (不存在)
 
 - 若是所有者本人 → 返回 403 `Cannot revoke the board owner's permission`，防止看板失去唯一所有者。
 - 若不是所有者 → 删除成功并刷新权限缓存。
+
+`SetColumnPermission` / `DeleteColumnPermission` 也会解析列所属的 board，并拒绝创建、覆盖或删除该 board owner 的列权限行；因此 owner 自身不能通过列权限管理操作修改自己的权限记录。
 
 ### 4.5 列权限高于看板权限
 

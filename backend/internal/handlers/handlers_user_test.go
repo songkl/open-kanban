@@ -62,6 +62,11 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		board_id TEXT NOT NULL,
 		owner_agent_id TEXT,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
+		notes TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -86,6 +91,10 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		user_id TEXT NOT NULL,
 		column_id TEXT NOT NULL,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -267,12 +276,15 @@ func TestGetPermissionsHandler(t *testing.T) {
 
 		var resp struct {
 			Permissions []struct {
-				ID           string `json:"id"`
-				BoardID      string `json:"boardId"`
-				BoardName    string `json:"boardName"`
-				Access       string `json:"access"`
-				UserID       string `json:"userId"`
-				UserNickname string `json:"userNickname"`
+				ID        string `json:"id"`
+				BoardID   string `json:"boardId"`
+				BoardName string `json:"boardName"`
+				Access    string `json:"access"`
+				UserID    string `json:"userId"`
+				Username  string `json:"username"`
+				Nickname  string `json:"nickname"`
+				UserType  string `json:"userType"`
+				UserRole  string `json:"userRole"`
 			} `json:"permissions"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -285,8 +297,17 @@ func TestGetPermissionsHandler(t *testing.T) {
 		if p.UserID != "admin1" {
 			t.Errorf("expected userId=admin1, got %q", p.UserID)
 		}
-		if p.UserNickname != "admin" {
-			t.Errorf("expected userNickname=admin, got %q", p.UserNickname)
+		if p.Username != "admin" {
+			t.Errorf("expected username=admin, got %q", p.Username)
+		}
+		if p.Nickname != "admin" {
+			t.Errorf("expected nickname=admin, got %q", p.Nickname)
+		}
+		if p.UserType != "HUMAN" {
+			t.Errorf("expected userType=HUMAN, got %q", p.UserType)
+		}
+		if p.UserRole != "ADMIN" {
+			t.Errorf("expected userRole=ADMIN, got %q", p.UserRole)
 		}
 		if p.BoardID != "board1" {
 			t.Errorf("expected boardId=board1, got %q", p.BoardID)
@@ -1616,22 +1637,6 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		if _, err := db.Exec("DROP TABLE column_permissions"); err != nil {
 			t.Fatalf("failed to drop column_permissions for test setup: %v", err)
 		}
-		// Re-create the table before any subsequent subtests so the
-		// order of t.Run entries doesn't matter.
-		t.Cleanup(func() {
-			_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS column_permissions (
-				id TEXT PRIMARY KEY,
-				user_id TEXT NOT NULL,
-				column_id TEXT NOT NULL,
-				access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-				FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
-				UNIQUE(user_id, column_id)
-			)`)
-		})
-
 		body := map[string]interface{}{"columnId": "col1", "userId": "member1", "access": "WRITE"}
 		jsonBody, _ := json.Marshal(body)
 
@@ -1650,6 +1655,23 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		errMsg, _ := resp["error"].(string)
 		if errMsg == "" || errMsg == "Failed to set" {
 			t.Errorf("expected error message to include the driver error, got %q", errMsg)
+		}
+		if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS column_permissions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			column_id TEXT NOT NULL,
+			access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+			granted_by_user_id TEXT,
+			expires_at DATETIME,
+			revoked_at DATETIME,
+			revoked_by_user_id TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
+			UNIQUE(user_id, column_id)
+		)`); err != nil {
+			t.Fatalf("failed to restore column_permissions for test setup: %v", err)
 		}
 	})
 
@@ -1693,7 +1715,7 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		// calls the endpoint twice with the same (userId, columnId)
 		// pair and verifies the row is updated, not duplicated.
 		for _, access := range []string{"WRITE", "ADMIN", "READ"} {
-			body := map[string]interface{}{"columnId": "col-upsert", "userId": "member-upsert", "access": access}
+			body := map[string]interface{}{"columnId": "col1", "userId": "member-upsert", "access": access}
 			jsonBody, _ := json.Marshal(body)
 
 			req, _ := http.NewRequest("POST", "/api/columns/permissions", bytes.NewBuffer(jsonBody))
@@ -1713,7 +1735,7 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		var count int
 		if err := db.QueryRow(
 			"SELECT COUNT(*) FROM column_permissions WHERE user_id = ? AND column_id = ?",
-			"member-upsert", "col-upsert",
+			"member-upsert", "col1",
 		).Scan(&count); err != nil {
 			t.Fatalf("count query failed: %v", err)
 		}
@@ -1725,7 +1747,7 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		var gotAccess string
 		if err := db.QueryRow(
 			"SELECT access FROM column_permissions WHERE user_id = ? AND column_id = ?",
-			"member-upsert", "col-upsert",
+			"member-upsert", "col1",
 		).Scan(&gotAccess); err != nil {
 			t.Fatalf("select failed: %v", err)
 		}

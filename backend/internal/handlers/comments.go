@@ -122,13 +122,38 @@ func GetComment(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// CreateCommentRequest represents comment creation request
+// CreateCommentRequest represents comment creation request.
+//
+// The Content field intentionally has no `max=` validator tag:
+// comment length is unbounded on purpose so the API never rejects
+// long-form feedback just because it crosses a character threshold.
+// The storage column is LONGTEXT on MySQL (max 4 GiB, migration
+// 007_extend_comment_content) and TEXT on SQLite (variable-length up
+// to ~1 GiB), so the handler is free of length checks at every
+// layer. See CreateComment for the full list of 400 conditions.
 type CreateCommentRequest struct {
 	Content string `json:"content" validate:"required"`
 	TaskID  string `json:"taskId" validate:"required"`
 }
 
-// CreateComment creates a new comment
+// CreateComment creates a new comment.
+//
+// POST /api/v1/comments
+//
+// Status code semantics:
+//
+//   - 200 OK: comment inserted, response carries the new id/content/author/userId/taskId/timestamps.
+//   - 400 Bad Request — every documented client error:
+//   -   • "content is required"      — `content` missing or empty (validator `required`).
+//   -   • "taskId is required"       — `taskId` missing or empty   (validator `required`).
+//   -   • "Invalid task ID"          — `taskId` does not reference any existing task.
+//     Note: length of `content` is NOT a 400 condition. Anything that would
+//     historically have surfaced as a "too long" 400 is intentionally
+//     allowed all the way through to storage (LONGTEXT / SQLite TEXT).
+//   - 401 Unauthorized: caller is not logged in.
+//   - 403 Forbidden: caller is a VIEWER, or lacks WRITE access on the task's board.
+//   - 429 Too Many Requests: per-user rate limit on `comment:<userID>` tripped.
+//   - 500 Internal Server Error: DB INSERT failed (very rare, only on driver-level errors).
 func CreateComment(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)

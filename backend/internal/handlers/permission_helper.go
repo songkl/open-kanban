@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"time"
 
 	"open-kanban/internal/models"
 
@@ -50,6 +51,14 @@ func accessLevelAtLeast(access, required string) bool {
 // rights even if their global role is MEMBER or VIEWER. The owner
 // short-circuit is reflected in the cached value so subsequent
 // checks stay a cache hit instead of round-tripping through the DB.
+//
+// "Effective" means the grant is currently active: revoked_at IS
+// NULL (the row has not been soft-deleted by DeletePermission) AND
+// the row is either non-expiring (expires_at IS NULL) or still in
+// the future. Soft-deleted and expired rows are treated as if they
+// don't exist — the cache is invalidated by the handlers that
+// stamp revoked_at / write a new expires_at, so the next read here
+// sees the truth on the very first uncached call.
 func loadBoardAccess(db *sql.DB, userID, boardID string) string {
 	if userID == "" || boardID == "" {
 		return ""
@@ -59,10 +68,13 @@ func loadBoardAccess(db *sql.DB, userID, boardID string) string {
 	}
 	var access string
 	var ownerID sql.NullString
-	err := db.QueryRow(
-		"SELECT access, owner_agent_id FROM board_permissions WHERE user_id = ? AND board_id = ?",
-		userID, boardID,
-	).Scan(&access, &ownerID)
+	err := db.QueryRow(`
+		SELECT access, owner_agent_id
+		FROM board_permissions
+		WHERE user_id = ? AND board_id = ?
+		  AND revoked_at IS NULL
+		  AND (expires_at IS NULL OR expires_at > ?)
+	`, userID, boardID, time.Now()).Scan(&access, &ownerID)
 	if err != nil {
 		// sql.ErrNoRows or any other failure: cache "" so we
 		// don't keep hammering the DB for users with no grant.
@@ -123,8 +135,24 @@ func canManageBoardPermissions(db *sql.DB, user *models.User, boardID string) bo
 	return owner
 }
 
+func canManageColumnPermissions(db *sql.DB, user *models.User, columnID string) bool {
+	if isAdmin(user) {
+		return true
+	}
+	if user == nil || columnID == "" {
+		return false
+	}
+	boardID, err := getBoardIDForColumn(db, columnID)
+	if err != nil {
+		return false
+	}
+	return canManageBoardPermissions(db, user, boardID)
+}
+
 // loadColumnAccess returns the user's effective access on a column.
-// See loadBoardAccess for the negative-cache rationale.
+// See loadBoardAccess for the negative-cache rationale and the
+// effective-access filter (revoked_at IS NULL, expires_at not yet
+// hit).
 func loadColumnAccess(db *sql.DB, userID, columnID string) string {
 	if userID == "" || columnID == "" {
 		return ""
@@ -133,10 +161,12 @@ func loadColumnAccess(db *sql.DB, userID, columnID string) string {
 		return cached
 	}
 	var access string
-	err := db.QueryRow(
-		"SELECT access FROM column_permissions WHERE user_id = ? AND column_id = ?",
-		userID, columnID,
-	).Scan(&access)
+	err := db.QueryRow(`
+		SELECT access FROM column_permissions
+		WHERE user_id = ? AND column_id = ?
+		  AND revoked_at IS NULL
+		  AND (expires_at IS NULL OR expires_at > ?)
+	`, userID, columnID, time.Now()).Scan(&access)
 	if err != nil {
 		access = ""
 	}

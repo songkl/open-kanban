@@ -65,11 +65,11 @@ func GetMyBoardPermissions(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"boardId":                      boardID,
-			"effectiveAccess":              effectiveAccess,
-			"isOwner":                      isOwner,
-			"canManageBoardPermissions":    canManageBoardPermissions(db, user, boardID),
-			"canManageColumnPermissions":   isAdmin(user),
+			"boardId":                    boardID,
+			"effectiveAccess":            effectiveAccess,
+			"isOwner":                    isOwner,
+			"canManageBoardPermissions":  canManageBoardPermissions(db, user, boardID),
+			"canManageColumnPermissions": canManageBoardPermissions(db, user, boardID),
 		})
 	}
 }

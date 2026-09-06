@@ -69,6 +69,11 @@ func setupBoardOwnerDB(t *testing.T) *sql.DB {
 		board_id TEXT NOT NULL,
 		owner_agent_id TEXT,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
+		notes TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -93,6 +98,10 @@ func setupBoardOwnerDB(t *testing.T) *sql.DB {
 		user_id TEXT NOT NULL,
 		column_id TEXT NOT NULL,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -481,14 +490,22 @@ func TestDeletePermission_BoardOwnerCanRevoke(t *testing.T) {
 		t.Fatalf("expected owner to revoke permission (200), got %d: %s", w.Code, w.Body.String())
 	}
 
-	var count int
+	// Soft-delete contract (s-1037): the row stays in
+	// board_permissions but revoked_at + revoked_by_user_id are
+	// stamped so loadBoardAccess's `revoked_at IS NULL` filter
+	// treats the grant as inactive. Verifying both columns keeps
+	// the audit trail readable end-to-end.
+	var revokedAt, revokedBy sql.NullString
 	if err := db.QueryRow(
-		`SELECT COUNT(*) FROM board_permissions WHERE id = 'bp-member2-board1'`,
-	).Scan(&count); err != nil {
-		t.Fatalf("failed to count rows: %v", err)
+		`SELECT revoked_at, revoked_by_user_id FROM board_permissions WHERE id = 'bp-member2-board1'`,
+	).Scan(&revokedAt, &revokedBy); err != nil {
+		t.Fatalf("failed to read revoked columns: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected bp-member2-board1 to be deleted, found %d rows", count)
+	if !revokedAt.Valid || revokedAt.String == "" {
+		t.Errorf("expected revoked_at stamped after revoke, got %v", revokedAt)
+	}
+	if !revokedBy.Valid || revokedBy.String != "member1" {
+		t.Errorf("expected revoked_by_user_id=member1 (the actor), got %v", revokedBy)
 	}
 }
 
@@ -624,6 +641,205 @@ func TestCreateBoard_AssignsOwner(t *testing.T) {
 
 	if _, err := db.Exec(`DELETE FROM boards WHERE id = ?`, resp.ID); err != nil {
 		t.Fatalf("cleanup: failed to delete test board: %v", err)
+	}
+}
+
+func TestColumnPermissionManagement_BoardOwner(t *testing.T) {
+	type testCase struct {
+		name         string
+		method       string
+		token        string
+		targetUser   string
+		columnID     string
+		permID       string
+		seedRow      bool
+		wantStatus   int
+		wantCount    int
+		wantRevoked  bool // post-condition: row must (or must not) carry revoked_at
+	}
+
+	cases := []testCase{
+		{
+			name:       "member owner can set column permission",
+			method:     "POST",
+			token:      "member1-token",
+			targetUser: "member2",
+			columnID:   "member-column",
+			wantStatus: http.StatusOK,
+			wantCount:  1,
+		},
+		{
+			name:        "member owner can delete column permission",
+			method:      "DELETE",
+			token:       "member1-token",
+			targetUser:  "member2",
+			columnID:    "member-column",
+			permID:      "cp-member",
+			seedRow:     true,
+			wantStatus:  http.StatusOK,
+			wantCount:   1, // soft-delete keeps the row (s-1037 audit trail)
+			wantRevoked: true,
+		},
+		{
+			name:       "non-owner non-admin cannot set column permission",
+			method:     "POST",
+			token:      "member2-token",
+			targetUser: "member1",
+			columnID:   "member-column",
+			wantStatus: http.StatusForbidden,
+			wantCount:  0,
+		},
+		{
+			name:        "non-owner non-admin cannot delete column permission",
+			method:      "DELETE",
+			token:       "member2-token",
+			targetUser:  "member1",
+			columnID:    "member-column",
+			permID:      "cp-member",
+			seedRow:     true,
+			wantStatus:  http.StatusForbidden,
+			wantCount:   1,
+			wantRevoked: false,
+		},
+		{
+			name:        "board owner cannot set own column permission",
+			method:      "POST",
+			token:       "member1-token",
+			targetUser:  "member1",
+			columnID:    "owner-column",
+			permID:      "cp-owner",
+			seedRow:     true,
+			wantStatus:  http.StatusForbidden,
+			wantCount:   1,
+			wantRevoked: false,
+		},
+		{
+			name:        "board owner cannot delete own column permission",
+			method:      "DELETE",
+			token:       "member1-token",
+			targetUser:  "member1",
+			columnID:    "owner-column",
+			permID:      "cp-owner",
+			seedRow:     true,
+			wantStatus:  http.StatusForbidden,
+			wantCount:   1,
+			wantRevoked: false,
+		},
+		{
+			name:        "global admin cannot delete board owner column permission",
+			method:      "DELETE",
+			token:       "admin-token",
+			targetUser:  "member1",
+			columnID:    "owner-column",
+			permID:      "cp-owner",
+			seedRow:     true,
+			wantStatus:  http.StatusForbidden,
+			wantCount:   1,
+			wantRevoked: false,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ResetTokenCacheForTest()
+			ResetPermissionCacheForTest()
+
+			db := setupBoardOwnerDB(t)
+			defer db.Close()
+
+			for _, columnID := range []string{"owner-column", "member-column"} {
+				if _, err := db.Exec(
+					`INSERT INTO columns (id, name, board_id) VALUES (?, ?, 'board1')`,
+					columnID, columnID,
+				); err != nil {
+					t.Fatalf("failed to seed column %s: %v", columnID, err)
+				}
+			}
+
+			if _, err := db.Exec(
+				`UPDATE board_permissions SET owner_agent_id = NULL WHERE user_id = 'admin1' AND board_id = 'board1'`,
+			); err != nil {
+				t.Fatalf("failed to clear prior owner: %v", err)
+			}
+			if _, err := db.Exec(
+				`UPDATE board_permissions SET owner_agent_id = 'member1' WHERE user_id = 'member1' AND board_id = 'board1'`,
+			); err != nil {
+				t.Fatalf("failed to promote member1 to owner: %v", err)
+			}
+
+			if tc.seedRow {
+				if _, err := db.Exec(
+					`INSERT INTO column_permissions (id, user_id, column_id, access) VALUES (?, ?, ?, 'WRITE')`,
+					tc.permID, tc.targetUser, tc.columnID,
+				); err != nil {
+					t.Fatalf("failed to seed column permission: %v", err)
+				}
+			}
+
+			router := gin.New()
+			router.Use(RequireAuth(db))
+			router.POST("/api/permissions/columns", SetColumnPermission(db))
+			router.DELETE("/api/permissions/columns", DeleteColumnPermission(db))
+
+			var req *http.Request
+			if tc.method == "POST" {
+				body := map[string]interface{}{
+					"columnId": tc.columnID,
+					"userId":   tc.targetUser,
+					"access":   "WRITE",
+				}
+				jsonBody, err := json.Marshal(body)
+				if err != nil {
+					t.Fatalf("failed to marshal request: %v", err)
+				}
+				req, _ = http.NewRequest("POST", "/api/permissions/columns", bytes.NewBuffer(jsonBody))
+				req.Header.Set("Content-Type", "application/json")
+			} else {
+				req, _ = http.NewRequest("DELETE", "/api/permissions/columns?id="+tc.permID, nil)
+			}
+			req.AddCookie(&http.Cookie{Name: "kanban-token", Value: tc.token})
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected status %d, got %d: %s", tc.wantStatus, w.Code, w.Body.String())
+			}
+
+			var count int
+			if err := db.QueryRow(
+				`SELECT COUNT(*) FROM column_permissions WHERE user_id = ? AND column_id = ?`,
+				tc.targetUser, tc.columnID,
+			).Scan(&count); err != nil {
+				t.Fatalf("failed to count column permission: %v", err)
+			}
+			if count != tc.wantCount {
+				t.Errorf("expected %d column permission rows, got %d", tc.wantCount, count)
+			}
+
+			// Soft-delete semantics: the row count alone no longer
+			// tells you whether the DELETE actually revoked the
+			// permission. Verify revoked_at IS NOT NULL on success
+			// paths and IS NULL on failure paths so the test
+			// catches a regression that quietly leaves the row
+			// active after a successful 200 response.
+			if tc.method == "DELETE" && tc.seedRow {
+				var revokedAt sql.NullString
+				if err := db.QueryRow(
+					`SELECT revoked_at FROM column_permissions WHERE id = ?`,
+					tc.permID,
+				).Scan(&revokedAt); err != nil {
+					t.Fatalf("failed to read revoked_at: %v", err)
+				}
+				if tc.wantRevoked && (!revokedAt.Valid || revokedAt.String == "") {
+					t.Errorf("expected revoked_at stamped on successful DELETE, got %v", revokedAt)
+				}
+				if !tc.wantRevoked && revokedAt.Valid && revokedAt.String != "" {
+					t.Errorf("expected revoked_at NOT stamped on failed DELETE, got %v", revokedAt)
+				}
+			}
+		})
 	}
 }
 

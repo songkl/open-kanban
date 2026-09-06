@@ -41,6 +41,7 @@ if [ -z "$(ls -A cmd/server/web 2>/dev/null)" ]; then
 EOF
 fi
 
+go env -w CGO_ENABLED=1
 go build -ldflags="-s -w" -o kanban-server ./cmd/server/main.go
 
 echo "Backend built: $PROJECT_DIR/backend/kanban-server"

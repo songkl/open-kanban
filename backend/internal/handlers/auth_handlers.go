@@ -556,21 +556,21 @@ func Login(db *sql.DB) gin.HandlerFunc {
 				return
 			}
 
-			if isFirstUser {
-				rows, err := db.Query("SELECT id FROM boards WHERE deleted = false")
-				if err == nil {
-					defer rows.Close()
-					for rows.Next() {
-						var boardID string
-						if err := rows.Scan(&boardID); err == nil {
-							permID := generateID()
-							db.Exec(
-								"INSERT INTO board_permissions (id, user_id, board_id, access) VALUES (?, ?, ?, ?)",
-								permID, userID, boardID, "ADMIN",
-							)
-						}
+		if isFirstUser {
+			rows, err := db.Query("SELECT id FROM boards WHERE deleted = false")
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var boardID string
+					if err := rows.Scan(&boardID); err == nil {
+						permID := generateID()
+						db.Exec(
+							"INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, '')",
+							permID, userID, boardID, "ADMIN", userID,
+						)
 					}
 				}
+			}
 			} else {
 				// Auto-registered (non-first) HUMAN users get
 				// READ on every public board so they land on
