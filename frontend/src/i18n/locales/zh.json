@@ -662,6 +662,7 @@
   "setup": {
     "welcome": "设置管理员账户以开始使用",
     "advancedSettings": "高级设置",
+    "dbSettings": "数据库",
     "dbType": "数据库类型",
     "dbTypeFixed": "数据库类型（当前构建仅支持 {{type}}）",
     "dbPath": "数据库文件路径",

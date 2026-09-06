@@ -662,6 +662,7 @@
   "setup": {
     "welcome": "Set up your admin account to get started",
     "advancedSettings": "Advanced Settings",
+    "dbSettings": "Database",
     "dbType": "Database Type",
     "dbTypeFixed": "Database Type (locked to {{type}} by this build)",
     "dbPath": "Database File Path",

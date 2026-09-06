@@ -253,7 +253,7 @@ export function SetupPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-900 px-4 py-8">
-      <div className="w-full max-w-lg rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-lg">
+      <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-800 p-8 shadow-lg">
         {restarting ? (
           <div className="py-12 text-center" data-testid="restart-status">
             <svg
@@ -306,197 +306,234 @@ export function SetupPage() {
               <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{t('setup.welcome')}</p>
             </div>
 
-            <form onSubmit={handleSetup} className="space-y-5">
-              <div>
-                <label
-                  htmlFor="setup-username"
-                  className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  {t('login.username')}
-                </label>
-                <input
-                  id="setup-username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder={t('login.enterUsername')}
-                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                  maxLength={50}
-                />
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('login.firstUserAdmin')}</p>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="setup-password"
-                  className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  {t('login.password')}
-                </label>
-                <input
-                  id="setup-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t('login.enterPassword')}
-                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                />
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('login.passwordHint')}</p>
+            <form onSubmit={handleSetup} className="space-y-6">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="setup-username"
+                      className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
+                      {t('login.username')}
+                    </label>
+                    <input
+                      id="setup-username"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder={t('login.enterUsername')}
+                      className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                      maxLength={50}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="setup-password"
+                      className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
+                      {t('login.password')}
+                    </label>
+                    <input
+                      id="setup-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={t('login.enterPassword')}
+                      className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>{t('login.firstUserAdmin')}</span>
+                  <span>{t('login.passwordHint')}</span>
+                </div>
               </div>
 
               {supportedDbTypes.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex w-full items-center justify-between rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-700/50"
-                >
-                  <span>{t('setup.advancedSettings')}</span>
-                  <svg
-                    className={`h-5 w-5 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+                <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="flex w-full items-center justify-between text-sm font-medium text-zinc-600 dark:text-zinc-400 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+                    <span className="flex items-center gap-2">
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                      {t('setup.advancedSettings')}
+                    </span>
+                    <svg
+                      className={`h-5 w-5 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
               )}
 
               {(supportedDbTypes.length === 1 || showAdvanced) && (
-                <div className="space-y-5 rounded-md border border-zinc-200 dark:border-zinc-700 p-4">
-                  <div>
-                    <label
-                      htmlFor="setup-db-type"
-                      className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                    >
-                      {supportedDbTypes.length === 1
-                        ? t('setup.dbTypeFixed', { type: supportedDbTypes[0].toUpperCase() })
-                        : t('setup.dbType')}
-                    </label>
-                    <select
-                      id="setup-db-type"
-                      value={advancedConfig.dbType}
-                      onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbType: e.target.value as DbType })}
-                      disabled={supportedDbTypes.length === 1}
-                      className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {ALL_DB_TYPES.filter((tt) => supportedDbTypes.includes(tt)).map((tt) => (
-                        <option key={tt} value={tt}>
-                          {tt === 'sqlite' ? 'SQLite' : 'MySQL'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {advancedConfig.dbType === 'sqlite' ? (
+                <div className="space-y-5 rounded-lg border border-zinc-200 dark:border-zinc-700 p-5">
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                      {t('setup.dbSettings')}
+                    </h3>
                     <div>
                       <label
-                        htmlFor="setup-db-path"
+                        htmlFor="setup-db-type"
                         className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                       >
-                        {t('setup.dbPath')}
+                        {supportedDbTypes.length === 1
+                          ? t('setup.dbTypeFixed', { type: supportedDbTypes[0].toUpperCase() })
+                          : t('setup.dbType')}
                       </label>
-                      <input
-                        id="setup-db-path"
-                        type="text"
-                        value={advancedConfig.dbPath}
-                        onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPath: e.target.value })}
-                        placeholder="kanban.db"
-                        className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                      />
-                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('setup.dbPathHint')}</p>
+                      <select
+                        id="setup-db-type"
+                        value={advancedConfig.dbType}
+                        onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbType: e.target.value as DbType })}
+                        disabled={supportedDbTypes.length === 1}
+                        className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {ALL_DB_TYPES.filter((tt) => supportedDbTypes.includes(tt)).map((tt) => (
+                          <option key={tt} value={tt}>
+                            {tt === 'sqlite' ? 'SQLite' : 'MySQL'}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                        <div className="sm:col-span-2">
-                          <label
-                            htmlFor="setup-db-host"
-                            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                          >
-                            {t('setup.dbHost')}
-                          </label>
-                          <input
-                            id="setup-db-host"
-                            type="text"
-                            value={advancedConfig.dbHost}
-                            onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbHost: e.target.value })}
-                            placeholder="localhost"
-                            className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                          />
-                        </div>
-                        <div>
-                          <label
-                            htmlFor="setup-db-port"
-                            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                          >
-                            {t('setup.dbPort')}
-                          </label>
-                          <input
-                            id="setup-db-port"
-                            type="text"
-                            value={advancedConfig.dbPort}
-                            onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPort: e.target.value })}
-                            placeholder="3306"
-                            className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                          />
-                        </div>
-                      </div>
+
+                    {advancedConfig.dbType === 'sqlite' ? (
                       <div>
                         <label
-                          htmlFor="setup-db-name"
+                          htmlFor="setup-db-path"
                           className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                         >
-                          {t('setup.dbName')}
+                          {t('setup.dbPath')}
                         </label>
                         <input
-                          id="setup-db-name"
+                          id="setup-db-path"
                           type="text"
-                          value={advancedConfig.dbName}
-                          onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbName: e.target.value })}
-                          placeholder="kanban"
+                          value={advancedConfig.dbPath}
+                          onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPath: e.target.value })}
+                          placeholder="kanban.db"
                           className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                         />
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('setup.dbPathHint')}</p>
                       </div>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                          <div className="sm:col-span-2">
+                            <label
+                              htmlFor="setup-db-host"
+                              className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {t('setup.dbHost')}
+                            </label>
+                            <input
+                              id="setup-db-host"
+                              type="text"
+                              value={advancedConfig.dbHost}
+                              onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbHost: e.target.value })}
+                              placeholder="localhost"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="setup-db-port"
+                              className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {t('setup.dbPort')}
+                            </label>
+                            <input
+                              id="setup-db-port"
+                              type="text"
+                              value={advancedConfig.dbPort}
+                              onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPort: e.target.value })}
+                              placeholder="3306"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                            />
+                          </div>
+                        </div>
                         <div>
                           <label
-                            htmlFor="setup-db-user"
+                            htmlFor="setup-db-name"
                             className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                           >
-                            {t('setup.dbUser')}
+                            {t('setup.dbName')}
                           </label>
                           <input
-                            id="setup-db-user"
+                            id="setup-db-name"
                             type="text"
-                            value={advancedConfig.dbUser}
-                            onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbUser: e.target.value })}
-                            placeholder="root"
+                            value={advancedConfig.dbName}
+                            onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbName: e.target.value })}
+                            placeholder="kanban"
                             className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
                           />
                         </div>
-                        <div>
-                          <label
-                            htmlFor="setup-db-password"
-                            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                          >
-                            {t('setup.dbPassword')}
-                          </label>
-                          <input
-                            id="setup-db-password"
-                            type="password"
-                            value={advancedConfig.dbPassword}
-                            onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPassword: e.target.value })}
-                            placeholder="********"
-                            className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-                          />
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor="setup-db-user"
+                              className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {t('setup.dbUser')}
+                            </label>
+                            <input
+                              id="setup-db-user"
+                              type="text"
+                              value={advancedConfig.dbUser}
+                              onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbUser: e.target.value })}
+                              placeholder="root"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="setup-db-password"
+                              className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {t('setup.dbPassword')}
+                            </label>
+                            <input
+                              id="setup-db-password"
+                              type="password"
+                              value={advancedConfig.dbPassword}
+                              onChange={(e) => setAdvancedConfig({ ...advancedConfig, dbPassword: e.target.value })}
+                              placeholder="********"
+                              className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2.5 focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </section>
 
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('setup.serverSettings')}</h3>
+                  <div className="border-t border-zinc-200 dark:border-zinc-700"></div>
+
+                  <section className="space-y-4">
+                    <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                      {t('setup.serverSettings')}
+                    </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
                         <label
@@ -532,11 +569,10 @@ export function SetupPage() {
                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('setup.allowedOriginsHint')}</p>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="rounded-md bg-blue-50 dark:bg-blue-900/30 p-3 text-xs text-blue-700 dark:text-blue-300">
-                    {t('setup.configNote')}
-                  </div>
+                    <div className="rounded-md bg-blue-50 dark:bg-blue-900/30 p-3 text-xs text-blue-700 dark:text-blue-300">
+                      {t('setup.configNote')}
+                    </div>
+                  </section>
                 </div>
               )}
 
