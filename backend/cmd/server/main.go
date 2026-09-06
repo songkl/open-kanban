@@ -342,6 +342,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.POST("/permissions/columns", handlers.SetColumnPermission(db))
 		authProtected.DELETE("/permissions/columns", handlers.DeleteColumnPermission(db))
 		authProtected.PUT("/config", handlers.UpdateAppConfig(db))
+		authProtected.GET("/me/board-permissions", handlers.GetMyBoardPermissions(db))
 		// OAuth 2.1 admin endpoints
 		authProtected.GET("/oauth/clients", oauth.ListAdminClientsHandler(db))
 		authProtected.DELETE("/oauth/clients", oauth.DeleteAdminClientHandler(db))
