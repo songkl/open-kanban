@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { Column } from './Column';
 import type { Column as ColumnType } from '@/types/kanban';
@@ -78,5 +78,51 @@ describe('Column', () => {
   it('renders column with task card', () => {
     render(<BrowserRouter><Column {...defaultProps} /></BrowserRouter>);
     expect(screen.getByText('Task 1')).toBeInTheDocument();
+  });
+
+  describe('create-task permission gating (s-1053)', () => {
+    const emptyColumn = { ...mockColumn, tasks: [] };
+    const onOpenAddTask = vi.fn();
+
+    it('renders the click-to-add hint and triggers onOpenAddTask when canCreateTask is true', () => {
+      render(
+        <BrowserRouter>
+          <Column {...defaultProps} column={emptyColumn} onOpenAddTask={onOpenAddTask} canCreateTask={true} />
+        </BrowserRouter>
+      );
+      expect(screen.getByText('column.clickToAddTask')).toBeInTheDocument();
+      fireEvent.click(screen.getByText('column.noTasks'));
+      expect(onOpenAddTask).toHaveBeenCalledWith('col-1');
+    });
+
+    it('disables the empty-state area when canCreateTask is false', () => {
+      render(
+        <BrowserRouter>
+          <Column {...defaultProps} column={emptyColumn} onOpenAddTask={onOpenAddTask} canCreateTask={false} />
+        </BrowserRouter>
+      );
+      expect(screen.queryByText('column.clickToAddTask')).not.toBeInTheDocument();
+      expect(screen.getByText('column.noAddPermission')).toBeInTheDocument();
+    });
+
+    it('does not trigger onOpenAddTask when the empty-state area is clicked without permission', () => {
+      render(
+        <BrowserRouter>
+          <Column {...defaultProps} column={emptyColumn} onOpenAddTask={onOpenAddTask} canCreateTask={false} />
+        </BrowserRouter>
+      );
+      fireEvent.click(screen.getByText('column.noTasks'));
+      expect(onOpenAddTask).not.toHaveBeenCalled();
+    });
+
+    it('exposes a tooltip describing the missing permission', () => {
+      render(
+        <BrowserRouter>
+          <Column {...defaultProps} column={emptyColumn} onOpenAddTask={onOpenAddTask} canCreateTask={false} />
+        </BrowserRouter>
+      );
+      const emptyState = screen.getByText('column.noTasks').parentElement;
+      expect(emptyState).toHaveAttribute('title', 'column.noAddPermission');
+    });
   });
 });

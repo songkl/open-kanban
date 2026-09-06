@@ -23,6 +23,7 @@ interface BoardToolbarProps {
   onToggleFilterPanel: () => void;
   onCloseFilterPanel: () => void;
   onAddTask: () => void;
+  canCreateTask?: boolean;
 }
 
 export function BoardToolbar({
@@ -44,6 +45,7 @@ export function BoardToolbar({
   onToggleFilterPanel,
   onCloseFilterPanel,
   onAddTask,
+  canCreateTask = true,
 }: BoardToolbarProps) {
   const { t } = useTranslation();
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -125,9 +127,16 @@ export function BoardToolbar({
 
       <button
         onClick={() => {
+          if (!canCreateTask) return;
           onAddTask();
         }}
-        className="flex items-center gap-1.5 rounded-md bg-blue-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-600"
+        disabled={!canCreateTask}
+        title={canCreateTask ? undefined : t('task.createNoPermission')}
+        className={`flex items-center gap-1.5 rounded-md px-4 py-1.5 text-sm font-medium text-white ${
+          canCreateTask
+            ? 'bg-blue-500 hover:bg-blue-600'
+            : 'bg-zinc-300 dark:bg-zinc-600 cursor-not-allowed'
+        }`}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

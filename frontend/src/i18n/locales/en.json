@@ -130,6 +130,7 @@
     "publishHint": "Publish to board (leave unchecked to save as draft)",
     "add": "Add",
     "create": "Create",
+    "createNoPermission": "You do not have permission to create tasks on this board",
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
@@ -311,6 +312,7 @@
     "clickToCopyStatus": "Click to copy status",
     "copied": "Copied!",
     "viewColumnDetail": "View column detail",
+    "noAddPermission": "You do not have permission to add tasks to this column",
     "permission": {
       "READ": "Read",
       "WRITE": "Write",
@@ -376,7 +378,9 @@
     "templateSaved": "Template saved",
     "templateDeleted": "Template deleted",
     "importSuccess": "Import successful",
-    "importFailed": "Import failed"
+    "importFailed": "Import failed",
+    "createFailed": "Failed to create task",
+    "createFailedNoPermission": "You do not have permission to create tasks in this column"
   },
   "confirm": {
     "deleteBoardTitle": "Delete Board",

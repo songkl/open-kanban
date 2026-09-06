@@ -51,6 +51,7 @@ interface ColumnBoardProps {
   onSetEditTaskId: (taskId: string | null) => void;
   getFilteredColumns: () => ColumnType[];
   updateTaskPosition: (activeId: string, overId: string, activeColumn: ColumnType, overColumn: ColumnType, activeTask: Task | null) => Promise<void>;
+  canCreateTaskInColumn?: (columnId: string) => boolean;
 }
 
 export function ColumnBoard({
@@ -84,6 +85,7 @@ export function ColumnBoard({
   onSetEditTaskId,
   getFilteredColumns,
   updateTaskPosition,
+  canCreateTaskInColumn,
 }: ColumnBoardProps) {
   const { t } = useTranslation();
   const [activeMobileColumn, setActiveMobileColumn] = useState(0);
@@ -299,6 +301,7 @@ export function ColumnBoard({
                     currentBoardId={currentBoard?.id}
                     boards={boards}
                     isMobileView={true}
+                    canCreateTask={canCreateTaskInColumn ? canCreateTaskInColumn(filteredColumns.filter(Boolean)[activeMobileColumn].id) : true}
                     onAddTask={(colId, title, desc, pub) => onAddTask(colId, title, desc, pub)}
                     onTaskClick={onSetSelectedTask}
                     onTaskCommentsClick={onSetSelectedTask}
@@ -331,6 +334,7 @@ export function ColumnBoard({
                       currentBoardId={currentBoard?.id}
                       boards={boards}
                       isMobileView={true}
+                      canCreateTask={canCreateTaskInColumn ? canCreateTaskInColumn(column.id) : true}
                       onAddTask={(colId, title, desc, pub) => onAddTask(colId, title, desc, pub)}
                       onTaskClick={onSetSelectedTask}
                       onTaskCommentsClick={onSetSelectedTask}
@@ -370,6 +374,7 @@ export function ColumnBoard({
                   column={column}
                   currentBoardId={currentBoard?.id}
                   boards={boards}
+                  canCreateTask={canCreateTaskInColumn ? canCreateTaskInColumn(column.id) : true}
                   onAddTask={(colId, title, desc, pub) => onAddTask(colId, title, desc, pub)}
                   onTaskClick={onSetSelectedTask}
                   onTaskCommentsClick={onSetSelectedTask}
@@ -405,6 +410,7 @@ export function ColumnBoard({
           defaultColumnId={defaultColumnIdForNewTask}
           currentBoardId={currentBoard?.id}
           boards={boards}
+          canCreateTaskInColumn={canCreateTaskInColumn}
           onClose={() => {
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);

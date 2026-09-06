@@ -121,4 +121,70 @@ describe('AddTaskModal', () => {
 
     expect(document.activeElement).toBe(textarea);
   });
+
+  describe('create-task permission gating (s-1053)', () => {
+    const canCreateTaskInColumn = (columnId: string) => columnId !== 'col-2';
+
+    it('enables submit when the selected column is allowed', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const input = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(input, 'New task');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      expect(submitButton).not.toBeDisabled();
+    });
+
+    it('disables submit when the selected column is forbidden by the permission gate', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          defaultColumnId="col-2"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const input = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(input, 'New task');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      expect(submitButton).toBeDisabled();
+      expect(submitButton).toHaveAttribute('title', 'column.noAddPermission');
+    });
+
+    it('shows a permission warning when the selected column is forbidden', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          defaultColumnId="col-2"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(screen.getByText('column.noAddPermission')).toBeInTheDocument();
+    });
+
+    it('does not call onSubmit when the submit button is disabled by the permission gate', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          defaultColumnId="col-2"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const input = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(input, 'New task');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      await userEvent.click(submitButton);
+      expect(defaultProps.onSubmit).not.toHaveBeenCalled();
+    });
+  });
 });

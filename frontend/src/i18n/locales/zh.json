@@ -130,6 +130,7 @@
     "publishHint": "发布到看板（不勾选则保存为草稿）",
     "add": "添加",
     "create": "创建",
+    "createNoPermission": "您没有在该看板创建任务的权限",
     "cancel": "取消",
     "save": "保存",
     "delete": "删除",
@@ -311,6 +312,7 @@
     "clickToCopyStatus": "点击复制状态",
     "copied": "已复制!",
     "viewColumnDetail": "查看列详情",
+    "noAddPermission": "您没有在该列添加任务的权限",
     "permission": {
       "READ": "读取",
       "WRITE": "写入",
@@ -376,7 +378,9 @@
     "boardCopied": "看板已复制",
     "copyFailed": "复制失败",
     "templateSaved": "模板已保存",
-    "templateDeleted": "模板已删除"
+    "templateDeleted": "模板已删除",
+    "createFailed": "创建任务失败",
+    "createFailedNoPermission": "您没有在该列创建任务的权限"
   },
   "confirm": {
     "deleteBoardTitle": "删除看板",

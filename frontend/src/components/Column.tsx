@@ -33,6 +33,7 @@ interface ColumnProps {
   onLoadMore?: (columnId: string) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  canCreateTask?: boolean;
 }
 
 interface Board {
@@ -40,7 +41,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
+export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true }: ColumnProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { setNodeRef, isOver } = useDroppable({
@@ -90,6 +91,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
   }, [isEditing]);
 
   const handleOpenAddTask = () => {
+    if (!canCreateTask) return;
     if (onOpenAddTask && column.id) {
       onOpenAddTask(column.id);
     }
@@ -254,7 +256,12 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
             {tasks.length === 0 ? (
               <div
                 onClick={handleOpenAddTask}
-                className="py-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600/50 dark:hover:bg-zinc-700/30 rounded-lg transition-colors"
+                title={canCreateTask ? undefined : t('column.noAddPermission')}
+                className={`py-12 flex flex-col items-center justify-center text-center rounded-lg transition-colors ${
+                  canCreateTask
+                    ? 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600/50 dark:hover:bg-zinc-700/30'
+                    : 'cursor-not-allowed opacity-60'
+                }`}
               >
                 <div className="mb-3 rounded-full bg-zinc-100 dark:bg-zinc-700 p-4">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
@@ -264,7 +271,9 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   </svg>
                 </div>
                 <p className="text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('column.noTasks')}</p>
-                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{t('column.clickToAddTask')}</p>
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                  {canCreateTask ? t('column.clickToAddTask') : t('column.noAddPermission')}
+                </p>
               </div>
             ) : (
               tasks.map((task) => (

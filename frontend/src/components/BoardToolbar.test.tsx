@@ -78,4 +78,32 @@ describe('BoardToolbar', () => {
     const button = container.querySelector('button');
     expect(button?.className).toContain('bg-blue-100');
   });
+
+  describe('create-task permission gating (s-1053)', () => {
+    it('enables the create button when canCreateTask is true', () => {
+      render(<BoardToolbar {...defaultProps} canCreateTask={true} />);
+      const createButton = screen.getByRole('button', { name: /task\.create/i });
+      expect(createButton).not.toBeDisabled();
+    });
+
+    it('disables the create button when canCreateTask is false', () => {
+      render(<BoardToolbar {...defaultProps} canCreateTask={false} />);
+      const createButton = screen.getByRole('button', { name: /task\.create/i });
+      expect(createButton).toBeDisabled();
+      expect(createButton).toHaveAttribute('title', 'task.createNoPermission');
+    });
+
+    it('does not call onAddTask when disabled button is clicked', () => {
+      render(<BoardToolbar {...defaultProps} canCreateTask={false} />);
+      const createButton = screen.getByRole('button', { name: /task\.create/i });
+      fireEvent.click(createButton);
+      expect(defaultProps.onAddTask).not.toHaveBeenCalled();
+    });
+
+    it('defaults canCreateTask to enabled when prop is omitted', () => {
+      render(<BoardToolbar {...defaultProps} />);
+      const createButton = screen.getByRole('button', { name: /task\.create/i });
+      expect(createButton).not.toBeDisabled();
+    });
+  });
 });

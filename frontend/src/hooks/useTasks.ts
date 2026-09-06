@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { tasksApi, commentsApi } from '../services/api';
+import { tasksApi, commentsApi, ApiError } from '../services/api';
 import { showErrorToast } from '../components/ErrorToast';
 import type { Task, Column as ColumnType, Board } from '../types/kanban';
 
@@ -200,15 +200,20 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       }
     } catch (error) {
       console.error('Failed to create task:', error);
-      saveFailedTaskToLocalStorage({
-        title: taskTitle.trim(),
-        description: description || '',
-        columnId: targetColumnId,
-        position: 9999,
-        priority: priority || 'medium',
-        published: published ?? true,
-        createdAt: new Date().toISOString(),
-      });
+      if (error instanceof ApiError && error.status === 403) {
+        showErrorToast(t('toast.createFailedNoPermission'), 'error');
+      } else {
+        showErrorToast(t('toast.createFailed'), 'error');
+        saveFailedTaskToLocalStorage({
+          title: taskTitle.trim(),
+          description: description || '',
+          columnId: targetColumnId,
+          position: 9999,
+          priority: priority || 'medium',
+          published: published ?? true,
+          createdAt: new Date().toISOString(),
+        });
+      }
     }
   }, [currentBoard?.id, t, onColumnsChange, notifyLastLocalUpdate]);
 

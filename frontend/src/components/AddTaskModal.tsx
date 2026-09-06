@@ -17,6 +17,7 @@ interface AddTaskModalProps {
   boards?: Board[];
   onClose: () => void;
   onSubmit: (title: string, description: string, published: boolean, columnId?: string, boardId?: string, priority?: string) => void;
+  canCreateTaskInColumn?: (columnId: string) => boolean;
 }
 
 export function AddTaskModal({
@@ -26,6 +27,7 @@ export function AddTaskModal({
   boards = [],
   onClose,
   onSubmit,
+  canCreateTaskInColumn,
 }: AddTaskModalProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState('');
@@ -37,6 +39,9 @@ export function AddTaskModal({
   const [priority, setPriority] = useState('medium');
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descEditorRef = useRef<HTMLDivElement>(null);
+
+  const selectedColumnAllowed =
+    !canCreateTaskInColumn || !selectedColumnId || canCreateTaskInColumn(selectedColumnId);
 
   useEffect(() => {
     if (selectedBoardId && isOpen) {
@@ -191,6 +196,11 @@ export function AddTaskModal({
                 onChange={setSelectedColumnId}
                 className="w-full"
               />
+              {!selectedColumnAllowed && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  {t('column.noAddPermission')}
+                </p>
+              )}
             </div>
           )}
 
@@ -228,8 +238,9 @@ export function AddTaskModal({
             </button>
             <button
               type="submit"
-              disabled={!title.trim()}
-              className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
+              disabled={!title.trim() || !selectedColumnAllowed}
+              title={!selectedColumnAllowed ? t('column.noAddPermission') : undefined}
+              className="flex-1 rounded-md bg-blue-500 px-4 py-2.5 text-base font-medium text-white hover:bg-blue-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-600 disabled:cursor-not-allowed"
             >
               {t('task.add')}
             </button>

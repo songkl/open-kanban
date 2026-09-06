@@ -8,6 +8,7 @@ import { BatchOperationBar } from '../components/BatchOperationBar';
 import { WsWarning } from '../components/WsWarning';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BoardSelector } from '../components/BoardSelector';
+import { ErrorToastContainer } from '../components/ErrorToast';
 import { boardsApi, tasksApi } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
@@ -113,6 +114,8 @@ export function BoardPage() {
     hasActiveFilters,
     lastLocalUpdateRef,
     setColumns,
+    canCreateTaskInColumn,
+    canCreateTaskAnywhere,
   } = useBoardState({ boardIdFromUrl, taskIdFromUrl });
 
   const showToastMessage = useCallback((message: string) => {
@@ -492,6 +495,7 @@ export function BoardPage() {
             setDefaultColumnIdForNewTask(undefined);
             setShowAddTaskModal(true);
           }}
+          canCreateTask={canCreateTaskAnywhere}
         />
 
         <div className="flex items-center gap-3">
@@ -576,6 +580,7 @@ export function BoardPage() {
         onMoveToColumn={handleMoveToColumn}
         getFilteredColumns={getFilteredColumns}
         updateTaskPosition={updateTaskPosition}
+        canCreateTaskInColumn={canCreateTaskInColumn}
       />
 
       {selectedTasks.size > 0 && (
@@ -608,6 +613,8 @@ export function BoardPage() {
           onCancel={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
         />
       )}
+
+      <ErrorToastContainer />
     </div>
   );
 }
