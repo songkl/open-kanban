@@ -226,6 +226,28 @@ func canModifyTask(db *sql.DB, user *models.User, taskID string) (bool, error) {
 	return createdBy.Valid && createdBy.String == user.ID, nil
 }
 
+// CheckTaskModifyAccess combines the per-role modify rules so callers
+// don't have to inline role-branch ladders. ADMIN always passes;
+// MEMBER requires ownership via canModifyTask; other roles fall back
+// to column-level access. VIEWER is rejected up-front; the caller is
+// expected to have run requireNonViewer first.
+//
+// The returned bool is the access decision. The error is non-nil only
+// on DB failure (typically sql.ErrNoRows when the task is missing),
+// which the caller surfaces as a not-found error to the client.
+func CheckTaskModifyAccess(db *sql.DB, user *models.User, taskID, columnID, accessLevel string) (bool, error) {
+	if user == nil || user.Role == "VIEWER" {
+		return false, nil
+	}
+	if user.Role == "ADMIN" {
+		return true, nil
+	}
+	if user.Role == "MEMBER" {
+		return canModifyTask(db, user, taskID)
+	}
+	return checkColumnAccessWithBoardFallback(db, user.ID, columnID, accessLevel, user.Role), nil
+}
+
 // GetEffectiveBoardAccess returns the user's effective access on a
 // single board, reading through the cache when warm. Thin wrapper
 // over loadBoardAccess so handlers / API endpoints can expose

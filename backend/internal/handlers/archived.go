@@ -226,8 +226,7 @@ func BatchDeleteDrafts(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete drafts"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -269,8 +268,7 @@ func BatchPublishDrafts(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot publish drafts"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -317,8 +315,7 @@ func BatchArchiveDrafts(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot archive drafts"})
+		if requireNonViewer(c, user) {
 			return
 		}
 

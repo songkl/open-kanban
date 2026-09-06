@@ -143,6 +143,8 @@ func setupCommentsDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
+	db.SetMaxOpenConns(1)
+
 	_, err = db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar, type) VALUES ('u1', 'admin', 'admin', 'pass', 'ADMIN', 1, '', 'HUMAN')`)
 	if err != nil {
 		t.Fatalf("failed to insert test user admin: %v", err)
@@ -517,7 +519,7 @@ func TestCreateCommentBeyondFormerLimit(t *testing.T) {
 		},
 		{
 			name:       "multibyte unicode content is accepted",
-			content:    strings.Repeat("你好世界", 500),
+			content:    strings.Repeat("你好世界🌍", 500),
 			taskID:     "task1",
 			wantStatus: http.StatusOK,
 		},

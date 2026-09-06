@@ -99,21 +99,15 @@ func BatchUpdateTasks(db *sql.DB) gin.HandlerFunc {
 				continue
 			}
 
-			if user.Role == "MEMBER" {
-				allowed, err := canModifyTask(db, user, taskID)
-				if err != nil {
-					failed++
-					errors = append(errors, "task "+taskID+": not found")
-					continue
-				}
-				if !allowed {
-					failed++
-					errors = append(errors, "task "+taskID+": can only modify tasks you created")
-					continue
-				}
-			} else if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
+			allowed, err := CheckTaskModifyAccess(db, user, taskID, columnID, "WRITE")
+			if err != nil {
 				failed++
-				errors = append(errors, "task "+taskID+": no permission")
+				errors = append(errors, "task "+taskID+": not found")
+				continue
+			}
+			if !allowed {
+				failed++
+				errors = append(errors, "task "+taskID+": can only modify tasks you created")
 				continue
 			}
 
@@ -217,21 +211,15 @@ func BatchDeleteTasks(db *sql.DB) gin.HandlerFunc {
 				continue
 			}
 
-			if user.Role == "MEMBER" {
-				allowed, err := canModifyTask(db, user, taskID)
-				if err != nil {
-					failed++
-					errors = append(errors, "task "+taskID+": not found")
-					continue
-				}
-				if !allowed {
-					failed++
-					errors = append(errors, "task "+taskID+": can only delete tasks you created")
-					continue
-				}
-			} else if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
+			allowed, err := CheckTaskModifyAccess(db, user, taskID, columnID, "WRITE")
+			if err != nil {
 				failed++
-				errors = append(errors, "task "+taskID+": no permission")
+				errors = append(errors, "task "+taskID+": not found")
+				continue
+			}
+			if !allowed {
+				failed++
+				errors = append(errors, "task "+taskID+": can only delete tasks you created")
 				continue
 			}
 

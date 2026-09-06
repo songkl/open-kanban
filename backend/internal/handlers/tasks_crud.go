@@ -239,22 +239,17 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "MEMBER" {
-			allowed, err := canModifyTask(db, user, id)
-			if err != nil {
-				if err == sql.ErrNoRows {
-					c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
-					return
-				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to query task: %v", err)})
+		allowed, err := CheckTaskModifyAccess(db, user, id, columnID, "ADMIN")
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 				return
 			}
-			if !allowed {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Can only delete tasks you created"})
-				return
-			}
-		} else if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "ADMIN", user.Role) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to delete this task"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to query task: %v", err)})
+			return
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Can only delete tasks you created"})
 			return
 		}
 

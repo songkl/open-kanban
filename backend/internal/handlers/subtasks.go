@@ -90,8 +90,7 @@ func CreateSubtask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot create subtasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -152,8 +151,7 @@ func UpdateSubtask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot modify subtasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -247,8 +245,7 @@ func DeleteSubtask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete subtasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 

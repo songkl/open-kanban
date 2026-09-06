@@ -137,8 +137,7 @@ func CreateComment(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot add comments"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
