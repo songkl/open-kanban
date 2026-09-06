@@ -13,6 +13,7 @@ interface UseBoardReturn {
   boards: Board[];
   currentBoard: Board | null;
   currentUser: User | null;
+  hasAccess: boolean;
   loading: boolean;
   boardSwitching: boolean;
   loadError: string | null;
@@ -35,6 +36,12 @@ export function useBoard({ boardIdFromUrl }: UseBoardOptions = {}): UseBoardRetu
     if (!currentBoard || !boardIdFromUrl) return false;
     return boardIdFromUrl !== currentBoard.id;
   }, [currentBoard, boardIdFromUrl]);
+
+  const hasAccess = useMemo(() => {
+    if (!currentBoard) return false;
+    if (currentBoard.isOwner === true) return true;
+    return currentBoard.effectiveAccess !== undefined && currentBoard.effectiveAccess !== '';
+  }, [currentBoard]);
 
   const currentBoardRef = useRef<Board | null>(null);
 
@@ -63,7 +70,8 @@ export function useBoard({ boardIdFromUrl }: UseBoardOptions = {}): UseBoardRetu
     if (!boardIdFromUrl && boards.length > 0) {
       const lastBoardId = localStorage.getItem(LAST_BOARD_KEY);
       const lastBoard = lastBoardId ? boards.find((b: Board) => b.id === lastBoardId) : null;
-      const targetBoard = lastBoard || boards[0];
+      const accessibleBoards = boards.filter((b: Board) => b.effectiveAccess !== '' && b.effectiveAccess !== undefined);
+      const targetBoard = lastBoard || accessibleBoards[0] || boards[0];
       navigate(`/board/${targetBoard.id}`);
     }
   }, [boardIdFromUrl, boards, navigate]);
@@ -79,8 +87,10 @@ export function useBoard({ boardIdFromUrl }: UseBoardOptions = {}): UseBoardRetu
         });
       }
     } else {
-      console.warn(`Board ${boardIdFromUrl} not found, redirecting to ${boards[0].id}`);
-      navigate(`/board/${boards[0].id}`);
+      const accessibleBoards = boards.filter((b) => b.effectiveAccess !== '' && b.effectiveAccess !== undefined);
+      const fallback = accessibleBoards[0] || boards[0];
+      console.warn(`Board ${boardIdFromUrl} not found, redirecting to ${fallback.id}`);
+      navigate(`/board/${fallback.id}`);
     }
   }, [boardIdFromUrl, boards, navigate, currentBoard?.id]);
 
@@ -88,6 +98,7 @@ export function useBoard({ boardIdFromUrl }: UseBoardOptions = {}): UseBoardRetu
     boards,
     currentBoard,
     currentUser,
+    hasAccess,
     loading,
     boardSwitching,
     loadError,

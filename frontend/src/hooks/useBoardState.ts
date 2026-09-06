@@ -34,6 +34,7 @@ interface UseBoardStateOptions {
 interface UseBoardStateReturn {
   boards: Board[];
   currentBoard: Board | null;
+  hasAccess: boolean;
   columns: ColumnType[];
   activeTask: Task | null;
   selectedTask: Task | null;
@@ -96,6 +97,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     boards,
     currentBoard,
     currentUser,
+    hasAccess,
     boardSwitching: boardBoardSwitching,
     fetchBoards,
   } = useBoard({ boardIdFromUrl });
@@ -260,6 +262,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
   return {
     boards,
     currentBoard,
+    hasAccess,
     columns,
     activeTask,
     selectedTask,

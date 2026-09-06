@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { boardsApi, templatesApi } from '../services/api';
+import { boardsApi, templatesApi, authApi } from '../services/api';
 import { useSetupGuard } from '../hooks/useSetupGuard';
 import { ErrorToastContainer } from '../components/ErrorToast';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -12,7 +12,7 @@ import { ImportConflictConfirm } from '../components/ImportModal';
 import { TemplateNameModal } from '../components/TemplateNameModal';
 import { TemplateList } from '../components/TemplateList';
 
-import type { Board } from '../types/kanban';
+import type { Board, User } from '../types/kanban';
 
 interface Template {
   id: string;
@@ -35,6 +35,7 @@ export function BoardsPage() {
   const [showImportConflictConfirm, setShowImportConflictConfirm] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingImportData, setPendingImportData] = useState<{ data: unknown; boardId?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -73,6 +74,12 @@ export function BoardsPage() {
   useEffect(() => {
     fetchBoards();
     fetchTemplates();
+    authApi
+      .me()
+      .then((data) => {
+        if (data.user) setCurrentUser(data.user);
+      })
+      .catch(console.error);
   }, [fetchBoards, fetchTemplates]);
 
   const showToastMessage = (message: string) => {
@@ -211,6 +218,11 @@ export function BoardsPage() {
     setShowImportModal(true);
   };
 
+  const accessibleBoards = boards.filter(
+    (b) => b.effectiveAccess !== '' && b.effectiveAccess !== undefined,
+  );
+  const canCreateBoard = currentUser?.role !== 'VIEWER';
+
   const closeImportModal = () => {
     setShowImportModal(false);
     setShowImportConflictConfirm(false);
@@ -288,7 +300,7 @@ export function BoardsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('nav.boardManagement')}</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.count', { count: boards.length })}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.count', { count: accessibleBoards.length })}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -301,15 +313,17 @@ export function BoardsPage() {
               </svg>
               {t('nav.columnManagement')}
             </Link>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              {t('modal.newBoard')}
-            </button>
+            {canCreateBoard && (
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                {t('modal.newBoard')}
+              </button>
+            )}
           </div>
         </div>
 
@@ -324,14 +338,16 @@ export function BoardsPage() {
             </div>
             <p className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('app.error.loadFailed')}</p>
             <div className="flex flex-col gap-3 items-center">
-              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.noAccessHint')}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.loadFailedHint')}</p>
               <div className="flex gap-3">
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
-                >
-                  {t('board.createNew')}
-                </button>
+                {canCreateBoard && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+                  >
+                    {t('board.createNew')}
+                  </button>
+                )}
                 <button
                   onClick={() => window.location.href = '/settings?tab=permissions'}
                   className="rounded-xl bg-zinc-100 dark:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
@@ -350,27 +366,31 @@ export function BoardsPage() {
               </button>
             </div>
           </div>
-        ) : boards.length === 0 ? (
+        ) : accessibleBoards.length === 0 ? (
           <div className="rounded-2xl bg-white dark:bg-zinc-800 p-12 text-center shadow-sm border border-zinc-100 dark:border-zinc-700">
             <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-400">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               </svg>
             </div>
-            <p className="text-lg font-medium text-zinc-500 dark:text-zinc-500">{t('board.noBoards')}</p>
-            <button
-              onClick={openAddModal}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              {t('modal.newBoard')}
-            </button>
+            <p className="text-lg font-medium text-zinc-500 dark:text-zinc-500">
+              {canCreateBoard ? t('board.noBoardsYet') : t('board.noAccessibleBoards')}
+            </p>
+            {canCreateBoard && (
+              <button
+                onClick={openAddModal}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                {t('modal.newBoard')}
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {boards.map((board) => (
+            {accessibleBoards.map((board) => (
               <BoardCard
                 key={board.id}
                 board={board}

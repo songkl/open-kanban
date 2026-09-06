@@ -100,6 +100,8 @@ export interface Board {
   description?: string;
   isPublic?: boolean;
   ownerAgentId?: string | null;
+  effectiveAccess?: string;
+  isOwner?: boolean;
   createdAt: string;
   updatedAt: string;
 }

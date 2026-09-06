@@ -1,0 +1,210 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { BoardsPage } from './BoardsPage';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, unknown>) => {
+      if (params && typeof params.count === 'number') {
+        return `${params.count} ${key}`;
+      }
+      return key;
+    },
+    i18n: { language: 'en' },
+  }),
+}));
+
+vi.mock('../hooks/useSetupGuard', () => ({ useSetupGuard: () => undefined }));
+
+vi.mock('../components/ImportModal', () => ({
+  ImportModal: () => null,
+  ImportConflictConfirm: () => null,
+}));
+
+vi.mock('../components/CreateBoardModal', () => ({
+  CreateBoardModal: () => null,
+}));
+
+vi.mock('../components/TemplateList', () => ({
+  TemplateList: () => null,
+}));
+
+vi.mock('../components/TemplateNameModal', () => ({
+  TemplateNameModal: () => null,
+}));
+
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: {
+    boardsApi: {
+      getAll: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      copy: vi.fn(),
+      export: vi.fn(),
+      import: vi.fn(),
+      createFromTemplate: vi.fn(),
+    },
+    templatesApi: {
+      getAll: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
+    authApi: {
+      me: vi.fn(),
+    },
+  },
+}));
+
+vi.mock('../services/api', () => apiMock);
+
+import { boardsApi, templatesApi, authApi } from '../services/api';
+
+const mockedBoardsGetAll = vi.mocked(boardsApi.getAll);
+const mockedTemplatesGetAll = vi.mocked(templatesApi.getAll);
+const mockedAuthMe = vi.mocked(authApi.me);
+
+const renderBoardsPage = () =>
+  render(
+    <BrowserRouter>
+      <BoardsPage />
+    </BrowserRouter>,
+  );
+
+describe('BoardsPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedTemplatesGetAll.mockResolvedValue([]);
+    mockedBoardsGetAll.mockResolvedValue([]);
+    mockedAuthMe.mockResolvedValue({ user: null, needsSetup: false });
+  });
+
+  it('shows noBoardsYet and create button for ADMIN when no boards exist', async () => {
+    mockedBoardsGetAll.mockResolvedValue([]);
+    mockedAuthMe.mockResolvedValue({
+      user: {
+        id: 'admin-1',
+        nickname: 'Admin',
+        avatar: null,
+        role: 'ADMIN',
+        type: 'HUMAN',
+        enabled: true,
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+      },
+      needsSetup: false,
+    });
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('board.noBoardsYet')).toBeInTheDocument();
+    });
+
+    const createButtons = screen.getAllByRole('button', { name: /modal.newBoard/ });
+    expect(createButtons.length).toBeGreaterThan(0);
+  });
+
+  it('shows noAccessibleBoards and hides create button for VIEWER when no boards exist', async () => {
+    mockedBoardsGetAll.mockResolvedValue([]);
+    mockedAuthMe.mockResolvedValue({
+      user: {
+        id: 'viewer-1',
+        nickname: 'Viewer',
+        avatar: null,
+        role: 'VIEWER',
+        type: 'HUMAN',
+        enabled: true,
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+      },
+      needsSetup: false,
+    });
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('board.noAccessibleBoards')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('board.noBoardsYet')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /modal.newBoard/ })).not.toBeInTheDocument();
+  });
+
+  it('filters out boards with empty effectiveAccess', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      {
+        id: 'board-1',
+        name: 'Accessible Board',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        effectiveAccess: 'WRITE',
+        isOwner: false,
+      },
+      {
+        id: 'board-2',
+        name: 'No Access Board',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        effectiveAccess: '',
+        isOwner: false,
+      },
+    ]);
+    mockedAuthMe.mockResolvedValue({
+      user: {
+        id: 'member-1',
+        nickname: 'Member',
+        avatar: null,
+        role: 'MEMBER',
+        type: 'HUMAN',
+        enabled: true,
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+      },
+      needsSetup: false,
+    });
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Accessible Board')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('No Access Board')).not.toBeInTheDocument();
+  });
+
+  it('renders owner crown when isOwner is true', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      {
+        id: 'board-owned',
+        name: 'My Owned Board',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        effectiveAccess: 'ADMIN',
+        isOwner: true,
+      },
+    ]);
+    mockedAuthMe.mockResolvedValue({
+      user: {
+        id: 'member-1',
+        nickname: 'Member',
+        avatar: null,
+        role: 'MEMBER',
+        type: 'HUMAN',
+        enabled: true,
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+      },
+      needsSetup: false,
+    });
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('My Owned Board')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('board-owner-crown')).toBeInTheDocument();
+  });
+});

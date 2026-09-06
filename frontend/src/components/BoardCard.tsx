@@ -36,6 +36,18 @@ export function BoardCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-zinc-800 dark:text-zinc-100 truncate">{board.name}</h3>
+            {board.isOwner === true && (
+              <span
+                title={t('board.ownerBadge')}
+                aria-label={t('board.ownerBadge')}
+                data-testid="board-owner-crown"
+                className="inline-flex shrink-0 items-center justify-center text-amber-500 dark:text-amber-400"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+                  <path d="M3 18l1.5-7.5L9 13l3-6 3 6 4.5-2.5L21 18H3z"/>
+                </svg>
+              </span>
+            )}
             {board.isPublic === false && (
               <span
                 title={t('board.private')}
