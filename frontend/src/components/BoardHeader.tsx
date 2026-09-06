@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { Board, BoardPermission } from '../types/kanban';
-import { authApi } from '@/services/api';
+import type { Board, BoardPermission, Column, ColumnPermission } from '../types/kanban';
+import { authApi, columnsApi } from '@/services/api';
 import { useBoardPermission } from '@/hooks/useBoardPermission';
 import { BoardPermissionsModal } from './BoardPermissionsModal';
+import { BoardColumnPermissionsModal } from './BoardColumnPermissionsModal';
 
 interface BoardHeaderProps {
   boards: Board[];
@@ -19,10 +20,18 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
   const [permissions, setPermissions] = useState<BoardPermission[]>([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
 
+  const [showColumnPermissionModal, setShowColumnPermissionModal] = useState(false);
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [columnsLoading, setColumnsLoading] = useState(false);
+  const [selectedColumn, setSelectedColumn] = useState<Column | null>(null);
+  const [columnPermissions, setColumnPermissions] = useState<ColumnPermission[]>([]);
+  const [columnPermissionLoading, setColumnPermissionLoading] = useState(false);
+
   const activeBoard = currentBoard || boards.find((b) => b.id === boardIdFromUrl) || null;
   const activeBoardId = activeBoard?.id ?? null;
   const {
     canManageBoardPermissions,
+    canManageColumnPermissions,
     isOwner,
     loading: permissionLoading2,
   } = useBoardPermission(activeBoardId);
@@ -32,6 +41,11 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
     : isOwner
     ? t('board.permissionsOwner')
     : t('board.permissions');
+  const columnPermissionsTooltip = isAdmin
+    ? t('board.columnPermissionsAdmin')
+    : isOwner
+    ? t('board.columnPermissionsOwner')
+    : t('board.columnPermissions');
 
   const handleOpenPermissionModal = async () => {
     if (!activeBoard) return;
@@ -57,6 +71,62 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
     } catch (err) {
       console.error('Failed to delete board permission:', err);
     }
+  };
+
+  const handleOpenColumnPermissionPicker = async () => {
+    if (!activeBoard) return;
+    setShowColumnPermissionModal(true);
+    setColumnsLoading(true);
+    try {
+      const data = await columnsApi.getByBoard(activeBoard.id);
+      setColumns(data || []);
+    } catch (err) {
+      console.error('Failed to fetch columns:', err);
+      setColumns([]);
+    } finally {
+      setColumnsLoading(false);
+    }
+  };
+
+  const handleSelectColumnForPermission = async (column: Column) => {
+    setSelectedColumn(column);
+    setColumnPermissionLoading(true);
+    try {
+      const data = await authApi.getColumnPermissions(undefined, column.id);
+      setColumnPermissions(data.permissions || []);
+    } catch (err) {
+      console.error('Failed to fetch column permissions:', err);
+      setColumnPermissions([]);
+    } finally {
+      setColumnPermissionLoading(false);
+    }
+  };
+
+  const handleDeleteColumnPermission = async (permissionId: string) => {
+    if (!selectedColumn) return;
+    try {
+      await authApi.deleteColumnPermission(permissionId);
+      const data = await authApi.getColumnPermissions(undefined, selectedColumn.id);
+      setColumnPermissions(data.permissions || []);
+    } catch (err) {
+      console.error('Failed to delete column permission:', err);
+    }
+  };
+
+  const handleColumnPermissionAdded = async () => {
+    if (!selectedColumn) return;
+    try {
+      const data = await authApi.getColumnPermissions(undefined, selectedColumn.id);
+      setColumnPermissions(data.permissions || []);
+    } catch (err) {
+      console.error('Failed to refresh column permissions:', err);
+    }
+  };
+
+  const handleCloseColumnPermissionModal = () => {
+    setShowColumnPermissionModal(false);
+    setSelectedColumn(null);
+    setColumnPermissions([]);
   };
 
   return (
@@ -119,6 +189,30 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
           </svg>
         </button>
       )}
+      {!permissionLoading2 && canManageColumnPermissions && activeBoard && (
+        <button
+          onClick={handleOpenColumnPermissionPicker}
+          className="flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+          title={columnPermissionsTooltip}
+          aria-label={columnPermissionsTooltip}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <line x1="9" y1="3" x2="9" y2="21"/>
+            <line x1="15" y1="3" x2="15" y2="21"/>
+          </svg>
+        </button>
+      )}
       <Link
         to={`/columns?boardId=${boardIdFromUrl}`}
         className="flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
@@ -150,6 +244,19 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
         onDeletePermission={handleDeletePermission}
         onPermissionAdded={handleOpenPermissionModal}
         onOwnershipTransferred={handleOpenPermissionModal}
+      />
+      <BoardColumnPermissionsModal
+        isOpen={showColumnPermissionModal}
+        columns={columns}
+        loading={columnsLoading}
+        selectedColumn={selectedColumn}
+        permissions={columnPermissions}
+        permissionLoading={columnPermissionLoading}
+        onSelectColumn={handleSelectColumnForPermission}
+        onClose={handleCloseColumnPermissionModal}
+        onBack={() => setSelectedColumn(null)}
+        onDeletePermission={handleDeleteColumnPermission}
+        onPermissionAdded={handleColumnPermissionAdded}
       />
     </div>
   );

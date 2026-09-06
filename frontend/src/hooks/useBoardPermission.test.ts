@@ -27,6 +27,7 @@ describe('useBoardPermission', () => {
       expect(result.current.effectiveAccess).toBe('');
       expect(result.current.isOwner).toBe(false);
       expect(result.current.canManageBoardPermissions).toBe(false);
+      expect(result.current.canManageColumnPermissions).toBe(false);
       expect(result.current.error).toBeNull();
     });
 
@@ -38,6 +39,7 @@ describe('useBoardPermission', () => {
       });
       expect(mockedGetMyBoardPermissions).not.toHaveBeenCalled();
       expect(result.current.canManageBoardPermissions).toBe(false);
+      expect(result.current.canManageColumnPermissions).toBe(false);
     });
   });
 
@@ -48,7 +50,7 @@ describe('useBoardPermission', () => {
         effectiveAccess: 'WRITE',
         isOwner: true,
         canManageBoardPermissions: true,
-        canManageColumnPermissions: false,
+        canManageColumnPermissions: true,
       });
 
       const { result } = renderHook(() => useBoardPermission('board-1'));
@@ -60,6 +62,7 @@ describe('useBoardPermission', () => {
       expect(result.current.effectiveAccess).toBe('WRITE');
       expect(result.current.isOwner).toBe(true);
       expect(result.current.canManageBoardPermissions).toBe(true);
+      expect(result.current.canManageColumnPermissions).toBe(true);
       expect(result.current.error).toBeNull();
       expect(mockedGetMyBoardPermissions).toHaveBeenCalledWith('board-1');
     });
@@ -80,6 +83,7 @@ describe('useBoardPermission', () => {
       });
 
       expect(result.current.canManageBoardPermissions).toBe(false);
+      expect(result.current.canManageColumnPermissions).toBe(false);
       expect(result.current.isOwner).toBe(false);
     });
   });

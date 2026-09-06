@@ -24,6 +24,7 @@ import { DeleteColumnModal } from '@/components/DeleteColumnModal';
 import { ColumnPermissionsModal } from '@/components/ColumnPermissionsModal';
 import type { Agent, Column, ColumnPermission } from '@/types/kanban';
 import { useSetupGuard } from '@/hooks/useSetupGuard';
+import { useBoardPermission } from '@/hooks/useBoardPermission';
 
 interface Board {
   id: string;
@@ -39,6 +40,7 @@ export function ColumnsPage() {
 
   const [boards, setBoards] = useState<Board[]>([]);
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
+  const { canManageColumnPermissions } = useBoardPermission(selectedBoard?.id);
   const [columns, setColumns] = useState<Column[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -461,9 +463,7 @@ export function ColumnsPage() {
                   onPermission={handleOpenPermissionModal}
                   canEdit={userBoardAccess === 'WRITE' || userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
                   canDelete={userBoardAccess === 'ADMIN' || currentUser?.role === 'ADMIN'}
-                  // 列级权限管理目前仍是 global ADMIN-only（后端 auth_column_permission.go:88 强制 isAdmin），
-                  // 因此不需要使用 useBoardPermission(canManageColumnPermissions)；MEMBER-as-owner 暂不能管理列权限。
-                  canManagePermission={currentUser?.role === 'ADMIN'}
+                  canManagePermission={canManageColumnPermissions}
                 />
               ))}
             </div>

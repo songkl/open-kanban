@@ -12,6 +12,11 @@ vi.mock('@/services/api', () => ({
   authApi: {
     getBoardPermissions: vi.fn().mockResolvedValue({ permissions: [] }),
     deletePermission: vi.fn(),
+    getColumnPermissions: vi.fn().mockResolvedValue({ permissions: [] }),
+    deleteColumnPermission: vi.fn(),
+  },
+  columnsApi: {
+    getByBoard: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -151,5 +156,111 @@ describe('BoardHeader permission shield', () => {
     );
 
     expect(screen.queryByLabelText(/^board\.permissions/)).toBeNull();
+  });
+});
+
+describe('BoardHeader column-permissions affordance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the column-permissions button with the admin tooltip for global ADMIN', async () => {
+    mockedUseBoardPermission.mockReturnValue({
+      effectiveAccess: 'ADMIN',
+      isOwner: false,
+      canManageBoardPermissions: true,
+      canManageColumnPermissions: true,
+      loading: false,
+      error: null,
+    });
+
+    renderHeader({ id: 'u1', role: 'ADMIN' });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('board.columnPermissionsAdmin')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the column-permissions button with the owner tooltip for a MEMBER-as-owner', async () => {
+    mockedUseBoardPermission.mockReturnValue({
+      effectiveAccess: 'WRITE',
+      isOwner: true,
+      canManageBoardPermissions: true,
+      canManageColumnPermissions: true,
+      loading: false,
+      error: null,
+    });
+
+    renderHeader({ id: 'u2', role: 'MEMBER' });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('board.columnPermissionsOwner')).toBeInTheDocument();
+    });
+  });
+
+  it('hides the column-permissions button while useBoardPermission is still loading', () => {
+    mockedUseBoardPermission.mockReturnValue({
+      effectiveAccess: '',
+      isOwner: false,
+      canManageBoardPermissions: false,
+      canManageColumnPermissions: false,
+      loading: true,
+      error: null,
+    });
+
+    const { container } = renderHeader({ id: 'u1', role: 'ADMIN' });
+    expect(container.querySelector('[aria-label^="board.columnPermissions"]')).toBeNull();
+  });
+
+  it('hides the column-permissions button when canManageColumnPermissions is false', () => {
+    mockedUseBoardPermission.mockReturnValue({
+      effectiveAccess: 'READ',
+      isOwner: false,
+      canManageBoardPermissions: false,
+      canManageColumnPermissions: false,
+      loading: false,
+      error: null,
+    });
+
+    const { container } = renderHeader({ id: 'u3', role: 'MEMBER' });
+    expect(container.querySelector('[aria-label^="board.columnPermissions"]')).toBeNull();
+  });
+
+  it('hides the column-permissions button when the permission request errored', () => {
+    mockedUseBoardPermission.mockReturnValue({
+      effectiveAccess: '',
+      isOwner: false,
+      canManageBoardPermissions: false,
+      canManageColumnPermissions: false,
+      loading: false,
+      error: new Error('boom'),
+    });
+
+    const { container } = renderHeader({ id: 'u1', role: 'ADMIN' });
+    expect(container.querySelector('[aria-label^="board.columnPermissions"]')).toBeNull();
+  });
+
+  it('hides the column-permissions button when no active board is selected', () => {
+    mockedUseBoardPermission.mockReturnValue({
+      effectiveAccess: 'ADMIN',
+      isOwner: false,
+      canManageBoardPermissions: true,
+      canManageColumnPermissions: true,
+      loading: false,
+      error: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <BoardHeader
+          boards={[]}
+          currentBoard={null}
+          boardIdFromUrl=""
+          currentUser={{ id: 'u1', role: 'ADMIN' }}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByLabelText(/^board\.columnPermissions/)).toBeNull();
   });
 });

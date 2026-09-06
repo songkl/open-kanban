@@ -13,6 +13,7 @@ export interface UseBoardPermissionResult {
   effectiveAccess: string;
   isOwner: boolean;
   canManageBoardPermissions: boolean;
+  canManageColumnPermissions: boolean;
   loading: boolean;
   error: Error | null;
 }
@@ -21,6 +22,7 @@ const EMPTY_RESULT: UseBoardPermissionResult = {
   effectiveAccess: '',
   isOwner: false,
   canManageBoardPermissions: false,
+  canManageColumnPermissions: false,
   loading: false,
   error: null,
 };
@@ -68,6 +70,7 @@ export function useBoardPermission(boardId: string | null | undefined): UseBoard
     effectiveAccess: data?.effectiveAccess ?? '',
     isOwner: data?.isOwner ?? false,
     canManageBoardPermissions: data?.canManageBoardPermissions ?? false,
+    canManageColumnPermissions: data?.canManageColumnPermissions ?? false,
     loading,
     error,
   };
