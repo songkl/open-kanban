@@ -124,4 +124,69 @@ describe('SettingsPage tab URL sync', () => {
       unmount();
     }
   });
+
+  it('applies consistent active styling in both light and dark mode', async () => {
+    // Light mode: classic blue highlight
+    renderAtTab('profile');
+    const lightActive = await waitFor(() => screen.getByRole('button', { name: 'settings.profile' }));
+    expect(lightActive).toHaveClass('bg-blue-100');
+    expect(lightActive).toHaveClass('text-blue-700');
+    // The `transition-colors` utility smooths the active/inactive swap so the
+    // user does not see a hard flash when clicking a tab.
+    expect(lightActive.className.split(/\s+/)).toContain('transition-colors');
+
+    // Dark mode: muted blue tint that doesn't flash against the dark sidebar.
+    // The active button must include the dark variant of bg/text classes.
+    document.documentElement.classList.add('dark');
+    try {
+      const darkActive = await waitFor(() => screen.getByRole('button', { name: 'settings.profile' }));
+      expect(darkActive.className).toMatch(/dark:bg-blue-900\/40/);
+      expect(darkActive.className).toMatch(/dark:text-blue-300/);
+    } finally {
+      document.documentElement.classList.remove('dark');
+    }
+  });
+
+  it('does not change sidebar width when switching tabs', async () => {
+    // Regression guard for the "width flashes on tab switch" bug.
+    // The sidebar and each tab button must keep the same width regardless of
+    // which tab is active, so the layout cannot shimmer between clicks.
+    const tabs: Array<{ name: string; selector?: string }> = [
+      { name: 'settings.profile' },
+      { name: 'settings.tokens' },
+      { name: 'settings.activitiesTitle' },
+      { name: 'settings.agents' },
+      { name: 'settings.users' },
+      { name: 'settings.shortcuts' },
+      { name: 'oauth.admin.title', selector: '[data-testid="tab-oauth"]' },
+      { name: 'nav.theme' }
+    ];
+
+    renderAtTab('profile');
+    await waitFor(() => expect(profileBtn()).toHaveClass('bg-blue-100'));
+
+    const measureSidebar = () => {
+      const sidebar = document.querySelector('nav')?.parentElement;
+      const buttons = document.querySelectorAll('nav button');
+      const sidebarRect = sidebar?.getBoundingClientRect();
+      const widths = Array.from(buttons).map((b) => (b as HTMLElement).getBoundingClientRect().width);
+      return {
+        sidebarWidth: sidebarRect?.width,
+        buttonWidths: widths
+      };
+    };
+
+    const baseline = measureSidebar();
+
+    for (const tab of tabs) {
+      const element = tab.selector
+        ? document.querySelector(tab.selector) as HTMLElement
+        : screen.getByRole('button', { name: tab.name });
+      fireEvent.click(element);
+      await waitFor(() => expect(element).toHaveClass('bg-blue-100'));
+      const measured = measureSidebar();
+      expect(measured.sidebarWidth).toBe(baseline.sidebarWidth);
+      expect(measured.buttonWidths).toEqual(baseline.buttonWidths);
+    }
+  });
 });

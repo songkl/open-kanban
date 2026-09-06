@@ -24,6 +24,14 @@ function isTab(value: string | null): value is Tab {
   return value !== null && (ALL_TABS as string[]).includes(value);
 }
 
+function sidebarTabClass(active: boolean, extra = ''): string {
+  const base = 'w-full rounded-md px-3 py-2 text-left text-sm transition-colors';
+  const state = active
+    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-600 dark:bg-zinc-700';
+  return `${base} ${state}${extra ? ' ' + extra : ''}`;
+}
+
 export function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -142,14 +150,14 @@ export function SettingsPage() {
             <nav className="space-y-1">
               <button
                 onClick={() => switchToTab('profile')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'profile' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                className={sidebarTabClass(activeTab === 'profile')}
               >
                 {t('settings.profile')}
               </button>
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('tokens')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'tokens' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                  className={sidebarTabClass(activeTab === 'tokens')}
                 >
                   {t('settings.tokens')}
                 </button>
@@ -157,7 +165,7 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('activities')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'activities' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                  className={sidebarTabClass(activeTab === 'activities')}
                 >
                   {t('settings.activitiesTitle')}
                 </button>
@@ -165,7 +173,7 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('agents')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'agents' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                  className={sidebarTabClass(activeTab === 'agents')}
                 >
                   {t('settings.agents')}
                 </button>
@@ -173,27 +181,27 @@ export function SettingsPage() {
               {currentUser?.role === 'ADMIN' && (
                 <button
                   onClick={() => switchToTab('users')}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'users' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                  className={sidebarTabClass(activeTab === 'users')}
                 >
                   {t('settings.users')}
                 </button>
               )}
               <button
                 onClick={() => switchToTab('shortcuts')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'shortcuts' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                className={sidebarTabClass(activeTab === 'shortcuts')}
               >
                 {t('settings.shortcuts')}
               </button>
               <button
                 onClick={() => switchToTab('oauth')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'oauth' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                className={sidebarTabClass(activeTab === 'oauth')}
                 data-testid="tab-oauth"
               >
                 {t('oauth.admin.title')}
               </button>
               <button
                 onClick={() => switchToTab('theme')}
-                className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                className={sidebarTabClass(activeTab === 'theme', 'flex items-center justify-between')}
               >
                 <span>{t('nav.theme')}</span>
                 {darkMode ? (
