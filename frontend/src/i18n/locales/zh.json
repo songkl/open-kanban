@@ -645,7 +645,8 @@
     "agentPrompt": "Agent Prompt",
     "agentPromptPlaceholder": "给 Agent 的指令...",
     "publishedAt": "发布日期",
-    "updatedAt": "更新日期"
+    "updatedAt": "更新日期",
+    "createdBy": "创建者"
   },
   "skeleton": {
     "loading": "加载中..."

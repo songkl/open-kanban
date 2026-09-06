@@ -76,12 +76,14 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 
 			inClause := buildInClause(len(columnIDs))
 			query := fmt.Sprintf(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name,
 				       (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
 				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count,
-				       COALESCE(u.nickname, u.username) as created_by_username
+				       COALESCE(u.nickname, u.username) as created_by_username,
+				       u.nickname as created_by_nickname,
+				       COALESCE(u.avatar, '') as created_by_avatar
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
 				LEFT JOIN users u ON t.created_by = u.id
@@ -93,12 +95,14 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			taskRows, err = db.Query(query, args...)
 		} else if userAgent != "" {
 			taskRows, err = db.Query(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name,
 				       (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
 				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count,
-				       COALESCE(u.nickname, u.username) as created_by_username
+				       COALESCE(u.nickname, u.username) as created_by_username,
+				       u.nickname as created_by_nickname,
+				       COALESCE(u.avatar, '') as created_by_avatar
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
 				LEFT JOIN users u ON t.created_by = u.id
@@ -114,12 +118,14 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 
 			inClause := buildInClause(len(columnIDs))
 			query := fmt.Sprintf(`
-				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position, 
+				SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
 				       t.published, t.archived, t.archived_at, t.agent_id, t.agent_prompt, t.created_by, t.created_at, t.updated_at,
 				       c.name as column_name,
 				       (SELECT COUNT(*) FROM comments WHERE task_id = t.id) as comment_count,
 				       (SELECT COUNT(*) FROM subtasks WHERE task_id = t.id) as subtask_count,
-				       COALESCE(u.nickname, u.username) as created_by_username
+				       COALESCE(u.nickname, u.username) as created_by_username,
+				       u.nickname as created_by_nickname,
+				       COALESCE(u.avatar, '') as created_by_avatar
 				FROM tasks t
 				JOIN columns c ON t.column_id = c.id
 				LEFT JOIN users u ON t.created_by = u.id
@@ -145,7 +151,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 				var desc, assignee, meta, createdBy, createdByUsername, columnName, agentID, agentPrompt sql.NullString
 				var archivedAt sql.NullTime
 				var commentCount, subtaskCount int
-				if err := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &columnName, &commentCount, &subtaskCount, &createdByUsername); err == nil {
+				if err := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &agentID, &agentPrompt, &createdBy, &task.CreatedAt, &task.UpdatedAt, &columnName, &commentCount, &subtaskCount, &createdByUsername, &task.CreatedByNickname, &task.CreatedByAvatar); err == nil {
 					if desc.Valid {
 						task.Description = &desc.String
 					}
@@ -188,6 +194,8 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 						"archivedAt":        task.ArchivedAt,
 						"createdBy":         task.CreatedBy,
 						"createdByUsername": task.CreatedByUsername,
+						"createdByNickname": task.CreatedByNickname,
+						"createdByAvatar":   task.CreatedByAvatar,
 						"createdAt":         task.CreatedAt,
 						"updatedAt":         task.UpdatedAt,
 						"_count": gin.H{

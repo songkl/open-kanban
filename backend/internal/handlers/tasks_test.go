@@ -1006,3 +1006,258 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 	})
 }
+
+func TestReorderTasksHandler(t *testing.T) {
+	handlers.ResetRateLimitMapForTest()
+	handlers.ResetTokenCacheForTest()
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t1', 'Task 1', 'c1', 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert t1: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t2', 'Task 2', 'c1', 1, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert t2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t3', 'Task 3', 'c1', 2, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert t3: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'Column 2', 'b1', 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert column c2: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.PUT("/api/tasks/reorder", handlers.ReorderTasks(db))
+
+	getPositions := func(columnID string) map[string]int {
+		rows, err := db.Query("SELECT id, position FROM tasks WHERE column_id = ? ORDER BY position ASC", columnID)
+		if err != nil {
+			t.Fatalf("failed to query positions: %v", err)
+		}
+		defer rows.Close()
+		result := make(map[string]int)
+		for rows.Next() {
+			var id string
+			var pos int
+			if err := rows.Scan(&id, &pos); err != nil {
+				t.Fatalf("scan failed: %v", err)
+			}
+			result[id] = pos
+		}
+		return result
+	}
+
+	t.Run("reorder without auth returns 401", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "c1", "position": 0},
+				{"id": "t2", "columnId": "c1", "position": 1},
+				{"id": "t3", "columnId": "c1", "position": 2},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder with empty tasks returns 400", func(t *testing.T) {
+		body := map[string]interface{}{"tasks": []interface{}{}}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder with missing id returns 400", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "", "columnId": "c1", "position": 0},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder with duplicate ids returns 400", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "c1", "position": 0},
+				{"id": "t1", "columnId": "c1", "position": 1},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder within same column persists new order", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t3", "columnId": "c1", "position": 0},
+				{"id": "t2", "columnId": "c1", "position": 1},
+				{"id": "t1", "columnId": "c1", "position": 2},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		positions := getPositions("c1")
+		if positions["t3"] != 0 {
+			t.Errorf("expected t3 position 0, got %d", positions["t3"])
+		}
+		if positions["t2"] != 1 {
+			t.Errorf("expected t2 position 1, got %d", positions["t2"])
+		}
+		if positions["t1"] != 2 {
+			t.Errorf("expected t1 position 2, got %d", positions["t1"])
+		}
+	})
+
+	t.Run("reorder moves tasks between columns", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "c2", "position": 0},
+				{"id": "t2", "columnId": "c2", "position": 1},
+				{"id": "t3", "columnId": "c1", "position": 0},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var columnID string
+		var pos int
+		if err := db.QueryRow("SELECT column_id, position FROM tasks WHERE id = 't1'").Scan(&columnID, &pos); err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if columnID != "c2" || pos != 0 {
+			t.Errorf("expected t1 in c2 pos 0, got column=%s pos=%d", columnID, pos)
+		}
+
+		if err := db.QueryRow("SELECT column_id, position FROM tasks WHERE id = 't3'").Scan(&columnID, &pos); err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if columnID != "c1" || pos != 0 {
+			t.Errorf("expected t3 in c1 pos 0, got column=%s pos=%d", columnID, pos)
+		}
+	})
+
+	t.Run("reorder with invalid column returns 500", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "nonexistent", "position": 0},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestSearchTasksOrdering(t *testing.T) {
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, archived, created_by) VALUES ('task-old', 'Old Order', 'c1', 100, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert task-old: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, archived, created_by) VALUES ('task-mid', 'Mid Order', 'c1', 50, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert task-mid: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, archived, created_by) VALUES ('task-new', 'New Order', 'c1', 10, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert task-new: %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/api/tasks/search", handlers.SearchTasks(db))
+
+	t.Run("search returns tasks ordered by position ascending", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok || len(data) != 3 {
+			t.Fatalf("expected 3 tasks in response, got %v", response["data"])
+		}
+
+		expected := []string{"task-new", "task-mid", "task-old"}
+		for i, expectedID := range expected {
+			task := data[i].(map[string]interface{})
+			if task["id"] != expectedID {
+				t.Errorf("expected task at index %d to be %s, got %s", i, expectedID, task["id"])
+			}
+		}
+	})
+}

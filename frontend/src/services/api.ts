@@ -305,6 +305,11 @@ export const tasksApi = {
       method: 'POST',
       body: JSON.stringify({ archived }),
     }),
+  reorder: (tasks: { id: string; columnId: string; position: number }[]) =>
+    fetchApi<{ success: boolean; count: number; details?: string }>('tasks/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ tasks }),
+    }),
 };
 
 // Comments API

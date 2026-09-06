@@ -383,10 +383,16 @@ export function TaskModal({
               <div>
                 <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
                 <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-400">
-                  {task.createdByUsername && (
-                    <div className="flex items-center gap-1">
-                      <UserAvatar username={task.createdByUsername} size="sm" />
-                      <span>{task.createdByUsername}</span>
+                  {(task.createdByNickname || task.createdByUsername) && (
+                    <div className="flex items-center gap-1.5" title={t('taskModal.createdBy')}>
+                      <UserAvatar
+                        username={task.createdByNickname || task.createdByUsername || ''}
+                        avatar={task.createdByAvatar}
+                        size="sm"
+                      />
+                      <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                        {task.createdByNickname || task.createdByUsername}
+                      </span>
                     </div>
                   )}
                   <span>{t('taskModal.publishedAt')}: {new Date(task.createdAt).toLocaleString()}</span>

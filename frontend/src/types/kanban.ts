@@ -44,6 +44,8 @@ export interface Task {
   agentPrompt: string | null;
   createdBy: string;
   createdByUsername?: string;
+  createdByNickname?: string;
+  createdByAvatar?: string;
   createdAt: string;
   updatedAt: string;
   comments: Comment[];

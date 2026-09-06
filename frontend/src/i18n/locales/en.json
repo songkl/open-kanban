@@ -645,7 +645,8 @@
     "agentPrompt": "Agent Prompt",
     "agentPromptPlaceholder": "Instructions for the agent...",
     "publishedAt": "Published",
-    "updatedAt": "Updated"
+    "updatedAt": "Updated",
+    "createdBy": "Created by"
   },
   "skeleton": {
     "loading": "Loading..."

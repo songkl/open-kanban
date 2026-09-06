@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"open-kanban/internal/services"
 
@@ -184,5 +185,102 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 				})
 			}
 		}()
+	}
+}
+
+// ReorderTasksRequest represents the request body for batch task reorder
+type ReorderTasksRequest struct {
+	Tasks []ReorderTaskItemRequest `json:"tasks"`
+}
+
+// ReorderTaskItemRequest represents a single task reorder entry
+type ReorderTaskItemRequest struct {
+	ID       string `json:"id"`
+	ColumnID string `json:"columnId"`
+	Position int    `json:"position"`
+}
+
+// ReorderTasks updates positions of multiple tasks in one transaction.
+// Supports reordering within a column or moving tasks between columns.
+func ReorderTasks(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		if requireNonViewer(c, user) {
+			return
+		}
+
+		var req ReorderTasksRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
+			return
+		}
+
+		if len(req.Tasks) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tasks array is required"})
+			return
+		}
+
+		if len(req.Tasks) > 500 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Too many tasks in one reorder request"})
+			return
+		}
+
+		seen := make(map[string]bool)
+		for _, t := range req.Tasks {
+			if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.ColumnID) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Each task must include id and columnId"})
+				return
+			}
+			if seen[t.ID] {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Duplicate task id: " + t.ID})
+				return
+			}
+			seen[t.ID] = true
+
+			if !checkColumnAccessWithBoardFallback(db, user.ID, t.ColumnID, "WRITE", user.Role) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "No permission to modify tasks in column " + t.ColumnID})
+				return
+			}
+		}
+
+		input := services.ReorderTasksInput{
+			Items: make([]services.ReorderTaskItem, 0, len(req.Tasks)),
+		}
+		for _, t := range req.Tasks {
+			input.Items = append(input.Items, services.ReorderTaskItem{
+				TaskID:   t.ID,
+				ColumnID: t.ColumnID,
+				Position: t.Position,
+			})
+		}
+
+		taskService := services.NewTaskService(db)
+		if err := taskService.ReorderTasks(input); err != nil {
+			ServerError(c, "Failed to reorder tasks", err)
+			return
+		}
+
+		var ids []string
+		for _, t := range req.Tasks {
+			ids = append(ids, t.ID)
+		}
+		details := fmt.Sprintf("Reordered %d tasks", len(req.Tasks))
+		for _, t := range req.Tasks {
+			LogActivity(db, user.ID, "UPDATE_TASK", "TASK", t.ID, "", "", c.ClientIP(), getRequestSource(c))
+		}
+		_ = ids
+
+		broadcast()
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"count":   len(req.Tasks),
+			"details": details,
+		})
 	}
 }

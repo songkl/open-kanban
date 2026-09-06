@@ -17,6 +17,9 @@ const mockTask: Task = {
   archivedAt: null,
   published: true,
   createdBy: 'user-1',
+  createdByUsername: 'creatorlogin',
+  createdByNickname: 'Creator Nick',
+  createdByAvatar: 'https://example.com/avatar.png',
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
   comments: [
@@ -428,6 +431,48 @@ describe('TaskModal', () => {
       const taskNoComments = { ...mockTask, comments: [] };
       render(<TaskModal {...defaultProps} task={taskNoComments} />);
       expect(screen.queryByText('Jane')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('creator display', () => {
+    it('renders creator nickname in header', () => {
+      render(<TaskModal {...defaultProps} />);
+      expect(screen.getByText('Creator Nick')).toBeInTheDocument();
+    });
+
+    it('renders creator avatar image when URL is provided', () => {
+      render(<TaskModal {...defaultProps} />);
+      const avatarImg = screen.getByAltText('Creator Nick');
+      expect(avatarImg).toBeInTheDocument();
+      expect(avatarImg).toHaveAttribute('src', 'https://example.com/avatar.png');
+    });
+
+    it('falls back to username when nickname is missing', () => {
+      const taskOnlyUsername = {
+        ...mockTask,
+        createdByNickname: undefined,
+        createdByAvatar: undefined,
+      };
+      render(<TaskModal {...defaultProps} task={taskOnlyUsername} />);
+      expect(screen.getByText('creatorlogin')).toBeInTheDocument();
+    });
+
+    it('shows initial-based avatar when avatar URL is missing', () => {
+      const taskNoAvatar = { ...mockTask, createdByAvatar: undefined };
+      render(<TaskModal {...defaultProps} task={taskNoAvatar} />);
+      const initial = screen.getByText('C');
+      expect(initial).toBeInTheDocument();
+    });
+
+    it('hides creator block when both username and nickname are missing', () => {
+      const taskAnon = {
+        ...mockTask,
+        createdByUsername: undefined,
+        createdByNickname: undefined,
+        createdByAvatar: undefined,
+      };
+      render(<TaskModal {...defaultProps} task={taskAnon} />);
+      expect(screen.queryByTitle('taskModal.createdBy')).not.toBeInTheDocument();
     });
   });
 });

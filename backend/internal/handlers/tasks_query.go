@@ -120,6 +120,8 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			"agentPrompt":       task.AgentPrompt,
 			"createdBy":         task.CreatedBy,
 			"createdByUsername": task.CreatedByUsername,
+			"createdByNickname": task.CreatedByNickname,
+			"createdByAvatar":   task.CreatedByAvatar,
 			"createdAt":         task.CreatedAt,
 			"updatedAt":         task.UpdatedAt,
 			"commentCount":      commentCount,

@@ -78,6 +78,88 @@ func TestTaskJSON(t *testing.T) {
 	}
 }
 
+func TestTaskCreatorFieldsJSON(t *testing.T) {
+	now := time.Now()
+	task := models.Task{
+		ID:                "task-2",
+		Title:             "Creator Test",
+		Priority:          "medium",
+		ColumnID:          "col-1",
+		Position:          0,
+		Published:         true,
+		CreatedBy:         "user-1",
+		CreatedByUsername: "testuser",
+		CreatedByNickname: "Test User",
+		CreatedByAvatar:   "https://example.com/avatar.png",
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatalf("failed to marshal task: %v", err)
+	}
+
+	jsonStr := string(data)
+	if !contains(jsonStr, `"createdByNickname":"Test User"`) {
+		t.Errorf("expected createdByNickname in JSON, got %s", jsonStr)
+	}
+	if !contains(jsonStr, `"createdByAvatar":"https://example.com/avatar.png"`) {
+		t.Errorf("expected createdByAvatar in JSON, got %s", jsonStr)
+	}
+
+	var unmarshaled models.Task
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal task: %v", err)
+	}
+
+	if unmarshaled.CreatedByUsername != "testuser" {
+		t.Errorf("expected createdByUsername 'testuser', got %q", unmarshaled.CreatedByUsername)
+	}
+	if unmarshaled.CreatedByNickname != "Test User" {
+		t.Errorf("expected createdByNickname 'Test User', got %q", unmarshaled.CreatedByNickname)
+	}
+	if unmarshaled.CreatedByAvatar != "https://example.com/avatar.png" {
+		t.Errorf("expected createdByAvatar url, got %q", unmarshaled.CreatedByAvatar)
+	}
+}
+
+func TestTaskCreatorFieldsOmitEmpty(t *testing.T) {
+	now := time.Now()
+	task := models.Task{
+		ID:        "task-3",
+		Title:     "No creator",
+		Priority:  "low",
+		ColumnID:  "col-1",
+		Position:  0,
+		CreatedBy: "deleted-user",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatalf("failed to marshal task: %v", err)
+	}
+
+	jsonStr := string(data)
+	if contains(jsonStr, `"createdByNickname"`) {
+		t.Errorf("expected createdByNickname to be omitted when empty, got %s", jsonStr)
+	}
+	if contains(jsonStr, `"createdByAvatar"`) {
+		t.Errorf("expected createdByAvatar to be omitted when empty, got %s", jsonStr)
+	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBoardJSON(t *testing.T) {
 	now := time.Now()
 	board := models.Board{

@@ -97,6 +97,8 @@ func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, p
 			"agentPrompt":       task.AgentPrompt,
 			"createdBy":         task.CreatedBy,
 			"createdByUsername": task.CreatedByUsername,
+			"createdByNickname": task.CreatedByNickname,
+			"createdByAvatar":   task.CreatedByAvatar,
 			"createdAt":         task.CreatedAt,
 			"updatedAt":         task.UpdatedAt,
 			"_count": gin.H{
@@ -434,6 +436,48 @@ func (s *TaskService) CompleteTask(taskID string) (*models.Task, error) {
 	return s.taskRepo.GetTaskByID(taskID)
 }
 
+type ReorderTasksInput struct {
+	Items []ReorderTaskItem
+}
+
+type ReorderTaskItem struct {
+	TaskID   string
+	ColumnID string
+	Position int
+}
+
+func (s *TaskService) ReorderTasks(input ReorderTasksInput) error {
+	if len(input.Items) == 0 {
+		return nil
+	}
+
+	seenColumns := make(map[string]bool)
+	for _, item := range input.Items {
+		if item.TaskID == "" || item.ColumnID == "" {
+			return fmt.Errorf("task id and column id are required")
+		}
+		if _, _, err := s.taskRepo.GetColumnPositionAndBoardID(item.ColumnID); err != nil {
+			return fmt.Errorf("invalid column id %s: %w", item.ColumnID, err)
+		}
+		seenColumns[item.ColumnID] = true
+	}
+
+	repoItems := make([]repositories.TaskReorderItem, len(input.Items))
+	for i, item := range input.Items {
+		repoItems[i] = repositories.TaskReorderItem{
+			TaskID:   item.TaskID,
+			ColumnID: item.ColumnID,
+			Position: item.Position,
+		}
+	}
+
+	if err := s.taskRepo.ReorderTasksInColumn(repoItems); err != nil {
+		return fmt.Errorf("failed to reorder tasks: %w", err)
+	}
+
+	return nil
+}
+
 func (s *TaskService) generateTaskID(columnID string) (string, error) {
 	boardID, err := s.getBoardIDForColumn(columnID)
 	if err != nil {
@@ -642,6 +686,8 @@ func (s *TaskService) SearchTasks(input SearchTasksInput) (*TaskListResult, erro
 			"agentPrompt":       task.AgentPrompt,
 			"createdBy":         task.CreatedBy,
 			"createdByUsername": task.CreatedByUsername,
+			"createdByNickname": task.CreatedByNickname,
+			"createdByAvatar":   task.CreatedByAvatar,
 			"createdAt":         task.CreatedAt,
 			"updatedAt":         task.UpdatedAt,
 			"_count": gin.H{

@@ -159,66 +159,77 @@ export function BoardPage() {
   ) => {
     const previousColumns = columns;
 
+    let nextActiveTasks: Task[] | null = null;
+    let nextOverTasks: Task[] | null = null;
+    let activeChanged = false;
+
     if (activeColumn.id === overColumn.id) {
       const tasks = activeColumn.tasks ?? [];
       const oldIndex = tasks.findIndex((t) => t.id === activeId);
       const newIndex = tasks.findIndex((t) => t.id === overId);
 
-      if (oldIndex !== newIndex) {
-        const newTasks = arrayMove(tasks, oldIndex, newIndex).map((t, i) => ({
+      if (oldIndex !== newIndex && oldIndex >= 0 && newIndex >= 0) {
+        nextActiveTasks = arrayMove(tasks, oldIndex, newIndex).map((t, i) => ({
           ...t,
           position: i,
         }));
-
-        lastLocalUpdateRef.current = Date.now();
-        setColumns(prev => prev.map(col =>
-          col.id === activeColumn.id
-            ? { ...col, tasks: newTasks }
-            : col
-        ));
-
-        try {
-          await tasksApi.update(activeId, { position: newTasks[newIndex].position });
-        } catch {
-          setColumns(previousColumns);
-          showToastMessage(t('task.moveFailed') || 'Failed to move task');
-        }
+        activeChanged = true;
       }
     } else {
       const overTasks = [...(overColumn.tasks ?? [])];
       const newIndex = overTasks.findIndex((t) => t.id === overId);
 
+      if (!activeTaskLocal) {
+        return;
+      }
+
       if (newIndex >= 0) {
-        overTasks.splice(newIndex, 0, { ...activeTaskLocal!, columnId: overColumn.id });
+        overTasks.splice(newIndex, 0, { ...activeTaskLocal, columnId: overColumn.id });
       } else {
-        overTasks.push({ ...activeTaskLocal!, columnId: overColumn.id });
+        overTasks.push({ ...activeTaskLocal, columnId: overColumn.id });
       }
 
-      const updatedTasks = overTasks.map((t, i) => ({ ...t, position: i }));
-      const movedTaskNewIndex = updatedTasks.findIndex((t) => t.id === activeId);
+      nextOverTasks = overTasks.map((t, i) => ({ ...t, position: i }));
+      nextActiveTasks = (activeColumn.tasks ?? [])
+        .filter(t => t.id !== activeId)
+        .map((t, i) => ({ ...t, position: i }));
+      activeChanged = true;
+    }
 
-      const sourceTasks = (activeColumn.tasks ?? []).filter(t => t.id !== activeId).map((t, i) => ({ ...t, position: i }));
+    if (!activeChanged) {
+      return;
+    }
 
-      lastLocalUpdateRef.current = Date.now();
-      setColumns(prev => prev.map(col => {
-        if (col.id === activeColumn.id) {
-          return { ...col, tasks: sourceTasks };
-        }
-        if (col.id === overColumn.id) {
-          return { ...col, tasks: updatedTasks };
-        }
-        return col;
-      }));
-
-      try {
-        await tasksApi.update(activeId, {
-          position: movedTaskNewIndex,
-          columnId: overColumn.id,
-        });
-      } catch {
-        setColumns(previousColumns);
-        showToastMessage(t('task.moveFailed') || 'Failed to move task');
+    lastLocalUpdateRef.current = Date.now();
+    setColumns(prev => prev.map(col => {
+      if (col.id === activeColumn.id && nextActiveTasks) {
+        return { ...col, tasks: nextActiveTasks };
       }
+      if (col.id === overColumn.id && nextOverTasks) {
+        return { ...col, tasks: nextOverTasks };
+      }
+      return col;
+    }));
+
+    const reorderItems: { id: string; columnId: string; position: number }[] = [];
+    if (nextActiveTasks) {
+      nextActiveTasks.forEach((task, idx) => {
+        reorderItems.push({ id: task.id, columnId: activeColumn.id, position: idx });
+      });
+    }
+    if (nextOverTasks && overColumn.id !== activeColumn.id) {
+      nextOverTasks.forEach((task, idx) => {
+        if (task.id !== activeId) {
+          reorderItems.push({ id: task.id, columnId: overColumn.id, position: idx });
+        }
+      });
+    }
+
+    try {
+      await tasksApi.reorder(reorderItems);
+    } catch {
+      setColumns(previousColumns);
+      showToastMessage(t('task.moveFailed') || 'Failed to move task');
     }
   }, [columns, lastLocalUpdateRef, setColumns, showToastMessage, t]);
 
@@ -256,10 +267,16 @@ export function BoardPage() {
       return col;
     }));
 
+    const reorderItems: { id: string; columnId: string; position: number }[] = [];
+    sourceTasks.forEach((task, idx) => {
+      reorderItems.push({ id: task.id, columnId: sourceColumn.id, position: idx });
+    });
+    updatedDestTasks.forEach((task, idx) => {
+      reorderItems.push({ id: task.id, columnId: destColumn.id, position: idx });
+    });
+
     try {
-      await tasksApi.update(taskId, {
-        columnId: destColumn.id,
-      });
+      await tasksApi.reorder(reorderItems);
     } catch {
       setColumns(previousColumns);
       showToastMessage(t('task.moveFailed') || 'Failed to move task');

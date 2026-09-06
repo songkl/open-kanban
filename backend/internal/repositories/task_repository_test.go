@@ -175,6 +175,106 @@ func TestGetTaskByID(t *testing.T) {
 	}
 }
 
+func TestGetTaskCreatorFields(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	repo := repositories.NewTaskRepository(db)
+
+	_, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar) VALUES ('u1', 'login_user', '昵称君', 'http://example.com/avatar.png')`)
+	if err != nil {
+		t.Fatalf("failed to insert test user: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, created_by)
+		VALUES ('t1', 'Test Task', 'c1', 1000, 1, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, created_by)
+		VALUES ('t2', 'Orphan Task', 'c1', 1001, 1, 'ghost-user')`)
+	if err != nil {
+		t.Fatalf("failed to insert orphan task: %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		taskID   string
+		wantUser string
+		wantNick string
+		wantAva  string
+	}{
+		{
+			name:     "task with existing creator",
+			taskID:   "t1",
+			wantUser: "昵称君",
+			wantNick: "昵称君",
+			wantAva:  "http://example.com/avatar.png",
+		},
+		{
+			name:     "task with deleted creator keeps creator fields empty",
+			taskID:   "t2",
+			wantUser: "",
+			wantNick: "",
+			wantAva:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task, err := repo.GetTaskByID(tt.taskID)
+			if err != nil {
+				t.Fatalf("GetTaskByID() error = %v", err)
+			}
+			if task.CreatedByUsername != tt.wantUser {
+				t.Errorf("expected CreatedByUsername %q, got %q", tt.wantUser, task.CreatedByUsername)
+			}
+			if task.CreatedByNickname != tt.wantNick {
+				t.Errorf("expected CreatedByNickname %q, got %q", tt.wantNick, task.CreatedByNickname)
+			}
+			if task.CreatedByAvatar != tt.wantAva {
+				t.Errorf("expected CreatedByAvatar %q, got %q", tt.wantAva, task.CreatedByAvatar)
+			}
+		})
+	}
+}
+
+func TestGetTasksByColumnIDsCreatorFields(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	repo := repositories.NewTaskRepository(db)
+
+	_, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar) VALUES ('u1', 'login_user', 'Display Name', 'http://example.com/u1.png')`)
+	if err != nil {
+		t.Fatalf("failed to insert test user: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, created_by)
+		VALUES ('t1', 'Task 1', 'c1', 1000, 1, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+
+	tasks, _, err := repo.GetTasksByColumnIDs([]string{"c1"}, 1, 10, false, false)
+	if err != nil {
+		t.Fatalf("GetTasksByColumnIDs() error = %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].CreatedByUsername != "Display Name" {
+		t.Errorf("expected username 'Display Name', got %q", tasks[0].CreatedByUsername)
+	}
+	if tasks[0].CreatedByNickname != "Display Name" {
+		t.Errorf("expected nickname 'Display Name', got %q", tasks[0].CreatedByNickname)
+	}
+	if tasks[0].CreatedByAvatar != "http://example.com/u1.png" {
+		t.Errorf("expected avatar url, got %q", tasks[0].CreatedByAvatar)
+	}
+}
+
 func TestCreateTask(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()

@@ -344,8 +344,12 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
         <div className="flex items-center gap-2">
-          {task.createdByUsername && (
-            <UserAvatar username={task.createdByUsername} size="sm" />
+          {(task.createdByNickname || task.createdByUsername) && (
+            <UserAvatar
+              username={task.createdByNickname || task.createdByUsername || ''}
+              avatar={task.createdByAvatar}
+              size="sm"
+            />
           )}
           {task.assignee && (
             <span className="text-xs text-zinc-400 dark:text-zinc-400">{task.assignee}</span>

@@ -35,6 +35,9 @@ const mockTask: Task = {
   agentId: null,
   agentPrompt: null,
   createdBy: 'user-1',
+  createdByUsername: 'creatorlogin',
+  createdByNickname: 'Creator Nick',
+  createdByAvatar: 'https://example.com/avatar.png',
   createdAt: '2024-01-01',
   updatedAt: '2024-01-01',
   comments: [],
@@ -193,5 +196,32 @@ describe('TaskCard', () => {
     const taskWithManySubtasks = { ...mockTask, subtasks: manySubtasks };
     render(<TaskCard {...defaultProps} task={taskWithManySubtasks} />);
     expect(screen.getByText(/taskCard.moreSubtasks/)).toBeInTheDocument();
+  });
+
+  describe('creator avatar', () => {
+    it('renders avatar image when creator avatar URL is provided', () => {
+      render(<TaskCard {...defaultProps} />);
+      const avatar = screen.getByAltText('Creator Nick');
+      expect(avatar).toBeInTheDocument();
+      expect(avatar).toHaveAttribute('src', 'https://example.com/avatar.png');
+    });
+
+    it('falls back to initial avatar when creator avatar URL is missing', () => {
+      const taskNoAvatar = { ...mockTask, createdByAvatar: undefined };
+      render(<TaskCard {...defaultProps} task={taskNoAvatar} />);
+      const initial = screen.getByText('C');
+      expect(initial).toBeInTheDocument();
+    });
+
+    it('hides creator avatar when no creator info is available', () => {
+      const taskAnon = {
+        ...mockTask,
+        createdByUsername: undefined,
+        createdByNickname: undefined,
+        createdByAvatar: undefined,
+      };
+      const { container } = render(<TaskCard {...defaultProps} task={taskAnon} />);
+      expect(container.querySelectorAll('img').length).toBe(0);
+    });
   });
 });

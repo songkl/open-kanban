@@ -727,6 +727,63 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /tasks/reorder:
+    put:
+      summary: Reorder tasks
+      description: |
+        Update the position of multiple tasks in one transaction.
+        Supports reordering within a column or moving tasks between columns.
+      operationId: reorderTasks
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tasks
+              properties:
+                tasks:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - columnId
+                      - position
+                    properties:
+                      id:
+                        type: string
+                      columnId:
+                        type: string
+                      position:
+                        type: integer
+      responses:
+        '200':
+          description: Tasks reordered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  details:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /tasks/{id}/archive:
     post:
       summary: Archive a task

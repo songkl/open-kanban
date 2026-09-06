@@ -82,6 +82,8 @@ type Task struct {
 	AgentPrompt       *string    `json:"agentPrompt,omitempty"`
 	CreatedBy         string     `json:"createdBy"`
 	CreatedByUsername string     `json:"createdByUsername,omitempty"`
+	CreatedByNickname string     `json:"createdByNickname,omitempty"`
+	CreatedByAvatar   string     `json:"createdByAvatar,omitempty"`
 	CreatedAt         time.Time  `json:"createdAt"`
 	UpdatedAt         time.Time  `json:"updatedAt"`
 	Comments          []Comment  `json:"comments,omitempty"`
