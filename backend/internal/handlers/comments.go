@@ -124,7 +124,7 @@ func GetComment(db *sql.DB) gin.HandlerFunc {
 
 // CreateCommentRequest represents comment creation request
 type CreateCommentRequest struct {
-	Content string `json:"content" validate:"required,max=2000"`
+	Content string `json:"content" validate:"required"`
 	TaskID  string `json:"taskId" validate:"required"`
 }
 

@@ -30,6 +30,12 @@ var VersionMigrationMap = []VersionMigration{
 	// unauthorized users. Defaults to 1 so existing boards stay
 	// publicly visible after upgrade.
 	{Version: "0.4.0", From: 1, To: 4},
+	// 0.5.0 added migration 005 to extend the activities.action CHECK
+	// constraint with PERMISSION_TRANSFER so the new TransferOwnership
+	// handler (POST /api/v1/auth/permissions/transfer-ownership) can
+	// record its activity row when a board owner hands ownership to
+	// another user. See docs/PERMISSION_MATRIX.md section 4.8.
+	{Version: "0.5.0", From: 1, To: 5},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

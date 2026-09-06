@@ -297,6 +297,225 @@ type UpdateAppConfigRequest struct {
 	AuthEnabled       *bool `json:"authEnabled"`
 }
 
+type TransferOwnershipRequest struct {
+	BoardID        string `json:"boardId"`
+	NewOwnerUserID string `json:"newOwnerUserId"`
+}
+
+// TransferOwnership hands ownership of a board from the current
+// owner to another user who already has at least one permission
+// row on the board. After the transfer:
+//
+//   - the new owner's row is stamped with owner_agent_id so the
+//     owner short-circuit in loadBoardAccess keeps granting ADMIN;
+//   - the old owner's row keeps its explicit access (we never
+//     delete it) and has owner_agent_id cleared — they retain
+//     whatever access the row currently has, typically ADMIN via
+//     the row access string itself.
+//
+// Only the current owner or a global ADMIN can call this. Global
+// ADMINs are allowed so operators can recover ownership for boards
+// whose owner has left the team without having to first grant
+// themselves an ADMIN row.
+//
+// The whole rewrite runs in a single transaction so a partial
+// failure cannot leave the board with two owners (or zero).
+func TransferOwnership(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		var req TransferOwnershipRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
+			return
+		}
+		if req.BoardID == "" || req.NewOwnerUserID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Incomplete parameters"})
+			return
+		}
+
+		// Refuse to transfer ownership to oneself — that would be
+		// a no-op rewrite that still produces an activity row and
+		// an unnecessary cache flush. Reject it explicitly so the
+		// operator gets a clean error instead of a confusing 200.
+		if req.NewOwnerUserID == user.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "New owner must be different from current owner"})
+			return
+		}
+
+		// Authorize: global ADMIN or the board's current owner.
+		// Mirrors the rule used by SetPermission /
+		// DeletePermission (see canManageBoardPermissions) but
+		// skips the per-board ADMIN-row shortcut: transferring
+		// ownership is a meta-capability reserved to the recorded
+		// owner and global admins.
+		if !isAdmin(user) {
+			isOwner, err := IsBoardOwner(db, user.ID, req.BoardID)
+			if err != nil {
+				log.Printf("[TransferOwnership] failed to check ownership (user=%s board=%s): %v", user.ID, req.BoardID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check ownership"})
+				return
+			}
+			if !isOwner {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can transfer ownership"})
+				return
+			}
+		}
+
+		var boardName string
+		if err := db.QueryRow("SELECT name FROM boards WHERE id = ?", req.BoardID).Scan(&boardName); err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Board not found"})
+				return
+			}
+			log.Printf("[TransferOwnership] failed to load board %s: %v", req.BoardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load board"})
+			return
+		}
+
+		// Verify the target user exists — a transfer to a
+		// non-existent user would leave the FK intact in SQLite
+		// (FK enforcement is off by default in some test configs)
+		// but produce a confusing "no row updated" failure on
+		// the COMMIT side. Catch it up front instead.
+		var targetExists bool
+		if err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", req.NewOwnerUserID).Scan(&targetExists); err != nil {
+			log.Printf("[TransferOwnership] failed to check target user %s: %v", req.NewOwnerUserID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check target user"})
+			return
+		}
+		if !targetExists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Target user not found"})
+			return
+		}
+
+		// The target must already have a board_permissions row
+		// for this board. Without one, a transfer would leave the
+		// new owner with an owner stamp on a row that does not
+		// exist — every subsequent permission check would route
+		// through "no row" and the board would effectively have no
+		// manageable owner. The spec is explicit about this:
+		// "不允许转移给无权限的人，否则会变成无主".
+		var hasExistingRow bool
+		if err := db.QueryRow(
+			"SELECT EXISTS(SELECT 1 FROM board_permissions WHERE user_id = ? AND board_id = ?)",
+			req.NewOwnerUserID, req.BoardID,
+		).Scan(&hasExistingRow); err != nil {
+			log.Printf("[TransferOwnership] failed to check existing row (user=%s board=%s): %v", req.NewOwnerUserID, req.BoardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check target permission"})
+			return
+		}
+		if !hasExistingRow {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Target user must already have a permission on this board"})
+			return
+		}
+
+		// Capture old owner user ID and nickname for the activity
+		// log. The handler may be invoked by a global ADMIN who is
+		// not the recorded owner — we want the log to mention the
+		// human-readable actor + the actual owner being replaced.
+		var oldOwnerID sql.NullString
+		if err := db.QueryRow(
+			"SELECT owner_agent_id FROM board_permissions WHERE board_id = ? AND owner_agent_id IS NOT NULL LIMIT 1",
+			req.BoardID,
+		).Scan(&oldOwnerID); err != nil && err != sql.ErrNoRows {
+			log.Printf("[TransferOwnership] failed to read current owner (board=%s): %v", req.BoardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read current owner"})
+			return
+		}
+
+		var oldOwnerNickname, newOwnerNickname string
+		if oldOwnerID.Valid {
+			db.QueryRow("SELECT nickname FROM users WHERE id = ?", oldOwnerID.String).Scan(&oldOwnerNickname)
+		}
+		db.QueryRow("SELECT nickname FROM users WHERE id = ?", req.NewOwnerUserID).Scan(&newOwnerNickname)
+
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("[TransferOwnership] failed to begin tx: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to transfer ownership"})
+			return
+		}
+		defer tx.Rollback()
+
+		// Step 1: clear the old owner's stamp. We deliberately
+		// keep their access row intact (and their access value)
+		// so they remain usable on the board — only the
+		// owner-of-the-board metadata moves.
+		if _, err := tx.Exec(
+			"UPDATE board_permissions SET owner_agent_id = NULL, access = COALESCE(access, 'ADMIN') WHERE user_id = ? AND board_id = ?",
+			oldOwnerID.String, req.BoardID,
+		); err != nil {
+			log.Printf("[TransferOwnership] failed to clear old owner (user=%s board=%s): %v", oldOwnerID.String, req.BoardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear old owner"})
+			return
+		}
+
+		// Step 2: stamp the new owner. Access on the new owner's
+		// row is forced to ADMIN so they can manage the board
+		// immediately even if their previous access was lower.
+		// The owner short-circuit in loadBoardAccess also grants
+		// ADMIN to the new owner — both paths reinforce the
+		// upgrade, so dropping access to READ here would still
+		// leave them with effective ADMIN via short-circuit.
+		if _, err := tx.Exec(
+			"UPDATE board_permissions SET owner_agent_id = ?, access = 'ADMIN' WHERE user_id = ? AND board_id = ?",
+			req.NewOwnerUserID, req.NewOwnerUserID, req.BoardID,
+		); err != nil {
+			log.Printf("[TransferOwnership] failed to stamp new owner (user=%s board=%s): %v", req.NewOwnerUserID, req.BoardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to stamp new owner"})
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			log.Printf("[TransferOwnership] commit failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to transfer ownership"})
+			return
+		}
+
+		// Flush every cached session / permission entry that the
+		// change could affect. The old owner's effective access
+		// drops (they lose the owner short-circuit and now rely on
+		// their explicit access row), the new owner's effective
+		// access rises, and any third party whose cached
+		// (user, board) entry was stale relative to this
+		// ownership change needs to re-read.
+		if oldOwnerID.Valid {
+			tokenCache.DeleteByUserID(oldOwnerID.String)
+			permissionCache.InvalidateUser(oldOwnerID.String)
+		}
+		tokenCache.DeleteByUserID(req.NewOwnerUserID)
+		permissionCache.InvalidateUser(req.NewOwnerUserID)
+		permissionCache.InvalidateResource(req.BoardID)
+
+		details := "from=" + oldOwnerID.String + " to=" + req.NewOwnerUserID
+		if oldOwnerNickname != "" || newOwnerNickname != "" {
+			details = "from=" + oldOwnerNickname + " (" + oldOwnerID.String + ") to=" + newOwnerNickname + " (" + req.NewOwnerUserID + ")"
+		}
+		LogActivity(
+			db,
+			user.ID,
+			"PERMISSION_TRANSFER",
+			"BOARD",
+			req.BoardID,
+			boardName,
+			details,
+			c.ClientIP(),
+			getRequestSource(c),
+		)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"boardId": req.BoardID,
+			"newOwnerUserId": req.NewOwnerUserID,
+		})
+	}
+}
+
 func GetAppConfig(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var allowRegistration bool = true

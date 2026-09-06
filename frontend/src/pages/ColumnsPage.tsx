@@ -22,7 +22,7 @@ import { AddColumnModal } from '@/components/AddColumnModal';
 import { EditColumnModal } from '@/components/EditColumnModal';
 import { DeleteColumnModal } from '@/components/DeleteColumnModal';
 import { ColumnPermissionsModal } from '@/components/ColumnPermissionsModal';
-import type { Agent, Column } from '@/types/kanban';
+import type { Agent, Column, ColumnPermission } from '@/types/kanban';
 import { useSetupGuard } from '@/hooks/useSetupGuard';
 
 interface Board {
@@ -61,7 +61,7 @@ export function ColumnsPage() {
   const [editColumnOwnerAgent, setEditColumnOwnerAgent] = useState<string>('');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionColumn, setPermissionColumn] = useState<Column | null>(null);
-  const [columnPermissions, setColumnPermissions] = useState<Array<{ id: string; columnId: string; columnName: string; access: string; userId: string; userNickname: string }>>([]);
+  const [columnPermissions, setColumnPermissions] = useState<ColumnPermission[]>([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
 
   const sensors = useSensors(

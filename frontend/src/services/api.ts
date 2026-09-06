@@ -487,6 +487,14 @@ export const authApi = {
     }),
   deletePermission: (id: string) =>
     fetchApi<void>(`auth/permissions?id=${id}`, { method: 'DELETE' }),
+  transferOwnership: (boardId: string, newOwnerUserId: string) =>
+    fetchApi<{ success: boolean; boardId: string; newOwnerUserId: string }>(
+      'auth/permissions/transfer-ownership',
+      {
+        method: 'POST',
+        body: JSON.stringify({ boardId, newOwnerUserId }),
+      }
+    ),
   getColumnPermissions: (userId?: string, columnId?: string) =>
     fetchApi<{ permissions: ColumnPermission[] }>(
       `auth/permissions/columns${userId ? `?userId=${userId}` : columnId ? `?columnId=${columnId}` : ''}`

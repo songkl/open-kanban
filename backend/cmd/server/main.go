@@ -338,6 +338,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.GET("/permissions", handlers.GetPermissions(db))
 		authProtected.POST("/permissions", handlers.SetPermission(db))
 		authProtected.DELETE("/permissions", handlers.DeletePermission(db))
+		authProtected.POST("/permissions/transfer-ownership", handlers.TransferOwnership(db))
 		authProtected.GET("/permissions/columns", handlers.GetColumnPermissions(db))
 		authProtected.POST("/permissions/columns", handlers.SetColumnPermission(db))
 		authProtected.DELETE("/permissions/columns", handlers.DeleteColumnPermission(db))

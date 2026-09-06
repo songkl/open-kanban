@@ -40,6 +40,7 @@ ADMIN = 3
 | 添加评论                              | ✅    | ⛔ READ on board/column | ✗     |
 | 给看板授权（`POST /permissions`）     | ✅    | ⛔ owner of board      | ✗     |
 | 给列授权（`POST /permissions/columns`）| ✅   | ✗                     | ✗     |
+| 转移看板所有权（`POST /permissions/transfer-ownership`）| ✅ | ⛔ owner of board | ✗     |
 | 创建 / 删除用户 / 智能体              | ✅    | ✗                     | ✗     |
 | 修改他人角色 / 启用 / 停用            | ✅    | ✗                     | ✗     |
 | 修改自己的昵称 / 头像                 | ✅    | ✅                    | ✅     |
@@ -138,6 +139,27 @@ cp-user-columnA  = (存在, access=ADMIN)
 3. 删除该资源相关的所有权限缓存条目（`permissionCache.InvalidateResource`）。
 
 下一次请求即读取最新数据库状态，不存在「需要重新登录才能看到新权限」的滞后窗口。
+
+### 4.8 看板所有权转移（Transfer Ownership）
+
+`POST /api/v1/auth/permissions/transfer-ownership` 把看板的所有者从当前 owner 移交给另一位**已经**在该看板有一条 `board_permissions` 记录的用户。事务里：
+
+1. 校验调用方：仅当前 owner（`board_permissions.owner_agent_id == user_id`）或全局 `ADMIN` 可调用；有 `ADMIN` 行但无 owner 戳的非 owner **不能**调用（与 `SetPermission` / `DeletePermission` 一致：权限管理是 owner + 全局 admin 的元能力）。
+2. 校验 `newOwnerUserId`：必须已存在，且在该 board 上至少有 1 条 `board_permissions` 行；不允许转移给「无权限的人」，否则新 owner 的 stamp 会落到一条不存在的记录上，看板变成「无主」。
+3. 旧 owner 行 `owner_agent_id = NULL`，`access` 保持原值（通常为 `ADMIN`），不再 short-circuit；仍可通过显式 `access` 行使 ADMIN 权限。
+4. 新 owner 行 `owner_agent_id = newOwnerUserId`，`access = 'ADMIN'`；同时通过 short-circuit 与显式 access 双重确保 ADMIN。
+5. `tokenCache.DeleteByUserID` + `permissionCache.InvalidateUser` 双向失效（覆盖旧 owner / 新 owner），`permissionCache.InvalidateResource(boardID)` 兜底任何第三方缓存条目。
+6. 写 `PERMISSION_TRANSFER` activity 行（migration 005 在 `activities.action` CHECK 上新增该类型）。
+
+```
+转移前：bp-admin-board1   = (owner_agent_id=admin1, access=ADMIN)
+       bp-member1-board1 = (owner_agent_id=NULL,   access=READ)
+
+转移后：bp-admin-board1   = (owner_agent_id=NULL,   access=ADMIN)   ← 显式 ADMIN，无 short-circuit
+       bp-member1-board1 = (owner_agent_id=member1, access=ADMIN)  ← 双重 ADMIN
+```
+
+调用方自身不能是 newOwner（返回 400），目标用户不存在返回 404，看板不存在返回 404，目标用户无 board_permissions 行返回 400。完整断言见 `auth_permission_handlers_test.go`。
 
 ## 5. 缓存语义
 

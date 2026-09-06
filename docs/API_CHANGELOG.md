@@ -124,3 +124,23 @@ This document tracks changes to the Open-Kanban API specification.
 - **Self enable/disable blocked** — `SetUserEnabled` returns 400 `Cannot enable/disable yourself` when the requester targets their own user ID, to avoid an admin accidentally locking themselves out.
 - **Owner cannot self-revoke** — `DeletePermission` refuses to remove a board's owner row (`owner_agent_id == targetUserID`) with 403 `Cannot revoke the board owner's permission`. The board must always have a manageable owner.
 - **Permission management is a meta-capability** — `SetPermission` / `DeletePermission` require either `users.role == 'ADMIN'` or `IsBoardOwner(db, user.ID, boardID) == true`. A user who has been granted `ADMIN` access to a board by another admin (without being the recorded owner) cannot manage permissions — they can use the board, but cannot change who else can use it. This is intentional: permission management is reserved to the creator and global admins.
+
+## [1.2.0] - 2026-09-06
+
+### Added
+
+- **Board ownership transfer** — `POST /api/v1/auth/permissions/transfer-ownership`. Body `{boardId, newOwnerUserId}`. Only the current board owner or a global `ADMIN` can call it. The target user must already have a `board_permissions` row on the board — transferring to a user with no row would leave the board with an owner stamp on a row that does not exist ("无主"). The handler runs in a single transaction:
+  - old owner's `owner_agent_id` is cleared (their `access` value is preserved so they remain usable on the board),
+  - new owner's row is stamped with `owner_agent_id` and forced to `access = 'ADMIN'`,
+  - `tokenCache` + `permissionCache` are invalidated for both users and the resource so the change is visible on the next request.
+  - One `PERMISSION_TRANSFER` activity row is written (new `activities.action` value; see migration 005).
+- **Activity action `PERMISSION_TRANSFER`** — added by migration `005_extend_activity_actions_transfer` to the `activities.action` CHECK constraint (SQLite + MySQL).
+- **Frontend `BoardPermissionsModal` "Transfer Ownership"** — owner / global admin sees a badge with the current owner plus a Transfer button. The transfer dialog lists only users who already have a permission row on the board; backend enforcement remains the source of truth.
+
+### Errors
+
+- `400 Incomplete parameters` — missing `boardId` or `newOwnerUserId`.
+- `400 New owner must be different from current owner` — requester tried to transfer to themselves.
+- `400 Target user must already have a permission on this board` — new owner has no `board_permissions` row.
+- `403 Only admin or board owner can transfer ownership` — caller is neither global admin nor recorded owner.
+- `404 Board not found` / `404 Target user not found` — invalid ids.

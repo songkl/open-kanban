@@ -132,12 +132,12 @@ func TestSQLiteMigrationsAllowNewPermissionActions(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	for _, action := range []string{"PERMISSION_GRANT", "PERMISSION_REVOKE"} {
+	for _, action := range []string{"PERMISSION_GRANT", "PERMISSION_REVOKE", "PERMISSION_TRANSFER"} {
 		if _, err := db.Exec(
 			"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, ?, 'BOARD', 'b1', 'web')",
 			"a-"+action, "u1", action,
 		); err != nil {
-			t.Errorf("action %s should be permitted by CHECK constraint after migration 002, got: %v", action, err)
+			t.Errorf("action %s should be permitted by CHECK constraint after migrations, got: %v", action, err)
 		}
 	}
 }

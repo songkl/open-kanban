@@ -497,22 +497,102 @@ func TestCreateCommentBeyondFormerLimit(t *testing.T) {
 	router.Use(handlers.RequireAuth(db))
 	router.POST("/api/comments", handlers.CreateComment(db))
 
-	body := map[string]interface{}{"content": strings.Repeat("a", 2001), "taskId": "task1"}
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
+	tests := []struct {
+		name       string
+		content    string
+		taskID     string
+		wantStatus int
+	}{
+		{
+			name:       "2001 chars (just over former 2000 limit) is accepted",
+			content:    strings.Repeat("a", 2001),
+			taskID:     "task1",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "100KB content is accepted (no length limit)",
+			content:    strings.Repeat("x", 100*1024),
+			taskID:     "task1",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "multibyte unicode content is accepted",
+			content:    strings.Repeat("你好世界", 500),
+			taskID:     "task1",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "empty content is rejected",
+			content:    "",
+			taskID:     "task1",
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 
-	req, err := http.NewRequest("POST", "/api/comments", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		t.Fatalf("failed to create request: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlers.ResetRateLimitMapForTest()
+			body := map[string]interface{}{"content": tt.content, "taskId": tt.taskID}
+			jsonBody, err := json.Marshal(body)
+			if err != nil {
+				t.Fatalf("failed to marshal request: %v", err)
+			}
+
+			req, err := http.NewRequest("POST", "/api/comments", bytes.NewBuffer(jsonBody))
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d: %s", tt.wantStatus, w.Code, w.Body.String())
+			}
+		})
 	}
+}
+
+func TestCreateCommentPersistsFullContent(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetRateLimitMapForTest()
+	db := setupCommentsDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/comments", handlers.CreateComment(db))
+
+	longContent := strings.Repeat("Z", 5000)
+	body := map[string]interface{}{"content": longContent, "taskId": "task1"}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/comments", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	commentID, ok := resp["id"].(string)
+	if !ok || commentID == "" {
+		t.Fatalf("expected non-empty comment id, got %v", resp["id"])
+	}
+
+	var stored string
+	err := db.QueryRow("SELECT content FROM comments WHERE id = ?", commentID).Scan(&stored)
+	if err != nil {
+		t.Fatalf("failed to read stored comment: %v", err)
+	}
+	if stored != longContent {
+		t.Errorf("stored content length = %d, want %d", len(stored), len(longContent))
 	}
 }
