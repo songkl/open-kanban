@@ -345,11 +345,19 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
         </div>
         <div className="flex items-center gap-2">
           {(task.createdByNickname || task.createdByUsername) && (
-            <UserAvatar
-              username={task.createdByNickname || task.createdByUsername || ''}
-              avatar={task.createdByAvatar}
-              size="sm"
-            />
+            <div
+              className="flex items-center gap-1.5"
+              title={t('taskModal.createdBy')}
+            >
+              <UserAvatar
+                username={task.createdByNickname || task.createdByUsername || ''}
+                avatar={task.createdByAvatar}
+                size="sm"
+              />
+              <span className="text-xs text-zinc-500 dark:text-zinc-500 truncate max-w-[8rem]">
+                {task.createdByNickname || task.createdByUsername}
+              </span>
+            </div>
           )}
           {task.assignee && (
             <span className="text-xs text-zinc-400 dark:text-zinc-400">{task.assignee}</span>

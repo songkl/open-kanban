@@ -472,7 +472,8 @@ describe('TaskModal', () => {
         createdByAvatar: undefined,
       };
       render(<TaskModal {...defaultProps} task={taskAnon} />);
-      expect(screen.queryByTitle('taskModal.createdBy')).not.toBeInTheDocument();
+      expect(screen.queryByText('Creator Nick')).not.toBeInTheDocument();
+      expect(screen.queryByText('creatorlogin')).not.toBeInTheDocument();
     });
   });
 });

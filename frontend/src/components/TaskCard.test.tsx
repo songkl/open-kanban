@@ -206,6 +206,20 @@ describe('TaskCard', () => {
       expect(avatar).toHaveAttribute('src', 'https://example.com/avatar.png');
     });
 
+    it('renders creator nickname next to avatar', () => {
+      render(<TaskCard {...defaultProps} />);
+      expect(screen.getByText('Creator Nick')).toBeInTheDocument();
+    });
+
+    it('falls back to username when creator nickname is missing', () => {
+      const taskOnlyUsername = {
+        ...mockTask,
+        createdByNickname: undefined,
+      };
+      render(<TaskCard {...defaultProps} task={taskOnlyUsername} />);
+      expect(screen.getByText('creatorlogin')).toBeInTheDocument();
+    });
+
     it('falls back to initial avatar when creator avatar URL is missing', () => {
       const taskNoAvatar = { ...mockTask, createdByAvatar: undefined };
       render(<TaskCard {...defaultProps} task={taskNoAvatar} />);
@@ -222,6 +236,7 @@ describe('TaskCard', () => {
       };
       const { container } = render(<TaskCard {...defaultProps} task={taskAnon} />);
       expect(container.querySelectorAll('img').length).toBe(0);
+      expect(screen.queryByText('creatorlogin')).not.toBeInTheDocument();
     });
   });
 });

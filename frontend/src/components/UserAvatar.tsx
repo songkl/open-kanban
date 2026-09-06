@@ -4,6 +4,7 @@ interface UserAvatarProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   onClick?: () => void;
+  title?: string;
 }
 
 const SIZE_CLASSES = {
@@ -46,13 +47,15 @@ function getInitial(username: string): string {
   return username.charAt(0).toUpperCase();
 }
 
-export function UserAvatar({ username = '', avatar, size = 'md', className = '', onClick }: UserAvatarProps) {
+export function UserAvatar({ username = '', avatar, size = 'md', className = '', onClick, title }: UserAvatarProps) {
   const clickable = !!onClick;
+  const resolvedTitle = title ?? username;
   if (avatar) {
     return (
       <img
         src={avatar}
         alt={username}
+        title={resolvedTitle || undefined}
         onClick={onClick}
         className={`rounded-full object-cover ${SIZE_CLASSES[size]} ${clickable ? 'cursor-pointer' : ''} ${className}`}
       />
@@ -65,6 +68,7 @@ export function UserAvatar({ username = '', avatar, size = 'md', className = '',
   return (
     <div
       onClick={onClick}
+      title={resolvedTitle || undefined}
       className={`flex items-center justify-center rounded-full font-medium text-white ${bgColor} ${SIZE_CLASSES[size]} ${clickable ? 'cursor-pointer' : ''} ${className}`}
     >
       {initial}

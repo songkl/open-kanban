@@ -384,7 +384,10 @@ export function TaskModal({
                 <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
                 <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-400">
                   {(task.createdByNickname || task.createdByUsername) && (
-                    <div className="flex items-center gap-1.5" title={t('taskModal.createdBy')}>
+                    <div
+                      className="flex items-center gap-1.5"
+                      title={`${t('taskModal.createdBy')}: ${task.createdByNickname || task.createdByUsername}`}
+                    >
                       <UserAvatar
                         username={task.createdByNickname || task.createdByUsername || ''}
                         avatar={task.createdByAvatar}
