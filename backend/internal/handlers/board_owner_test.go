@@ -58,6 +58,7 @@ func setupBoardOwnerDB(t *testing.T) *sql.DB {
 		short_alias TEXT UNIQUE,
 		task_counter INTEGER DEFAULT 1000,
 		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		description TEXT DEFAULT ''

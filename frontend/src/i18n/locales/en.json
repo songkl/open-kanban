@@ -84,7 +84,12 @@
     "addPermission": "Add Authorization",
     "add": "Add",
     "selectUser": "Select user",
-    "permissionAddFailed": "Failed to add authorization"
+    "permissionAddFailed": "Failed to add authorization",
+    "public": "Public",
+    "private": "Private",
+    "publicHint": "Visible to everyone, including anonymous users",
+    "privateHint": "Only invited users can see this board",
+    "privateBadge": "Private"
   },
   "task": {
     "addTask": "Add Task",
@@ -307,6 +312,8 @@
     "boardId": "Board ID (optional)",
     "boardIdHint": "For URL access, cannot contain /",
     "autoGenerate": "Leave empty for auto-generated English ID",
+    "visibility": "Visibility",
+    "visibilityHint": "Public boards appear in the board list for everyone; private boards only show for invited users",
     "templateName": "Template Name",
     "enterTemplateName": "Enter template name",
     "templateNameHint": "Save \"{{boardName}}\" as a template",

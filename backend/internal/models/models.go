@@ -33,6 +33,7 @@ type Board struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
+	IsPublic    bool      `json:"isPublic"`
 	Deleted     bool      `json:"deleted"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`

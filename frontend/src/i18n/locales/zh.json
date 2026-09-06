@@ -84,7 +84,12 @@
     "addPermission": "添加授权",
     "add": "添加",
     "selectUser": "选择用户",
-    "permissionAddFailed": "添加授权失败"
+    "permissionAddFailed": "添加授权失败",
+    "public": "公开",
+    "private": "私有",
+    "publicHint": "所有人（包括未登录用户）都可以看到",
+    "privateHint": "只有被授权的用户才能看到此看板",
+    "privateBadge": "私有"
   },
   "task": {
     "addTask": "添加任务",
@@ -307,6 +312,8 @@
     "boardId": "看板 ID（可选）",
     "boardIdHint": "用于 URL 访问，不能包含 /",
     "autoGenerate": "留空则自动生成英文ID",
+    "visibility": "可见性",
+    "visibilityHint": "公开看板会出现在所有人的看板列表中；私有看板只对被授权的用户可见",
     "templateName": "模板名称",
     "enterTemplateName": "请输入模板名称",
     "templateNameHint": "将「{{boardName}}」保存为模板",

@@ -188,7 +188,7 @@ export function createApiRequest<T>(
 // Boards API
 export const boardsApi = {
   getAll: () => fetchApi<Board[]>('boards'),
-  create: (data: { id?: string; name: string; description?: string }) =>
+  create: (data: { id?: string; name: string; description?: string; isPublic?: boolean }) =>
     fetchApi<Board>('boards', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -198,7 +198,7 @@ export const boardsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  update: (id: string, data: { name?: string; description?: string }) =>
+  update: (id: string, data: { name?: string; description?: string; isPublic?: boolean }) =>
     fetchApi<Board>(`boards/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),

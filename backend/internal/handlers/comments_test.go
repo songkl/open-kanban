@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"open-kanban/internal/handlers"
@@ -49,6 +50,7 @@ func setupCommentsDB(t *testing.T) *sql.DB {
 		short_alias TEXT UNIQUE,
 		task_counter INTEGER DEFAULT 1000,
 		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		description TEXT DEFAULT ''
@@ -483,4 +485,34 @@ func TestCreateCommentHandler(t *testing.T) {
 			t.Errorf("expected author 'member', got %v", resp["author"])
 		}
 	})
+}
+
+func TestCreateCommentBeyondFormerLimit(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetRateLimitMapForTest()
+	db := setupCommentsDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/comments", handlers.CreateComment(db))
+
+	body := map[string]interface{}{"content": strings.Repeat("a", 2001), "taskId": "task1"}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", "/api/comments", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
 }

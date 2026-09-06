@@ -85,10 +85,15 @@ export function BoardsPage() {
     description?: string;
     boardId?: string;
     templateId?: string;
+    isPublic?: boolean;
   }) => {
     try {
       if (editingBoard) {
-        await boardsApi.update(editingBoard.id, { name: data.name, description: data.description });
+        await boardsApi.update(editingBoard.id, {
+          name: data.name,
+          description: data.description,
+          isPublic: data.isPublic,
+        });
         showToastMessage(t('toast.boardUpdated'));
       } else {
         if (data.templateId) {
@@ -101,6 +106,7 @@ export function BoardsPage() {
           await boardsApi.create({
             name: data.name,
             id: data.boardId,
+            isPublic: data.isPublic,
           });
         }
         showToastMessage(t('toast.boardCreated'));

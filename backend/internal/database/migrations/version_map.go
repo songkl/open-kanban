@@ -25,6 +25,11 @@ var VersionMigrationMap = []VersionMigration{
 	// the new "owner can manage permissions" branch in
 	// SetPermission / DeletePermission have a real owner to act on.
 	{Version: "0.3.0", From: 1, To: 3},
+	// 0.4.0 added migration 004 to introduce boards.is_public so the
+	// board list endpoint can hide private boards from anonymous and
+	// unauthorized users. Defaults to 1 so existing boards stay
+	// publicly visible after upgrade.
+	{Version: "0.4.0", From: 1, To: 4},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

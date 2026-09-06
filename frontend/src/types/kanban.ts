@@ -74,6 +74,7 @@ export interface Board {
   id: string;
   name: string;
   description?: string;
+  isPublic?: boolean;
   createdAt: string;
   updatedAt: string;
 }

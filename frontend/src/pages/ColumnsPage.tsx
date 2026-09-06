@@ -28,6 +28,7 @@ import { useSetupGuard } from '@/hooks/useSetupGuard';
 interface Board {
   id: string;
   name: string;
+  isPublic?: boolean;
 }
 
 export function ColumnsPage() {

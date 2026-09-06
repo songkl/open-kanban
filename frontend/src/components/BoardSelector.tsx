@@ -40,6 +40,25 @@ export const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
           <span className="truncate max-w-24">
             {currentBoard?.name || boards.find((b) => b.id === boardIdFromUrl)?.name || t('board.selectBoard')}
           </span>
+          {(currentBoard?.isPublic === false ||
+            (!currentBoard && boards.find((b) => b.id === boardIdFromUrl)?.isPublic === false)) && (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-amber-500"
+            >
+              <title>{t('board.private')}</title>
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          )}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="12"
@@ -60,11 +79,29 @@ export const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
               <button
                 key={board.id}
                 onClick={() => onSelectBoard(board.id)}
-                className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 ${
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 ${
                   board.id === boardIdFromUrl ? 'bg-blue-50 text-blue-700 font-medium' : 'text-zinc-700 dark:text-zinc-400'
                 }`}
               >
-                {board.name}
+                <span className="flex-1 truncate">{board.name}</span>
+                {board.isPublic === false && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="shrink-0 text-amber-500"
+                  >
+                    <title>{t('board.private')}</title>
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                )}
               </button>
             ))}
           </div>
