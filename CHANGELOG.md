@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
+#### Added
+  - feat: widen comments.content to LONGTEXT (migration 007) and document every 400 reason on POST /api/v1/comments (s-1018)
+  - test: add migration_007_test.go covering long-content round-trip and up/down non-destructiveness
+
 #### Fixed
   - fix: tone down borders + the VIEWER badge in dark mode
   - fix: stop hiding more-menu icons in dark mode
