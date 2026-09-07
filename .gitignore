@@ -68,3 +68,4 @@ test/
 .claude/
 backend/web/
 opencode.json
+devDoc/
