@@ -21,6 +21,32 @@ function permissionUsername(perm: BoardPermission): string {
   return (perm as BoardPermission & { username?: string }).username || '';
 }
 
+// Audit fields rendered under each granted row (s-1047). The backend
+// exposes the grantor as either a username (preferred) or a nickname
+// fallback, with nulls for legacy / system-seeded rows that have no
+// granting actor on file.
+function permissionGrantorDisplay(perm: BoardPermission): string {
+  return perm.grantedByUsername || perm.grantedByNickname || '';
+}
+
+function permissionGrantorUsername(perm: BoardPermission): string {
+  return perm.grantedByUsername || '';
+}
+
+function isExpiredPermission(perm: BoardPermission): boolean {
+  if (!perm.expiresAt) return false;
+  const ts = Date.parse(perm.expiresAt);
+  if (Number.isNaN(ts)) return false;
+  return ts <= Date.now();
+}
+
+function formatPermissionTimestamp(value: string | null | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString();
+}
+
 function matchesQuery(query: string, ...fields: (string | undefined)[]): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -259,13 +285,21 @@ export function BoardPermissionsModal({
                 <p className="text-sm text-zinc-400 dark:text-zinc-500 py-4 text-center">{t('board.noMatchingPermissions')}</p>
               ) : (
                 <div className="space-y-2" data-testid="board-permissions-list">
-                  {filteredPermissions.map((perm) => (
+                  {filteredPermissions.map((perm) => {
+                    const grantor = permissionGrantorDisplay(perm);
+                    const grantedAtText = formatPermissionTimestamp(perm.grantedAt);
+                    const expiresAtText = formatPermissionTimestamp(perm.expiresAt);
+                    const revokedAtText = formatPermissionTimestamp(perm.revokedAt);
+                    const expired = isExpiredPermission(perm);
+                    const revoked = !!perm.revokedAt;
+                    const showAuditLine = grantor || grantedAtText || expiresAtText || revokedAtText;
+                    return (
                     <div key={perm.id} data-testid="board-permission-row" className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-700 rounded-xl border border-zinc-100 dark:border-zinc-700">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-xs font-bold">
                           {permissionDisplayName(perm).charAt(0).toUpperCase()}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{permissionDisplayName(perm)}</span>
                             {perm.ownerAgentId && perm.ownerAgentId === perm.userId && (
@@ -275,6 +309,61 @@ export function BoardPermissionsModal({
                             )}
                           </div>
                           <div className="text-xs text-zinc-400 dark:text-zinc-500">{t('column.permission.' + perm.access)}</div>
+                          {showAuditLine && (
+                            <div
+                              className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400"
+                              data-testid="board-permission-audit"
+                            >
+                              {grantor && (
+                                <span data-testid="board-permission-grantor">
+                                  <span className="text-zinc-400 dark:text-zinc-500">{t('board.grantedBy')}</span>
+                                  {permissionGrantorUsername(perm) ? (
+                                    <span
+                                      className="ml-1 font-medium text-zinc-700 dark:text-zinc-200"
+                                      data-testid="board-permission-grantor-username"
+                                      data-username={permissionGrantorUsername(perm)}
+                                    >
+                                      @{permissionGrantorUsername(perm)}
+                                    </span>
+                                  ) : (
+                                    <span className="ml-1 font-medium text-zinc-700 dark:text-zinc-200">{grantor}</span>
+                                  )}
+                                </span>
+                              )}
+                              {grantedAtText && (
+                                <span data-testid="board-permission-granted-at">
+                                  <span className="text-zinc-400 dark:text-zinc-500">{t('board.grantedAt')}</span>
+                                  <span className="ml-1 text-zinc-600 dark:text-zinc-300">{grantedAtText}</span>
+                                </span>
+                              )}
+                              {expiresAtText && (
+                                <span
+                                  data-testid="board-permission-expires-at"
+                                  data-expired={expired ? 'true' : 'false'}
+                                  className={expired ? 'text-red-600 dark:text-red-400' : ''}
+                                >
+                                  <span className={expired ? 'text-red-500/80 dark:text-red-400/80' : 'text-zinc-400 dark:text-zinc-500'}>
+                                    {t('board.expiresAt')}
+                                  </span>
+                                  <span className="ml-1">{expiresAtText}</span>
+                                </span>
+                              )}
+                              {revokedAtText && (
+                                <span data-testid="board-permission-revoked-at">
+                                  <span className="text-zinc-400 dark:text-zinc-500">{t('board.revokedAt')}</span>
+                                  <span className="ml-1 text-zinc-600 dark:text-zinc-300">{revokedAtText}</span>
+                                </span>
+                              )}
+                              {revoked && !revokedAtText && (
+                                <span
+                                  data-testid="board-permission-revoked-at"
+                                  className="text-zinc-400 dark:text-zinc-500"
+                                >
+                                  {t('board.revokedAt')}: -
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <button
@@ -284,7 +373,8 @@ export function BoardPermissionsModal({
                         {t('column.remove')}
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

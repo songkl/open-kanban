@@ -444,4 +444,162 @@ describe('BoardPermissionsModal', () => {
       expect(screen.queryByRole('button', { name: 'board.bulkAddSubmit' })).not.toBeInTheDocument();
     });
   });
+
+  describe('audit information (grantedBy / grantedAt / expiresAt / revokedAt)', () => {
+    const pastDate = '2024-01-01T00:00:00.000Z';
+    const futureDate = '2999-01-01T00:00:00.000Z';
+    const grantedAt = '2024-06-15T08:30:00.000Z';
+    const revokedAt = '2024-07-20T10:00:00.000Z';
+
+    const auditPermissions = [
+      {
+        id: 'perm-granted',
+        boardId: 'board-1',
+        boardName: 'Test Board',
+        access: 'WRITE' as const,
+        userId: 'user-1',
+        userNickname: 'Alice',
+        username: 'alice_login',
+        userType: 'HUMAN' as const,
+        userRole: 'MEMBER' as const,
+        grantedByUserId: 'admin-1',
+        grantedByUsername: 'admin_user',
+        grantedByNickname: 'Admin One',
+        grantedAt,
+        expiresAt: futureDate,
+        revokedAt: null,
+      },
+      {
+        id: 'perm-expired',
+        boardId: 'board-1',
+        boardName: 'Test Board',
+        access: 'READ' as const,
+        userId: 'user-2',
+        userNickname: 'Bob',
+        username: 'bob_login',
+        userType: 'AGENT' as const,
+        userRole: 'MEMBER' as const,
+        grantedByUserId: 'admin-1',
+        grantedByUsername: 'admin_user',
+        grantedByNickname: 'Admin One',
+        grantedAt,
+        expiresAt: pastDate,
+        revokedAt: null,
+      },
+      {
+        id: 'perm-revoked',
+        boardId: 'board-1',
+        boardName: 'Test Board',
+        access: 'ADMIN' as const,
+        userId: 'user-3',
+        userNickname: 'Carol',
+        username: 'carol_login',
+        userType: 'HUMAN' as const,
+        userRole: 'MEMBER' as const,
+        grantedByUserId: 'admin-1',
+        grantedByUsername: 'admin_user',
+        grantedByNickname: 'Admin One',
+        grantedAt,
+        expiresAt: null,
+        revokedAt,
+      },
+      {
+        id: 'perm-anonymous',
+        boardId: 'board-1',
+        boardName: 'Test Board',
+        access: 'READ' as const,
+        userId: 'user-4',
+        userNickname: 'Dave',
+        username: 'dave_login',
+        userType: 'HUMAN' as const,
+        userRole: 'MEMBER' as const,
+        grantedByUserId: null,
+        grantedByUsername: null,
+        grantedByNickname: null,
+        grantedAt: null,
+        expiresAt: null,
+        revokedAt: null,
+      },
+    ];
+
+    const auditProps = {
+      ...defaultProps,
+      permissions: auditPermissions,
+    };
+
+    it('renders the grantor username for every row that has one', () => {
+      render(<BoardPermissionsModal {...auditProps} />);
+
+      const grantorRows = screen.getAllByTestId('board-permission-grantor');
+      expect(grantorRows).toHaveLength(3);
+      const usernames = screen.getAllByTestId('board-permission-grantor-username');
+      expect(usernames).toHaveLength(3);
+      usernames.forEach((el) => {
+        expect(el.textContent).toBe('@admin_user');
+        expect(el.getAttribute('data-username')).toBe('admin_user');
+      });
+    });
+
+    it('renders the granted-at timestamp for each row', () => {
+      render(<BoardPermissionsModal {...auditProps} />);
+
+      const grantedAtRows = screen.getAllByTestId('board-permission-granted-at');
+      expect(grantedAtRows).toHaveLength(3);
+      grantedAtRows.forEach((el) => {
+        expect(el.textContent).toContain('board.grantedAt');
+        expect(el.textContent).not.toBe('');
+      });
+    });
+
+    it('marks rows past their expires_at as expired with a red indicator', () => {
+      render(<BoardPermissionsModal {...auditProps} />);
+
+      const expiresRows = screen.getAllByTestId('board-permission-expires-at');
+      expect(expiresRows).toHaveLength(2);
+
+      const [grantedRow, expiredRow] = expiresRows;
+      expect(grantedRow.getAttribute('data-expired')).toBe('false');
+      expect(expiredRow.getAttribute('data-expired')).toBe('true');
+
+      expect(grantedRow.className).not.toMatch(/text-red-600/);
+      expect(expiredRow.className).toMatch(/text-red-600/);
+    });
+
+    it('renders the revoked-at timestamp for rows that have been revoked', () => {
+      render(<BoardPermissionsModal {...auditProps} />);
+
+      const revokedRows = screen.getAllByTestId('board-permission-revoked-at');
+      expect(revokedRows).toHaveLength(1);
+      expect(revokedRows[0].textContent).toContain('board.revokedAt');
+      expect(revokedRows[0].textContent).not.toBe('');
+    });
+
+    it('hides the audit line when a row carries no audit metadata', () => {
+      const onlyAnonymous = [auditPermissions[3]];
+      render(<BoardPermissionsModal {...defaultProps} permissions={onlyAnonymous} />);
+
+      expect(screen.queryByTestId('board-permission-audit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('board-permission-grantor')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('board-permission-granted-at')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('board-permission-expires-at')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('board-permission-revoked-at')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the grantor nickname when the username is missing', () => {
+      const onlyNickname = [
+        {
+          ...auditPermissions[0],
+          id: 'perm-nick',
+          grantedByUsername: null,
+          grantedByNickname: 'Admin One',
+          expiresAt: null,
+          revokedAt: null,
+        },
+      ];
+      render(<BoardPermissionsModal {...defaultProps} permissions={onlyNickname} />);
+
+      expect(screen.getByTestId('board-permission-grantor')).toHaveTextContent('Admin One');
+      expect(screen.queryByTestId('board-permission-grantor-username')).not.toBeInTheDocument();
+    });
+  });
 });

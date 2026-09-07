@@ -77,11 +77,19 @@ export interface BoardPermission {
   id: string;
   userId: string;
   userNickname: string;
+  username?: string;
   userType: UserType;
+  userRole?: 'ADMIN' | 'MEMBER' | 'VIEWER';
   boardId: string;
   boardName: string;
   access: PermissionAccess;
   ownerAgentId?: string | null;
+  grantedByUserId?: string | null;
+  grantedByUsername?: string | null;
+  grantedByNickname?: string | null;
+  grantedAt?: string | null;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
 }
 
 export interface ColumnPermission {
