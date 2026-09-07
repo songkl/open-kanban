@@ -396,8 +396,10 @@ describe('BoardPermissionsModal', () => {
       await waitFor(() => {
         expect(getSpy).toHaveBeenCalled();
       });
+      // Both AddBoardPermissionForm (fallback) and BulkBoardPermissionForm
+      // render Alice after getUsers resolves, so multiple matches are expected.
       await waitFor(() => {
-        expect(screen.getByText('Alice')).toBeInTheDocument();
+        expect(screen.getAllByText('Alice').length).toBeGreaterThan(0);
       });
     });
 
@@ -411,7 +413,35 @@ describe('BoardPermissionsModal', () => {
       await waitFor(() => {
         expect(vi.mocked(authApi.listVisibleUsers)).toHaveBeenCalledWith('board-1');
       });
-      expect(getSpy).not.toHaveBeenCalled();
+      // BulkBoardPermissionForm always calls getUsers on mount, so the
+      // assertion is now "exactly one caller" — the AddBoardPermissionForm
+      // did not have to fall back to getUsers.
+      expect(getSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('BulkBoardPermissionForm gating by canManageBoardPermissions', () => {
+    it('renders BulkBoardPermissionForm when canManageBoardPermissions is true', async () => {
+      render(<BoardPermissionsModal {...defaultProps} canManageBoardPermissions={true} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('board.bulkAddTitle')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: 'board.bulkAddSubmit' })).toBeInTheDocument();
+    });
+
+    it('hides BulkBoardPermissionForm when canManageBoardPermissions is false', () => {
+      render(<BoardPermissionsModal {...defaultProps} canManageBoardPermissions={false} />);
+
+      expect(screen.queryByText('board.bulkAddTitle')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'board.bulkAddSubmit' })).not.toBeInTheDocument();
+    });
+
+    it('hides BulkBoardPermissionForm when canManageBoardPermissions is undefined', () => {
+      render(<BoardPermissionsModal {...defaultProps} />);
+
+      expect(screen.queryByText('board.bulkAddTitle')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'board.bulkAddSubmit' })).not.toBeInTheDocument();
     });
   });
 });

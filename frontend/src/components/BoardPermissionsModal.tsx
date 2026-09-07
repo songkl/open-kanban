@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Board, BoardPermission, PermissionAccess, User } from '@/types/kanban';
 import { AddBoardPermissionForm } from '@/components/AddBoardPermissionForm';
+import { BulkBoardPermissionForm } from '@/components/BulkBoardPermissionForm';
 import { authApi, type PermissionCandidate } from '@/services/api';
 
 type AccessFilter = 'ALL' | PermissionAccess;
@@ -342,6 +343,16 @@ export function BoardPermissionsModal({
                 onPermissionAdded={onPermissionAdded}
               />
             </div>
+
+            {canManageBoardPermissions && (
+              <div className="mt-4 border-t border-zinc-100 dark:border-zinc-700 pt-4">
+                <BulkBoardPermissionForm
+                  boardId={board.id}
+                  onGranted={onPermissionAdded}
+                  existingPermissionUserIds={permissions.map((p) => p.userId)}
+                />
+              </div>
+            )}
           </>
         )}
 
