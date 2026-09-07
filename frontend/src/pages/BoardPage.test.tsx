@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { BoardPage } from './BoardPage';
 
@@ -67,5 +67,74 @@ describe('BoardPage', () => {
       </BrowserRouter>
     );
     expect(document.body).toBeInTheDocument();
+  });
+});
+
+describe('BoardPage error state', () => {
+  it('wires retry button onClick to fetchBoards when loadError is set', async () => {
+    vi.resetModules();
+    const fetchBoardsMock = vi.fn();
+    vi.doMock('@/hooks/useBoardState', () => ({
+      useBoardState: () => ({
+        boards: [],
+        currentBoard: null,
+        columns: [],
+        activeTask: null,
+        selectedTask: null,
+        selectedTasks: new Set(),
+        lastSelectedTaskId: null,
+        loading: false,
+        boardSwitching: false,
+        loadError: 'network down',
+        wsStatus: 'disconnected',
+        reconnectCount: 0,
+        currentUser: null,
+        filters: {},
+        filterPresets: [],
+        columnPagination: {},
+        searchQuery: '',
+        uniqueAssignees: [],
+        uniqueTags: [],
+        getFilteredColumns: () => [],
+        fetchBoards: fetchBoardsMock,
+        fetchColumns: vi.fn(),
+        handleLoadMoreTasks: vi.fn(),
+        updateTask: vi.fn(),
+        deleteTask: vi.fn(),
+        archiveTask: vi.fn(),
+        addTask: vi.fn(),
+        addComment: vi.fn(),
+        handleTaskSelect: vi.fn(),
+        selectAllInColumn: vi.fn(),
+        clearSelection: vi.fn(),
+        batchDelete: vi.fn(),
+        batchArchive: vi.fn(),
+        batchMove: vi.fn(),
+        batchUpdatePriority: vi.fn(),
+        batchUpdateAssignee: vi.fn(),
+        handleColumnRename: vi.fn(),
+        setSelectedTask: vi.fn(),
+        setActiveTask: vi.fn(),
+        setFilters: vi.fn(),
+        setSearchQuery: vi.fn(),
+        saveCurrentAsPreset: vi.fn(),
+        applyPreset: vi.fn(),
+        deletePreset: vi.fn(),
+        clearFilters: vi.fn(),
+        hasActiveFilters: false,
+        lastLocalUpdateRef: { current: 0 },
+        setColumns: vi.fn(),
+      }),
+    }));
+    const { BoardPage: BoardPageWithError } = await import('./BoardPage');
+    render(
+      <BrowserRouter>
+        <BoardPageWithError />
+      </BrowserRouter>
+    );
+    const retryButton = screen.getByText('app.error.retry');
+    expect(retryButton).toBeInTheDocument();
+    fireEvent.click(retryButton);
+    expect(fetchBoardsMock).toHaveBeenCalledTimes(1);
   });
 });
