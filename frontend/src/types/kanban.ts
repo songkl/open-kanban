@@ -94,6 +94,13 @@ export interface ColumnPermission {
   access: PermissionAccess;
 }
 
+export interface BoardBulkGrantResult {
+  success: boolean;
+  boardId: string;
+  granted: Array<{ userId: string; access: string }>;
+  count: number;
+}
+
 export interface Board {
   id: string;
   name: string;

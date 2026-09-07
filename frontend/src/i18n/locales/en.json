@@ -22,7 +22,9 @@
     "sortAsc": "Ascending",
     "sortDesc": "Descending",
     "delete": "Delete",
-    "save": "Save"
+    "save": "Save",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all"
   },
   "upload": {
     "fileTooLarge": "File too large, max 10MB",
@@ -112,6 +114,15 @@
     "transferOwnershipNoCandidates": "No eligible users — add a permission first.",
     "transferOwnershipFailed": "Failed to transfer ownership",
     "transferOwnershipSuccess": "Ownership transferred",
+    "bulkAddTitle": "Bulk assign permission",
+    "bulkAddHint": "Pick multiple users and set one access level",
+    "bulkAddSelectUsers": "Select users",
+    "bulkAddAccess": "Access level",
+    "bulkAddSubmit": "Bulk grant",
+    "bulkAddSuccess": "Granted to {count} users",
+    "bulkAddPartialFailure": "Unknown users: {ids}",
+    "bulkAddTooMany": "Up to 200 users per request",
+    "bulkAddOwnerForbidden": "Cannot modify the board owner's permission",
     "role": {
       "owner": "Owner",
       "admin": "Admin",

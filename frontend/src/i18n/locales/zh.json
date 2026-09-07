@@ -22,7 +22,9 @@
     "sortAsc": "升序",
     "sortDesc": "降序",
     "delete": "删除",
-    "save": "保存"
+    "save": "保存",
+    "selectAll": "全选",
+    "deselectAll": "取消全选"
   },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",
@@ -112,6 +114,15 @@
     "transferOwnershipNoCandidates": "暂无可选用户，请先为该看板授权。",
     "transferOwnershipFailed": "转移所有权失败",
     "transferOwnershipSuccess": "所有权已转移",
+    "bulkAddTitle": "批量分配权限",
+    "bulkAddHint": "选择多个用户并统一设置访问级别",
+    "bulkAddSelectUsers": "选择用户",
+    "bulkAddAccess": "访问级别",
+    "bulkAddSubmit": "批量授权",
+    "bulkAddSuccess": "已授权 {count} 个用户",
+    "bulkAddPartialFailure": "部分用户不存在: {ids}",
+    "bulkAddTooMany": "单次最多 200 个用户",
+    "bulkAddOwnerForbidden": "不能修改看板所有者的权限",
     "role": {
       "owner": "所有者",
       "admin": "管理员",

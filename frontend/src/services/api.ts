@@ -13,6 +13,7 @@ import type {
   OAuthConfigEntry,
   BoardPermission,
   ColumnPermission,
+  BoardBulkGrantResult,
 } from '@/types/kanban';
 import i18n from '@/i18n';
 
@@ -552,12 +553,7 @@ export const authApi = {
       body: JSON.stringify({ userId, boardId, access }),
     }),
   bulkSetPermissions: (boardId: string, userIds: string[], access: string) =>
-    fetchApi<{
-      success: boolean;
-      boardId: string;
-      granted: string[];
-      count: number;
-    }>('auth/permissions/bulk', {
+    fetchApi<BoardBulkGrantResult>('auth/permissions/bulk', {
       method: 'POST',
       body: JSON.stringify({ boardId, userIds, access }),
     }),
