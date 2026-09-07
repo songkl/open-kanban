@@ -96,10 +96,18 @@ export interface ColumnPermission {
   id: string;
   userId: string;
   userNickname: string;
+  username?: string;
   userType: UserType;
+  userRole?: 'ADMIN' | 'MEMBER' | 'VIEWER';
   columnId: string;
   columnName: string;
   access: PermissionAccess;
+  grantedByUserId?: string | null;
+  grantedByUsername?: string | null;
+  grantedByNickname?: string | null;
+  grantedAt?: string | null;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
 }
 
 export interface BoardBulkGrantResult {

@@ -1566,6 +1566,119 @@ func TestGetColumnPermissionsHandler(t *testing.T) {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("returns unified row shape with userType, userRole and audit fields", func(t *testing.T) {
+		// Seed an additional user with AGENT type so the userType
+		// projection is exercised against a non-HUMAN value. The
+		// grant row is attributed to admin1 (the seeded admin) so
+		// grantedByUserId / grantedByUsername / grantedByNickname
+		// all surface.
+		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar, type) VALUES ('agent-x', 'agent-x', 'Agent X', '', 'ADMIN', 1, '', 'AGENT')`); err != nil {
+			t.Fatalf("seed agent user: %v", err)
+		}
+		if _, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access, granted_by_user_id) VALUES ('cp-unified', 'agent-x', 'col1', 'WRITE', 'admin1')`); err != nil {
+			t.Fatalf("seed column permission: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/columns/permissions?userId=agent-x", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp struct {
+			Permissions []struct {
+				ID                string  `json:"id"`
+				UserID            string  `json:"userId"`
+				Username          string  `json:"username"`
+				Nickname          string  `json:"nickname"`
+				UserType          string  `json:"userType"`
+				UserRole          string  `json:"userRole"`
+				ColumnID          string  `json:"columnId"`
+				ColumnName        string  `json:"columnName"`
+				Access            string  `json:"access"`
+				GrantedByUserID   *string `json:"grantedByUserId"`
+				GrantedByUsername *string `json:"grantedByUsername"`
+				GrantedByNickname *string `json:"grantedByNickname"`
+				GrantedAt         *string `json:"grantedAt"`
+				ExpiresAt         *string `json:"expiresAt"`
+				RevokedAt         *string `json:"revokedAt"`
+			} `json:"permissions"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(resp.Permissions) != 1 {
+			t.Fatalf("expected 1 permission, got %d", len(resp.Permissions))
+		}
+		p := resp.Permissions[0]
+		if p.UserID != "agent-x" || p.UserType != "AGENT" || p.UserRole != "ADMIN" {
+			t.Errorf("missing or wrong user fields: %+v", p)
+		}
+		if p.ColumnID != "col1" || p.ColumnName != "Test Column" || p.Access != "WRITE" {
+			t.Errorf("missing or wrong column fields: %+v", p)
+		}
+		if p.Username != "agent-x" || p.Nickname != "Agent X" {
+			t.Errorf("missing or wrong display fields: %+v", p)
+		}
+		if p.GrantedByUserID == nil || *p.GrantedByUserID != "admin1" {
+			t.Errorf("missing grantedByUserId: %+v", p)
+		}
+		if p.GrantedByUsername == nil || *p.GrantedByUsername != "admin" {
+			t.Errorf("missing grantedByUsername: %+v", p)
+		}
+		if p.GrantedByNickname == nil || *p.GrantedByNickname != "admin" {
+			t.Errorf("missing grantedByNickname: %+v", p)
+		}
+		if p.GrantedAt == nil || *p.GrantedAt == "" {
+			t.Errorf("missing grantedAt: %+v", p)
+		}
+		// expiresAt and revokedAt must always be present as keys
+		// even when their DB columns are NULL — the field-set
+		// identity contract requires this.
+		if p.ExpiresAt != nil {
+			t.Errorf("expiresAt should be null for an un-expiring grant: %+v", p)
+		}
+		if p.RevokedAt != nil {
+			t.Errorf("revokedAt should be null for an active grant: %+v", p)
+		}
+	})
+
+	t.Run("excludes revoked rows", func(t *testing.T) {
+		// Add a fresh row and immediately soft-delete it. The
+		// listing must not surface it, otherwise the management
+		// UI could re-revoke an already-revoked row and log a
+		// duplicate PERMISSION_REVOKE activity entry.
+		if _, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access, revoked_at, revoked_by_user_id) VALUES ('cp-revoked', 'member1', 'col1', 'READ', datetime('now'), 'admin1')`); err != nil {
+			t.Fatalf("seed revoked row: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/columns/permissions", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp struct {
+			Permissions []struct {
+				ID string `json:"id"`
+			} `json:"permissions"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		for _, p := range resp.Permissions {
+			if p.ID == "cp-revoked" {
+				t.Errorf("revoked row cp-revoked should be excluded, but was returned: %+v", resp.Permissions)
+			}
+		}
+	})
 }
 
 func TestSetColumnPermissionHandler(t *testing.T) {

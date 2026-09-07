@@ -178,10 +178,14 @@ export function BoardPermissionsModal({
 
   const currentOwner =
     permissions.find((p) => p.ownerAgentId && p.ownerAgentId === p.userId) || null;
+  const isCurrentUserOwner = currentOwner !== null && currentOwner.userId === currentUser?.id;
+  // The board owner can always transfer ownership regardless of
+  // canManageBoardPermissions (which is only true for owners when
+  // the caller explicitly fetched the permission state). Treat the
+  // owner check as the source of truth so a stale/undefined
+  // canManageBoardPermissions doesn't lock the owner out.
   const canTransfer =
-    !!canManageBoardPermissions &&
-    (currentUser?.role === 'ADMIN' ||
-      (currentOwner !== null && currentOwner.userId === currentUser?.id));
+    currentUser?.role === 'ADMIN' || isCurrentUserOwner;
 
   const eligibleUsers = transferUsers.filter(
     (u) => permissions.some((p) => p.userId === u.id) && u.id !== currentUser?.id

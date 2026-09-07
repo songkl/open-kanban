@@ -375,6 +375,35 @@ describe('BoardPermissionsModal', () => {
       });
     });
 
+    it('shows the transfer button for a non-admin owner even when canManageBoardPermissions is undefined', async () => {
+      // Regression guard: before the fix, canTransfer was gated on
+      // canManageBoardPermissions AND owner/admin role. A stale
+      // canManageBoardPermissions=undefined (e.g. the hook hasn't
+      // resolved yet, or the BoardHeader didn't pass it) used to
+      // hide the button even from the recorded owner.
+      render(
+        <BoardPermissionsModal
+          {...ownerProps}
+          canManageBoardPermissions={undefined}
+        />
+      );
+      expect(screen.getByText('board.transferOwnership')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(vi.mocked(authApi.listVisibleUsers)).toHaveBeenCalled();
+      });
+    });
+
+    it('hides the transfer button for a non-owner who is not a global admin', async () => {
+      const nonOwnerProps = {
+        ...defaultProps,
+        permissions: ownerPermissions,
+        currentUser: { id: 'random-user', role: 'MEMBER' },
+        canManageBoardPermissions: false,
+      };
+      render(<BoardPermissionsModal {...nonOwnerProps} />);
+      expect(screen.queryByText('board.transferOwnership')).not.toBeInTheDocument();
+    });
+
     it('loads the candidate picker via authApi.listVisibleUsers(boardId) for the add form', async () => {
       const listSpy = vi.mocked(authApi.listVisibleUsers);
       listSpy.mockClear();

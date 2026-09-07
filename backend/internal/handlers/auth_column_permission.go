@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,6 +13,62 @@ type SetColumnPermissionRequest struct {
 	UserID   string `json:"userId"`
 	ColumnID string `json:"columnId"`
 	Access   string `json:"access"`
+}
+
+// ColumnPermissionRow is the unified, frontend-friendly row shape
+// returned by GET /api/v1/auth/permissions/columns for both the
+// ?userId= and ?columnId= query modes.
+//
+// The pre-s-1054 handler projected a minimal shape
+// ({id, columnId, columnName, access, userId, userNickname}) that
+// dropped userType, userRole, and every audit column. Downstream
+// code (AddColumnPermissionForm, BoardHeader.tsx owner-badge
+// rendering) had to fall back to a separate getUsers() round-trip
+// just to know whether the grantee was an AGENT, and the audit
+// fields were unreachable. The unified row below carries:
+//
+//	userId            — id of the granted user
+//	username          — login name of the granted user
+//	nickname          — display name of the granted user
+//	userType          — HUMAN | AGENT
+//	userRole          — ADMIN | MEMBER | VIEWER
+//	columnId          — id of the column
+//	columnName        — name of the column
+//	access            — READ | WRITE | ADMIN
+//	id                — column_permissions row id (delete handle)
+//	grantedByUserId   — actor who issued the grant (audit)
+//	grantedByUsername — actor login (audit)
+//	grantedByNickname — actor display name (audit)
+//	grantedAt         — created_at of the row (audit)
+//	expiresAt         — optional access expiry (null = never)
+//	revokedAt         — soft-delete tombstone (null = active)
+//
+// Nullable audit columns are projected as *string without
+// `omitempty` so the JSON encoder always emits the key (with a null
+// value when the DB column is NULL). This keeps the field set
+// identical between the two query modes — the same shape fix that
+// s-1041 applied to board permissions.
+//
+// Revoked rows (revoked_at IS NOT NULL) are excluded from the
+// listing: they no longer count as effective access and surfacing
+// them to the management UI would let an operator re-revoke an
+// already-revoked row and log a duplicate PERMISSION_REVOKE row.
+type ColumnPermissionRow struct {
+	UserID            string  `json:"userId"`
+	Username          string  `json:"username"`
+	Nickname          string  `json:"nickname"`
+	UserType          string  `json:"userType"`
+	UserRole          string  `json:"userRole"`
+	ColumnID          string  `json:"columnId"`
+	ColumnName        string  `json:"columnName"`
+	Access            string  `json:"access"`
+	ID                string  `json:"id"`
+	GrantedByUserID   *string `json:"grantedByUserId"`
+	GrantedByUsername *string `json:"grantedByUsername"`
+	GrantedByNickname *string `json:"grantedByNickname"`
+	GrantedAt         *string `json:"grantedAt"`
+	ExpiresAt         *string `json:"expiresAt"`
+	RevokedAt         *string `json:"revokedAt"`
 }
 
 func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
@@ -33,24 +90,61 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Mirror GetPermissions: a board owner needs to enumerate
+		// existing column grants to manage them. Without this
+		// branch, an owner who can set/revoke via
+		// SetColumnPermission / DeleteColumnPermission would still
+		// be unable to list existing rows.
+		if requestedColumnID != "" && !isAdmin(user) {
+			boardID, err := getBoardIDForColumn(db, requestedColumnID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load column"})
+				return
+			}
+			if !canManageBoardPermissions(db, user, boardID) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can list column permissions"})
+				return
+			}
+		}
+
 		var rows *sql.Rows
 		var err error
 
-		if requestedColumnID != "" && isAdmin(user) {
+		// Unified query (s-1054). Both ?userId= and ?columnId=
+		// join columns + users + grantor so the projected row
+		// always carries username / nickname / userType / userRole
+		// / grantedByUserId / expiresAt / revokedAt. The branch
+		// is only the WHERE clause + the revoked filter — keeping
+		// the field set identical is the contract the task spec
+		// calls out. INNER JOIN drops orphan rows the same way
+		// GetPermissions does.
+		if requestedColumnID != "" {
 			rows, err = db.Query(`
-				SELECT cp.id, cp.column_id, col.name, cp.access, u.id, u.nickname
+				SELECT cp.id, cp.user_id, u.username, u.nickname, u.type, u.role,
+				       cp.column_id, col.name, cp.access,
+				       cp.granted_by_user_id, g.username, g.nickname,
+				       cp.created_at, cp.expires_at, cp.revoked_at
 				FROM column_permissions cp
 				JOIN columns col ON cp.column_id = col.id
 				JOIN users u ON cp.user_id = u.id
+				LEFT JOIN users g ON g.id = cp.granted_by_user_id
 				WHERE cp.column_id = ?
+				  AND cp.revoked_at IS NULL
+				ORDER BY cp.created_at ASC, cp.id ASC
 			`, requestedColumnID)
 		} else {
 			rows, err = db.Query(`
-				SELECT cp.id, cp.column_id, col.name, cp.access, u.id, u.nickname
+				SELECT cp.id, cp.user_id, u.username, u.nickname, u.type, u.role,
+				       cp.column_id, col.name, cp.access,
+				       cp.granted_by_user_id, g.username, g.nickname,
+				       cp.created_at, cp.expires_at, cp.revoked_at
 				FROM column_permissions cp
 				JOIN columns col ON cp.column_id = col.id
 				JOIN users u ON cp.user_id = u.id
+				LEFT JOIN users g ON g.id = cp.granted_by_user_id
 				WHERE cp.user_id = ?
+				  AND cp.revoked_at IS NULL
+				ORDER BY cp.created_at ASC, cp.id ASC
 			`, targetUserID)
 		}
 		if err != nil {
@@ -59,19 +153,65 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var permissions []gin.H
+		permissions := make([]ColumnPermissionRow, 0)
 		for rows.Next() {
-			var id, columnID, columnName, access, userID, userNickname string
-			if err := rows.Scan(&id, &columnID, &columnName, &access, &userID, &userNickname); err == nil {
-				permissions = append(permissions, gin.H{
-					"id":           id,
-					"columnId":     columnID,
-					"columnName":   columnName,
-					"access":       access,
-					"userId":       userID,
-					"userNickname": userNickname,
-				})
+			var (
+				id, userID, username, nickname, userType, userRole,
+				columnID, columnName, access string
+				grantedByUserID             sql.NullString
+				grantedByUsername           sql.NullString
+				grantedByNickname           sql.NullString
+				grantedAt, expiresAt, revoked sql.NullTime
+			)
+			if err := rows.Scan(
+				&id, &userID, &username, &nickname, &userType, &userRole,
+				&columnID, &columnName, &access,
+				&grantedByUserID, &grantedByUsername, &grantedByNickname,
+				&grantedAt, &expiresAt, &revoked,
+			); err != nil {
+				log.Printf("[GetColumnPermissions] row scan failed: %v", err)
+				continue
 			}
+			row := ColumnPermissionRow{
+				UserID:     userID,
+				Username:   username,
+				Nickname:   nickname,
+				UserType:   userType,
+				UserRole:   userRole,
+				ColumnID:   columnID,
+				ColumnName: columnName,
+				Access:     access,
+				ID:         id,
+			}
+			if grantedByUserID.Valid {
+				s := grantedByUserID.String
+				row.GrantedByUserID = &s
+			}
+			if grantedByUsername.Valid {
+				s := grantedByUsername.String
+				row.GrantedByUsername = &s
+			}
+			if grantedByNickname.Valid {
+				s := grantedByNickname.String
+				row.GrantedByNickname = &s
+			}
+			if grantedAt.Valid {
+				s := grantedAt.Time.UTC().Format(time.RFC3339)
+				row.GrantedAt = &s
+			}
+			if expiresAt.Valid {
+				s := expiresAt.Time.UTC().Format(time.RFC3339)
+				row.ExpiresAt = &s
+			}
+			if revoked.Valid {
+				s := revoked.Time.UTC().Format(time.RFC3339)
+				row.RevokedAt = &s
+			}
+			permissions = append(permissions, row)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
+			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"permissions": permissions})

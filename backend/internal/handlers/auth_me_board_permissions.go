@@ -64,6 +64,16 @@ func GetMyBoardPermissions(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// canManageColumnPermissions is reported per-column by its
+		// helper, but the spec for this endpoint is "can the caller
+		// manage column permissions on this board at all" — which is
+		// exactly the same gate as canManageBoardPermissions today
+		// (both resolve to "owner or global admin"). Routing through
+		// canManageColumnPermissions here would require a columnID,
+		// which the endpoint intentionally does not take; reuse the
+		// board-level check directly so the response stays honest if
+		// the column-management rule ever diverges (every column
+		// under the board will share the answer).
 		c.JSON(http.StatusOK, gin.H{
 			"boardId":                    boardID,
 			"effectiveAccess":            effectiveAccess,

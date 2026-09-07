@@ -238,14 +238,11 @@ describe('ColumnsPage owner column-permission flow', () => {
 
     // Bob appears in two places: the add-permission form's user
     // <select> option and the permission-list row. Scope to the
-    // permission list by anchoring on its header so we don't
-    // accidentally match the form option. The list item is rendered
-    // as <div>Bob</div> under a row whose second text node is
-    // "Todo - READ"; find that row and assert Bob is inside it.
-    const accessLabel = await screen.findByText('column.permission.READ');
-    const permissionRow = accessLabel.parentElement?.parentElement;
-    expect(permissionRow).not.toBeNull();
-    expect(within(permissionRow as HTMLElement).getByText('Bob')).toBeInTheDocument();
+    // permission list via data-testid so we don't accidentally
+    // match the form option or the access <select>.
+    const permissionList = await screen.findByTestId('column-permissions-list');
+    const permissionRow = within(permissionList).getByTestId('column-permission-row');
+    expect(within(permissionRow).getByText('Bob')).toBeInTheDocument();
   });
 
   it('calls authApi.deleteColumnPermission when an owner removes a column permission', async () => {
