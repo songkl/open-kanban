@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { BoardsPage } from './BoardsPage';
 
 vi.mock('react-i18next', () => ({
@@ -8,6 +8,9 @@ vi.mock('react-i18next', () => ({
     t: (key: string, params?: Record<string, unknown>) => {
       if (params && typeof params.count === 'number') {
         return `${params.count} ${key}`;
+      }
+      if (key === 'board.contactOwner') {
+        return '请联系看板 owner 邀请你';
       }
       return key;
     },
@@ -65,12 +68,41 @@ const mockedBoardsGetAll = vi.mocked(boardsApi.getAll);
 const mockedTemplatesGetAll = vi.mocked(templatesApi.getAll);
 const mockedAuthMe = vi.mocked(authApi.me);
 
+const LocationDisplay = () => {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}{location.search}</div>;
+};
+
 const renderBoardsPage = () =>
   render(
-    <BrowserRouter>
+    <MemoryRouter initialEntries={['/boards']}>
       <BoardsPage />
-    </BrowserRouter>,
+      <LocationDisplay />
+    </MemoryRouter>,
   );
+
+const makeUser = (role: 'ADMIN' | 'MEMBER' | 'VIEWER') => ({
+  id: `${role.toLowerCase()}-1`,
+  nickname: role,
+  avatar: null,
+  role,
+  type: 'HUMAN' as const,
+  enabled: true,
+  createdAt: '2024-01-01',
+  updatedAt: '2024-01-01',
+});
+
+const renderLoadErrorPage = async (role: 'ADMIN' | 'MEMBER' | 'VIEWER') => {
+  mockedBoardsGetAll.mockRejectedValue(new Error('Failed to load boards'));
+  mockedAuthMe.mockResolvedValue({ user: makeUser(role), needsSetup: false });
+
+  renderBoardsPage();
+
+  await waitFor(() => {
+    expect(screen.getByText('app.error.loadFailed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'board.contactAdmin' })).toBeInTheDocument();
+  });
+};
 
 describe('BoardsPage', () => {
   beforeEach(() => {
@@ -130,6 +162,28 @@ describe('BoardsPage', () => {
 
     expect(screen.queryByText('board.noBoardsYet')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /modal.newBoard/ })).not.toBeInTheDocument();
+  });
+
+  it.each(['MEMBER', 'VIEWER'] as const)('returns %s users to boards with an owner invitation toast', async (role) => {
+    await renderLoadErrorPage(role);
+
+    fireEvent.click(screen.getByRole('button', { name: 'board.contactAdmin' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/boards');
+    });
+    expect(screen.getByText('请联系看板 owner 邀请你')).toBeInTheDocument();
+  });
+
+  it('sends ADMIN users to the user settings tab', async () => {
+    await renderLoadErrorPage('ADMIN');
+
+    fireEvent.click(screen.getByRole('button', { name: 'board.contactAdmin' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/settings?tab=users');
+    });
+    expect(screen.queryByText('请联系看板 owner 邀请你')).not.toBeInTheDocument();
   });
 
   it('filters out boards with empty effectiveAccess', async () => {

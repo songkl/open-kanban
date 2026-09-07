@@ -79,6 +79,7 @@
     "noAccessHint": "当前无法访问任何看板，请联系管理员获取权限",
     "createNew": "创建新看板",
     "contactAdmin": "联系管理员",
+    "contactOwner": "请联系看板 owner 邀请你",
     "noAccess": "无权访问该看板",
     "noAccessHint": "请联系看板所有者为您授权后再访问。",
     "goBackToList": "返回看板列表",

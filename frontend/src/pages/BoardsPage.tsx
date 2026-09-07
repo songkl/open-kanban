@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { boardsApi, templatesApi, authApi } from '../services/api';
 import { useSetupGuard } from '../hooks/useSetupGuard';
@@ -25,6 +25,7 @@ interface Template {
 
 export function BoardsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   useSetupGuard();
   const [boards, setBoards] = useState<Board[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -85,6 +86,16 @@ export function BoardsPage() {
   const showToastMessage = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 2000);
+  };
+
+  const handleContactAdmin = () => {
+    if (currentUser?.role === 'ADMIN') {
+      navigate('/settings?tab=users');
+      return;
+    }
+
+    showToastMessage(t('board.contactOwner'));
+    navigate('/boards');
   };
 
   const handleBoardSubmit = async (data: {
@@ -349,7 +360,7 @@ export function BoardsPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => window.location.href = '/settings?tab=permissions'}
+                  onClick={handleContactAdmin}
                   className="rounded-xl bg-zinc-100 dark:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
                 >
                   {t('board.contactAdmin')}

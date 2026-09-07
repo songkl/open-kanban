@@ -79,6 +79,7 @@
     "noAccessHint": "Cannot access any boards. Please contact an administrator for access",
     "createNew": "Create New Board",
     "contactAdmin": "Contact Admin",
+    "contactOwner": "Ask the board owner to invite you",
     "noAccess": "No access to this board",
     "noAccessHint": "Ask the owner to grant you access.",
     "goBackToList": "Back to boards list",
