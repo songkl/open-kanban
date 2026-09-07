@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { Board } from '@/types/kanban';
 import { AddBoardPermissionForm } from '@/components/AddBoardPermissionForm';
+import { BulkBoardPermissionForm } from '@/components/BulkBoardPermissionForm';
 
 interface BoardPermission {
   id: string;
@@ -16,6 +17,7 @@ interface BoardPermissionsModalProps {
   board: Board | null;
   permissions: BoardPermission[];
   loading: boolean;
+  canManageBoardPermissions?: boolean;
   onClose: () => void;
   onDeletePermission: (permissionId: string) => void;
   onPermissionAdded: () => void;
@@ -26,6 +28,7 @@ export function BoardPermissionsModal({
   board,
   permissions,
   loading,
+  canManageBoardPermissions = true,
   onClose,
   onDeletePermission,
   onPermissionAdded,
@@ -33,6 +36,8 @@ export function BoardPermissionsModal({
   const { t } = useTranslation();
 
   if (!isOpen || !board) return null;
+
+  const existingPermissionUserIds = permissions.map((p) => p.userId);
 
   return (
     <div
@@ -88,13 +93,25 @@ export function BoardPermissionsModal({
               )}
             </div>
 
-            <div className="border-t border-zinc-100 dark:border-zinc-700 pt-4">
-              <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-3">{t('board.addPermission')}</h3>
-              <AddBoardPermissionForm
-                boardId={board.id}
-                onPermissionAdded={onPermissionAdded}
-              />
-            </div>
+            {canManageBoardPermissions && (
+              <div className="mb-4">
+                <BulkBoardPermissionForm
+                  boardId={board.id}
+                  onGranted={onPermissionAdded}
+                  existingPermissionUserIds={existingPermissionUserIds}
+                />
+              </div>
+            )}
+
+            {canManageBoardPermissions && (
+              <div className="border-t border-zinc-100 dark:border-zinc-700 pt-4">
+                <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-400 mb-3">{t('board.addPermission')}</h3>
+                <AddBoardPermissionForm
+                  boardId={board.id}
+                  onPermissionAdded={onPermissionAdded}
+                />
+              </div>
+            )}
           </>
         )}
 

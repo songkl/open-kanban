@@ -458,6 +458,14 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ userId, boardId, access }),
     }),
+  bulkSetPermissions: (boardId: string, userIds: string[], access: string) =>
+    fetchApi<{ success: boolean; boardId: string; granted: string[]; count: number }>(
+      'auth/permissions/bulk',
+      {
+        method: 'POST',
+        body: JSON.stringify({ boardId, userIds, access }),
+      }
+    ),
   deletePermission: (id: string) =>
     fetchApi<void>(`auth/permissions?id=${id}`, { method: 'DELETE' }),
   getColumnPermissions: (userId?: string, columnId?: string) =>

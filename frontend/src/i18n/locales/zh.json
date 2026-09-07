@@ -82,7 +82,27 @@
     "addPermission": "添加授权",
     "add": "添加",
     "selectUser": "选择用户",
-    "permissionAddFailed": "添加授权失败"
+    "permissionAddFailed": "添加授权失败",
+    "bulkAddTitle": "批量授权",
+    "bulkAddHint": "一次为多个用户授予相同的访问权限。",
+    "bulkAddRoleFilter": "角色",
+    "bulkAddTypeFilter": "类型",
+    "bulkAddAll": "全部",
+    "bulkAddSelectUsers": "选择用户",
+    "bulkAddSelectAll": "全选",
+    "bulkAddDeselectAll": "取消全选",
+    "bulkAddEmpty": "没有符合筛选条件的用户。",
+    "bulkAddAlreadyHasPermission": "已授权",
+    "bulkAddAccess": "访问权限",
+    "bulkAddSubmit": "授权",
+    "bulkAddSuccess": "已成功授予 {{count}} 个授权。",
+    "bulkAddPartialFailure": "部分用户未找到，已跳过：{{ids}}。",
+    "bulkAddTooMany": "单次请求用户过多，请分批授权。",
+    "role": {
+      "admin": "管理员",
+      "member": "成员",
+      "viewer": "查看者"
+    }
   },
   "task": {
     "addTask": "添加任务",

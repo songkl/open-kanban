@@ -10,6 +10,7 @@ export { BoardActionsMenu } from './BoardActionsMenu';
 export { BoardCard } from './BoardCard';
 export { BoardHeader } from './BoardHeader';
 export { BoardPermissionsModal } from './BoardPermissionsModal';
+export { BulkBoardPermissionForm } from './BulkBoardPermissionForm';
 export { BoardSelector } from './BoardSelector';
 export { BoardToolbar } from './BoardToolbar';
 export { Column } from './Column';

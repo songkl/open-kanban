@@ -141,6 +141,7 @@ export function BoardHeader({ boards, currentBoard, boardIdFromUrl, currentUser 
         board={activeBoard}
         permissions={permissions}
         loading={permissionLoading}
+        canManageBoardPermissions={isAdmin}
         onClose={() => setShowPermissionModal(false)}
         onDeletePermission={handleDeletePermission}
         onPermissionAdded={handleOpenPermissionModal}

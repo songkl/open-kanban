@@ -82,7 +82,27 @@
     "addPermission": "Add Authorization",
     "add": "Add",
     "selectUser": "Select user",
-    "permissionAddFailed": "Failed to add authorization"
+    "permissionAddFailed": "Failed to add authorization",
+    "bulkAddTitle": "Bulk Authorization",
+    "bulkAddHint": "Grant the same access level to multiple users at once.",
+    "bulkAddRoleFilter": "Role",
+    "bulkAddTypeFilter": "Type",
+    "bulkAddAll": "All",
+    "bulkAddSelectUsers": "Select users",
+    "bulkAddSelectAll": "Select all",
+    "bulkAddDeselectAll": "Deselect all",
+    "bulkAddEmpty": "No users match the current filters.",
+    "bulkAddAlreadyHasPermission": "Already authorized",
+    "bulkAddAccess": "Access",
+    "bulkAddSubmit": "Grant",
+    "bulkAddSuccess": "Granted {{count}} authorizations.",
+    "bulkAddPartialFailure": "Some users were skipped (not found): {{ids}}.",
+    "bulkAddTooMany": "Too many users in one request. Please split into smaller batches.",
+    "role": {
+      "admin": "Admin",
+      "member": "Member",
+      "viewer": "Viewer"
+    }
   },
   "task": {
     "addTask": "Add Task",

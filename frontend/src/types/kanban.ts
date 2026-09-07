@@ -88,6 +88,8 @@ export interface User {
   lastActiveAt?: string;
 }
 
+export type PermissionAccess = 'READ' | 'WRITE' | 'ADMIN';
+
 export interface Agent extends User {
   tokenCount: number;
 }
