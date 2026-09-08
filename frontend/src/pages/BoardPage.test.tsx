@@ -293,6 +293,28 @@ describe('BoardPage', () => {
     renderBoardPage();
     expect(document.body).toBeInTheDocument();
   });
+
+  it('invokes fetchBoards when retry button is clicked in loadError state', async () => {
+    const fetchBoards = vi.fn().mockResolvedValue(undefined);
+    boardStateMock.current = buildBoardStateMock({
+      loadError: 'Failed to load board',
+      currentBoard: null,
+      hasAccess: false,
+      columns: [],
+      fetchBoards,
+    });
+
+    renderBoardPage();
+
+    const retryButton = screen.getByRole('button', { name: 'app.error.retry' });
+    expect(retryButton).toBeInTheDocument();
+
+    fireEvent.click(retryButton);
+
+    await waitFor(() => {
+      expect(fetchBoards).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 void useNavigate;

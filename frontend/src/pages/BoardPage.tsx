@@ -89,6 +89,7 @@ export function BoardPage() {
     uniqueAssignees,
     uniqueTags,
     getFilteredColumns,
+    fetchBoards,
     updateTask,
     deleteTask,
     archiveTask,
@@ -351,7 +352,7 @@ export function BoardPage() {
       <div className="flex h-screen flex-col items-center justify-center gap-4">
         <div className="text-red-500">{t('app.error.loadFailed')}</div>
         <div className="text-sm text-zinc-400 dark:text-zinc-500">{loadError}</div>
-        <button className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600">
+        <button onClick={fetchBoards} className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600">
           {t('app.error.retry')}
         </button>
         <button
