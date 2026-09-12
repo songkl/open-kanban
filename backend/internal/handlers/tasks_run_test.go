@@ -451,74 +451,85 @@ func TestClaimRun_MissingFieldsReturns400(t *testing.T) {
 // (cache=shared) lets every goroutine see the same task_runs
 // table.
 func TestClaimRun_ParallelClaimersRaceOnlyOneWins(t *testing.T) {
-	db := setupRunsDB(t)
-	defer db.Close()
-
-	// Restrict to a single eligible task so the test design
-	// collapses to "exactly one winner" — otherwise two
-	// goroutines can claim different rows and both win.
-	if _, err := db.Exec("DELETE FROM tasks WHERE id = 't-1'"); err != nil {
-		t.Fatalf("delete t-1: %v", err)
-	}
-
-	router := runsRouter(db)
-
+	// Acceptance criterion: the key race case must run at least
+	// 100 times to rule out an accidental pass. Each iteration
+	// gets a fresh in-memory DB so state cannot leak across
+	// attempts; the subtest harness surfaces which iteration
+	// (if any) regresses.
+	const iterations = 100
 	const claimers = 4
-	results := make([]int, claimers)
-	bodies := make([]string, claimers)
-	// gate keeps the goroutines from all hammering the same
-	// SQLite instance at once; without it sqlite (in delete
-	// journal mode on macOS) returns "database is locked"
-	// for any reader that lands while a writer holds the
-	// exclusive lock. The interesting race we care about —
-	// "two runners, one lock" — only needs two attempts to
-	// expose, so a 1-at-a-time gate is enough.
-	var gate sync.Mutex
-	var wg sync.WaitGroup
-	wg.Add(claimers)
-	for i := 0; i < claimers; i++ {
+	for i := 0; i < iterations; i++ {
 		i := i
-		go func() {
-			defer wg.Done()
-			gate.Lock()
-			defer gate.Unlock()
-			w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
-				"boardId":   "b1",
-				"status":    "todo",
-				"agentType": "opencoder",
-				"runnerId":  fmt.Sprintf("runner-%d", i),
-			})
-			results[i] = w.Code
-			bodies[i] = w.Body.String()
-		}()
-	}
-	wg.Wait()
+		t.Run(fmt.Sprintf("iter-%03d", i), func(t *testing.T) {
+			db := setupRunsDB(t)
+			defer db.Close()
 
-	winners, losers := 0, 0
-	for i, c := range results {
-		switch c {
-		case http.StatusOK:
-			winners++
-		case http.StatusNoContent:
-			losers++
-		default:
-			t.Logf("unexpected status %d (body=%s)", c, bodies[i])
-			t.Errorf("unexpected status %d", c)
-		}
-	}
-	if winners != 1 {
-		t.Errorf("expected exactly 1 winner, got %d (results=%v)", winners, results)
-	}
-	if losers != claimers-1 {
-		t.Errorf("expected %d losers (204), got %d (results=%v)", claimers-1, losers, results)
-	}
+			// Restrict to a single eligible task so the test design
+			// collapses to "exactly one winner" — otherwise two
+			// goroutines can claim different rows and both win.
+			if _, err := db.Exec("DELETE FROM tasks WHERE id = 't-1'"); err != nil {
+				t.Fatalf("delete t-1: %v", err)
+			}
 
-	var rowCount int
-	if err := db.QueryRow("SELECT COUNT(*) FROM task_runs WHERE task_id='t-2'").Scan(&rowCount); err != nil {
-		t.Fatalf("count runs: %v", err)
-	}
-	if rowCount != 1 {
-		t.Errorf("expected 1 task_runs row for t-2, got %d", rowCount)
+			router := runsRouter(db)
+
+			results := make([]int, claimers)
+			bodies := make([]string, claimers)
+			// gate keeps the goroutines from all hammering the same
+			// SQLite instance at once; without it sqlite (in delete
+			// journal mode on macOS) returns "database is locked"
+			// for any reader that lands while a writer holds the
+			// exclusive lock. The interesting race we care about —
+			// "two runners, one lock" — only needs two attempts to
+			// expose, so a 1-at-a-time gate is enough.
+			var gate sync.Mutex
+			var wg sync.WaitGroup
+			wg.Add(claimers)
+			for j := 0; j < claimers; j++ {
+				j := j
+				go func() {
+					defer wg.Done()
+					gate.Lock()
+					defer gate.Unlock()
+					w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
+						"boardId":   "b1",
+						"status":    "todo",
+						"agentType": "opencoder",
+						"runnerId":  fmt.Sprintf("runner-%d-%d", i, j),
+					})
+					results[j] = w.Code
+					bodies[j] = w.Body.String()
+				}()
+			}
+			wg.Wait()
+
+			winners, losers := 0, 0
+			for j, c := range results {
+				switch c {
+				case http.StatusOK:
+					winners++
+				case http.StatusNoContent:
+					losers++
+				default:
+					t.Logf("unexpected status %d (body=%s)", c, bodies[j])
+					t.Errorf("unexpected status %d", c)
+				}
+			}
+			if winners != 1 {
+				t.Errorf("expected exactly 1 winner, got %d (results=%v)", winners, results)
+			}
+			if losers != claimers-1 {
+				t.Errorf("expected %d losers (204), got %d (results=%v)", claimers-1, losers, results)
+			}
+
+			var rowCount int
+			if err := db.QueryRow("SELECT COUNT(*) FROM task_runs WHERE task_id='t-2'").Scan(&rowCount); err != nil {
+				t.Fatalf("count runs: %v", err)
+			}
+			if rowCount != 1 {
+				t.Errorf("expected 1 task_runs row for t-2, got %d", rowCount)
+			}
+		})
 	}
 }
 
@@ -592,6 +603,48 @@ func TestHeartbeatRun_NotFound(t *testing.T) {
 	})
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestHeartbeatRun_ConflictAfterReaper simulates the full
+// reaper-then-heartbeat path: a runner claims, then crashes,
+// then the background reaper flips the row to 'released' (and
+// rolls the task back to its snapshot column). When the
+// original runner comes back online and posts a heartbeat,
+// the lock is no longer held — handler must surface 409 so the
+// runner can detect its loss and exit cleanly instead of
+// looping forever.
+func TestHeartbeatRun_ConflictAfterReaper(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-reap-hb', 'reap+hb', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-reap-hb", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	// Drive the reaper through the repository — keeps the
+	// test focused on the heartbeat contract without
+	// depending on the timer-driven loop. Nudge expires_at
+	// into the past first so the reaper treats the row as
+	// stale.
+	if _, err := db.Exec("UPDATE task_runs SET expires_at = datetime('now', '-1 minute') WHERE task_id='t-reap-hb'"); err != nil {
+		t.Fatalf("expire: %v", err)
+	}
+	if _, err := repo.ReapExpiredRuns(true); err != nil {
+		t.Fatalf("reap: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-reap-hb/heartbeat", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+	})
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 after reaper released the lock, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
