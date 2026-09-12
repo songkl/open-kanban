@@ -407,6 +407,20 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 
 	r.GET("/api/v1/mcp/my-tasks", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetMyTasks(db))
 
+	// Runner API endpoints (§3.4 of CLI_RUNNER_PLAN). claim/heartbeat/finish
+	// all run through RequireAuth so a leaked socket cannot drive the
+	// runner without a bearer token; per-column WRITE permission is
+	// enforced inside ClaimRun for mode=board, matching PM §9.1.
+	runs := r.Group("/api/v1/runs")
+	runs.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		runs.POST("/claim", handlers.ClaimRun(db))
+		runs.POST("/release", handlers.ReleaseRuns(db))
+		runs.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
+		runs.POST("/:taskId/finish", handlers.FinishRun(db))
+		runs.GET("/:taskId", handlers.GetRun(db))
+	}
+
 	comments := r.Group("/api/v1/comments")
 	{
 		comments.GET("", handlers.GetComments(db))
@@ -688,6 +702,16 @@ func main() {
 	// Initialize webhook service
 	services.InitWebhookService()
 
+	// Start the task_runs reaper (§3.5 of CLI_RUNNER_PLAN).
+	// The reaper sweeps expired locks every 30s and restores
+	// the affected tasks to their snapshot column. It runs for
+	// the entire server lifetime and stops on graceful shutdown.
+	var runReaper *services.RunReaper
+	if db != nil {
+		runReaper = services.NewRunReaper(db)
+		runReaper.Start(context.Background())
+	}
+
 	// Create Gin router
 	r := gin.New()
 
@@ -779,6 +803,9 @@ func main() {
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			log.Printf("HTTP server shutdown error: %v", err)
+		}
+		if runReaper != nil {
+			runReaper.Stop()
 		}
 	}
 	go func() {
