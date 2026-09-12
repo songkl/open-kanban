@@ -61,6 +61,11 @@ import {
   runArchivedArchive,
   runArchivedRestore,
 } from "./src/commands/archived.js";
+import {
+  runCommentsAdd,
+  runCommentsList,
+  STDIN_BODY_SENTINEL,
+} from "./src/commands/comments.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -978,6 +983,69 @@ archivedCmd
     } catch (err) {
       process.stderr.write(`${(err as Error).message}\n`);
       process.exit(archivedExitCode(err));
+    }
+  });
+
+const commentsCmd = program.command("comments").description("manage task comments");
+
+function commentsExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+commentsCmd
+  .command("add <taskId>")
+  .description(
+    "add a comment to a task (POST /api/v1/comments); pass --body - to read the body from stdin"
+  )
+  .requiredOption(
+    "--body <text>",
+    `comment body, or "${STDIN_BODY_SENTINEL}" to read from stdin`
+  )
+  .option("--author <name>", "optional author override (server uses authenticated user by default)")
+  .action(async (taskId: string, cmdOpts: { body: string; author?: string }) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runCommentsAdd(
+        {
+          apiUrl: opts.apiUrl,
+          body: cmdOpts.body,
+          author: cmdOpts.author,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        taskId
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(commentsExitCode(err));
+    }
+  });
+
+commentsCmd
+  .command("list <taskId>")
+  .description("list comments for a task (GET /api/v1/comments?taskId=...)")
+  .action(async (taskId: string) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runCommentsList(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        taskId
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(commentsExitCode(err));
     }
   });
 
