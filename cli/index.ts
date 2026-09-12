@@ -66,6 +66,12 @@ import {
   runCommentsList,
   STDIN_BODY_SENTINEL,
 } from "./src/commands/comments.js";
+import {
+  runSubtasksList,
+  runSubtasksCreate,
+  runSubtasksUpdate,
+  runSubtasksDelete,
+} from "./src/commands/subtasks.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -1046,6 +1052,124 @@ commentsCmd
     } catch (err) {
       process.stderr.write(`${(err as Error).message}\n`);
       process.exit(commentsExitCode(err));
+    }
+  });
+
+const subtasksCmd = program.command("subtasks").description("manage task subtasks");
+
+function subtasksExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+subtasksCmd
+  .command("list <taskId>")
+  .description("list subtasks for a task (GET /api/v1/subtasks?taskId=...)")
+  .action(async (taskId: string) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runSubtasksList(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        taskId
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(subtasksExitCode(err));
+    }
+  });
+
+subtasksCmd
+  .command("create <taskId>")
+  .description("create a subtask on a task (POST /api/v1/subtasks)")
+  .requiredOption("--title <title>", "subtask title (required)")
+  .action(async (taskId: string, cmdOpts: { title: string }) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runSubtasksCreate(
+        {
+          apiUrl: opts.apiUrl,
+          title: cmdOpts.title,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        taskId
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(subtasksExitCode(err));
+    }
+  });
+
+subtasksCmd
+  .command("update <id>")
+  .description(
+    "update a subtask (PUT /api/v1/subtasks/:id); pass --title and/or --completed/--no-completed"
+  )
+  .option("--title <title>", "new subtask title")
+  .option(
+    "--completed",
+    "mark the subtask as completed (use --no-completed to mark as incomplete)"
+  )
+  .action(
+    async (
+      id: string,
+      cmdOpts: { title?: string; completed?: boolean }
+    ) => {
+      const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+      const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+      const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+      http.attachOAuth(oauth);
+      try {
+        await runSubtasksUpdate(
+          {
+            apiUrl: opts.apiUrl,
+            title: cmdOpts.title,
+            completed: cmdOpts.completed,
+            format: opts.output === "json" ? "json" : "table",
+            http,
+          },
+          id
+        );
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(subtasksExitCode(err));
+      }
+    }
+  );
+
+subtasksCmd
+  .command("delete <id>")
+  .description("delete a subtask (DELETE /api/v1/subtasks/:id); --yes is the default")
+  .option("--yes", "skip confirmation prompt (default behaviour)", false)
+  .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runSubtasksDelete(
+        {
+          apiUrl: opts.apiUrl,
+          yes: true,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(subtasksExitCode(err));
     }
   });
 

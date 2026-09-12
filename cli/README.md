@@ -125,6 +125,10 @@ On `kanban auth login`, the CLI:
 | `kanban tasks batch create [--file <json\|yaml>] [--title ...] [--column ...] [--description ...] [--priority ...] [--assignee ...] [--status ...]` | Create multiple tasks (`POST /api/v1/tasks/batch`). Either supply `--file` or repeat the field flags to build a positional list. |
 | `kanban tasks batch update <ids...> [--file <ids.txt>] [--column\|--status] [--priority] [--assignee]` | Update multiple tasks at once (`PUT /api/v1/tasks/batch`). Ids may come from the positional list or a newline-delimited text file. |
 | `kanban tasks batch delete <ids...> [--file <ids.txt>] [--yes]` | Delete multiple tasks (`DELETE /api/v1/tasks/batch`). `--yes` is the default and may be omitted. |
+| `kanban subtasks list <taskId>` | List subtasks for a task (`GET /api/v1/subtasks?taskId=...`). |
+| `kanban subtasks create <taskId> --title <t>` | Create a subtask (`POST /api/v1/subtasks`). |
+| `kanban subtasks update <id> [--title <t>] [--completed\|--no-completed]` | Update a subtask (`PUT /api/v1/subtasks/:id`). At least one of `--title` / `--completed` must be supplied. |
+| `kanban subtasks delete <id> [--yes]` | Delete a subtask (`DELETE /api/v1/subtasks/:id`). `--yes` is the default and may be omitted. |
 
 ### Batch input examples
 
