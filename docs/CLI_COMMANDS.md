@@ -55,6 +55,10 @@ built-in default**. Run `kanban config get apiUrl` to inspect the chain.
 - [`comments` — task comments](#comments--task-comments)
 - [`subtasks` — task subtasks](#subtasks--task-subtasks)
 - [`mine` — current-agent tasks](#mine--current-agent-tasks)
+- [`run` — runner loop](#run--runner-loop)
+  - [`run start` (default action)](#run-start-default-action)
+  - [`run init` — interactive wizard](#run-init--interactive-wizard)
+- [`runs` — terminal task-run history](#runs--terminal-task-run-history)
 - [`workspace` — workspace files](#workspace--workspace-files)
 - [`shell` — interactive REPL](#shell--interactive-repl)
 - [`completion` — shell completion](#completion--shell-completion)
@@ -761,6 +765,263 @@ the current agent. **Auth required.**
 |---|---|---|---|
 | `--board <id>` | string | _(none)_ | Forward-compatibility shim. The endpoint does not accept `boardId`, so the flag is currently **ignored** — a yellow warning is written to stderr when supplied. |
 | `--lightweight` | boolean | `false` | When set, returns `id/title/priority/assignee/createdAt`. Otherwise `columnName` is included instead of `columnId`. |
+
+---
+
+## `run` — runner loop
+
+Group description: _drive the long-lived runner loop (claim → spawn agent →
+heartbeat → finish)_ / 运行 runner 循环,负责抢任务、拉起 agent、发心跳、回报结果.
+**Auth is required for mode-2 (`--mine`); mode-1 uses the resolved CLI profile
+for OAuth credentials and otherwise only needs board / column ids that the
+server already knows.**
+
+The runner is a self-contained state machine — see
+[`devDoc/CLI_RUNNER_PLAN_2026-09-12.md`](../devDoc/CLI_RUNNER_PLAN_2026-09-12.md)
+for the design. The reference below only covers the CLI surface (flags,
+discovery, validation, exit codes).
+
+### Modes / 两种模式
+
+The runner has two mutually exclusive modes. The CLI fails fast (exit code
+`1`) when both are present at once, and when neither is present it walks up
+from `cwd` looking for a config file (see [Configuration discovery](#configuration-discovery)).
+
+| Mode | How to enable | Use case / 适用场景 |
+|---|---|---|
+| **Mode 1 — board-bound** | `--board <id> --status <s>` (or `boardId` + `status` in the config) | Team pool: watch a single column on a single board / 监听固定看板的固定列. |
+| **Mode 2 — identity-bound (`--mine`)** | `--mine` (or `mode: mine` in the config) | Agent inbox: pick any task assigned to (or routed to) the authenticated agent, regardless of board / 监听当前 profile 名下的任务. |
+
+### `run start` (default action)
+
+```
+kanban run [--config <file>] [--board <id> --status <s> | --mine] [--once]
+kanban run start [...]  # explicit alias for the same handler
+```
+
+Start the runner loop. `kanban run <flags>` (no subcommand) routes to the same
+handler as `kanban run start` — the two spellings are interchangeable.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--config <file>` | string | _discovery_ | Explicit path to a `.kanban-runner{.local}.yaml` / `.json`. Overrides the walk-up. |
+| `--board <id>` | string | _(unset)_ | Mode-1 board id. Must pair with `--status` on the same command line. |
+| `--status <s>` | string | _(unset)_ | Mode-1 column status. Allowed: `todo` / `in_progress` / `review` / `done`. |
+| `--mine` | boolean | `false` | Mode-2: pick from the authenticated agent's inbox. Requires `kanban auth login`. Mutually exclusive with `--board` / `--status`. |
+| `--once` | boolean | `false` | Process a single task and exit. The loop still installs `SIGINT` / `SIGTERM` handlers, but it does not poll for new claims once the first task has been drained (or if no claim is available within the configured poll interval). Handy for cron jobs and smoke tests. |
+
+On startup the loop:
+
+1. Calls `POST /api/v1/runs/claim` to atomically acquire the next eligible
+   task whose column advertises the runner's agent type.
+2. Spawns the configured agent binary, passing it a rendered markdown prompt
+   that includes the board / column / task context.
+3. Calls `POST /api/v1/runs/:taskId/heartbeat` every `heartbeatIntervalMs`
+   milliseconds while the agent runs.
+4. On exit, calls `POST /api/v1/runs/:taskId/finish` with `status="completed"`
+   (exit code 0 + reason `exit`) or `status="failed"` (non-zero / timeout /
+   signal). Failures also leave a comment via `POST /api/v1/comments`.
+
+`Ctrl-C` is graceful: the in-flight agent is sent `SIGTERM` and the runner
+releases its locks via `POST /api/v1/runs/release` before exiting.
+
+```bash
+# Watch the sys board's todo column, run forever
+$ kanban run --board sys --status todo
+
+# Process one task from the agent inbox and exit (cron-friendly)
+$ kanban run --mine --once
+
+# Pin a specific config file (CI)
+$ kanban run --config /etc/kanban-runner.yaml --once
+```
+
+#### Exit codes / 退出码
+
+| Code | Meaning / 含义 |
+|---|---|
+| `0` | Loop terminated gracefully with no in-flight task, or `--once` completed normally. |
+| `1` | Invalid usage (missing / conflicting flags, malformed config, validation failure). |
+| `2` | Not logged in — triggered when `--mine` / `mode: mine` is configured but the active profile has no stored credentials. |
+| `3` | HTTP 404 from a server endpoint. |
+| `4` | Server error (HTTP 5xx); the loop logs the failure and either retries (transient) or exits (after exhausting retries). |
+| `6` | Network error (DNS failure, TLS error, server unreachable). |
+
+### Configuration discovery / 配置文件查找
+
+When `--config` is not supplied, the runner walks up from the current working
+directory until it finds one of:
+
+1. `./.kanban-runner.local.yaml` — machine-local override (gitignored).
+2. `./.kanban-runner.yaml` — project-shared config (checked into git).
+3. `~/.config/kanban-cli/runner.json` — global fallback.
+
+When both a local override and a project file sit at the same directory they
+are deep-merged (local wins on conflict; array fields like `args` are
+replaced wholesale). The full schema and validation rules are documented in
+[`cli/man/kanban-run.1.md`](../cli/man/kanban-run.1.md) and
+`devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §2.2 / §4.6.
+
+Minimal Mode-1 config:
+
+```yaml
+version: 1
+boardId: sys
+status: todo
+agent:
+  bin: opencode
+  cwd: .
+  args: ["--non-interactive"]
+  timeoutMs: 1800000
+runner:
+  pollIntervalMs: 5000
+  heartbeatIntervalMs: 30000
+  lockTimeoutMs: 120000
+```
+
+Minimal Mode-2 config:
+
+```yaml
+version: 1
+mode: mine
+agent:
+  bin: opencode
+  cwd: .
+  args: ["--non-interactive"]
+  timeoutMs: 1800000
+runner:
+  pollIntervalMs: 5000
+  heartbeatIntervalMs: 30000
+  lockTimeoutMs: 120000
+```
+
+Validation rules (loop refuses to start when any fails):
+
+- `agent.bin` is not an absolute path on disk and is not resolvable via
+  `PATH`.
+- `runner.lockTimeoutMs` is not strictly greater than 2 ×
+  `runner.heartbeatIntervalMs` (otherwise an in-flight task could be reaped
+  before its next heartbeat).
+- `mode: mine` is selected but the active CLI profile is not logged in.
+- Both `boardId` + `status` are missing AND `mode` is not `mine`.
+
+### `run init` — interactive wizard / 交互式配置向导
+
+```
+kanban run init
+```
+
+Scaffold a `.kanban-runner.yaml` (or `.kanban-runner.local.yaml`)
+interactively. The wizard walks through every field the runner needs and
+fetches boards + columns live from `GET /api/v1/boards` / `GET /api/v1/columns`
+so you never have to copy/paste an id blind.
+
+Steps:
+
+1. **Mode** — board-bound (one board + column status) or identity-bound
+   (`mode: mine`).
+2. **Board + status** — fetched live from the API; the wizard refuses
+   hand-typed ids.
+3. **Agent block** — `bin` + optional absolute `binPath`, prompt delivery
+   (`arg` / `stdin` / `file`), `cwd`, extra args, extra env vars, and a
+   per-task `timeoutMs`.
+4. **Runner cadences** — poll / heartbeat / lock timeouts, max concurrency,
+   optional static `runnerId`. The wizard enforces
+   `lockTimeoutMs > 2 × heartbeatIntervalMs` before it lets you write.
+5. **Scope** — `.kanban-runner.yaml` (project-shared, commit-safe) or
+   `.kanban-runner.local.yaml` (machine-local override, gitignored).
+
+The wizard refuses to overwrite an existing file unless you confirm, and the
+resulting YAML is round-tripped through `parseConfig` so the runner will
+load it without surprises.
+
+```bash
+$ kanban run init
+#   ? Mode:  board-bound
+#   ? Board: sys
+#   ? Status: todo
+#   ? Agent bin: opencode
+#   ? Cwd: .
+#   ? Extra args: --non-interactive
+#   ? Timeout (ms): 1800000
+#   ? Poll interval (ms): 5000
+#   ? Heartbeat interval (ms): 30000
+#   ? Lock timeout (ms): 120000
+#   ? Scope: .kanban-runner.yaml
+# ✓ wrote .kanban-runner.yaml
+```
+
+### Troubleshooting / 常见问题
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `no runner config found: walked up from '<cwd>' looking for ...` | Discovery walk found nothing | Drop a config in the working directory, point at one explicitly with `--config <path>`, or create the global fallback under `~/.config/kanban-cli/`. |
+| `config is incomplete: provide either 'boardId' + 'status' or 'mode: mine'` | Picked neither mode | Add both `boardId` + `status` (or pass `--board X --status todo`), or add `mode: mine` (or pass `--mine`). |
+| `config is ambiguous: 'mode: mine' is mutually exclusive with 'boardId' / 'status'` | Set both | Drop the `boardId` / `status` keys when `mode: mine` is set, or vice versa. |
+| `agent.bin '<x>' is neither an absolute path nor resolvable via PATH` | Bad `bin` | Use an absolute path or one on `$PATH`; the runner does not search `./node_modules/.bin` for you. `agent.binPath` overrides the resolution path entirely. |
+| `runner.lockTimeoutMs (...) must be greater than 2 × runner.heartbeatIntervalMs (...)` | Lock timeout too short | Bump `lockTimeoutMs`. |
+| `mode 'mine' requires CLI profile '<x>' to be logged in` | No OAuth session | `kanban auth login` (or pass `--api-url` + `--profile <name>` to log in to a non-default profile) before starting the loop. |
+| `claim failed: ... (retryable=false)` / loop exits with code `1` | `401 Unauthorized` / `403 Forbidden` / token mismatch | Re-login, or fix the column's `column_agents` grant so the runner's `user_agent` is allowed. |
+| `task ... finish returned 409 (lost)` | Another runner (or the reaper) took the lock between claim and finish | The loop logs `warn` and increments the `failed` counter; the task is left in its current column. Re-claim manually if you want to retry. |
+| The agent exits cleanly (`0`) but the task stays in `in_progress` | `finish()` only moves the task when `status='completed'` | The runner sends `'completed'` only when the agent exited with code `0` AND the reason was `exit` (not a signal / timeout / spawn error). If the agent was killed by `SIGTERM` for running past `agent.timeoutMs`, the task reverts on the next loop iteration via the server's reaper. |
+
+---
+
+## `runs` — terminal task-run history
+
+Group description: _inspect past task-run history_ / 查看 runner 跑过的历史任务.
+**Auth required.**
+
+The `runs` group only lists **terminal** rows (`status ∈ completed | failed | released`)
+served by `GET /api/v1/runs/history`. Live locks held by a running `kanban run`
+loop are intentionally *not* surfaced here — they live on the server's locks
+table and the runner's own process. To debug a stuck claim, use `runs list
+--status failed` or read the reaper logs.
+
+### `runs list`
+
+```
+kanban runs list
+  [--runner-id <id>]
+  [--since <duration>]
+  [--status <status>]
+  [--task <id>]
+  [--board <id>]
+  [--limit <n>]
+  [--offset <n>]
+```
+
+Fetch `GET /api/v1/runs/history` and render the result as a table
+(`taskId / status / runnerId / finishedAt / duration / error`) or raw JSON.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--runner-id <id>` | string | _(all)_ | Filter by exact runner identifier (forwards to `?runnerId=`). |
+| `--since <duration>` | string | _(all)_ | Lower bound on `finishedAt`. Accepts a relative duration `1d` / `2h` / `30m` / `1w` / `45s` (units: `s` / `m` / `h` / `d` / `w`, case-insensitive) **or** an absolute `YYYY-MM-DD` / RFC3339 timestamp forwarded verbatim. |
+| `--status <status>` | string | _(all)_ | Filter by terminal status. Allowed: `completed` / `failed` / `released`. |
+| `--task <id>` | string | _(all)_ | Filter by task id (forwards to `?taskId=`). |
+| `--board <id>` | string | _(all)_ | Filter by board id (forwards to `?boardId=`). |
+| `--limit <n>` | integer | server default `50` (capped at `200`) | Pagination size. Must be a positive integer; non-integer values raise `InvalidUsageError` (exit `1`) before any HTTP traffic. |
+| `--offset <n>` | integer | `0` | Pagination offset. Must be a non-negative integer. |
+
+Invalid `--status` values raise `InvalidRunStatusError` (exit `1`); invalid
+`--since` values raise `InvalidSinceError` (exit `1`). Both fail fast without
+sending an HTTP request.
+
+```bash
+# Last 24 hours of failures across all runners
+$ kanban runs list --since 1d --status failed
+
+# What did a specific runner do this week?
+$ kanban runs list --runner-id host-42-pid-7-uuid --since 1w
+
+# Page through the history for a single task
+$ kanban runs list --task task-123 --limit 50 --offset 0
+```
+
+The table renders the elapsed `duration` between `claimedAt` and
+`finishedAt` (humanised as `42ms` / `3s` / `1m20s` / `1h5m`). Empty results
+print `(no runs)` so scripts can branch on the table without parsing stderr.
 
 ---
 

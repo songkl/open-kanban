@@ -123,6 +123,8 @@ kanban auth logout
 | [`comments`](../docs/CLI_COMMANDS.md#comments--task-comments) | 新增（含 stdin）/ 列出 | 需要 |
 | [`subtasks`](../docs/CLI_COMMANDS.md#subtasks--task-subtasks) | 创建 / 更新 / 完成 / 删除 | 需要 |
 | [`mine`](../docs/CLI_COMMANDS.md#mine--current-agent-tasks) | 当前 Agent 名下的任务 | 需要 |
+| [`run`](../docs/CLI_COMMANDS.md#run--runner-loop) | Runner 循环（抢任务 → 拉起 agent → 心跳 → 回报） | 部分 |
+| [`runs`](../docs/CLI_COMMANDS.md#runs--terminal-task-run-history) | 查看已结束的 task-run 历史 | 需要 |
 | [`workspace`](../docs/CLI_COMMANDS.md#workspace--workspace-files) | 工作区文件上传 / 读取 / 列出 / 删除 | 需要 |
 | [`shell`](../docs/CLI_COMMANDS.md#shell--interactive-repl) | 交互式 REPL | — |
 | [`completion`](../docs/CLI_COMMANDS.md#completion--shell-completion) | 输出 bash / zsh / fish 自动补全脚本 | — |

@@ -139,6 +139,8 @@ shape of the command tree:
 | [`comments`](../docs/CLI_COMMANDS.md#comments--task-comments) | Add (incl. stdin) / list | required |
 | [`subtasks`](../docs/CLI_COMMANDS.md#subtasks--task-subtasks) | Create / update / complete / delete | required |
 | [`mine`](../docs/CLI_COMMANDS.md#mine--current-agent-tasks) | Tasks assigned to the current agent | required |
+| [`run`](../docs/CLI_COMMANDS.md#run--runner-loop) | Runner loop (claim → spawn agent → heartbeat → finish) | mixed |
+| [`runs`](../docs/CLI_COMMANDS.md#runs--terminal-task-run-history) | List past terminal task runs | required |
 | [`workspace`](../docs/CLI_COMMANDS.md#workspace--workspace-files) | Upload / read / list / delete workspace files | required |
 | [`shell`](../docs/CLI_COMMANDS.md#shell--interactive-repl) | Interactive REPL | — |
 | [`completion`](../docs/CLI_COMMANDS.md#completion--shell-completion) | Emit bash / zsh / fish completion scripts | — |
