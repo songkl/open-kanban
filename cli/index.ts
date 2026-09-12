@@ -73,6 +73,14 @@ import {
   runSubtasksDelete,
 } from "./src/commands/subtasks.js";
 import { runMine } from "./src/commands/mine.js";
+import {
+  runWorkspaceUpload,
+  runWorkspaceBatchUpload,
+  runWorkspaceList,
+  runWorkspaceRead,
+  runWorkspaceDelete,
+  runWorkspaceStats,
+} from "./src/commands/workspace.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -1210,6 +1218,161 @@ mineCmd.action(
     }
   }
 );
+
+const workspaceCmd = program
+  .command("workspace")
+  .description("manage workspace files");
+
+function workspaceExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+workspaceCmd
+  .command("upload <file>")
+  .description(
+    "upload a local text file to the workspace (POST /api/v1/workspace/upload)"
+  )
+  .option(
+    "--path <remotePath>",
+    "workspace-relative path for the uploaded file (defaults to the local basename)"
+  )
+  .action(async (file: string, cmdOpts: { path?: string }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runWorkspaceUpload({
+        apiUrl: opts.apiUrl,
+        file,
+        remotePath: cmdOpts.path,
+        format: opts.output === "json" ? "json" : "table",
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(workspaceExitCode(err));
+    }
+  });
+
+workspaceCmd
+  .command("batch-upload <files...>")
+  .description(
+    "upload multiple local text files in one request (POST /api/v1/workspace/batch-upload)"
+  )
+  .action(async (files: string[]) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runWorkspaceBatchUpload({
+        apiUrl: opts.apiUrl,
+        files,
+        format: opts.output === "json" ? "json" : "table",
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(workspaceExitCode(err));
+    }
+  });
+
+workspaceCmd
+  .command("list")
+  .description("list workspace files (GET /api/v1/workspace/files)")
+  .option("--path <sub>", "filter to a workspace-relative subdirectory")
+  .action(async (cmdOpts: { path?: string }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runWorkspaceList({
+        apiUrl: opts.apiUrl,
+        path: cmdOpts.path,
+        format: opts.output === "json" ? "json" : "table",
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(workspaceExitCode(err));
+    }
+  });
+
+workspaceCmd
+  .command("read <id>")
+  .description(
+    "read a workspace file (GET /api/v1/workspace/files/<id>); default writes the raw content to stdout, --output json emits a base64 payload"
+  )
+  .action(async (id: string) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runWorkspaceRead(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(workspaceExitCode(err));
+    }
+  });
+
+workspaceCmd
+  .command("delete <id>")
+  .description(
+    "delete a workspace file (DELETE /api/v1/workspace/files/<id>); --yes is the default"
+  )
+  .option("--yes", "skip confirmation prompt (default behaviour)", false)
+  .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runWorkspaceDelete(
+        {
+          apiUrl: opts.apiUrl,
+          yes: true,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(workspaceExitCode(err));
+    }
+  });
+
+workspaceCmd
+  .command("stats")
+  .description("show workspace stats (GET /api/v1/workspace/stats)")
+  .action(async () => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runWorkspaceStats({
+        apiUrl: opts.apiUrl,
+        format: opts.output === "json" ? "json" : "table",
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(workspaceExitCode(err));
+    }
+  });
 
 program.parseAsync(process.argv).catch((err: Error) => {
   process.stderr.write(`${err.message}\n`);
