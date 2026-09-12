@@ -72,6 +72,7 @@ import {
   runSubtasksUpdate,
   runSubtasksDelete,
 } from "./src/commands/subtasks.js";
+import { runMine } from "./src/commands/mine.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -1172,6 +1173,43 @@ subtasksCmd
       process.exit(subtasksExitCode(err));
     }
   });
+
+const mineCmd = program
+  .command("mine")
+  .description("list tasks assigned to (or routed to) the current agent (GET /api/v1/mcp/my-tasks)")
+  .option("--board <id>", "client-side filter: only include tasks from this board")
+  .option(
+    "--lightweight",
+    "return only id/title/priority/assignee/createdAt",
+    false
+  );
+
+function mineExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+mineCmd.action(
+  async (cmdOpts: { board?: string; lightweight?: boolean }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runMine({
+        apiUrl: opts.apiUrl,
+        boardId: cmdOpts.board,
+        lightweight: cmdOpts.lightweight,
+        format: opts.output === "json" ? "json" : "table",
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(mineExitCode(err));
+    }
+  }
+);
 
 program.parseAsync(process.argv).catch((err: Error) => {
   process.stderr.write(`${err.message}\n`);
