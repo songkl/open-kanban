@@ -236,6 +236,26 @@ $ kanban run --config /etc/kanban-runner.yaml \-\-once
 .fi
 .RE
 
+.SH "kanban run init"
+.PP
+The
+.B init
+subcommand scaffolds a
+.I .kanban-runner.yaml
+(or
+.IR .kanban-runner.local.yaml )
+interactively. The wizard walks through mode selection (board-bound
+vs. identity-bound), the agent block (bin / binPath / prompt delivery
+/ args / env / timeout), and the runner cadences. Boards and columns
+are fetched live from
+.B GET /api/v1/boards
+and
+.BR GET /api/v1/columns ,
+so the user never has to copy/paste an id. The wizard refuses to
+overwrite an existing file unless explicitly confirmed, and the
+resulting YAML is round-tripped through the same parser the runner
+uses, so a freshly-scaffolded config always loads.
+
 .SH "SEE ALSO"
 .BR kanban (1),
 .BR kanban\-tasks (1),

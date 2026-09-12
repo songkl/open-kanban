@@ -93,6 +93,16 @@ import {
 import { runMine } from "./commands/mine.js";
 import { runRunCommand, InvalidUsageError as RunInvalidUsageError } from "./commands/run.js";
 import {
+  runRunnerInitCommand,
+  RunnerInitError as RunInitError,
+} from "./commands/run_init.js";
+import {
+  input as inquirerInput,
+  select as inquirerSelect,
+  number as inquirerNumber,
+  confirm as inquirerConfirm,
+} from "@inquirer/prompts";
+import {
   runWorkspaceUpload,
   runWorkspaceBatchUpload,
   runWorkspaceList,
@@ -1222,8 +1232,83 @@ export function createProgram(
   // agent's task inbox (mode-2) and dispatches each task to an external
   // agent binary. SIGINT / SIGTERM trigger a graceful drain so the
   // runner releases its locks before exiting.
-  program
+  //
+  // `run` is a parent command with two subcommands:
+  //
+  //   * `run start` — the actual runner loop (was the top-level
+  //     `kanban run` command before the wizard was added).
+  //   * `run init`  — interactive wizard for the `.kanban-runner.yaml`.
+  //
+  // Commander invokes the parent's default action when no subcommand
+  // is matched, so `kanban run --config foo` still works exactly as it
+  // did before — the `start` action and the parent default action are
+  // wired to the same handler.
+  const runCmd = program
     .command("run")
+    .description(
+      "run the runner loop (start) or scaffold its config (init)"
+    )
+    .option(
+      "--config <file>",
+      "explicit path to a .kanban-runner{.local}.yaml; overrides the discovery walk-up"
+    )
+    .option(
+      "--board <id>",
+      "mode-1 board id to watch (must pair with --status)"
+    )
+    .option(
+      "--status <status>",
+      "mode-1 column status to watch (todo|in_progress|review|done); must pair with --board"
+    )
+    .option(
+      "--mine",
+      "mode-2: pick tasks assigned to (or routed to) the authenticated agent"
+    )
+    .option(
+      "--once",
+      "process a single task and exit; useful for cron / smoke tests"
+    );
+
+  const runStartAction = async (cmdOpts: {
+    config?: string;
+    board?: string;
+    status?: string;
+    mine?: boolean;
+    once?: boolean;
+  }): Promise<void> => {
+    try {
+      await runRunCommand(
+        {
+          apiUrl: opts.apiUrl,
+          profile: opts.profile,
+          configPath: cmdOpts.config,
+          boardId: cmdOpts.board,
+          status: cmdOpts.status,
+          mine: cmdOpts.mine === true,
+          once: cmdOpts.once === true,
+        },
+        {
+          http,
+          oauth,
+          cwd: process.cwd(),
+        }
+      );
+    } catch (err) {
+      if (err instanceof RunInvalidUsageError) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(1);
+      }
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(exitCodeForError(err));
+    }
+  };
+
+  // Default `kanban run <flags>` invocation still works because
+  // Commander calls the parent's action when no subcommand matches.
+  runCmd.action(runStartAction);
+
+  runCmd
+    .command("start")
     .description(
       "start the runner loop (claim → spawn agent → heartbeat → finish)"
     )
@@ -1247,41 +1332,64 @@ export function createProgram(
       "--once",
       "process a single task and exit; useful for cron / smoke tests"
     )
-    .action(
-      async (cmdOpts: {
-        config?: string;
-        board?: string;
-        status?: string;
-        mine?: boolean;
-        once?: boolean;
-      }) => {
-        try {
-          await runRunCommand(
-            {
-              apiUrl: opts.apiUrl,
-              profile: opts.profile,
-              configPath: cmdOpts.config,
-              boardId: cmdOpts.board,
-              status: cmdOpts.status,
-              mine: cmdOpts.mine === true,
-              once: cmdOpts.once === true,
+    .action(runStartAction);
+
+  // ---- run init ----
+  // Interactive wizard that writes a `.kanban-runner{.local}.yaml`
+  // step-by-step. Subcommand of `run` so the existing `kanban run`
+  // flag surface stays untouched.
+  runCmd
+    .command("init")
+    .description(
+      "interactively create a .kanban-runner{.local}.yaml (mode, agent, runner)"
+    )
+    .action(async () => {
+      try {
+        await runRunnerInitCommand(
+          {
+            cwd: process.cwd(),
+            apiUrl: opts.apiUrl,
+            profile: opts.profile,
+            prompter: {
+              select: <T,>(cfg: {
+                message: string;
+                choices: Array<{ value: T; name?: string; description?: string }>;
+                default?: T;
+              }): Promise<T> =>
+                inquirerSelect(
+                  cfg as Parameters<typeof inquirerSelect>[0]
+                ) as Promise<T>,
+              input: (cfg: {
+                message: string;
+                default?: string;
+                validate?: (value: string) => string | true;
+              }): Promise<string> => inquirerInput(cfg as Parameters<typeof inquirerInput>[0]),
+              number: (cfg: {
+                message: string;
+                default?: number;
+                min?: number;
+                validate?: (value: number | undefined) => string | true;
+              }): Promise<number | undefined> =>
+                inquirerNumber(
+                  cfg as Parameters<typeof inquirerNumber>[0]
+                ) as Promise<number | undefined>,
+              confirm: (cfg: {
+                message: string;
+                default?: boolean;
+              }): Promise<boolean> => inquirerConfirm(cfg as Parameters<typeof inquirerConfirm>[0]),
             },
-            {
-              http,
-              oauth,
-              cwd: process.cwd(),
-            }
-          );
-        } catch (err) {
-          if (err instanceof RunInvalidUsageError) {
-            process.stderr.write(`${(err as Error).message}\n`);
-            process.exit(1);
-          }
+          },
+          { http }
+        );
+      } catch (err) {
+        if (err instanceof RunInitError) {
           process.stderr.write(`${(err as Error).message}\n`);
-          process.exit(exitCodeForError(err));
+          process.exit(1);
         }
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(exitCodeForError(err));
       }
-    );
+    });
 
   // ---- workspace ----
   const workspaceCmd = program

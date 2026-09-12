@@ -360,7 +360,12 @@ the per-flag reference is in [`man kanban-run`](./man/kanban-run.1.md).
 # 1. Log in once
 kanban auth login
 
-# 2. Drop a project config next to your code
+# 2. Scaffold the config interactively (recommended). The wizard
+#    pulls the board list from the live API so you never have to
+#    copy/paste an id, and validates every field before writing.
+kanban run init
+
+# 2b. Or: drop a project config next to your code by hand
 cat > .kanban-runner.yaml <<'YAML'
 version: 1
 boardId: sys
@@ -385,6 +390,30 @@ kanban run --once
 # 5. Or: watch the agent's task inbox instead of a fixed column.
 kanban run --mine
 ```
+
+### `kanban run init` (interactive wizard)
+
+When invoked without arguments, `kanban run init` walks through every
+field the runner needs:
+
+1. **Mode** — board-bound (one board + column status) or identity-bound
+   (`mode: mine`).
+2. **Board + status** — fetched live from `GET /api/v1/boards` and
+   `GET /api/v1/columns`, so the wizard never asks you to paste an id
+   you don't already have.
+3. **Agent block** — `bin` + optional absolute `binPath`, prompt
+   delivery (`arg` / `stdin` / `file`), `cwd`, extra args, extra env
+   vars, and a per-task timeout.
+4. **Runner cadences** — poll / heartbeat / lock timeouts, max
+   concurrency, and an optional static `runnerId`. The wizard enforces
+   `lockTimeoutMs > 2 × heartbeatIntervalMs` before it lets you write.
+5. **Scope** — `.kanban-runner.yaml` (project-shared, commit-safe) or
+   `.kanban-runner.local.yaml` (machine-local override, gitignored).
+
+The wizard refuses to overwrite an existing file unless you confirm,
+and the resulting YAML is round-tripped through `parseConfig` so the
+runner will load it without surprises.
+
 
 ### Modes
 
