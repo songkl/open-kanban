@@ -1,0 +1,547 @@
+openapi: 3.0.3
+info:
+  title: Open-Kanban — Runner API
+  description: |
+    Runner endpoints for `s-1084`. This is the contract for the long-lived
+    CLI loop that watches a board / column, picks up tasks whose column
+    advertises the runner's agent type, and reports the outcome back to
+    the kanban.
+
+    All endpoints live under `/api/v1/runs/*` and require
+    `RequireAuth(db)` (Bearer token). Per the design review
+    (`devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §9 Q1), the `claim`
+    endpoint additionally requires `WRITE` access on the target
+    column (or its parent board via fallback).
+
+    ## Resource model
+
+    `task_runs` is the server-managed lock row. The claim transaction
+    inserts a row keyed on `task_id` and moves the task into the
+    column whose `status = 'in_progress'`. The snapshot
+    `task_runs.column_id` is the column the task came from, used by
+    the reaper to roll back on lock expiry.
+
+    Status lifecycle:
+
+    ```
+    (none) --claim--> claimed --finish(completed|failed)--> row deleted
+                          \\--heartbeat--> claimed|running (extended expires_at)
+                          \\--reaper (expires_at < now)--> released (task restored)
+    ```
+
+  version: 1.0.0
+  contact:
+    name: Open-Kanban backend
+    url: https://github.com/songkl/open-kanban
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+
+paths:
+  /runs/claim:
+    post:
+      summary: Atomically claim the next eligible task for a runner
+      description: |
+        In a single transaction:
+
+        1. Find a task whose column matches `(boardId, status)` and
+           whose `column_agents.agent_types` JSON contains `agentType`.
+           Skip tasks already locked by a non-expired `task_runs` row.
+        2. Insert / upsert a `task_runs` row with `status='claimed'`,
+           `claimed_at = now`, `last_heartbeat_at = now`,
+           `expires_at = now + lockTimeoutMs`.
+        3. Move the task to the column with `status = 'in_progress'`
+           on the same board (canonical "in-progress" column).
+        4. Return the full task JSON plus the run row metadata so the
+           CLI can render the prompt without a second round-trip.
+
+        If `mode = "mine"` is supplied, the server delegates to the
+        existing `GetMyTasks` filter pipeline
+        (`backend/internal/handlers/tasks_mytasks.go:39-66`) and
+        ignores `boardId` / `status`.
+
+        Returns `204 No Content` when no eligible task exists.
+
+        Atomicity note: the implementation MUST use a single
+        `INSERT … ON CONFLICT DO NOTHING RETURNING …` (sqlite) /
+        `INSERT … ON DUPLICATE KEY UPDATE …` (mysql) wrapped in a
+        transaction. Two parallel claims must result in exactly one
+        winner; this is covered by the parallel-claim test in `s-1087`.
+      operationId: claimRun
+      tags:
+        - Runs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimRunRequest'
+      responses:
+        '200':
+          description: Task successfully claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimRunResponse'
+        '204':
+          description: No eligible task found
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /runs/{taskId}/heartbeat:
+    post:
+      summary: Refresh the lock expiry on an in-flight run
+      description: |
+        Refresh `last_heartbeat_at = now` and
+        `expires_at = now + lockTimeoutMs` if the row matches
+        `(runner_id, status IN ('claimed','running'))`. Returns
+        `200` with the new `expires_at`. Returns `409 Conflict` when
+        the row has been reaped (status = `released` or no row), at
+        which point the runner must call `finish` and abandon.
+      operationId: heartbeatRun
+      tags:
+        - Runs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: Lock refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Lock has been reaped (no longer owned by this runner)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /runs/{taskId}/finish:
+    post:
+      summary: Mark a run as completed or failed
+      description: |
+        Updates the `task_runs` row to `completed` / `failed` and
+        deletes it. When `status='completed'` the handler also invokes
+        the existing `task_service.CompleteTask` so the task advances
+        to the next column (typically `review`). On `failed`, the task
+        remains in `in_progress` per requirement F8 — the runner is
+        expected to have already attached a failure comment via
+        `POST /api/v1/comments`.
+
+        The request must be sent by the runner that owns the lock;
+        mismatched `runnerId` returns `409`.
+      operationId: finishRun
+      tags:
+        - Runs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinishRunRequest'
+      responses:
+        '200':
+          description: Run finished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinishRunResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Run is not owned by this runner or already finished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /runs/release:
+    post:
+      summary: Bulk-release all runs owned by a runner
+      description: |
+        Used on graceful shutdown and as startup cleanup. Releases
+        every `task_runs` row owned by `runnerId` whose status is
+        `claimed` or `running`. Optionally scoped to `taskIds`. For
+        each released row the task is restored to the snapshot
+        `column_id`.
+
+        The endpoint is idempotent: rows already in
+        `completed` / `failed` / `released` are skipped.
+      operationId: releaseRuns
+      tags:
+        - Runs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseRunsRequest'
+      responses:
+        '200':
+          description: Runs released
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseRunsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /runs/{taskId}:
+    get:
+      summary: Get the current run row for a task
+      description: |
+        Used by the web UI task card to render the "claimed by
+        `runner-opencoder-7f3a` 12s ago" badge. Returns `404` when no
+        run row exists. Requires the same column READ access as the
+        underlying task.
+      operationId: getRun
+      tags:
+        - Runs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Run row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskRun'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
+
+  responses:
+    BadRequest:
+      description: Invalid request payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Authenticated but lacks required permission
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    RunMode:
+      type: string
+      enum: [board, mine]
+      default: board
+      description: |
+        `board`: server picks a task from the column matching
+        `(boardId, status)`. `mine`: server delegates to
+        `GetMyTasks`; `boardId` / `status` are ignored.
+
+    RunStatus:
+      type: string
+      enum: [claimed, running, completed, failed, released]
+      description: |
+        Lifecycle of a `task_runs` row. `claimed` immediately after
+        claim; `running` is reserved for a future `POST /runs/:id/start`
+        transition (not used in v1, see comment). `completed` and
+        `failed` are written by `finish` and immediately deleted;
+        `released` is written by the reaper when `expires_at < now`.
+
+    ClaimRunRequest:
+      type: object
+      required: [boardId, status, agentType, runnerId]
+      properties:
+        boardId:
+          type: string
+          description: Target board (ignored when `mode = mine`)
+          example: sys
+        status:
+          type: string
+          description: |
+            Target column status (`todo`, `in_progress`, …).
+            Ignored when `mode = mine`.
+          example: todo
+        agentType:
+          type: string
+          description: |
+            Token `user_agent` of the calling CLI. The server matches
+            this against `column_agents.agent_types` (JSON array).
+          example: opencoder
+        runnerId:
+          type: string
+          description: |
+            Stable identifier of the runner process
+            (`<hostname>-<pid>-<uuid>`). Recorded on `task_runs`.
+        mode:
+          $ref: '#/components/schemas/RunMode'
+
+    ClaimRunResponse:
+      type: object
+      required: [task, run]
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+        run:
+          $ref: '#/components/schemas/TaskRun'
+
+    HeartbeatRequest:
+      type: object
+      required: [runnerId]
+      properties:
+        runnerId:
+          type: string
+          description: Must match the `runner_id` of the existing run row.
+
+    HeartbeatResponse:
+      type: object
+      required: [expiresAt]
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          description: New `task_runs.expires_at`.
+
+    FinishRunRequest:
+      type: object
+      required: [runnerId, status]
+      properties:
+        runnerId:
+          type: string
+        status:
+          type: string
+          enum: [completed, failed]
+        exitCode:
+          type: integer
+          nullable: true
+          description: Process exit code of the agent binary.
+        error:
+          type: string
+          nullable: true
+          description: |
+            Captured stderr (≤ 64 KiB). Only meaningful when
+            `status = failed`.
+
+    FinishRunResponse:
+      type: object
+      required: [success, advanced]
+      properties:
+        success:
+          type: boolean
+        advanced:
+          type: boolean
+          description: |
+            `true` when the underlying task was moved to its next
+            column (only when `status = completed`).
+
+    ReleaseRunsRequest:
+      type: object
+      required: [runnerId]
+      properties:
+        runnerId:
+          type: string
+        taskIds:
+          type: array
+          description: Optional allow-list; default releases all owned rows.
+          items:
+            type: string
+
+    ReleaseRunsResponse:
+      type: object
+      required: [released]
+      properties:
+        released:
+          type: integer
+          description: Number of `task_runs` rows transitioned to `released`.
+
+    TaskRun:
+      type: object
+      required:
+        [taskId, runnerId, agentId, boardId, columnId, status, claimedAt, lastHeartbeatAt, expiresAt]
+      properties:
+        taskId:
+          type: string
+        runnerId:
+          type: string
+        agentId:
+          type: string
+        boardId:
+          type: string
+        columnId:
+          type: string
+          description: |
+            Snapshot of the task's column at claim time. Used by the
+            reaper to restore the task on expiry.
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        claimedAt:
+          type: string
+          format: date-time
+        lastHeartbeatAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+        exitCode:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    Task:
+      type: object
+      description: |
+        Same shape as `GET /api/v1/tasks/{id}`. `agentPrompt` is the
+        canonical input the runner passes to its agent binary
+        (rendered together with board / column context by the CLI).
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        priority:
+          type: string
+          enum: [low, medium, high]
+        assignee:
+          type: string
+          nullable: true
+        columnId:
+          type: string
+        columnName:
+          type: string
+        position:
+          type: integer
+        published:
+          type: boolean
+        archived:
+          type: boolean
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+        agentId:
+          type: string
+          nullable: true
+        agentPrompt:
+          type: string
+          nullable: true
+        createdBy:
+          type: string
+        createdByUsername:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        _count:
+          type: object
+          properties:
+            comments:
+              type: integer
+            subtasks:
+              type: integer
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: No permission to claim tasks in this column
