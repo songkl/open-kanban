@@ -57,6 +57,7 @@ const TOP_LEVEL_COMMANDS = [
   "comments",
   "subtasks",
   "mine",
+  "runs",
   "workspace",
   "shell",
   "completion",
@@ -78,6 +79,7 @@ const SUBCOMMANDS: Record<string, string[]> = {
   archived: ["list", "archive", "restore"],
   comments: ["add", "list"],
   subtasks: ["list", "create", "update", "delete"],
+  runs: ["list"],
   workspace: ["upload", "batch-upload", "list", "read", "delete", "stats"],
   completion: ["bash", "zsh", "fish"],
 };

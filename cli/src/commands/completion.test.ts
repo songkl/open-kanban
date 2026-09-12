@@ -26,6 +26,7 @@ import { HttpClient } from "../http/client.js";
 import {
   COMMON_FLAG_VALUES,
   DYNAMIC_ID_TASKS,
+  FLAG_VALUES_PER_COMMAND,
   FLAGS_PER_COMMAND,
   GLOBAL_FLAGS,
   SUBCOMMANDS,
@@ -160,6 +161,33 @@ describe("renderShell", () => {
     expect(script).toContain("table json yaml");
     expect(script).toContain("--priority)");
     expect(script).toContain("low medium high");
+  });
+
+  it("the bash script embeds per-command --status overrides", () => {
+    const script = renderShell("bash");
+    const override = FLAG_VALUES_PER_COMMAND["runs list"]["--status"];
+    expect(script).toContain("__kanban__FLAGVALS_runs_list");
+    for (const v of override) {
+      expect(script).toContain(v);
+    }
+  });
+
+  it("the zsh script embeds per-command --status overrides", () => {
+    const script = renderShell("zsh");
+    const override = FLAG_VALUES_PER_COMMAND["runs list"]["--status"];
+    expect(script).toContain("__kanban__FLAGVALS_runs_list");
+    for (const v of override) {
+      expect(script).toContain(v);
+    }
+  });
+
+  it("the fish script registers per-command flag-value overrides", () => {
+    const script = renderShell("fish");
+    const override = FLAG_VALUES_PER_COMMAND["runs list"]["--status"];
+    expect(script).toContain("__kanban_resolve_path | string match -rq '^runs list$'");
+    for (const v of override) {
+      expect(script).toContain(`-fa "${v}"`);
+    }
   });
 
   it("the fish script emits a `complete -c` line per global flag", () => {
@@ -339,6 +367,25 @@ describe("runComplete", () => {
     const lines = cap.read().stdout.split("\n").filter((l) => l.length > 0);
     for (const v of COMMON_FLAG_VALUES["--status"]) {
       expect(lines).toContain(v);
+    }
+  });
+
+  it("uses per-command --status overrides when the active path matches", async () => {
+    const cap = makeCapture();
+    const http = new HttpClient({ apiUrl: "http://kanban.test" });
+    await runComplete({
+      line: "kanban runs list --status ",
+      io: cap.io,
+      http,
+    });
+    const lines = cap.read().stdout.split("\n").filter((l) => l.length > 0);
+    const override = FLAG_VALUES_PER_COMMAND["runs list"]["--status"];
+    for (const v of override) {
+      expect(lines).toContain(v);
+    }
+    // Task column states must NOT leak through for the runs command.
+    for (const v of COMMON_FLAG_VALUES["--status"]) {
+      expect(lines).not.toContain(v);
     }
   });
 

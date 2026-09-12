@@ -96,6 +96,7 @@ import {
   runRunnerInitCommand,
   RunnerInitError as RunInitError,
 } from "./commands/run_init.js";
+import { runRunsList, InvalidUsageError as RunsInvalidUsageError } from "./commands/runs.js";
 import {
   input as inquirerInput,
   select as inquirerSelect,
@@ -1516,6 +1517,97 @@ export function createProgram(
         process.exit(exitCodeForError(err));
       }
     });
+
+  // ---- runs ----
+  // Read-only listing of terminal task_runs rows (completed / failed /
+  // released) backed by `GET /api/v1/runs/history`. Sits next to `run`
+  // because the same operator that drives the runner loop also wants to
+  // inspect what previous runs did — but is its own command group so
+  // future per-run verbs (get, cancel, …) have an obvious home.
+  const runsCmd = program
+    .command("runs")
+    .description("list terminal task-run history (GET /api/v1/runs/history)");
+
+  function runsExitCode(err: unknown): number {
+    if (err instanceof RunsInvalidUsageError) return 1;
+    return authExitCodeForError(err);
+  }
+
+  runsCmd
+    .command("list")
+    .description(
+      "list past task runs (auth required); supports --runner-id, --since, --status, --task, --board, --limit, --offset"
+    )
+    .option(
+      "--runner-id <id>",
+      "filter by exact runner identifier (forwards to ?runnerId=)"
+    )
+    .option(
+      "--since <duration>",
+      "lower bound on finished_at; accepts relative durations like 1d/2h/30m or an absolute RFC3339/YYYY-MM-DD timestamp"
+    )
+    .option(
+      "--status <status>",
+      "filter by terminal status (completed|failed|released)"
+    )
+    .option("--task <id>", "filter by task id (forwards to ?taskId=)")
+    .option("--board <id>", "filter by board id (forwards to ?boardId=)")
+    .option(
+      "--limit <n>",
+      "pagination size; server defaults to 50, capped at 200",
+      (v: string) => {
+        const n = Number(v);
+        if (!Number.isFinite(n) || !Number.isInteger(n)) {
+          throw new RunsInvalidUsageError(
+            `invalid --limit value: ${v} (must be an integer)`
+          );
+        }
+        return n;
+      }
+    )
+    .option(
+      "--offset <n>",
+      "pagination offset",
+      (v: string) => {
+        const n = Number(v);
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+          throw new RunsInvalidUsageError(
+            `invalid --offset value: ${v} (must be a non-negative integer)`
+          );
+        }
+        return n;
+      }
+    )
+    .action(
+      async (cmdOpts: {
+        runnerId?: string;
+        since?: string;
+        status?: string;
+        task?: string;
+        board?: string;
+        limit?: number;
+        offset?: number;
+      }) => {
+        const o = program.opts<{ output?: string }>();
+        try {
+          await runRunsList({
+            apiUrl: opts.apiUrl,
+            runnerId: cmdOpts.runnerId,
+            since: cmdOpts.since,
+            status: cmdOpts.status,
+            taskId: cmdOpts.task,
+            boardId: cmdOpts.board,
+            limit: cmdOpts.limit,
+            offset: cmdOpts.offset,
+            format: resolveOutputFormat(o.output),
+            http,
+          });
+        } catch (err) {
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(runsExitCode(err));
+        }
+      }
+    );
 
   // ---- workspace ----
   const workspaceCmd = program

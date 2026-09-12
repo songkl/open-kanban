@@ -303,6 +303,23 @@ SIGTERM trigger a graceful drain. See
 \fIcli/man/kanban-run.1.md\fR for the full reference and
 \fIdevDoc/CLI_RUNNER_PLAN_2026-09-12.md\fR for the design plan.
 
+.SS Run history
+.TP
+.B kanban runs list
+[\fB\-\-runner\-id\fR \fIID\fR]
+[\fB\-\-since\fR \fIDUR\fR]
+[\fB\-\-status\fR \fIS\fR]
+[\fB\-\-task\fR \fIID\fR]
+[\fB\-\-board\fR \fIID\fR]
+[\fB\-\-limit\fR \fIN\fR]
+[\fB\-\-offset\fR \fIN\fR]
+List terminal task runs (completed / failed / released) by calling
+\fBGET /api/v1/runs/history\fR. \fB\-\-since\fR accepts a relative
+duration (\fB1d\fR, \fB2h\fR, \fB30m\fR, \fB1w\fR, \fB45s\fR) or an
+absolute RFC3339 / YYYY-MM-DD timestamp; relative durations resolve
+to \fB?from=<now \- duration>\fR. \fB\-\-status\fR must be one of
+\fBcompleted\fR, \fBfailed\fR, \fBreleased\fR. Auth required.
+
 .SS Shell completion
 .TP
 .B kanban completion bash | zsh | fish
