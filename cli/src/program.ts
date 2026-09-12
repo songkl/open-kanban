@@ -91,6 +91,7 @@ import {
   runSubtasksDelete,
 } from "./commands/subtasks.js";
 import { runMine } from "./commands/mine.js";
+import { runRunCommand, InvalidUsageError as RunInvalidUsageError } from "./commands/run.js";
 import {
   runWorkspaceUpload,
   runWorkspaceBatchUpload,
@@ -1215,6 +1216,72 @@ export function createProgram(
       }
     }
   );
+
+  // ---- run ----
+  // Long-lived runner loop that watches a board/column (mode-1) or the
+  // agent's task inbox (mode-2) and dispatches each task to an external
+  // agent binary. SIGINT / SIGTERM trigger a graceful drain so the
+  // runner releases its locks before exiting.
+  program
+    .command("run")
+    .description(
+      "start the runner loop (claim → spawn agent → heartbeat → finish)"
+    )
+    .option(
+      "--config <file>",
+      "explicit path to a .kanban-runner{.local}.yaml; overrides the discovery walk-up"
+    )
+    .option(
+      "--board <id>",
+      "mode-1 board id to watch (must pair with --status)"
+    )
+    .option(
+      "--status <status>",
+      "mode-1 column status to watch (todo|in_progress|review|done); must pair with --board"
+    )
+    .option(
+      "--mine",
+      "mode-2: pick tasks assigned to (or routed to) the authenticated agent"
+    )
+    .option(
+      "--once",
+      "process a single task and exit; useful for cron / smoke tests"
+    )
+    .action(
+      async (cmdOpts: {
+        config?: string;
+        board?: string;
+        status?: string;
+        mine?: boolean;
+        once?: boolean;
+      }) => {
+        try {
+          await runRunCommand(
+            {
+              apiUrl: opts.apiUrl,
+              profile: opts.profile,
+              configPath: cmdOpts.config,
+              boardId: cmdOpts.board,
+              status: cmdOpts.status,
+              mine: cmdOpts.mine === true,
+              once: cmdOpts.once === true,
+            },
+            {
+              http,
+              oauth,
+              cwd: process.cwd(),
+            }
+          );
+        } catch (err) {
+          if (err instanceof RunInvalidUsageError) {
+            process.stderr.write(`${(err as Error).message}\n`);
+            process.exit(1);
+          }
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(exitCodeForError(err));
+        }
+      }
+    );
 
   // ---- workspace ----
   const workspaceCmd = program

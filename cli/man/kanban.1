@@ -290,6 +290,19 @@ Anything else is dispatched to a fresh \fBparseAsync\fR; history is
 persisted to \fI~/.kanban_shell_history\fR
 (override via \fBKANBAN_SHELL_HISTORY\fR).
 
+.SS Runner loop
+.TP
+.B kanban run [\fB\-\-config\fR \fIFILE\fR]
+[{\fB\-\-board\fR \fIID\fR \fB\-\-status\fR \fIS\fR | \fB\-\-mine\fR}]
+[\fB\-\-once\fR]
+Start the long\-lived runner loop that watches a board/column (mode-1)
+or the authenticated agent's task inbox (mode-2), spawns the agent
+binary, heartbeats every \fBheartbeatIntervalMs\fR, and reports the
+outcome back via \fBPOST /api/v1/runs/:taskId/finish\fR. SIGINT /
+SIGTERM trigger a graceful drain. See
+\fIcli/man/kanban-run.1.md\fR for the full reference and
+\fIdevDoc/CLI_RUNNER_PLAN_2026-09-12.md\fR for the design plan.
+
 .SS Shell completion
 .TP
 .B kanban completion bash | zsh | fish

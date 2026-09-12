@@ -344,6 +344,81 @@ kanban completion fish > ~/.config/fish/completions/kanban.fish
 
 A manpage (`cli/man/kanban.1`) is also shipped for `man kanban`.
 
+## Runner
+
+`kanban run` is a long-lived process that watches a board/column
+(mode-1) or the authenticated agent's task inbox (mode-2), spawns a
+local agent binary for each claimed task, heartbeats the lock on a
+fixed cadence, and reports the outcome back via
+`POST /api/v1/runs/:taskId/finish`. The full design lives in
+[`devDoc/CLI_RUNNER_PLAN_2026-09-12.md`](../devDoc/CLI_RUNNER_PLAN_2026-09-12.md);
+the per-flag reference is in [`man kanban-run`](./man/kanban-run.1.md).
+
+### Quick start
+
+```bash
+# 1. Log in once
+kanban auth login
+
+# 2. Drop a project config next to your code
+cat > .kanban-runner.yaml <<'YAML'
+version: 1
+boardId: sys
+status: todo
+agent:
+  bin: opencode
+  cwd: .
+  args: ["--non-interactive"]
+  timeoutMs: 1800000
+runner:
+  pollIntervalMs: 5000
+  heartbeatIntervalMs: 30000
+  lockTimeoutMs: 120000
+YAML
+
+# 3. Start the loop (foreground). Ctrl-C triggers a graceful drain.
+kanban run
+
+# 4. Or: process a single task and exit (cron-friendly).
+kanban run --once
+
+# 5. Or: watch the agent's task inbox instead of a fixed column.
+kanban run --mine
+```
+
+### Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--config <file>` | _(discovery)_ | Read the runner config from this file instead of walking up from `cwd`. |
+| `--board <id>` | _(unset)_ | Mode-1 board id. Must pair with `--status`. |
+| `--status <s>` | _(unset)_ | Mode-1 column status (`todo` / `in_progress` / `review` / `done`). |
+| `--mine` | `false` | Mode-2: pick tasks assigned to (or routed to) the authenticated agent. Requires `kanban auth login`. |
+| `--once` | `false` | Process a single task and exit. Useful for cron jobs / smoke tests. |
+
+### Configuration discovery
+
+The runner walks up from the current working directory until it finds
+one of:
+
+1. `./.kanban-runner.local.yaml` — machine-local override (gitignored)
+2. `./.kanban-runner.yaml` — project-shared config (checked in)
+3. `~/.config/kanban-cli/runner.json` — global fallback
+
+When a local override and a project file sit in the same directory
+they are deep-merged (local wins on conflict; arrays like `args` are
+replaced wholesale). The full schema and validation rules are
+documented in [`cli/man/kanban-run.1.md`](./man/kanban-run.1.md) and
+`devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §2.2 / §4.6.
+
+### Signals
+
+The loop installs `SIGINT` and `SIGTERM` handlers that call
+`requestShutdown()`. The current in-flight agent (if any) is sent
+`SIGTERM`, the loop waits up to 15 s for it to drain, then
+`POST /api/v1/runs/release` is called to release any orphan locks
+before the process exits.
+
 ## License
 
 MIT
