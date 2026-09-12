@@ -101,6 +101,7 @@ import {
   select as inquirerSelect,
   number as inquirerNumber,
   confirm as inquirerConfirm,
+  password as inquirerPassword,
 } from "@inquirer/prompts";
 import {
   runWorkspaceUpload,
@@ -123,6 +124,12 @@ import {
   InvalidConfigValueError,
   extractCliFlags,
 } from "./commands/config.js";
+import {
+  runAgentsList,
+  runAgentCreate,
+  runAgentBind,
+  runAgentDelete,
+} from "./commands/agents.js";
 
 const DEFAULT_APP_NAME = "kanban-cli";
 const PROGRAM_VERSION = "0.1.0";
@@ -254,6 +261,125 @@ export function createProgram(
         process.exit(
           authExitCodeForError(err) === 1 ? exitCodeForError(err) : authExitCodeForError(err)
         );
+      }
+    });
+
+  // ---- auth agent ----
+  // Binds the CLI to an Agent identity instead of the human approver's
+  // session, so `kanban auth login` no longer leaks the admin identity
+  // into unattended automation. See `auth agent create / bind` below.
+
+  const agentCmd = authCmd.command("agent").description(
+    "manage the Agent identity bound to the CLI (unattended / automation use)"
+  );
+
+  agentCmd
+    .command("list")
+    .description("list configured Agents on the server (admin OAuth session required)")
+    .action(async () => {
+      const o = program.opts<{ output?: string }>();
+      try {
+        await runAgentsList({
+          apiUrl: opts.apiUrl,
+          format: resolveOutputFormat(o.output),
+          http,
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(exitCodeForError(err));
+      }
+    });
+
+  agentCmd
+    .command("create <nickname>")
+    .description(
+      "create a new Agent on the server and bind its API token to the CLI profile (admin OAuth session required)"
+    )
+    .option("--avatar <url>", "avatar URL for the new Agent")
+    .option("--role <role>", "role for the new Agent (ADMIN|MEMBER|VIEWER)", "ADMIN")
+    .option(
+      "--no-bind",
+      "do not persist the new token to the credential store (dry run)"
+    )
+    .action(
+      async (
+        nickname: string,
+        cmdOpts: { avatar?: string; role?: string; bind?: boolean }
+      ) => {
+        const o = program.opts<{ output?: string }>();
+        try {
+          const role = (cmdOpts.role ?? "ADMIN").toUpperCase();
+          if (role !== "ADMIN" && role !== "MEMBER" && role !== "VIEWER") {
+            process.stderr.write(
+              `Invalid --role: ${cmdOpts.role}. Use one of ADMIN, MEMBER, VIEWER.\n`
+            );
+            process.exit(1);
+          }
+          await runAgentCreate(
+            {
+              apiUrl: opts.apiUrl,
+              nickname,
+              avatar: cmdOpts.avatar,
+              role: role as "ADMIN" | "MEMBER" | "VIEWER",
+              bindWhenFinished: cmdOpts.bind !== false,
+              format: resolveOutputFormat(o.output),
+              http,
+              oauth,
+            },
+            nickname
+          );
+        } catch (err) {
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(exitCodeForError(err));
+        }
+      }
+    );
+
+  agentCmd
+    .command("bind")
+    .description(
+      "bind the CLI to an existing Agent API token (issued via the web UI or `kanban auth agent create`)"
+    )
+    .option("--token <token>", "Agent API token to persist (else KANBAN_AGENT_TOKEN, else prompt)")
+    .action(async (cmdOpts: { token?: string }) => {
+      const o = program.opts<{ output?: string }>();
+      try {
+        await runAgentBind({
+          apiUrl: opts.apiUrl,
+          token: cmdOpts.token,
+          format: resolveOutputFormat(o.output),
+          http,
+          oauth,
+          prompt: async () =>
+            inquirerPassword({
+              message: "Agent API token:",
+              validate: (v: string) =>
+                v && v.trim().length > 0 ? true : "Token is required",
+            }),
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(exitCodeForError(err));
+      }
+    });
+
+  agentCmd
+    .command("delete <agentId>")
+    .description("delete an Agent (admin OAuth session required)")
+    .action(async (agentId: string) => {
+      const o = program.opts<{ output?: string }>();
+      try {
+        await runAgentDelete(
+          {
+            apiUrl: opts.apiUrl,
+            format: resolveOutputFormat(o.output),
+            http,
+          },
+          agentId
+        );
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(exitCodeForError(err));
       }
     });
 

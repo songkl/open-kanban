@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- s-1102: add `kanban auth agent {list,create,bind,delete}` so the CLI
+  can bind to an Agent identity (long-lived API token) instead of the
+  human approver's OAuth session. `auth status` now reports
+  `Identity: Agent / Human` and `auth agent bind` validates the token
+  via `GET /api/v1/users/me` to refuse HUMAN tokens.
+
 ### Bug Fixes
 
 ### Improvements

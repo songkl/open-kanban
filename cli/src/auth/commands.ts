@@ -160,6 +160,10 @@ export interface StatusReport {
   accessTokenExpiresAt: number | undefined;
   accessTokenRemainingSeconds: number | undefined;
   hasRefreshToken: boolean;
+  // isAgentToken is true when the credential store holds an Agent API
+  // token written by `kanban auth agent create / bind`. Surfaced so the
+  // renderer can swap "Refresh: yes/no" for "Identity: Agent/Human".
+  isAgentToken: boolean;
 }
 
 export async function runStatus(
@@ -185,6 +189,7 @@ export async function runStatus(
         ? Math.max(0, Math.round((stored.accessExpiresAt - Date.now()) / 1000))
         : undefined,
     hasRefreshToken: !!stored.refreshToken,
+    isAgentToken: stored.clientName === "kanban-cli/agent-token",
   };
   stdout.write(formatStatus(report) + "\n");
   return report;
@@ -199,6 +204,14 @@ function formatStatus(r: StatusReport): string {
         : chalk.green(`${formatDuration(r.accessTokenRemainingSeconds!)} remaining`);
   const scope = r.scope ? r.scope : chalk.gray("(none)");
   const profile = r.profile ?? chalk.gray("(default)");
+  const identity = r.isAgentToken
+    ? chalk.green("Agent (long-lived token)")
+    : r.hasRefreshToken
+      ? chalk.blue("Human (OAuth device flow)")
+      : chalk.yellow("Human (OAuth — no refresh)");
+  const refreshLine = r.isAgentToken
+    ? `${chalk.bold("Refresh")}:    ${chalk.gray("n/a — long-lived API token")}`
+    : `${chalk.bold("Refresh")}:    ${r.hasRefreshToken ? chalk.green("yes") : chalk.red("no")}`;
   return [
     `${chalk.bold("Profile")}:    ${profile}`,
     `${chalk.bold("Host")}:       ${r.apiUrl}`,
@@ -206,7 +219,8 @@ function formatStatus(r: StatusReport): string {
     `${chalk.bold("Client")}:     ${r.clientName ?? chalk.gray("(unnamed)")}`,
     `${chalk.bold("Scope")}:      ${scope}`,
     `${chalk.bold("Access")}:     ${expires}`,
-    `${chalk.bold("Refresh")}:    ${r.hasRefreshToken ? chalk.green("yes") : chalk.red("no")}`,
+    refreshLine,
+    `${chalk.bold("Identity")}:   ${identity}`,
   ].join("\n");
 }
 

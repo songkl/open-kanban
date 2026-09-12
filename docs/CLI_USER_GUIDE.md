@@ -17,6 +17,7 @@ automation, with runnable examples at every step. 中文段落解释了**为什�
 
 1. [安装 / Installation](#1-安装--installation)
 2. [第一次登录 / First login](#2-第一次登录--first-login)
+   - [2.1 给自动化 / Runner 绑定一个 Agent 身份](#21-给自动化--runner-绑定一个-agent-身份--bind-the-cli-to-an-agent-identity)
 3. [看懂看板 / Reading the board](#3-看懂看板--reading-the-board)
 4. [创建并流转任务 / Creating and moving tasks](#4-创建并流转任务--creating-and-moving-tasks)
 5. [评论与子任务 / Comments & subtasks](#5-评论与子任务--comments--subtasks)
@@ -112,7 +113,63 @@ kanban auth logout
 > logged in to `work` and `personal` boards at the same time on the same
 > machine — they live in separate files.
 
+### 2.1 给自动化 / Runner 绑定一个 Agent 身份 / Bind the CLI to an Agent identity
+
+`kanban auth login` 走的是 OAuth device flow,最终拿到的 access token
+会绑定到那个点"批准"的人类用户。对人来说没问题,但 CI / watcher /
+`kanban run` 这种无人值守的场景就有两个副作用:
+
+1. 每条评论 / 任务都会记成某个 admin 的操作,审计日志被噪声淹没。
+2. `kanban mine` 的 agent-type 过滤失效 —— 因为 token 主体是人类,
+   `/api/v1/users/me` 返回的 `type` 也是 `HUMAN`。
+
+`kanban auth agent` 这一组命令就是为此设计的 —— 它会让 CLI 持有一个
+**Agent 类型的 API token**,而不是某个 admin 的 OAuth 会话。
+
+```
+# 一次性:用 admin 账号登录,然后创建一个 Agent
+kanban auth login
+kanban auth agent create ci-runner --role ADMIN
+#   ↳ 打印出一次性 API token(请立刻存进 secret manager)
+#   ↳ 同时写进 ~/.config/kanban-cli/credentials-<api>.json
+
+# 之后 `kanban status` / `whoami` / `mine` / `run` 都以这个 Agent 身份运行
+kanban auth status    # Identity: Agent (long-lived token)
+kanban mine           # 看到所有 routed 给 ci-runner 的任务
+```
+
+如果你的 secret manager 已经存着现成的 Agent token(比如从 Web UI 的
+Settings → Agents 复制出来),跳过 OAuth 直接 bind 即可:
+
+```
+# 三选一: --token / $KANBAN_AGENT_TOKEN / 交互式(密码回显关闭)
+kanban auth agent bind --token agt_xxx...
+KANBAN_AGENT_TOKEN=agt_xxx... kanban auth agent bind
+kanban auth agent bind             # 提示输入,输入会被 mask
+```
+
+Admin 想清理时:
+
+```
+kanban auth agent list              # 查看所有 Agent
+kanban auth agent delete ci-runner  # 删除
+```
+
+`auth agent bind` 会先调用 `GET /api/v1/users/me` 校验 token,
+并拒绝绑定任何 `type='HUMAN'` 的会话 —— 防止误把 admin token 当成
+Agent token 写进凭据文件。
+
 ---
+
+## 3. 看懂看板 / Reading the board
+
+Before you write anything, take a look at what's already there.
+
+### `kanban status` — API 探测 / API probe
+
+不要求登录。返回 server 是否在线、延迟、看板块数。
+
+
 
 ## 3. 看懂看板 / Reading the board
 

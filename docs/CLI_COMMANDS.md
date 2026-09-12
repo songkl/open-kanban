@@ -43,6 +43,7 @@ built-in default**. Run `kanban config get apiUrl` to inspect the chain.
 
 - [Global flags](#global-flags)
 - [`auth` — authentication](#auth--authentication)
+  - [`auth agent` — bind the CLI to an Agent identity](#auth-agent--bind-the-cli-to-an-agent-identity)
 - [`status` — API probe](#status--api-probe)
 - [`dashboard` — workspace stats](#dashboard--workspace-stats)
 - [`boards` — board navigation](#boards--board-navigation)
@@ -127,6 +128,88 @@ Useful for verifying the OAuth session is bound to the expected account.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--path <path>` | string | `/api/v1/users/me` | Override the endpoint path (e.g. for custom auth proxies). |
+
+### `auth agent` — bind the CLI to an Agent identity
+
+```
+kanban auth agent list
+kanban auth agent create <nickname> [--avatar <url>] [--role <role>] [--no-bind]
+kanban auth agent bind [--token <token>]
+kanban auth agent delete <agentId>
+```
+
+The `auth login` device flow always binds the resulting access token to
+the human approver. For unattended / automation use cases (the runner,
+CI pipelines, watchdogs) this leaks the admin identity into every
+audit trail and prevents the `kanban mine` inbox from filtering by
+agent-type. The `auth agent` sub-commands close that gap by minting
+(or accepting) an Agent API token and writing it to the CLI's encrypted
+credential store in place of the human session.
+
+Once the credential store holds an Agent token, every subsequent
+`kanban ...` call runs as that Agent and `auth status` reports
+`Identity: Agent (long-lived token)`. Use `auth logout` to wipe the
+profile and fall back to a human session.
+
+> **Note:** `auth agent create` and `auth agent delete` require an
+> existing admin OAuth session (`kanban auth login`). `auth agent bind`
+> does not — the supplied token is the credential.
+
+#### `auth agent list`
+
+```
+kanban auth agent list
+```
+
+`GET /api/v1/auth/agents` — print the configured Agents (id, nickname,
+role, enabled, last active). Admin OAuth session required.
+
+#### `auth agent create <nickname>`
+
+```
+kanban auth agent create ci-runner --role ADMIN
+```
+
+`POST /api/v1/auth/agents` — mint a new Agent and bind the freshly
+returned API token to the local profile. The CLI prints the token
+once; copy it to a secret manager immediately.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--avatar <url>` | string | _(empty)_ | Avatar URL stored on the Agent row. |
+| `--role <role>` | string | `ADMIN` | `ADMIN` / `MEMBER` / `VIEWER`. |
+| `--no-bind` | boolean | `false` | Dry-run: do not persist the new token. |
+
+Admin OAuth session required (returns 403 otherwise).
+
+#### `auth agent bind`
+
+```
+kanban auth agent bind --token agt_xxx...
+# or
+KANBAN_AGENT_TOKEN=agt_xxx... kanban auth agent bind
+# or interactively (password-masked prompt)
+kanban auth agent bind
+```
+
+Take an externally-issued Agent API token (from the Settings → Agents
+page, or pasted from `auth agent create`'s output) and persist it to
+the credential store. The CLI validates the token against
+`GET /api/v1/users/me` and refuses to bind when the resolved user is
+not of `type='AGENT'` — this prevents accidentally downgrading an
+admin session to a HUMAN token.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--token <token>` | string | _(prompt / `KANBAN_AGENT_TOKEN`)_ | Agent API token to persist. If omitted the CLI falls back to the `KANBAN_AGENT_TOKEN` env var, then prompts (input is masked). |
+
+#### `auth agent delete <agentId>`
+
+```
+kanban auth agent delete agent-1
+```
+
+`DELETE /api/v1/auth/agents?id=<agentId>`. Admin OAuth session required.
 
 ---
 
