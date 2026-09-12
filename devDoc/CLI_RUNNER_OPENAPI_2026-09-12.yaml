@@ -275,6 +275,150 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /runs/history:
+    get:
+      summary: List terminal task_runs rows (history view)
+      description: |
+        Returns every `task_runs` row in a terminal state
+        (`completed` / `failed` / `released`) that the caller is
+        permitted to read, ordered by `finishedAt DESC` (most recent
+        first). Live rows (`claimed` / `running`) are intentionally
+        **not** returned here — those are surfaced by
+        `GET /runs/{taskId}` and rendered on the task card.
+
+        Powers three consumers that must stay in lockstep:
+
+        1. The `/runs` web page (`RunHistoryPage`, list of recent
+           failures).
+        2. The CLI `kanban runs list` subcommand.
+        3. Operator dashboards / log analysis pipelines.
+
+        ## Filtering
+
+        All query params are optional and combine with logical AND:
+
+        | Param      | Type   | Behaviour |
+        |------------|--------|-----------|
+        | `runnerId` | string | Exact match on `task_runs.runner_id`. |
+        | `status`   | enum   | One of `completed` \| `failed` \| `released`. Server returns `400` for any other value (including the live `claimed` / `running` states). |
+        | `boardId`  | string | Comma-separated allow-list of `board_id` values. |
+        | `taskId`   | string | Exact match on `task_runs.task_id`. |
+        | `from`     | RFC3339 or `YYYY-MM-DD` | Lower bound on `finishedAt`. |
+        | `to`       | RFC3339 or `YYYY-MM-DD` | Upper bound on `finishedAt`. Must be `>= from`. |
+        | `limit`    | integer | Page size, default `50`, capped at `200`. Must be positive. |
+        | `offset`   | integer | Page offset, default `0`. Must be non-negative. |
+
+        ## Authorization
+
+        Same READ access rule as `GET /tasks/{id}`: a row is visible if
+        the caller has READ on the snapshot `columnId` *or* on the
+        task's *current* column (the task may have been advanced by
+        `CompleteTask` after the run finished). `ADMIN` users see
+        every row. Unknown columns (e.g. board deleted out from under
+        a finished run) are dropped silently.
+
+        ## Response shape
+
+        Always returns a JSON array (never `null`) so the CLI can
+        iterate without a null-guard. An empty filter match returns
+        `200` with `[]`.
+      operationId: listRunsHistory
+      tags:
+        - Runs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: runnerId
+          in: query
+          required: false
+          description: Exact-match filter on `task_runs.runner_id`.
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: |
+            Terminal status filter. Server returns `400` for any
+            value outside this enum (including `claimed` /
+            `running`, which are live states owned by
+            `GET /runs/{taskId}`).
+          schema:
+            $ref: '#/components/schemas/RunHistoryStatus'
+        - name: boardId
+          in: query
+          required: false
+          description: |
+            Comma-separated allow-list of `board_id` values. Whitespace
+            around each id is tolerated; empty entries are ignored.
+          schema:
+            type: string
+            example: sys,personal
+        - name: taskId
+          in: query
+          required: false
+          description: Exact-match filter on `task_runs.task_id`.
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: false
+          description: |
+            Lower bound on `finishedAt`. Accepts full RFC3339
+            (`2026-09-12T08:00:00Z`) or date-only (`2026-09-12`).
+            Server parses via `parseHistoryTime` and returns `400`
+            on parse failure.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: |
+            Upper bound on `finishedAt`. Same format as `from`. Server
+            returns `400` when `to < from`.
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          description: |
+            Page size. Default `50`, capped at `200`. Must be a
+            positive integer; server returns `400` otherwise.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Page offset. Must be a non-negative integer.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Terminal runs visible to the caller, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListRunsHistoryResponse'
+        '400':
+          description: |
+            Invalid query parameter (unrecognised `status`, malformed
+            `from`/`to`, `to < from`, non-positive `limit`, negative
+            `offset`, etc.).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -333,6 +477,34 @@ components:
         transition (not used in v1, see comment). `completed` and
         `failed` are written by `finish` and immediately deleted;
         `released` is written by the reaper when `expires_at < now`.
+
+    RunHistoryStatus:
+      type: string
+      enum: [completed, failed, released]
+      description: |
+        Terminal subset of `RunStatus` accepted by the `status`
+        query parameter on `GET /runs/history`. Live states
+        (`claimed` / `running`) are intentionally excluded — they
+        are surfaced by `GET /runs/{taskId}` instead. The server
+        returns `400` for any other value.
+
+    ListRunsHistoryResponse:
+      type: array
+      description: |
+        Array of terminal `TaskRun` rows visible to the caller,
+        ordered by `finishedAt DESC` (most recent first). Always
+        a JSON array — an empty result is `[]`, never `null`,
+        so the CLI can iterate without a null-guard. Each entry
+        carries the full run row plus the row that powers the
+        history view (`status`, `finishedAt`, `exitCode`,
+        `error`); the join with `tasks.title` happens client-side
+        via `runsApi.list` / `kanban runs list --task <id>`.
+
+        Note: live rows (`claimed` / `running`) intentionally do
+        **not** appear here. Use `GET /runs/{taskId}` to fetch the
+        live lock row for a task.
+      items:
+        $ref: '#/components/schemas/TaskRun'
 
     ClaimRunRequest:
       type: object
