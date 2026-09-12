@@ -296,11 +296,18 @@ func (r *RunRepository) Heartbeat(taskID, runnerID string, lockTimeoutMs int) (t
 	return expiresAt, nil
 }
 
-// FinishRun marks the run row as completed/failed, deletes it,
-// and (when status='completed') invokes CompleteTask to advance
-// the underlying task. On 'failed' the task stays in its current
+// FinishRun marks the run row as completed/failed and (when
+// status='completed') invokes CompleteTask to advance the
+// underlying task. On 'failed' the task stays in its current
 // column — the runner is expected to attach a failure comment via
 // POST /api/v1/comments before calling /finish.
+//
+// As of s-1106, the row is NOT deleted: it is stamped to its
+// terminal status (completed / failed) and left in place so the
+// /api/v1/runs/history endpoint can list past runs. The release
+// path still owns the 'released' terminal state — a row that
+// transitions claimed → released is just another terminal row
+// for the history view.
 //
 // Returns ErrNoRunRow when no row exists for the task, and
 // ErrLockHeld when the row exists but is owned by a different
@@ -335,14 +342,15 @@ func (r *RunRepository) FinishRun(taskID, runnerID string, status models.RunStat
 	}
 
 	now := time.Now().UTC()
+	// Update in place — the row stays so /runs/history can list it.
+	// The expires_at / last_heartbeat_at columns are left as they
+	// were at the last heartbeat (or claim) so the history view
+	// can show "lock expired at" without recomputing.
 	if _, err := tx.Exec(`
 		UPDATE task_runs
 		SET status = ?, finished_at = ?, exit_code = ?, error = ?
 		WHERE task_id = ? AND runner_id = ?
 	`, string(status), now, exitCode, errMsg, taskID, runnerID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM task_runs WHERE task_id = ?", taskID); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -471,6 +479,122 @@ func (r *RunRepository) GetRun(taskID string) (*models.TaskRun, error) {
 		return nil, err
 	}
 	return tr, nil
+}
+
+// RunHistoryFilter is the bundle of optional predicates the
+// /api/v1/runs/history endpoint accepts. Each field is optional;
+// the zero value means "no filter on this column". Status and
+// BoardIDs are the two compound predicates — Status matches the
+// run lifecycle (completed / failed / released) and BoardIDs
+// scopes the result to one or more boards.
+//
+// From / To bound the finished_at column so the typical "last
+// 24h / 7d / 30d" queries can hit idx_task_runs_finished_at (or
+// idx_task_runs_status_finished_at when Status is also set)
+// instead of scanning the table.
+type RunHistoryFilter struct {
+	RunnerID string
+	Status   models.RunStatus
+	BoardIDs []string
+	TaskID   string
+	From     time.Time
+	To       time.Time
+	Limit    int
+	Offset   int
+}
+
+// ListRunHistory returns every terminal task_runs row
+// (status ∈ {completed, failed, released}) matching the given
+// filter, ordered by finished_at DESC. Live rows
+// (status ∈ {claimed, running}) are intentionally excluded —
+// those are surfaced by GetRun on the task card, not the history
+// page.
+//
+// The query joins tasks so the handler can render task titles
+// without an extra round-trip per row, and joins columns so a
+// caller-side permission gate can evaluate column-level READ
+// access for each row.
+//
+// Limit defaults to 50 and is capped at 200 to keep the JSON
+// response bounded; Offset is the standard pagination cursor.
+func (r *RunRepository) ListRunHistory(filter RunHistoryFilter) ([]*models.TaskRun, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	where := []string{
+		"tr.status IN ('completed', 'failed', 'released')",
+	}
+	args := []interface{}{}
+
+	if filter.RunnerID != "" {
+		where = append(where, "tr.runner_id = ?")
+		args = append(args, filter.RunnerID)
+	}
+	if filter.Status != "" {
+		where = append(where, "tr.status = ?")
+		args = append(args, string(filter.Status))
+	}
+	if filter.TaskID != "" {
+		where = append(where, "tr.task_id = ?")
+		args = append(args, filter.TaskID)
+	}
+	if !filter.From.IsZero() {
+		where = append(where, "tr.finished_at >= ?")
+		args = append(args, filter.From.UTC())
+	}
+	if !filter.To.IsZero() {
+		where = append(where, "tr.finished_at <= ?")
+		args = append(args, filter.To.UTC())
+	}
+	if len(filter.BoardIDs) > 0 {
+		placeholders := make([]string, len(filter.BoardIDs))
+		for i, id := range filter.BoardIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		where = append(where, "tr.board_id IN ("+strings.Join(placeholders, ",")+")")
+	}
+
+	args = append(args, limit, offset)
+
+	query := `
+		SELECT ` + models.TaskRunColumns + `
+		FROM task_runs tr
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY tr.finished_at DESC, tr.task_id ASC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []*models.TaskRun
+	for rows.Next() {
+		tr, err := models.ScanTaskRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, tr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []*models.TaskRun{}
+	}
+	return out, nil
 }
 
 // ExpiredRun is the minimal snapshot the reaper needs to roll a

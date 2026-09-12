@@ -51,6 +51,8 @@ func TestSQLiteMigrations(t *testing.T) {
 		"idx_task_runs_expires",
 		"idx_task_runs_runner",
 		"idx_task_runs_status",
+		"idx_task_runs_finished_at",
+		"idx_task_runs_status_finished_at",
 	}
 	for _, idx := range taskRunIndexes {
 		var c int

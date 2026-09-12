@@ -38,6 +38,14 @@ var VersionMigrationMap = []VersionMigration{
 	// binary which runs migrations against an empty in-memory SQLite
 	// and would otherwise miss migration 004.
 	{Version: "0.5.0", From: 1, To: 4},
+	// 0.6.0 added migration 006 to add the history indexes on
+	// task_runs (s-1106). The application-side behaviour change
+	// (FinishRun stops DELETing terminal rows, /runs/history
+	// endpoint ships under s-1107) lands in the same release but
+	// doesn't touch this map because it doesn't add a new
+	// migration file. Operators upgrading from 0.5.x get the new
+	// indexes on `up`; nothing changes for fresh installs.
+	{Version: "0.6.0", From: 1, To: 6},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

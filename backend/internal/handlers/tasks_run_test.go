@@ -277,6 +277,7 @@ func runsRouter(db *sql.DB) *gin.Engine {
 	group.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
 	group.POST("/:taskId/finish", handlers.FinishRun(db))
 	group.GET("/:taskId", handlers.GetRun(db))
+	group.GET("/history", handlers.ListRunsHistory(db))
 	return router
 }
 
@@ -687,7 +688,10 @@ func TestFinishRun_CompletedAdvancesColumn(t *testing.T) {
 		t.Errorf("expected success=true, advanced=true, got %+v", resp)
 	}
 
-	// Row should be deleted and task advanced past in_progress.
+	// Row should be preserved (s-1106) and stamped to
+	// status='completed', and the task should advance past
+	// in_progress. The terminal row is now source-of-truth for
+	// /api/v1/runs/history.
 	var col string
 	if err := db.QueryRow("SELECT column_id FROM tasks WHERE id='t-fin'").Scan(&col); err != nil {
 		t.Fatalf("query: %v", err)
@@ -696,12 +700,12 @@ func TestFinishRun_CompletedAdvancesColumn(t *testing.T) {
 		t.Errorf("expected task to advance past in_progress, still in %s", col)
 	}
 
-	var runCount int
-	if err := db.QueryRow("SELECT COUNT(*) FROM task_runs WHERE task_id='t-fin'").Scan(&runCount); err != nil {
+	var runStatus string
+	if err := db.QueryRow("SELECT status FROM task_runs WHERE task_id='t-fin'").Scan(&runStatus); err != nil {
 		t.Fatalf("count runs: %v", err)
 	}
-	if runCount != 0 {
-		t.Errorf("expected task_runs row deleted, got %d rows", runCount)
+	if runStatus != "completed" {
+		t.Errorf("expected task_runs row stamped to 'completed', got status=%q", runStatus)
 	}
 }
 
@@ -1006,8 +1010,16 @@ func TestRepository_ErrNoRunRowDistinctFromErrLockHeld(t *testing.T) {
 	if err := repo.FinishRun("t-lock", "u-admin", models.RunStatusCompleted, nil, nil, nil); err != nil {
 		t.Errorf("expected nil error on right runner finish, got %v", err)
 	}
-	if _, err := repo.Heartbeat("t-lock", "u-admin", 60000); !errors.Is(err, repositories.ErrNoRunRow) {
-		t.Errorf("expected ErrNoRunRow after finish, got %v", err)
+	// s-1106: FinishRun stamps the row to status='completed'
+	// instead of DELETEing it, so the heartbeat handler now
+	// sees a row in a terminal state and surfaces ErrLockHeld
+	// ("this lock is no longer held by anyone") rather than
+	// ErrNoRunRow ("there is no lock at all"). The handler
+	// still maps both to 409, so the wire contract is the
+	// same; the sentinel changes because the underlying row
+	// now persists for /runs/history to enumerate.
+	if _, err := repo.Heartbeat("t-lock", "u-admin", 60000); !errors.Is(err, repositories.ErrLockHeld) {
+		t.Errorf("expected ErrLockHeld after finish (s-1106 preserves row), got %v", err)
 	}
 }
 
@@ -1238,3 +1250,361 @@ func TestClaimRun_BadModeReturns400(t *testing.T) {
 		t.Errorf("expected error to mention 'mode', got %s", w.Body.String())
 	}
 }
+
+// seedHistoryRow inserts a terminal task_runs row directly into
+// the database so /runs/history tests don't have to drive the
+// full claim → heartbeat → finish cycle for every fixture.
+// Status must be one of completed / failed / released.
+func seedHistoryRow(t *testing.T, db *sql.DB, taskID, runnerID, boardID, columnID, status string, finishedAt time.Time, exitCode *int, errMsg *string) {
+	t.Helper()
+	if _, err := db.Exec(`
+		INSERT INTO task_runs (
+			task_id, runner_id, agent_id, board_id, column_id, status,
+			claimed_at, last_heartbeat_at, expires_at, finished_at, exit_code, error
+		) VALUES (?, ?, 'opencoder', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, taskID, runnerID, boardID, columnID, status,
+		finishedAt.Add(-30*time.Second), finishedAt, finishedAt,
+		finishedAt, exitCode, errMsg); err != nil {
+		t.Fatalf("seed history row: %v", err)
+	}
+}
+
+// TestListRunsHistory_HappyPathReturnsTerminalRows covers the
+// basic contract: every terminal task_runs row (completed /
+// failed / released) is returned; live rows are excluded. The
+// ADMIN caller sees everything because the post-filter
+// short-circuits for ADMIN.
+func TestListRunsHistory_HappyPathReturnsTerminalRows(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES
+		('t-h1', 'hist one', 'c-todo', 1, 'u-admin'),
+		('t-h2', 'hist two', 'c-todo', 1, 'u-admin'),
+		('t-h3', 'live',     'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed tasks: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	seedHistoryRow(t, db, "t-h1", "runner-A", "b1", "c-todo", "completed", now.Add(-2*time.Minute), intPtr(0), nil)
+	seedHistoryRow(t, db, "t-h2", "runner-B", "b1", "c-todo", "failed", now.Add(-1*time.Minute), intPtr(1), strPtr("boom"))
+
+	// Live row — must NOT appear in the response.
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-h3", "c-todo", "runner-C", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("claim live: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/history", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp []models.TaskRun
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp) != 2 {
+		t.Fatalf("expected 2 terminal rows, got %d: %s", len(resp), w.Body.String())
+	}
+	// Order: most recent finished_at first (t-h2 then t-h1).
+	if resp[0].TaskID != "t-h2" || resp[1].TaskID != "t-h1" {
+		t.Errorf("expected DESC order by finished_at, got [%s, %s]", resp[0].TaskID, resp[1].TaskID)
+	}
+	if resp[0].Status != models.RunStatusFailed {
+		t.Errorf("expected first row status=failed, got %q", resp[0].Status)
+	}
+	if resp[1].Status != models.RunStatusCompleted {
+		t.Errorf("expected second row status=completed, got %q", resp[1].Status)
+	}
+}
+
+// TestListRunsHistory_FilterByRunnerId covers the runnerId
+// query parameter: only rows matching the exact runner
+// identifier come back.
+func TestListRunsHistory_FilterByRunnerId(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES
+		('t-r1', 'r1', 'c-todo', 1, 'u-admin'),
+		('t-r2', 'r2', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	now := time.Now().UTC()
+	seedHistoryRow(t, db, "t-r1", "runner-A", "b1", "c-todo", "completed", now, intPtr(0), nil)
+	seedHistoryRow(t, db, "t-r2", "runner-B", "b1", "c-todo", "completed", now, intPtr(0), nil)
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/history?runnerId=runner-B", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp []models.TaskRun
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp) != 1 || resp[0].RunnerID != "runner-B" {
+		t.Errorf("expected single runner-B row, got %+v", resp)
+	}
+}
+
+// TestListRunsHistory_FilterByStatus covers the status filter
+// (completed | failed | released). Bad values return 400.
+func TestListRunsHistory_FilterByStatus(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES
+		('t-s1', 's1', 'c-todo', 1, 'u-admin'),
+		('t-s2', 's2', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	now := time.Now().UTC()
+	seedHistoryRow(t, db, "t-s1", "runner-A", "b1", "c-todo", "completed", now, intPtr(0), nil)
+	seedHistoryRow(t, db, "t-s2", "runner-A", "b1", "c-todo", "failed", now, intPtr(1), strPtr("boom"))
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/history?status=failed", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp []models.TaskRun
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp) != 1 || resp[0].Status != models.RunStatusFailed {
+		t.Errorf("expected one failed row, got %+v", resp)
+	}
+
+	// Bad status — 400.
+	wBad := doRequest(router, "GET", "/api/v1/runs/history?status=bogus", "admin-token", nil)
+	if wBad.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for unknown status, got %d: %s", wBad.Code, wBad.Body.String())
+	}
+}
+
+// TestListRunsHistory_TimeWindow covers the from / to bound:
+// only rows with finished_at within the window come back.
+func TestListRunsHistory_TimeWindow(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES
+		('t-tw1', 'tw1', 'c-todo', 1, 'u-admin'),
+		('t-tw2', 'tw2', 'c-todo', 1, 'u-admin'),
+		('t-tw3', 'tw3', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	now := time.Now().UTC()
+	old := now.Add(-48 * time.Hour)
+	recent := now.Add(-30 * time.Minute)
+	mid := now.Add(-2 * time.Hour)
+	seedHistoryRow(t, db, "t-tw1", "runner-A", "b1", "c-todo", "completed", old, intPtr(0), nil)
+	seedHistoryRow(t, db, "t-tw2", "runner-A", "b1", "c-todo", "completed", mid, intPtr(0), nil)
+	seedHistoryRow(t, db, "t-tw3", "runner-A", "b1", "c-todo", "completed", recent, intPtr(0), nil)
+
+	// Window: last 24h. t-tw1 (48h ago) is OUT; t-tw2 (2h ago)
+	// and t-tw3 (30min ago) are IN.
+	router := runsRouter(db)
+	url := "/api/v1/runs/history?from=" + now.Add(-24*time.Hour).Format(time.RFC3339) + "&to=" + now.Format(time.RFC3339)
+	w := doRequest(router, "GET", url, "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp []models.TaskRun
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp) != 2 {
+		t.Fatalf("expected 2 rows within window (t-tw2 + t-tw3), got %d: %s", len(resp), w.Body.String())
+	}
+	gotIDs := map[string]bool{}
+	for _, r := range resp {
+		gotIDs[r.TaskID] = true
+	}
+	if !gotIDs["t-tw2"] || !gotIDs["t-tw3"] {
+		t.Errorf("expected t-tw2 + t-tw3, got %v", gotIDs)
+	}
+	if gotIDs["t-tw1"] {
+		t.Errorf("t-tw1 (48h ago) must be excluded by 24h window")
+	}
+
+	// Date-only format (YYYY-MM-DD) must also parse — used by
+	// the CLI's --since flag.
+	wDate := doRequest(router, "GET", "/api/v1/runs/history?from="+now.Add(-72*time.Hour).Format("2006-01-02"), "admin-token", nil)
+	if wDate.Code != http.StatusOK {
+		t.Fatalf("date-only format: expected 200, got %d: %s", wDate.Code, wDate.Body.String())
+	}
+
+	// to < from → 400.
+	wBad := doRequest(router, "GET", "/api/v1/runs/history?from="+now.Format(time.RFC3339)+"&to="+now.Add(-time.Hour).Format(time.RFC3339), "admin-token", nil)
+	if wBad.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for inverted window, got %d: %s", wBad.Code, wBad.Body.String())
+	}
+
+	// Bad timestamp → 400.
+	wBadTs := doRequest(router, "GET", "/api/v1/runs/history?from=not-a-date", "admin-token", nil)
+	if wBadTs.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for bad timestamp, got %d: %s", wBadTs.Code, wBadTs.Body.String())
+	}
+}
+
+// TestListRunsHistory_Pagination covers limit / offset. The
+// repository caps limit at 200 and rejects negative offsets.
+func TestListRunsHistory_Pagination(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	// Seed 5 rows on distinct tasks.
+	values := make([]string, 0, 5)
+	args := []interface{}{}
+	for i := 0; i < 5; i++ {
+		taskID := fmt.Sprintf("t-pg%d", i)
+		values = append(values, fmt.Sprintf("('%s', 'pg %d', 'c-todo', 1, 'u-admin')", taskID, i))
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES `+strings.Join(values, ","), args...); err != nil {
+		t.Fatalf("seed tasks: %v", err)
+	}
+	base := time.Now().UTC().Truncate(time.Second)
+	for i := 0; i < 5; i++ {
+		seedHistoryRow(t, db, fmt.Sprintf("t-pg%d", i), "runner-A", "b1", "c-todo", "completed",
+			base.Add(-time.Duration(i)*time.Minute), intPtr(0), nil)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/history?limit=2&offset=0", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var page1 []models.TaskRun
+	if err := json.Unmarshal(w.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(page1) != 2 {
+		t.Errorf("expected 2 rows on first page, got %d", len(page1))
+	}
+	// DESC by finished_at: page1 = [t-pg0, t-pg1].
+	if page1[0].TaskID != "t-pg0" || page1[1].TaskID != "t-pg1" {
+		t.Errorf("expected DESC order, got [%s, %s]", page1[0].TaskID, page1[1].TaskID)
+	}
+
+	w2 := doRequest(router, "GET", "/api/v1/runs/history?limit=2&offset=2", "admin-token", nil)
+	var page2 []models.TaskRun
+	if err := json.Unmarshal(w2.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(page2) != 2 || page2[0].TaskID != "t-pg2" {
+		t.Errorf("expected page2 to start with t-pg2, got %+v", page2)
+	}
+
+	// Bad limit / offset → 400.
+	wBad := doRequest(router, "GET", "/api/v1/runs/history?limit=-1", "admin-token", nil)
+	if wBad.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for negative limit, got %d", wBad.Code)
+	}
+	wBad2 := doRequest(router, "GET", "/api/v1/runs/history?offset=-5", "admin-token", nil)
+	if wBad2.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for negative offset, got %d", wBad2.Code)
+	}
+	wBad3 := doRequest(router, "GET", "/api/v1/runs/history?limit=abc", "admin-token", nil)
+	if wBad3.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for non-numeric limit, got %d", wBad3.Code)
+	}
+}
+
+// TestListRunsHistory_EmptyResultReturnsEmptyArray covers the
+// no-rows case: handler returns [] not null so the frontend
+// can render the empty state without a null-guard.
+func TestListRunsHistory_EmptyResultReturnsEmptyArray(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/history", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := strings.TrimSpace(w.Body.String())
+	if body != "[]" {
+		t.Errorf("expected '[]' for empty result, got %q", body)
+	}
+}
+
+// TestListRunsHistory_PermissionDeniedHidesRows covers the
+// post-filter: a VIEWER who only has READ on b1 sees rows that
+// originated on b1; rows from a board they have no access to
+// are silently dropped.
+func TestListRunsHistory_PermissionDeniedHidesRows(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	// Second board the viewer has no access to.
+	if _, err := db.Exec(`INSERT INTO boards (id, name, description) VALUES ('b2', 'Hidden board', '')`); err != nil {
+		t.Fatalf("seed b2: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
+		('c2-todo', 'Todo', 'todo', 0, 'b2'),
+		('c2-done', 'Done', 'done', 2, 'b2')`); err != nil {
+		t.Fatalf("seed b2 cols: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES
+		('bp-admin-b2', 'u-admin', 'b2', 'u-admin', 'ADMIN')`); err != nil {
+		t.Fatalf("seed b2 perms: %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES
+		('t-ok',  'ok',  'c-todo', 1, 'u-admin'),
+		('t-hid', 'hid', 'c2-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed tasks: %v", err)
+	}
+	now := time.Now().UTC()
+	seedHistoryRow(t, db, "t-ok", "runner-A", "b1", "c-todo", "completed", now, intPtr(0), nil)
+	seedHistoryRow(t, db, "t-hid", "runner-A", "b2", "c2-todo", "completed", now, intPtr(0), nil)
+
+	router := runsRouter(db)
+
+	// Viewer — sees only b1 rows.
+	wViewer := doRequest(router, "GET", "/api/v1/runs/history", "viewer-token", nil)
+	if wViewer.Code != http.StatusOK {
+		t.Fatalf("expected 200 for viewer, got %d: %s", wViewer.Code, wViewer.Body.String())
+	}
+	var viewerRows []models.TaskRun
+	if err := json.Unmarshal(wViewer.Body.Bytes(), &viewerRows); err != nil {
+		t.Fatalf("decode viewer: %v", err)
+	}
+	if len(viewerRows) != 1 || viewerRows[0].TaskID != "t-ok" {
+		t.Errorf("expected viewer to see only t-ok, got %+v", viewerRows)
+	}
+
+	// Admin — sees both.
+	wAdmin := doRequest(router, "GET", "/api/v1/runs/history", "admin-token", nil)
+	var adminRows []models.TaskRun
+	if err := json.Unmarshal(wAdmin.Body.Bytes(), &adminRows); err != nil {
+		t.Fatalf("decode admin: %v", err)
+	}
+	if len(adminRows) != 2 {
+		t.Errorf("expected admin to see both rows, got %d", len(adminRows))
+	}
+}
+
+// TestListRunsHistory_Unauthenticated covers the auth gate:
+// RequireAuth must reject the request before any handler logic
+// runs.
+func TestListRunsHistory_Unauthenticated(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/history", "", nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func intPtr(v int) *int       { return &v }
+func strPtr(s string) *string { return &s }

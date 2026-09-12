@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -463,6 +464,171 @@ func GetRun(db *sql.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, run)
 	}
+}
+
+// ListRunsHistory handles GET /api/v1/runs/history. Returns
+// every terminal task_runs row (status ∈ completed, failed,
+// released) that the caller has READ access to, ordered by
+// finished_at DESC. Live rows are excluded — those are surfaced
+// by GetRun on the task card, not the history page.
+//
+// Query params (all optional):
+//
+//   - runnerId  filter by runner identifier (string exact match)
+//   - status    filter by terminal status (completed|failed|released)
+//   - boardId   filter by board (comma-separated allow-list)
+//   - taskId    filter by task identifier
+//   - from      ISO-8601 lower bound on finished_at
+//   - to        ISO-8601 upper bound on finished_at
+//   - limit     pagination size, default 50, capped at 200
+//   - offset    pagination offset, default 0
+//
+// Authorization: same column READ access as the underlying
+// tasks — implemented as a post-filter that drops rows the
+// caller cannot see. ADMIN sees everything. Unknown columns
+// (e.g. board deleted out from under a finished run) are dropped
+// silently rather than leaking IDs.
+func ListRunsHistory(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		filter := repositories.RunHistoryFilter{
+			RunnerID: strings.TrimSpace(c.Query("runnerId")),
+			TaskID:   strings.TrimSpace(c.Query("taskId")),
+		}
+
+		if rawStatus := strings.TrimSpace(c.Query("status")); rawStatus != "" {
+			st := models.RunStatus(rawStatus)
+			switch st {
+			case models.RunStatusCompleted, models.RunStatusFailed, models.RunStatusReleased:
+				filter.Status = st
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'completed', 'failed', or 'released'"})
+				return
+			}
+		}
+
+		if rawBoards := strings.TrimSpace(c.Query("boardId")); rawBoards != "" {
+			for _, id := range strings.Split(rawBoards, ",") {
+				id = strings.TrimSpace(id)
+				if id != "" {
+					filter.BoardIDs = append(filter.BoardIDs, id)
+				}
+			}
+		}
+
+		if rawFrom := strings.TrimSpace(c.Query("from")); rawFrom != "" {
+			t, err := parseHistoryTime(rawFrom)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid 'from' timestamp (expected RFC3339 or YYYY-MM-DD)"})
+				return
+			}
+			filter.From = t
+		}
+		if rawTo := strings.TrimSpace(c.Query("to")); rawTo != "" {
+			t, err := parseHistoryTime(rawTo)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid 'to' timestamp (expected RFC3339 or YYYY-MM-DD)"})
+				return
+			}
+			filter.To = t
+		}
+		if !filter.From.IsZero() && !filter.To.IsZero() && filter.To.Before(filter.From) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "'to' must be >= 'from'"})
+			return
+		}
+
+		if rawLimit := strings.TrimSpace(c.Query("limit")); rawLimit != "" {
+			n, err := strconv.Atoi(rawLimit)
+			if err != nil || n <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a positive integer"})
+				return
+			}
+			filter.Limit = n
+		}
+		if rawOffset := strings.TrimSpace(c.Query("offset")); rawOffset != "" {
+			n, err := strconv.Atoi(rawOffset)
+			if err != nil || n < 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be a non-negative integer"})
+				return
+			}
+			filter.Offset = n
+		}
+
+		repo := repositories.NewRunRepository(db)
+		rows, err := repo.ListRunHistory(filter)
+		if err != nil {
+			ServerError(c, "Failed to list run history", err)
+			return
+		}
+
+		// Post-filter by READ permission: a row is visible if the
+		// caller has READ access on the snapshot column_id (with
+		// board fallback), OR READ access on the underlying task's
+		// current column. The task may have moved since the run
+		// finished — CompletedTask advances the column — so we
+		// union the two and accept either. ADMIN users skip this
+		// check entirely.
+		if user.Role != "ADMIN" {
+			visible := rows[:0]
+			for _, r := range rows {
+				if canSeeRunRow(db, user, r) {
+					visible = append(visible, r)
+				}
+			}
+			rows = visible
+		}
+
+		if rows == nil {
+			rows = []*models.TaskRun{}
+		}
+		c.JSON(http.StatusOK, rows)
+	}
+}
+
+// canSeeRunRow reports whether the user has READ access to a
+// history row. A row is visible when either the snapshot
+// `column_id` (what the task was at claim time) or the task's
+// *current* column grants READ — covering both "I never moved
+// the task since it ran" and "the runner finished and CompleteTask
+// advanced the column". ADMIN short-circuits to true.
+func canSeeRunRow(db *sql.DB, user *models.User, r *models.TaskRun) bool {
+	if user == nil || r == nil {
+		return false
+	}
+	if user.Role == "ADMIN" {
+		return true
+	}
+	if r.ColumnID != "" && checkColumnAccessWithBoardFallback(db, user.ID, r.ColumnID, "READ", user.Role) {
+		return true
+	}
+	// Fallback: the task's current column. Use the same lookup
+	// pattern as GetRun so we resolve column_id → board_id →
+	// access through the existing helpers.
+	currentColumnID, err := getColumnIDForTask(db, r.TaskID)
+	if err == nil && currentColumnID != "" &&
+		checkColumnAccessWithBoardFallback(db, user.ID, currentColumnID, "READ", user.Role) {
+		return true
+	}
+	return false
+}
+
+// parseHistoryTime accepts RFC3339 (preferred) and YYYY-MM-DD
+// (date-only) so the CLI's `--since 1d` style flags can pass a
+// bare date without forcing callers to remember the time zone
+// layout. Returns the parsed time in UTC.
+func parseHistoryTime(raw string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse("2006-01-02", raw); err == nil {
+		return t.UTC(), nil
+	}
+	return time.Time{}, fmt.Errorf("unrecognised timestamp %q", raw)
 }
 
 // userHasBoardStatusWrite reports whether the user has WRITE
