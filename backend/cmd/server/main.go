@@ -286,7 +286,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	}
 
 	// OAuth 2.1 discovery + JWKS
-	r.GET("/.well-known/oauth-authorization-server", oauth.DiscoveryHandler("/oauth/device/code"))
+	r.GET("/.well-known/oauth-authorization-server", oauth.DiscoveryHandlerWithDB(db, "/oauth/device/code"))
 	r.GET("/.well-known/oauth-protected-resource/mcp", oauth.ProtectedResourceHandler())
 	r.GET("/.well-known/jwks.json", oauth.JWKSHandler(signer))
 
@@ -303,10 +303,10 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	})
 	oauthGroup := r.Group("/oauth", oauthGate)
 	oauthGroup.POST("/register", oauth.RegisterClient(db))
-	oauthGroup.POST("/device/code", oauth.RequestDeviceCode(db))
+	oauthGroup.POST("/device/code", oauth.DeviceFlowGate(db), oauth.RequestDeviceCode(db))
 	oauthGroup.POST("/token", oauth.TokenEndpoint(db, signer))
-	oauthGroup.GET("/device/lookup", oauth.DeviceLookupHandler(db))
-	oauthGroup.POST("/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
+	oauthGroup.GET("/device/lookup", oauth.DeviceFlowGate(db), oauth.DeviceLookupHandler(db))
+	oauthGroup.POST("/device/approve", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
 
 	auth := r.Group("/api/v1/auth")
 	{

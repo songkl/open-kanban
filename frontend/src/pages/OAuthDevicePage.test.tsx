@@ -21,7 +21,9 @@ vi.mock('react-i18next', () => ({
         'oauth.device.loginRequired': 'Login required',
         'oauth.device.goLogin': 'Sign in',
         'oauth.device.approvedBanner': 'Approved. Return to device.',
-        'oauth.device.deniedBanner': 'Denied.'
+        'oauth.device.deniedBanner': 'Denied.',
+        'oauth.device.disabledTitle': 'Device authorization is disabled',
+        'oauth.device.disabledBody': 'An administrator has turned off the OAuth device flow.'
       };
       return map[key] || key;
     },
@@ -184,5 +186,22 @@ describe('OAuthDevicePage', () => {
     await waitFor(() => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
     });
+  });
+
+  it('shows the disabled notice when lookup returns 503 oauth_device_disabled', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: 'oauth_device_disabled' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage('?code=DSBL-DSBL');
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'DSBL-DSBL' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('device-disabled-card')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Device authorization is disabled')).toBeInTheDocument();
   });
 });

@@ -84,29 +84,52 @@ type ProtectedResourceMetadata struct {
 // DiscoveryHandler returns a gin handler that emits the OAuth authorization
 // server metadata document at /.well-known/oauth-authorization-server.
 func DiscoveryHandler(registerDevicePath string) gin.HandlerFunc {
+	return DiscoveryHandlerWithDB(nil, registerDevicePath)
+}
+
+// DiscoveryHandlerWithDB is like DiscoveryHandler but accepts the DB handle so
+// the device_authorization_endpoint can be suppressed when the admin disables
+// the device authorization flow.
+func DiscoveryHandlerWithDB(db *sql.DB, registerDevicePath string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		issuer := DiscoveryIssuerFromRequest(c)
 		audience := GetConfiguredAudience(c)
 		md := DiscoveryMetadata{
-			Issuer:                                 issuer,
-			AuthorizationEndpoint:                  issuer + "/oauth/authorize",
-			TokenEndpoint:                          issuer + "/oauth/token",
-			IntrospectionEndpoint:                  issuer + "/oauth/introspect",
-			RevocationEndpoint:                     issuer + "/oauth/revoke",
-			JWKSURI:                                issuer + "/.well-known/jwks.json",
-			RegistrationEndpoint:                   issuer + "/oauth/register",
-			DeviceAuthorizationEndpoint:            issuer + registerDevicePath,
-			GrantTypesSupported:                    SupportedGrantTypes,
-			ResponseTypesSupported:                 SupportedResponseTypes,
-			TokenEndpointAuthMethodsSupported:      SupportedAuthMethods,
-			CodeChallengeMethodsSupported:          SupportedCodeChallengeMethods,
-			ScopesSupported:                        SupportedScopes(),
+			Issuer:                            issuer,
+			AuthorizationEndpoint:             issuer + "/oauth/authorize",
+			TokenEndpoint:                     issuer + "/oauth/token",
+			IntrospectionEndpoint:             issuer + "/oauth/introspect",
+			RevocationEndpoint:                issuer + "/oauth/revoke",
+			JWKSURI:                           issuer + "/.well-known/jwks.json",
+			RegistrationEndpoint:              issuer + "/oauth/register",
+			GrantTypesSupported:               SupportedGrantTypes,
+			ResponseTypesSupported:            SupportedResponseTypes,
+			TokenEndpointAuthMethodsSupported: SupportedAuthMethods,
+			CodeChallengeMethodsSupported:     SupportedCodeChallengeMethods,
+			ScopesSupported:                   SupportedScopes(),
 			AuthorizationResponseIssuedAtSupported: true,
+		}
+		if db == nil || IsDeviceFlowEnabled(db) {
+			md.DeviceAuthorizationEndpoint = issuer + registerDevicePath
+		} else {
+			// RFC 8414 §2: omit rather than advertise a dead endpoint.
+			md.GrantTypesSupported = dropGrantType(SupportedGrantTypes, GrantTypeDeviceCode)
 		}
 		c.Header("Cache-Control", "public, max-age=300")
 		_ = audience // currently unused at AS layer; left for future use.
 		c.JSON(http.StatusOK, md)
 	}
+}
+
+// dropGrantType returns a copy of grants with needle removed (order preserved).
+func dropGrantType(grants []string, needle string) []string {
+	out := make([]string, 0, len(grants))
+	for _, g := range grants {
+		if g != needle {
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 // ProtectedResourceHandler returns a gin handler for

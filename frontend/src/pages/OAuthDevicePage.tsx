@@ -30,6 +30,7 @@ export function OAuthDevicePage() {
   const [submitting, setSubmitting] = useState(false);
   const [decided, setDecided] = useState<'approved' | 'denied' | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [disabled, setDisabled] = useState(false);
 
   useEffect(() => {
     authApi
@@ -50,11 +51,13 @@ export function OAuthDevicePage() {
     if (!code) {
       setLookup(null);
       setError('');
+      setDisabled(false);
       return;
     }
     let cancelled = false;
     setError('');
     setLookup(null);
+    setDisabled(false);
     fetch(`/oauth/device/lookup?code=${encodeURIComponent(code)}`)
       .then(async (res) => {
         if (cancelled) return;
@@ -64,6 +67,20 @@ export function OAuthDevicePage() {
         }
         if (res.status === 410) {
           setError(t('oauth.device.expired'));
+          return;
+        }
+        if (res.status === 503) {
+          let body: { error?: string } = {};
+          try {
+            body = (await res.json()) as { error?: string };
+          } catch {
+            // ignore parse failures and fall back to the generic message
+          }
+          if (body?.error === 'oauth_device_disabled') {
+            setDisabled(true);
+            return;
+          }
+          setError(t('oauth.device.lookupFailed'));
           return;
         }
         if (!res.ok) {
@@ -126,6 +143,24 @@ export function OAuthDevicePage() {
           >
             {t('oauth.device.goLogin')}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (disabled) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">
+        <div
+          className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 text-center shadow-lg dark:bg-zinc-800"
+          data-testid="device-disabled-card"
+        >
+          <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
+            {t('oauth.device.disabledTitle')}
+          </h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-500">
+            {t('oauth.device.disabledBody')}
+          </p>
         </div>
       </div>
     );

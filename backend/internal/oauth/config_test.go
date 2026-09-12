@@ -142,3 +142,37 @@ func TestPKCERequiredDefault(t *testing.T) {
 		t.Errorf("expected PKCE required by default, got %s", got)
 	}
 }
+
+func TestIsDeviceFlowEnabled(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	if err := oauth.EnsureDefaults(db); err != nil {
+		t.Fatalf("EnsureDefaults: %v", err)
+	}
+	if !oauth.IsDeviceFlowEnabled(db) {
+		t.Error("expected default to be enabled")
+	}
+	if _, err := db.Exec(`UPDATE app_config SET value = '0' WHERE key = 'oauth_device_enabled'`); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if oauth.IsDeviceFlowEnabled(db) {
+		t.Error("expected disabled when value=0")
+	}
+}
+
+func TestDeviceFlowAgentID(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	if err := oauth.EnsureDefaults(db); err != nil {
+		t.Fatalf("EnsureDefaults: %v", err)
+	}
+	if got := oauth.DeviceFlowAgentID(db); got != "" {
+		t.Errorf("expected empty default, got %q", got)
+	}
+	if _, err := db.Exec(`UPDATE app_config SET value = 'agent-7' WHERE key = 'oauth_device_agent_id'`); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got := oauth.DeviceFlowAgentID(db); got != "agent-7" {
+		t.Errorf("expected agent-7, got %q", got)
+	}
+}

@@ -22,7 +22,9 @@
     "sortAsc": "升序",
     "sortDesc": "降序",
     "delete": "删除",
-    "save": "保存"
+    "save": "保存",
+    "enabled": "已启用",
+    "disabled": "已禁用"
   },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",
@@ -749,7 +751,9 @@
       "loginRequired": "请先登录后再授权。",
       "goLogin": "去登录",
       "approvedBanner": "已批准。可以返回设备继续操作。",
-      "deniedBanner": "已拒绝。设备将不会获得访问权限。"
+      "deniedBanner": "已拒绝。设备将不会获得访问权限。",
+      "disabledTitle": "设备授权已停用",
+      "disabledBody": "管理员已停用 OAuth 设备授权流程。请联系管理员启用，或改用其他登录方式。"
     },
     "admin": {
       "title": "OAuth 2.1",
@@ -766,7 +770,10 @@
       "clientDeleted": "应用已删除。",
       "consentRevoked": "授权已撤销。",
       "configSaved": "设置已保存。",
-      "dynamicRegistration": "动态注册当前{{enabled}}。"
+      "dynamicRegistration": "动态注册当前{{enabled}}。",
+      "noAgentBinding": "不绑定（按当前登录用户授权）",
+      "deviceEnabled": "设备授权流程",
+      "deviceAgentBinding": "设备授权绑定的 Agent"
     }
   }
 }

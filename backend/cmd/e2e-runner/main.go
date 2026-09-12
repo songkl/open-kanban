@@ -188,7 +188,7 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 
 	// OAuth discovery routes — kept so any future curl from the suite
 	// (e.g. a metadata probe) returns the same shape as production.
-	r.GET("/.well-known/oauth-authorization-server", oauth.DiscoveryHandler("/oauth/device/code"))
+	r.GET("/.well-known/oauth-authorization-server", oauth.DiscoveryHandlerWithDB(db, "/oauth/device/code"))
 	r.GET("/.well-known/oauth-protected-resource/mcp", oauth.ProtectedResourceHandler())
 	r.GET("/.well-known/jwks.json", oauth.JWKSHandler(signer))
 

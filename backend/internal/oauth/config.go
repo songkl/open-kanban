@@ -3,6 +3,10 @@ package oauth
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 // ConfigKey defines the canonical set of OAuth-related app_config keys.
@@ -40,6 +44,16 @@ func DefaultConfig() []ConfigKey {
 			Key:         "oauth_refresh_token_ttl_seconds",
 			DefaultVal:  "2592000",
 			Description: "Refresh token lifetime in seconds (30 days default).",
+		},
+		{
+			Key:         "oauth_device_enabled",
+			DefaultVal:  "1",
+			Description: "Toggle the OAuth device authorization flow. When 0, /oauth/device/* is disabled.",
+		},
+		{
+			Key:         "oauth_device_agent_id",
+			DefaultVal:  "",
+			Description: "Optional Agent user id (type=AGENT) bound to device flow approvals. Empty = approve as the logged-in user.",
 		},
 		{
 			Key:         "oauth_device_code_ttl_seconds",
@@ -93,6 +107,42 @@ func IsOAuthEnabled(db *sql.DB) bool {
 		return true
 	}
 	return val != "0"
+}
+
+// IsDeviceFlowEnabled returns true unless oauth_device_enabled is explicitly "0".
+func IsDeviceFlowEnabled(db *sql.DB) bool {
+	var val string
+	if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'oauth_device_enabled'").Scan(&val); err != nil {
+		return true
+	}
+	return val != "0"
+}
+
+// DeviceFlowAgentID returns the configured Agent user id bound to the device
+// flow, or an empty string when no binding is set.
+func DeviceFlowAgentID(db *sql.DB) string {
+	var val string
+	if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'oauth_device_agent_id'").Scan(&val); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(val)
+}
+
+// DeviceFlowGate returns a gin middleware that blocks /oauth/device/* when the
+// device authorization flow is disabled by configuration. The endpoint then
+// replies with 503 + oauth_device_disabled so MCP clients can fall back to
+// their legacy bearer token path.
+func DeviceFlowGate(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !IsDeviceFlowEnabled(db) {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":             "oauth_device_disabled",
+				"error_description": "OAuth device authorization flow is disabled by administrator.",
+			})
+			return
+		}
+		c.Next()
+	}
 }
 
 // SetConfig updates a single OAuth config key. Returns an error for unknown

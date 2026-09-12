@@ -232,6 +232,11 @@ func readIntConfig(db *sql.DB, key string, def int) int {
 //
 // The approval UI submits the user-facing user_code (display) over the
 // browser; this function hashes it to find the row.
+//
+// When oauth_device_agent_id is configured to an existing Agent user id, the
+// approval is bound to that Agent instead of the human approver — useful for
+// unattended kiosk-style setups where the MCP client should always act on
+// behalf of a specific Agent.
 func ApproveDeviceCode(db *sql.DB, userCode string, userID string) (*models.OAuthDeviceCode, error) {
 	dc, err := findDeviceCodeByUserCode(db, userCode)
 	if err != nil {
@@ -244,12 +249,18 @@ func ApproveDeviceCode(db *sql.DB, userCode string, userID string) (*models.OAut
 		_, _ = db.Exec("UPDATE oauth_device_codes SET status = 'expired' WHERE id = ?", dc.ID)
 		return nil, errors.New("device code expired")
 	}
-	_, err = db.Exec("UPDATE oauth_device_codes SET status = 'approved', user_id = ? WHERE id = ?", userID, dc.ID)
+	bindUser := userID
+	if agentID := DeviceFlowAgentID(db); agentID != "" {
+		if hasAgent(db, agentID) {
+			bindUser = agentID
+		}
+	}
+	_, err = db.Exec("UPDATE oauth_device_codes SET status = 'approved', user_id = ? WHERE id = ?", bindUser, dc.ID)
 	if err != nil {
 		return nil, err
 	}
 	dc.Status = "approved"
-	dc.UserID = &userID
+	dc.UserID = &bindUser
 	return dc, nil
 }
 
@@ -262,8 +273,28 @@ func DenyDeviceCode(db *sql.DB, userCode string, userID string) error {
 	if dc.Status != "pending" {
 		return fmt.Errorf("device code already %s", dc.Status)
 	}
-	_, err = db.Exec("UPDATE oauth_device_codes SET status = 'denied', user_id = ? WHERE id = ?", userID, dc.ID)
+	bindUser := userID
+	if agentID := DeviceFlowAgentID(db); agentID != "" {
+		if hasAgent(db, agentID) {
+			bindUser = agentID
+		}
+	}
+	_, err = db.Exec("UPDATE oauth_device_codes SET status = 'denied', user_id = ? WHERE id = ?", bindUser, dc.ID)
 	return err
+}
+
+// hasAgent reports whether the configured Agent user exists, is of type AGENT,
+// and is currently enabled. Returns false for empty ids.
+func hasAgent(db *sql.DB, id string) bool {
+	if id == "" {
+		return false
+	}
+	var one int
+	err := db.QueryRow(
+		`SELECT 1 FROM users WHERE id = ? AND type = 'AGENT' AND enabled = 1`,
+		id,
+	).Scan(&one)
+	return err == nil
 }
 
 // findDeviceCodeByUserCode returns the device code row matching the displayed

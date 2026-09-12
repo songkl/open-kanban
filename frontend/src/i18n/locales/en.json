@@ -22,7 +22,9 @@
     "sortAsc": "Ascending",
     "sortDesc": "Descending",
     "delete": "Delete",
-    "save": "Save"
+    "save": "Save",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
   },
   "upload": {
     "fileTooLarge": "File too large, max 10MB",
@@ -749,7 +751,9 @@
       "loginRequired": "Please sign in to authorize this request.",
       "goLogin": "Sign in",
       "approvedBanner": "Approved. You can return to your device.",
-      "deniedBanner": "Denied. The device will not receive access."
+      "deniedBanner": "Denied. The device will not receive access.",
+      "disabledTitle": "Device authorization is disabled",
+      "disabledBody": "An administrator has turned off the OAuth device flow. Please contact your administrator or use another sign-in method."
     },
     "admin": {
       "title": "OAuth 2.1",
@@ -766,7 +770,10 @@
       "clientDeleted": "Application removed.",
       "consentRevoked": "Permission revoked.",
       "configSaved": "Settings saved.",
-      "dynamicRegistration": "Dynamic registration is {{enabled}}."
+      "dynamicRegistration": "Dynamic registration is {{enabled}}.",
+      "noAgentBinding": "No binding (authorize as the current user)",
+      "deviceEnabled": "Device authorization flow",
+      "deviceAgentBinding": "Device authorization bound agent"
     }
   }
 }

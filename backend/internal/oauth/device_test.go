@@ -412,3 +412,124 @@ func TestDenyDeviceCode(t *testing.T) {
 		t.Error("expected second denial to fail")
 	}
 }
+
+func setupAgentBindingDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db := setupDeviceDB(t)
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		type TEXT NOT NULL DEFAULT 'HUMAN',
+		enabled INTEGER DEFAULT 1
+	)`); err != nil {
+		t.Fatalf("users schema: %v", err)
+	}
+	return db
+}
+
+func seedAgent(t *testing.T, db *sql.DB, id string) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO users (id, type, enabled) VALUES (?, 'AGENT', 1)`, id); err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+}
+
+func TestApproveDeviceCodeBindsToConfiguredAgent(t *testing.T) {
+	db := setupAgentBindingDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	seedAgent(t, db, "agent-1")
+	if err := oauth.SetConfig(db, "oauth_device_agent_id", "agent-1"); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+
+	uc := "BIND-BIND"
+	hash := oauth.HashToken(uc)
+	_, err := db.Exec(
+		`INSERT INTO oauth_device_codes
+			(id, device_code_hash, user_code_hash, user_code_display, client_id, scope,
+			 expires_at, status, verification_uri, created_at)
+		 VALUES ('dc-bind', 'h', ?, ?, 'kanban-client-1', 'kanban:read', ?, 'pending', 'http://x', ?)`,
+		hash, uc, time.Now().Add(time.Hour), time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Human user "user-1" tries to approve, but the configured Agent takes over.
+	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1")
+	if err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if dc.UserID == nil || *dc.UserID != "agent-1" {
+		t.Errorf("expected agent-1 binding, got %v", dc.UserID)
+	}
+}
+
+func TestApproveDeviceCodeFallsBackWhenAgentMissing(t *testing.T) {
+	db := setupAgentBindingDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	// Configured agent id does NOT exist as an enabled AGENT row, so the
+	// approval should fall back to the approving human.
+	if err := oauth.SetConfig(db, "oauth_device_agent_id", "ghost-agent"); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+
+	uc := "FALL-FALL"
+	hash := oauth.HashToken(uc)
+	_, err := db.Exec(
+		`INSERT INTO oauth_device_codes
+			(id, device_code_hash, user_code_hash, user_code_display, client_id, scope,
+			 expires_at, status, verification_uri, created_at)
+		 VALUES ('dc-fall', 'h', ?, ?, 'kanban-client-1', 'kanban:read', ?, 'pending', 'http://x', ?)`,
+		hash, uc, time.Now().Add(time.Hour), time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1")
+	if err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if dc.UserID == nil || *dc.UserID != "user-1" {
+		t.Errorf("expected user-1 fallback, got %v", dc.UserID)
+	}
+}
+
+func TestApproveDeviceCodeIgnoresNonAgentBinding(t *testing.T) {
+	db := setupAgentBindingDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	// Seed a non-AGENT row at the configured id; the binding should not apply.
+	if _, err := db.Exec(`INSERT INTO users (id, type, enabled) VALUES ('not-an-agent', 'HUMAN', 1)`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := oauth.SetConfig(db, "oauth_device_agent_id", "not-an-agent"); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+
+	uc := "HUMN-HUMN"
+	hash := oauth.HashToken(uc)
+	_, err := db.Exec(
+		`INSERT INTO oauth_device_codes
+			(id, device_code_hash, user_code_hash, user_code_display, client_id, scope,
+			 expires_at, status, verification_uri, created_at)
+		 VALUES ('dc-humn', 'h', ?, ?, 'kanban-client-1', 'kanban:read', ?, 'pending', 'http://x', ?)`,
+		hash, uc, time.Now().Add(time.Hour), time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1")
+	if err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if dc.UserID == nil || *dc.UserID != "user-1" {
+		t.Errorf("expected user-1 binding (non-AGENT ignored), got %v", dc.UserID)
+	}
+}

@@ -105,6 +105,8 @@
 - `oauth_require_pkce`:authorization_code 流是否强制 PKCE
 - `oauth_access_token_ttl_seconds`:access token 寿命(默认 3600 秒)
 - `oauth_refresh_token_ttl_seconds`:refresh token 寿命(默认 30 天)
+- `oauth_device_enabled`:设备授权流程开关,默认开启;关闭后 `/oauth/device/*` 返回 503
+- `oauth_device_agent_id`:可选 Agent 用户 ID;设置后设备授权的 consent / token 自动绑定到该 Agent
 - `oauth_device_code_ttl_seconds`:设备码寿命(默认 600 秒)
 - `oauth_device_poll_interval_seconds`:轮询最小间隔(默认 5 秒)
 - `oauth_authorization_code_ttl_seconds`:授权码寿命(默认 120 秒)
