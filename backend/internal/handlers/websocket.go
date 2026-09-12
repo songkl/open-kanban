@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -219,28 +218,9 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		initConnectionCounter()
 
-		tokenKey := ""
-
-		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
-			}
-		}
-
-		if tokenKey == "" {
-			if cookie, err := c.Cookie("kanban-token"); err == nil && cookie != "" {
-				tokenKey = cookie
-			}
-		}
-
-		if tokenKey == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
-			return
-		}
-
-		user := getCurrentUserFromToken(db, tokenKey)
+		user := getCurrentUserFromRequest(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
 			return
 		}
 		userID := user.ID

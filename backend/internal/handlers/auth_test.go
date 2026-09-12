@@ -12,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"open-kanban/internal/database"
 	"open-kanban/internal/handlers"
+	"open-kanban/internal/oauth"
 
 	"github.com/gin-gonic/gin"
 )
@@ -1182,6 +1185,236 @@ func TestUsersMeAlias(t *testing.T) {
 		}
 		if resp["needsSetup"] != true {
 			t.Errorf("expected needsSetup=true in lazy-setup, got %v", resp["needsSetup"])
+		}
+	})
+}
+
+// mustAccessJWTSigner returns an oauth.Signer loaded against the test DB.
+// Tests share the same sqlite :memory: handle with the handler, so the
+// private key written by LoadOrGenerate is the one VerifyAccessToken will
+// use to validate the JWT minted for the test request.
+func mustAccessJWTSigner(t *testing.T, db *sql.DB) *oauth.Signer {
+	t.Helper()
+	s := oauth.NewSigner(db)
+	if err := s.LoadOrGenerate(); err != nil {
+		t.Fatalf("LoadOrGenerate: %v", err)
+	}
+	return s
+}
+
+// mintAccessJWT signs a fresh access token for the supplied subject and
+// returns the compact serialisation. Audience / issuer match what
+// oauth.DiscoveryIssuerFromRequest + oauth.GetConfiguredAudience return for
+// the httptest request shape used by these tests, so VerifyAccessToken
+// accepts the token without having to override the issuer override.
+func mintAccessJWT(t *testing.T, s *oauth.Signer, subject, clientID string) string {
+	t.Helper()
+	now := time.Now()
+	claims := &oauth.AccessTokenClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "http://example.com",
+			Subject:   subject,
+			Audience:  jwt.ClaimStrings{"kanban"},
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+		ClientID:  clientID,
+		Scope:     "kanban:read",
+		TokenType: oauth.TokenTypeAccess,
+	}
+	tok, err := s.Sign(claims)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	return tok
+}
+
+// TestUsersMeAliasJWTBearer covers the OAuth 2.1 device-flow path: the CLI
+// sends a freshly minted access-token JWT in the Authorization header and
+// expects GetMe to identify the user even though the JWT never lives in the
+// `tokens` table. Without getCurrentUserFromBearerJWT this loop returns 401
+// (and the CLI maps that to "Session expired. Run 'kanban auth login'
+// again.") because getCurrentUserFromToken only looks up opaque kanban-token
+// rows.
+func TestUsersMeAliasJWTBearer(t *testing.T) {
+	t.Run("returns user when bearer is a valid access JWT", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		handlers.ResetTokenCacheForTest()
+		db.Exec("DELETE FROM users")
+		userID := setupTestUser(t, db, "cli-user", "", "MEMBER")
+		signer := mustAccessJWTSigner(t, db)
+		tok := mintAccessJWT(t, signer, userID, "open-kanban-cli")
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+		req.Host = "example.com"
+		req.Header.Set("Authorization", "Bearer "+tok)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		user, ok := resp["user"].(map[string]interface{})
+		if !ok || user == nil {
+			t.Fatalf("expected user object in response, got %v", resp["user"])
+		}
+		if user["username"] != "cli-user" {
+			t.Errorf("expected username 'cli-user', got %v", user["username"])
+		}
+	})
+
+	t.Run("falls back to 401 when JWT subject does not match any user", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		handlers.ResetTokenCacheForTest()
+		db.Exec("DELETE FROM users")
+		setupTestUser(t, db, "real-user", "", "MEMBER")
+		signer := mustAccessJWTSigner(t, db)
+		tok := mintAccessJWT(t, signer, "ghost-user", "open-kanban-cli")
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+		req.Host = "example.com"
+		req.Header.Set("Authorization", "Bearer "+tok)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("falls back to 401 when JWT is expired", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		handlers.ResetTokenCacheForTest()
+		db.Exec("DELETE FROM users")
+		userID := setupTestUser(t, db, "expired-user", "", "MEMBER")
+		signer := mustAccessJWTSigner(t, db)
+
+		now := time.Now()
+		expired := &oauth.AccessTokenClaims{
+			RegisteredClaims: jwt.RegisteredClaims{
+				Issuer:    "http://example.com",
+				Subject:   userID,
+				Audience:  jwt.ClaimStrings{"kanban"},
+				ExpiresAt: jwt.NewNumericDate(now.Add(-time.Minute)),
+				IssuedAt:  jwt.NewNumericDate(now.Add(-time.Hour)),
+				NotBefore: jwt.NewNumericDate(now.Add(-time.Hour)),
+			},
+			ClientID:  "open-kanban-cli",
+			Scope:     "kanban:read",
+			TokenType: oauth.TokenTypeAccess,
+		}
+		tok, err := signer.Sign(expired)
+		if err != nil {
+			t.Fatalf("Sign: %v", err)
+		}
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+		req.Host = "example.com"
+		req.Header.Set("Authorization", "Bearer "+tok)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401 for expired JWT, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("falls back to 401 when JWT signature does not verify", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		handlers.ResetTokenCacheForTest()
+		db.Exec("DELETE FROM users")
+		userID := setupTestUser(t, db, "sig-user", "", "MEMBER")
+		signer := mustAccessJWTSigner(t, db)
+		good := mintAccessJWT(t, signer, userID, "open-kanban-cli")
+
+		// Flip the last four base64url characters of the signature segment
+		// so the signature fails to validate but the rest of the token
+		// still parses. (Mirrors flipLastGroup from oauth/jwt_test.go.)
+		parts := strings.Split(good, ".")
+		if len(parts) != 3 {
+			t.Fatalf("expected JWT with 3 parts, got %d", len(parts))
+		}
+		sig := []byte(parts[2])
+		for i := len(sig) - 4; i < len(sig); i++ {
+			if sig[i] == 'A' {
+				sig[i] = 'B'
+			} else {
+				sig[i] = 'A'
+			}
+		}
+		tampered := parts[0] + "." + parts[1] + "." + string(sig)
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+		req.Host = "example.com"
+		req.Header.Set("Authorization", "Bearer "+tampered)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401 for tampered JWT, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("falls back to kanban-token lookup when bearer is not a JWT", func(t *testing.T) {
+		// /api/v1/users/me should still accept a bearer-shaped kanban-token
+		// (the same shape used by the legacy username/password login). This
+		// pins the fallback path so the JWT optimisation does not regress
+		// the existing auth surface.
+		db := setupTestDB(t)
+		defer db.Close()
+
+		handlers.ResetTokenCacheForTest()
+		db.Exec("DELETE FROM users")
+		userID := setupTestUser(t, db, "legacy-user", "", "MEMBER")
+		tokenKey := "legacy-bearer-abc"
+		setupTestToken(t, db, userID, tokenKey)
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenKey)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		user, ok := resp["user"].(map[string]interface{})
+		if !ok || user == nil {
+			t.Fatalf("expected user object, got %v", resp["user"])
+		}
+		if user["username"] != "legacy-user" {
+			t.Errorf("expected username 'legacy-user', got %v", user["username"])
 		}
 	})
 }

@@ -16,6 +16,7 @@ import (
 	"open-kanban/internal/config"
 	"open-kanban/internal/database"
 	"open-kanban/internal/models"
+	"open-kanban/internal/oauth"
 )
 
 type LoginRequest struct {
@@ -675,22 +676,7 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		tokenKey, err := c.Cookie("kanban-token")
-		if err != nil {
-			if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
-				tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
-			}
-		}
-		if tokenKey == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"user":            nil,
-				"needsSetup":      false,
-				"requirePassword": isRequirePassword,
-			})
-			return
-		}
-
-		user := getCurrentUserFromToken(db, tokenKey)
+		user := getCurrentUserFromRequest(c, db)
 		if user == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"user":            nil,
@@ -779,5 +765,109 @@ func getCurrentUserFromToken(db *sql.DB, tokenKey string) *models.User {
 		expiresAt: time.Now().Add(tokenCacheDuration),
 	})
 
+	return &user
+}
+
+// getCurrentUserFromRequest resolves the authenticated user for the request,
+// trying OAuth 2.1 JWT bearer authentication first (the device-flow access
+// token issued to the CLI / MCP client) and then falling back to the
+// kanban-token lookup in the `tokens` table (the cookie-based session used
+// by the web UI and the legacy `kanban auth login` bearer).
+//
+// Order matters for two reasons:
+//
+//   - JWT verification is cheap (a single signature check) compared to a
+//     DB roundtrip, so the OAuth path stays fast on the hot `/api/v1/users/me`
+//     call the CLI polls on every command.
+//   - A kanban-token row is keyed by an opaque random string and is therefore
+//     guaranteed never to collide with a JWT (which has dots in it). The
+//     fallback is therefore unambiguous: if the JWT path returns nil the
+//     bearer value is either a kanban-token, a stale token, or invalid —
+//     exactly the same set the kanban-token branch already handles.
+//
+// Returns nil if neither path yields an enabled user.
+func getCurrentUserFromRequest(c *gin.Context, db *sql.DB) *models.User {
+	bearer := ""
+	if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		bearer = strings.TrimSpace(authHeader[len("Bearer "):])
+	}
+
+	if bearer != "" {
+		if user := getCurrentUserFromBearerJWT(c, db, bearer); user != nil {
+			return user
+		}
+	}
+
+	tokenKey := bearer
+	if tokenKey == "" {
+		if cookie, err := c.Cookie("kanban-token"); err == nil {
+			tokenKey = cookie
+		}
+	}
+	if tokenKey == "" {
+		return nil
+	}
+	return getCurrentUserFromToken(db, tokenKey)
+}
+
+// getCurrentUserFromBearerJWT validates a raw bearer string as an OAuth 2.1
+// access-token JWT issued by this server. It is intentionally lenient: a
+// bearer value that is not even shaped like a JWT (no dots) is silently
+// treated as a non-JWT credential so the caller can fall through to the
+// kanban-token lookup. Verification failures (expired, wrong audience /
+// issuer, bad signature) also return nil for the same reason.
+//
+// On success the user identified by the JWT's subject claim is cached in the
+// shared token cache so subsequent calls hit memory instead of the DB.
+func getCurrentUserFromBearerJWT(c *gin.Context, db *sql.DB, raw string) *models.User {
+	if raw == "" || !strings.Contains(raw, ".") {
+		return nil
+	}
+	if cached, ok := tokenCache.Load(raw); ok {
+		if time.Now().Before(cached.expiresAt) && cached.user.Enabled {
+			return cached.user
+		}
+	}
+
+	signer := oauth.NewSigner(db)
+	if err := signer.LoadOrGenerate(); err != nil {
+		return nil
+	}
+	issuer := oauth.DiscoveryIssuerFromRequest(c)
+	audience := oauth.GetConfiguredAudience(c)
+	claims, err := signer.VerifyAccessToken(raw, issuer, audience)
+	if err != nil || claims == nil || claims.Subject == "" {
+		return nil
+	}
+
+	user := loadUserByID(db, claims.Subject)
+	if user == nil {
+		return nil
+	}
+
+	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
+	tokenCache.Store(raw, &cachedUser{
+		user:      user,
+		expiresAt: time.Now().Add(tokenCacheDuration),
+	})
+	return user
+}
+
+// loadUserByID fetches a single user row by primary key, returning nil if
+// the user does not exist or has been disabled. Mirrors the user-fetch step
+// inside getCurrentUserFromToken but is keyed on the OAuth subject (== user
+// ID) rather than a `tokens` row, so it can be used by the JWT path.
+func loadUserByID(db *sql.DB, id string) *models.User {
+	var user models.User
+	err := db.QueryRow(
+		"SELECT id, username, nickname, avatar, type, role, enabled FROM users WHERE id = ?",
+		id,
+	).Scan(&user.ID, &user.Username, &user.Nickname, &user.Avatar, &user.Type, &user.Role, &user.Enabled)
+	if err != nil {
+		return nil
+	}
+	if !user.Enabled {
+		return nil
+	}
 	return &user
 }
