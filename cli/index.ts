@@ -1,5 +1,7 @@
 import { Command } from "commander";
 import { HttpClient } from "./src/http/client.js";
+import { setColorOverride } from "./src/config.js";
+import { parseColorFlag } from "./src/output/color.js";
 import {
   FileSecretProvider,
   OAuthClient,
@@ -115,7 +117,16 @@ program
   .version("0.1.0")
   .option("--api-url <url>", "Kanban API base URL", DEFAULT_API_URL)
   .option("--profile <name>", "credential profile to use", DEFAULT_PROFILE)
-  .option("--output <format>", "output format (table|json)", "table");
+  .option("--output <format>", "output format (table|json)", "table")
+  .option("--no-color", "disable ANSI color in table output")
+  .option("--color <mode>", "force color on/off (on|off|auto)", "auto");
+
+// Apply the resolved colour override once, after Commander has parsed
+// argv. Doing it here keeps every command file agnostic of Commander.
+program.hook("preAction", () => {
+  const opts = program.opts<{ color?: unknown }>();
+  setColorOverride(parseColorFlag(opts.color));
+});
 
 const authCmd = program.command("auth").description("manage CLI authentication");
 
