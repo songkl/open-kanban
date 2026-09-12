@@ -66,21 +66,28 @@ All notable changes to this project will be documented in this file.
 - s-1093: ship the runner run-history surface end-to-end so ops and
   PMs can audit which runner ran which task, when, and how it ended.
   Closes the original v1 placeholder; the v2 scope it deferred has
-  been delivered across sibling tasks s-1105 / s-1106 / s-1108 /
-  s-1109 / s-1110 / s-1111. Backend (s-1108): `FinishRun` now stamps
+  been delivered across sibling tasks s-1105 / s-1106 / s-1107 /
+  s-1108 / s-1109 / s-1110 / s-1111. Backend (s-1107): repository
+  method `RunRepository.ListRunHistory(filter RunHistoryFilter)`
+  plus handler `handlers.ListRunsHistory(db)` exposing
+  `GET /api/v1/runs/history`; supports `runnerId`, `status`
+  (completed|failed|released), `boardId` (csv), `taskId`,
+  `from`/`to` (RFC3339 or `YYYY-MM-DD`), `limit` (1–200, default
+  50), `offset` (≥0, default 0); orders by `finished_at DESC` with
+  `task_id ASC` as a stable tie-breaker; post-filters by column READ
+  access for non-ADMIN callers (`canSeeRunRow` accepts either the
+  snapshot `column_id` at claim time or the task's current column so
+  rows remain visible after `CompleteTask` advances the task); ADMIN
+  short-circuits the check; bad status / inverted time window /
+  non-positive limit / negative offset return 400; returns `[]` not
+  `null` on empty. Backend (s-1108): `FinishRun` now stamps
   the row in place — status=`completed|failed`, `finished_at`,
   `exit_code`, `error` — instead of issuing a `DELETE`, unifying the
   three terminal states (completed / failed / released) on the same
   "row stays" contract; migration 006 (sqlite + mysql) adds
   `idx_task_runs_finished_at` and
   `idx_task_runs_status_finished_at` to keep `/runs/history` cheap;
-  `version_map.go` bumps the 0.6.0 entry to `From=1 To=6`. New
-  `GET /api/v1/runs/history` (Bearer-authed) accepts `runnerId`,
-  `status` (completed|failed|released), `boardId` (csv), `taskId`,
-  `from`/`to` (RFC3339 or `YYYY-MM-DD`; `to < from` → 400), `limit`
-  (1–200, default 50), `offset` (≥0, default 0); orders by
-  `finished_at DESC`; post-filters by column READ access for
-  non-ADMIN callers; returns `[]` not `null` on empty. Frontend
+  `version_map.go` bumps the 0.6.0 entry to `From=1 To=6`. Frontend
   (s-1109): `frontend/src/pages/RunHistoryPage.tsx` consumes
   `runsApi.list` and renders a table (time, task title, runner,
   status, duration, error) with status / runner / date-range filters
