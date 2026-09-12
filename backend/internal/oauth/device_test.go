@@ -135,7 +135,7 @@ func TestRequestDeviceCodeSuccess(t *testing.T) {
 	if v, _ := resp["verification_uri"].(string); v != "http://kanban.example/oauth/device" {
 		t.Errorf("verification_uri mismatch: %s", v)
 	}
-	if v, _ := resp["verification_uri_complete"].(string); v != "http://kanban.example/oauth/device?user_code="+uc {
+	if v, _ := resp["verification_uri_complete"].(string); v != "http://kanban.example/oauth/device?code="+uc {
 		t.Errorf("verification_uri_complete mismatch: %s", v)
 	}
 	if exp, ok := resp["expires_in"].(float64); !ok || exp <= 0 {

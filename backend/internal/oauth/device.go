@@ -136,7 +136,11 @@ func RequestDeviceCode(db *sql.DB) gin.HandlerFunc {
 
 		issuer := DiscoveryIssuerFromRequest(c)
 		verificationURI := issuer + "/oauth/device"
-		verificationURIComplete := verificationURI + "?user_code=" + userCode
+		// Use the shorter `code` parameter name on the verification URL so
+		// the link humans click from the CLI/MCP server reads naturally
+		// (e.g. `/oauth/device?code=ABCD-EFGH`). The page itself accepts
+		// both `code` and the legacy `user_code` alias.
+		verificationURIComplete := verificationURI + "?code=" + userCode
 
 		c.JSON(http.StatusOK, models.DeviceAuthorizationResponse{
 			DeviceCode:              deviceCode,

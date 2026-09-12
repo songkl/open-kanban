@@ -51,10 +51,22 @@ describe('OAuthDevicePage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders input from URL ?user_code query', () => {
+  it('renders input from URL ?code query', () => {
+    renderPage('?code=ABCD-1234');
+    const input = screen.getByTestId('user-code-input') as HTMLInputElement;
+    expect(input.value).toBe('ABCD-1234');
+  });
+
+  it('falls back to ?user_code when ?code is missing', () => {
     renderPage('?user_code=ABCD-1234');
     const input = screen.getByTestId('user-code-input') as HTMLInputElement;
     expect(input.value).toBe('ABCD-1234');
+  });
+
+  it('prefers ?code over ?user_code when both are present', () => {
+    renderPage('?code=WINN-WINN&user_code=AAAA-1111');
+    const input = screen.getByTestId('user-code-input') as HTMLInputElement;
+    expect(input.value).toBe('WINN-WINN');
   });
 
   it('normalises input to upper-case', () => {

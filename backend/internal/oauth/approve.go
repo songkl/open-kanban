@@ -82,15 +82,21 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// DeviceLookupHandler serves GET /oauth/device/lookup?user_code=XXXX-XXXX.
-// It is a public read endpoint used by the verification page to display the
-// client_name and scope before the user decides. Sensitive fields like the
-// device_code are NOT returned.
+// DeviceLookupHandler serves GET /oauth/device/lookup?code=XXXX-XXXX (or the
+// legacy ?user_code= alias) and returns the client_name and scope metadata
+// for the verification page. Sensitive fields like the device_code are NOT
+// returned.
 func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		uc := strings.ToUpper(strings.TrimSpace(c.Query("user_code")))
+		// Prefer the modern `code` parameter that matches
+		// verification_uri_complete; keep `user_code` as a fallback so
+		// older clients / saved links still work.
+		uc := strings.ToUpper(strings.TrimSpace(c.Query("code")))
 		if uc == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user_code is required"})
+			uc = strings.ToUpper(strings.TrimSpace(c.Query("user_code")))
+		}
+		if uc == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
 			return
 		}
 		dc, err := findDeviceCodeByUserCode(db, uc)

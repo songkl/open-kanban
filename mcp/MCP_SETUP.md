@@ -82,7 +82,7 @@
 | `POST /oauth/revoke` | 撤销 token (RFC 7009) |
 | `POST /oauth/introspect` | 自省 token (RFC 7662) |
 | `POST /oauth/device/approve` | 用户在浏览器侧批准设备码(需登录) |
-| `GET /oauth/device/lookup?user_code=...` | 公开读取待审批设备码的元数据 |
+| `GET /oauth/device/lookup?code=...` | 公开读取待审批设备码的元数据(`user_code` 也兼容) |
 
 ## Scope
 

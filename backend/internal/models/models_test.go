@@ -468,7 +468,7 @@ func TestDeviceAuthorizationResponseJSON(t *testing.T) {
 		DeviceCode:              "device-secret",
 		UserCode:                "WXYZ-9876",
 		VerificationURI:         "http://localhost:8080/oauth/device",
-		VerificationURIComplete: "http://localhost:8080/oauth/device?user_code=WXYZ-9876",
+		VerificationURIComplete: "http://localhost:8080/oauth/device?code=WXYZ-9876",
 		ExpiresIn:               600,
 		Interval:                5,
 	}

@@ -15,7 +15,15 @@ export function OAuthDevicePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const initialCode = (params.get('user_code') || '').trim();
+  // Prefer the modern `code` parameter (e.g. `/oauth/device?code=ABCD-1234`)
+  // that matches the verification_uri_complete emitted by the device-code
+  // endpoint, but keep `user_code` as a fallback so existing deep links
+  // still resolve.
+  const initialCode = (
+    params.get('code') ||
+    params.get('user_code') ||
+    ''
+  ).trim();
   const [code, setCode] = useState(initialCode);
   const [lookup, setLookup] = useState<DeviceLookup | null>(null);
   const [error, setError] = useState<string>('');
@@ -47,7 +55,7 @@ export function OAuthDevicePage() {
     let cancelled = false;
     setError('');
     setLookup(null);
-    fetch(`/oauth/device/lookup?user_code=${encodeURIComponent(code)}`)
+    fetch(`/oauth/device/lookup?code=${encodeURIComponent(code)}`)
       .then(async (res) => {
         if (cancelled) return;
         if (res.status === 404) {
@@ -114,7 +122,7 @@ export function OAuthDevicePage() {
           <button
             type="button"
             className="w-full rounded-md bg-blue-500 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-600"
-            onClick={() => navigate('/login?return=/oauth/device?user_code=' + encodeURIComponent(code))}
+            onClick={() => navigate('/login?return=/oauth/device?code=' + encodeURIComponent(code))}
           >
             {t('oauth.device.goLogin')}
           </button>

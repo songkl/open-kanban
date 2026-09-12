@@ -262,6 +262,49 @@ func TestDeviceLookupRequiresUserCode(t *testing.T) {
 	}
 }
 
+func TestDeviceLookupAcceptsCodeQuery(t *testing.T) {
+	// ?code= is the modern alias that matches verification_uri_complete;
+	// make sure the public lookup endpoint honours it identically to
+	// ?user_code= so the device page can use either name.
+	db := setupApproveDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-client-1", "CODE-QRY99", "kanban:read", time.Hour)
+	r := newApproveServer(t, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/oauth/device/lookup?code=code-qry99", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["clientId"] != "kanban-client-1" {
+		t.Errorf("clientId mismatch: %v", resp)
+	}
+}
+
+func TestDeviceLookupPrefersCodeOverUserCode(t *testing.T) {
+	// If both query params are supplied, `code` wins so the page can
+	// safely forward URL parameters without colliding with an unrelated
+	// user_code value embedded in a deep link.
+	db := setupApproveDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-client-1", "WINN-WINN", "kanban:read", time.Hour)
+	r := newApproveServer(t, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/oauth/device/lookup?code=WINN-WINN&user_code=GHOST", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 // setApproveUser seeds a token for the given user and attaches it as a
 // cookie so the embedded auth middleware can pick it up. This is a test-only
 // helper that avoids constructing a full gin auth middleware.
