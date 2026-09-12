@@ -51,6 +51,16 @@ import {
   splitFlagValues,
   type BatchTaskSpec,
 } from "./src/commands/tasks_batch.js";
+import {
+  runDraftsList,
+  runDraftsPublish,
+  runDraftsUnpublish,
+} from "./src/commands/drafts.js";
+import {
+  runArchivedList,
+  runArchivedArchive,
+  runArchivedRestore,
+} from "./src/commands/archived.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -810,6 +820,166 @@ function coerceBooleans(values: string[]): boolean[] {
     );
   });
 }
+
+const draftsCmd = program.command("drafts").description("manage draft tasks");
+
+function draftsExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+draftsCmd
+  .command("list")
+  .description("list draft tasks (GET /api/v1/drafts)")
+  .option("--board <id>", "filter by board id")
+  .action(async (cmdOpts: { board?: string }) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runDraftsList({
+        apiUrl: opts.apiUrl,
+        boardId: cmdOpts.board,
+        format: opts.output === "json" ? "json" : "table",
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(draftsExitCode(err));
+    }
+  });
+
+draftsCmd
+  .command("publish <id>")
+  .description("publish a draft task (PUT /api/v1/tasks/:id with { published: true })")
+  .action(async (id: string) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runDraftsPublish(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(draftsExitCode(err));
+    }
+  });
+
+draftsCmd
+  .command("unpublish <id>")
+  .description(
+    "unpublish a task back into drafts (PUT /api/v1/tasks/:id with { published: false })"
+  )
+  .action(async (id: string) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runDraftsUnpublish(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(draftsExitCode(err));
+    }
+  });
+
+const archivedCmd = program.command("archived").description("manage archived tasks");
+
+function archivedExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+archivedCmd
+  .command("list")
+  .description("list archived tasks (GET /api/v1/archived)")
+  .option("--board <id>", "filter by board id")
+  .action(async (cmdOpts: { board?: string }) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runArchivedList({
+        apiUrl: opts.apiUrl,
+        boardId: cmdOpts.board,
+        format: opts.output === "json" ? "json" : "table",
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(archivedExitCode(err));
+    }
+  });
+
+archivedCmd
+  .command("archive <id>")
+  .description(
+    "archive a task (POST /api/v1/tasks/:id/archive with { archived: true }); --yes is the default"
+  )
+  .option("--yes", "skip confirmation prompt (default behaviour)", false)
+  .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runArchivedArchive(
+        {
+          apiUrl: opts.apiUrl,
+          yes: true,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(archivedExitCode(err));
+    }
+  });
+
+archivedCmd
+  .command("restore <id>")
+  .description(
+    "restore an archived task (POST /api/v1/tasks/:id/archive with { archived: false })"
+  )
+  .action(async (id: string) => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runArchivedRestore(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(archivedExitCode(err));
+    }
+  });
 
 program.parseAsync(process.argv).catch((err: Error) => {
   process.stderr.write(`${err.message}\n`);
