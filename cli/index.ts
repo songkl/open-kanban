@@ -25,6 +25,22 @@ import {
   runColumnsList,
   runColumnsGet,
 } from "./src/commands/columns.js";
+import {
+  runTasksList,
+  runTaskGet,
+  runTaskCreate,
+  runTaskUpdate,
+  runTaskDelete,
+  runTaskComplete,
+  runTaskMove,
+  parseMetaArgs,
+  type DateRange,
+  type TaskFields,
+  type TaskPriority,
+  type TaskStatus,
+} from "./src/commands/tasks.js";
+import { InvalidUsageError as TasksInvalidUsageError } from "./src/commands/boards.js";
+import { NotLoggedInError as TasksNotLoggedInError } from "./src/commands/dashboard.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -292,6 +308,319 @@ columnsCmd
       process.exit(exitCodeForError(err));
     }
   });
+
+const tasksCmd = program.command("tasks").description("manage tasks");
+
+function tasksExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+tasksCmd
+  .command("list")
+  .description("list tasks (filters client-side over GET /api/v1/columns)")
+  .option("--board <id>", "filter by board id")
+  .option("--column <id>", "filter by column id (mutually exclusive with --status)")
+  .option(
+    "--status <status>",
+    "filter by status (todo|in_progress|review|done); mutually exclusive with --column"
+  )
+  .option("--agent-type <type>", "filter by column agentConfig.agentTypes")
+  .option(
+    "--priority <priority>",
+    "filter by priority (low|medium|high)"
+  )
+  .option("--assignee <username>", "filter by assignee username")
+  .option("--search <query>", "free-text search across title and description")
+  .option(
+    "--since <range>",
+    "filter by creation date (today|thisWeek|thisMonth)"
+  )
+  .option("--tag <tag>", "filter by a meta value (substring match)")
+  .option(
+    "--lightweight",
+    "return only id/title/priority/assignee/createdAt (default behaviour)",
+    false
+  )
+  .option(
+    "--fields <set>",
+    "field set for change-detection (id|id+updated)",
+    (v: string): TaskFields => {
+      const t = v.trim();
+      if (t !== "id" && t !== "id+updated") {
+        throw new TasksInvalidUsageError(
+          `invalid --fields value: ${v} (allowed: id, id+updated)`
+        );
+      }
+      return t as TaskFields;
+    }
+  )
+  .action(
+    async (cmdOpts: {
+      board?: string;
+      column?: string;
+      status?: string;
+      agentType?: string;
+      priority?: string;
+      assignee?: string;
+      search?: string;
+      since?: string;
+      tag?: string;
+      lightweight?: boolean;
+      fields?: TaskFields;
+    }) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      try {
+        await runTasksList({
+          apiUrl: opts.apiUrl,
+          boardId: cmdOpts.board,
+          columnId: cmdOpts.column,
+          status: cmdOpts.status as TaskStatus | undefined,
+          agentType: cmdOpts.agentType,
+          priority: cmdOpts.priority as TaskPriority | undefined,
+          assignee: cmdOpts.assignee,
+          search: cmdOpts.search,
+          since: cmdOpts.since as DateRange | undefined,
+          tag: cmdOpts.tag,
+          lightweight: cmdOpts.lightweight,
+          fields: cmdOpts.fields,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksExitCode(err));
+      }
+    }
+  );
+
+tasksCmd
+  .command("get <id>")
+  .description("fetch a single task by id (GET /api/v1/tasks/:id)")
+  .action(async (id: string) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    try {
+      await runTaskGet(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(tasksExitCode(err));
+    }
+  });
+
+tasksCmd
+  .command("create")
+  .description("create a task (POST /api/v1/tasks)")
+  .requiredOption("--title <title>", "task title (required)")
+  .option("--description <description>", "task description")
+  .option("--column <id>", "target column id (mutually exclusive with --status)")
+  .option(
+    "--status <status>",
+    "target status (todo|in_progress|review|done); mutually exclusive with --column"
+  )
+  .option("--board <id>", "default board for status→column resolution")
+  .option(
+    "--priority <priority>",
+    "task priority (low|medium|high); defaults to medium"
+  )
+  .option("--assignee <username>", "task assignee username")
+  .option(
+    "--meta <kv...>",
+    "metadata key=value pairs (repeatable or comma-separated)"
+  )
+  .option("--no-publish", "create as a draft instead of a published task")
+  .action(
+    async (cmdOpts: {
+      title: string;
+      description?: string;
+      column?: string;
+      status?: string;
+      board?: string;
+      priority?: string;
+      assignee?: string;
+      meta?: string[];
+      publish?: boolean;
+    }) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const oauth = buildOAuthClient(opts.apiUrl, undefined);
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      http.attachOAuth(oauth);
+      try {
+        await runTaskCreate({
+          apiUrl: opts.apiUrl,
+          title: cmdOpts.title,
+          description: cmdOpts.description,
+          columnId: cmdOpts.column,
+          status: cmdOpts.status as TaskStatus | undefined,
+          boardId: cmdOpts.board,
+          priority: cmdOpts.priority as TaskPriority | undefined,
+          assignee: cmdOpts.assignee,
+          meta: parseMetaArgs(cmdOpts.meta),
+          published: cmdOpts.publish,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksExitCode(err));
+      }
+    }
+  );
+
+tasksCmd
+  .command("update <id>")
+  .description("update a task (PUT /api/v1/tasks/:id)")
+  .option("--title <title>", "new title")
+  .option("--description <description>", "new description")
+  .option(
+    "--priority <priority>",
+    "new priority (low|medium|high)"
+  )
+  .option("--assignee <username>", "new assignee username")
+  .option(
+    "--meta <kv...>",
+    "new metadata key=value pairs (repeatable or comma-separated)"
+  )
+  .option("--column <id>", "move task to this column (mutually exclusive with --status)")
+  .option(
+    "--status <status>",
+    "move task to the column with this status (todo|in_progress|review|done); mutually exclusive with --column"
+  )
+  .action(
+    async (
+      id: string,
+      cmdOpts: {
+        title?: string;
+        description?: string;
+        priority?: string;
+        assignee?: string;
+        meta?: string[];
+        column?: string;
+        status?: string;
+      }
+    ) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const oauth = buildOAuthClient(opts.apiUrl, undefined);
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      http.attachOAuth(oauth);
+      try {
+        await runTaskUpdate(
+          {
+            apiUrl: opts.apiUrl,
+            title: cmdOpts.title,
+            description: cmdOpts.description,
+            priority: cmdOpts.priority as TaskPriority | undefined,
+            assignee: cmdOpts.assignee,
+            meta: parseMetaArgs(cmdOpts.meta),
+            columnId: cmdOpts.column,
+            status: cmdOpts.status as TaskStatus | undefined,
+            format: opts.output === "json" ? "json" : "table",
+            http,
+          },
+          id
+        );
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksExitCode(err));
+      }
+    }
+  );
+
+tasksCmd
+  .command("delete <id>")
+  .description("delete a task (DELETE /api/v1/tasks/:id); --yes skips confirmation")
+  .option("--yes", "skip confirmation prompt (default behaviour)", false)
+  .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runTaskDelete(
+        {
+          apiUrl: opts.apiUrl,
+          yes: true,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(tasksExitCode(err));
+    }
+  });
+
+tasksCmd
+  .command("complete <id>")
+  .description(
+    "advance a task to the next column (POST /api/v1/tasks/:id/complete)"
+  )
+  .action(async (id: string) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, undefined);
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    http.attachOAuth(oauth);
+    try {
+      await runTaskComplete(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(tasksExitCode(err));
+    }
+  });
+
+tasksCmd
+  .command("move <id>")
+  .description(
+    "move a task to a target column or status (PUT /api/v1/tasks/:id with columnId)"
+  )
+  .option("--column <id>", "target column id (mutually exclusive with --status)")
+  .option(
+    "--status <status>",
+    "target status (todo|in_progress|review|done); mutually exclusive with --column"
+  )
+  .action(
+    async (
+      id: string,
+      cmdOpts: { column?: string; status?: string }
+    ) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const oauth = buildOAuthClient(opts.apiUrl, undefined);
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      http.attachOAuth(oauth);
+      try {
+        await runTaskMove(
+          {
+            apiUrl: opts.apiUrl,
+            columnId: cmdOpts.column,
+            status: cmdOpts.status as TaskStatus | undefined,
+            format: opts.output === "json" ? "json" : "table",
+            http,
+          },
+          id
+        );
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksExitCode(err));
+      }
+    }
+  );
 
 program.parseAsync(process.argv).catch((err: Error) => {
   process.stderr.write(`${err.message}\n`);
