@@ -292,6 +292,29 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Authorization: the user must have WRITE access on the
+		// task's current column (with board fallback) — mirrors
+		// the claim path so a runner that lost its column grant
+		// between claim and finish can't advance the task.
+		columnID, err := getColumnIDForTask(db, taskID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+				return
+			}
+			ServerError(c, "Failed to load task", err)
+			return
+		}
+		boardID, err := getBoardIDForColumn(db, columnID)
+		if err != nil {
+			ServerError(c, "Failed to load task board", err)
+			return
+		}
+		if !HasColumnWrite(db, user, boardID, columnID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to finish tasks in this column"})
+			return
+		}
+
 		var req FinishRunRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
@@ -317,7 +340,7 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 		taskSvc := services.NewTaskService(db)
 
 		var advanced bool
-		err := repo.FinishRun(taskID, req.RunnerID, status, req.ExitCode, req.Error,
+		err = repo.FinishRun(taskID, req.RunnerID, status, req.ExitCode, req.Error,
 			func(taskID string) error {
 				if _, err := taskSvc.CompleteTask(taskID); err != nil {
 					return err
@@ -437,9 +460,12 @@ func GetRun(db *sql.DB) gin.HandlerFunc {
 
 // userHasBoardStatusWrite reports whether the user has WRITE
 // access on at least one column on boardID whose status equals
-// status. Admins short-circuit to true via the column access
-// helper, so this works for global ADMIN without a per-row
-// grant.
+// status. Admins short-circuit to true via HasColumnWrite, so
+// this works for global ADMIN without a per-row grant.
+//
+// Iterates the columns matching the status and delegates the
+// actual access check to HasColumnWrite so the rule lives in
+// exactly one place.
 func userHasBoardStatusWrite(db *sql.DB, user *models.User, boardID, status string) bool {
 	if user == nil {
 		return false
@@ -460,7 +486,7 @@ func userHasBoardStatusWrite(db *sql.DB, user *models.User, boardID, status stri
 		if err := rows.Scan(&colID); err != nil {
 			continue
 		}
-		if checkColumnAccessWithBoardFallback(db, user.ID, colID, "WRITE", user.Role) {
+		if HasColumnWrite(db, user, boardID, colID) {
 			return true
 		}
 	}

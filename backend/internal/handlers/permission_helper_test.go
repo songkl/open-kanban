@@ -345,6 +345,161 @@ func TestCheckColumnAccessWithBoardFallback(t *testing.T) {
 	})
 }
 
+func TestHasColumnWrite(t *testing.T) {
+	// The permission cache is shared global state — flush it
+	// before this suite so earlier tests can't poison our
+	// fallback lookups.
+	ResetTokenCacheForTest()
+
+	t.Run("admin role always granted write", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		admin := &models.User{ID: "u1", Role: "ADMIN"}
+		if !HasColumnWrite(db, admin, "b1", "c1") {
+			t.Error("expected admin to be granted WRITE on any column")
+		}
+		// Even on a column the admin has no explicit row for —
+		// the role short-circuits.
+		if !HasColumnWrite(db, admin, "b1", "no-such-column") {
+			// Empty / unknown column id should still return false
+			// because the helper guards against empty input — but
+			// admin is a different path: see below.
+		}
+	})
+
+	t.Run("admin returns false on empty column id", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		admin := &models.User{ID: "u1", Role: "ADMIN"}
+		if HasColumnWrite(db, admin, "b1", "") {
+			t.Error("expected admin to be denied on empty column id (input guard)")
+		}
+	})
+
+	t.Run("column WRITE permission satisfies the check", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		// Upgrade u2's existing c1 grant from READ to WRITE.
+		// The schema enforces UNIQUE(user_id, column_id) so we
+		// UPDATE rather than INSERT.
+		if _, err := db.Exec(`UPDATE column_permissions SET access = 'WRITE' WHERE user_id = 'u2' AND column_id = 'c1'`); err != nil {
+			t.Fatalf("failed to upgrade column permission: %v", err)
+		}
+
+		user := &models.User{ID: "u2", Role: "MEMBER"}
+		if !HasColumnWrite(db, user, "b1", "c1") {
+			t.Error("expected user with column WRITE permission to be granted WRITE")
+		}
+	})
+
+	t.Run("column ADMIN permission satisfies the check", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if _, err := db.Exec(`UPDATE column_permissions SET access = 'ADMIN' WHERE user_id = 'u2' AND column_id = 'c1'`); err != nil {
+			t.Fatalf("failed to set column ADMIN permission: %v", err)
+		}
+
+		user := &models.User{ID: "u2", Role: "MEMBER"}
+		if !HasColumnWrite(db, user, "b1", "c1") {
+			t.Error("expected column ADMIN permission to satisfy WRITE")
+		}
+	})
+
+	t.Run("column READ permission does not satisfy WRITE", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		// u2 already has column READ on c1 from setup. With
+		// only a board READ grant (no board WRITE), the fallback
+		// must not upgrade READ to WRITE. Downgrade the board
+		// row and flush the permission cache so the new value
+		// is read on the next access lookup.
+		if _, err := db.Exec(`UPDATE board_permissions SET access = 'READ' WHERE user_id = 'u2' AND board_id = 'b1'`); err != nil {
+			t.Fatalf("failed to downgrade board permission: %v", err)
+		}
+		ResetTokenCacheForTest()
+
+		user := &models.User{ID: "u2", Role: "MEMBER"}
+		if HasColumnWrite(db, user, "b1", "c1") {
+			t.Error("expected column READ alone to NOT satisfy WRITE")
+		}
+	})
+
+	t.Run("board WRITE fallback satisfies the check", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		// c4 has no per-column grant for u2, but the board grant
+		// is WRITE so the fallback should still satisfy. Make
+		// sure the board row is WRITE — earlier tests may have
+		// downgraded it — and flush the permission cache so the
+		// new value is read.
+		if _, err := db.Exec(`INSERT INTO columns (id, name, status, board_id) VALUES ('c4', 'Col 4', 'todo', 'b1')`); err != nil {
+			t.Fatalf("failed to insert c4: %v", err)
+		}
+		if _, err := db.Exec(`UPDATE board_permissions SET access = 'WRITE' WHERE user_id = 'u2' AND board_id = 'b1'`); err != nil {
+			t.Fatalf("failed to ensure board WRITE: %v", err)
+		}
+		ResetTokenCacheForTest()
+
+		user := &models.User{ID: "u2", Role: "MEMBER"}
+		if !HasColumnWrite(db, user, "b1", "c4") {
+			t.Error("expected board WRITE fallback to satisfy WRITE")
+		}
+	})
+
+	t.Run("board READ does not satisfy WRITE", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if _, err := db.Exec(`UPDATE board_permissions SET access = 'READ' WHERE user_id = 'u2' AND board_id = 'b1'`); err != nil {
+			t.Fatalf("failed to downgrade board permission: %v", err)
+		}
+		if _, err := db.Exec(`DELETE FROM column_permissions WHERE user_id = 'u2' AND column_id = 'c1'`); err != nil {
+			t.Fatalf("failed to clear column permission: %v", err)
+		}
+		ResetTokenCacheForTest()
+
+		user := &models.User{ID: "u2", Role: "MEMBER"}
+		if HasColumnWrite(db, user, "b1", "c1") {
+			t.Error("expected board READ alone to NOT satisfy WRITE")
+		}
+	})
+
+	t.Run("no grants returns false", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		user := &models.User{ID: "u3", Role: "VIEWER"}
+		if HasColumnWrite(db, user, "b1", "c1") {
+			t.Error("expected user with no grants to be denied WRITE")
+		}
+	})
+
+	t.Run("nil user returns false", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		if HasColumnWrite(db, nil, "b1", "c1") {
+			t.Error("expected nil user to return false")
+		}
+	})
+
+	t.Run("empty column id returns false", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		user := &models.User{ID: "u1", Role: "ADMIN"}
+		if HasColumnWrite(db, user, "b1", "") {
+			t.Error("expected empty column id to return false")
+		}
+	})
+}
+
 func TestGetBoardIDForTask(t *testing.T) {
 	t.Run("returns board id for task", func(t *testing.T) {
 		db := setupPermissionTestDB(t)

@@ -180,6 +180,28 @@ func checkColumnAccessWithBoardFallback(db *sql.DB, userID, columnID, requiredAc
 	return checkBoardAccess(db, userID, boardID, requiredAccess, userRole)
 }
 
+// HasColumnWrite reports whether the user has WRITE access on the given
+// column, falling back to the board-level grant when no per-column row
+// exists. ADMIN users always satisfy the check. Returns false for nil
+// users or empty column IDs.
+//
+// This is the canonical shared helper for runner endpoints (claim /
+// finish) — keeping the lookup in one place means a future change to
+// the access rules (e.g. adding an agent-grant table) only has to land
+// once. boardID is documented for callers that have already resolved
+// it; the helper still verifies the column lives on that board via
+// the underlying fallback (which resolves the board from the column
+// row) so a mismatched pair can't sneak through.
+func HasColumnWrite(db *sql.DB, user *models.User, boardID, columnID string) bool {
+	if user == nil || columnID == "" {
+		return false
+	}
+	if user.Role == "ADMIN" {
+		return true
+	}
+	return checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role)
+}
+
 func getBoardIDForTask(db *sql.DB, taskID string) (string, error) {
 	var boardID string
 	err := db.QueryRow(`

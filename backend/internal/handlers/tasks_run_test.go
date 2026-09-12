@@ -795,6 +795,44 @@ func TestFinishRun_InvalidStatusReturns400(t *testing.T) {
 	}
 }
 
+// TestFinishRun_ReadOnlyUserRejected guards the WRITE permission
+// gate added alongside HasColumnWrite. The viewer user (u-viewer)
+// has READ-only board access — even with a valid task_runs row
+// owned by an admin, finish must reject them with 403 so a
+// runner that lost its grant between claim and finish can't
+// advance the task.
+func TestFinishRun_ReadOnlyUserRejected(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-ro', 'ro', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-ro", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-ro/finish", "viewer-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "completed",
+	})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Task_runs row should still be present — the permission
+	// gate fires before the repo layer is touched.
+	var status string
+	if err := db.QueryRow("SELECT status FROM task_runs WHERE task_id='t-ro'").Scan(&status); err != nil {
+		t.Fatalf("query run: %v", err)
+	}
+	if status != "claimed" {
+		t.Errorf("expected task_runs row untouched, got status=%s", status)
+	}
+}
+
 func TestReleaseRuns_BulkRestore(t *testing.T) {
 	db := setupRunsDB(t)
 	defer db.Close()
