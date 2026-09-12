@@ -216,6 +216,42 @@ open-kanban/
 cd mcp-server && npm publish
 ```
 
+## Shell Completion
+
+The CLI ships with completion scripts for bash, zsh, and fish. Static
+suggestions (subcommands, flags) are baked into the script so
+completion is instant; dynamic values (boardId, columnId, taskId, …)
+are fetched lazily through `kanban __complete <line>` whenever you
+press <kbd>Tab</kbd>.
+
+**bash**
+
+```bash
+# System-wide (requires bash-completion):
+kanban completion bash | sudo tee /etc/bash_completion.d/kanban
+
+# Per-user (load on demand):
+kanban completion bash > ~/.kanban-completion.bash
+echo 'source ~/.kanban-completion.bash' >> ~/.bashrc
+```
+
+**zsh**
+
+```zsh
+# Place the file somewhere on $fpath. Most users have ~/.zsh/completions
+# already in $fpath; create the directory if it doesn't exist.
+kanban completion zsh > "${fpath[1]}/_kanban"
+# Then reload completions:
+autoload -Uz compinit && compinit
+```
+
+**fish**
+
+```fish
+kanban completion fish | source    # current session
+kanban completion fish > ~/.config/fish/completions/kanban.fish   # persistent
+```
+
 ### Release Output
 
 ```

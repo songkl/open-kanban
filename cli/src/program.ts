@@ -100,6 +100,11 @@ import {
 } from "./commands/workspace.js";
 import { runShell } from "./commands/shell.js";
 import {
+  runCompletion,
+  runComplete,
+  UnsupportedShellError,
+} from "./commands/completion.js";
+import {
   runConfigGet,
   runConfigSet,
   InvalidConfigKeyError,
@@ -1367,6 +1372,85 @@ export function createProgram(
         }
       );
     });
+
+  // ---- completion ----
+  // Emits a self-contained bash/zsh/fish completion snippet on stdout.
+  // The hidden `__complete <line>` command is invoked by the script to
+  // fetch dynamic ids; it stays hidden from `--help` so users don't
+  // stumble on it.
+  const completionCmd = program
+    .command("completion")
+    .description("emit a shell completion script (bash|zsh|fish)");
+
+  completionCmd
+    .command("bash")
+    .description("emit a bash completion script to stdout")
+    .action(() => {
+      try {
+        runCompletion({ shell: "bash" });
+      } catch (err) {
+        if (err instanceof UnsupportedShellError) {
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(1);
+        }
+        throw err;
+      }
+    });
+
+  completionCmd
+    .command("zsh")
+    .description("emit a zsh completion script to stdout")
+    .action(() => {
+      try {
+        runCompletion({ shell: "zsh" });
+      } catch (err) {
+        if (err instanceof UnsupportedShellError) {
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(1);
+        }
+        throw err;
+      }
+    });
+
+  completionCmd
+    .command("fish")
+    .description("emit a fish completion script to stdout")
+    .action(() => {
+      try {
+        runCompletion({ shell: "fish" });
+      } catch (err) {
+        if (err instanceof UnsupportedShellError) {
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(1);
+        }
+        throw err;
+      }
+    });
+
+  // Hidden `__complete` endpoint used by the completion scripts to
+  // resolve dynamic ids (boardId / columnId / taskId / ...). The
+  // `<line> <point>` invocation mirrors the convention popularised by
+  // kubectl and gh: the script passes the full line plus the cursor
+  // offset so partial tokens don't get treated as completed words.
+  const completeCmd = program
+    .command("__complete <line> [point]")
+    .description("internal: dynamic completion used by the shell scripts")
+    .action(async (line: string, pointRaw?: string) => {
+      const point = pointRaw !== undefined ? Number(pointRaw) : undefined;
+      try {
+        await runComplete({
+          line,
+          point,
+          apiUrl: opts.apiUrl,
+          http,
+        });
+      } catch {
+        // Dynamic completion is best-effort; the script keeps working
+        // with static candidates even when the network is down.
+      }
+    });
+  // Hide __complete from --help so end users don't see the protocol.
+  (completeCmd as unknown as { _hidden: boolean })._hidden = true;
 
   // ---- config ----
   // Inspects and updates the persistent CLI configuration. The priority

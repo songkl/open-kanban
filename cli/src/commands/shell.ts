@@ -59,6 +59,8 @@ const TOP_LEVEL_COMMANDS = [
   "mine",
   "workspace",
   "shell",
+  "completion",
+  "config",
   "help",
   "version",
 ];
@@ -77,6 +79,7 @@ const SUBCOMMANDS: Record<string, string[]> = {
   comments: ["add", "list"],
   subtasks: ["list", "create", "update", "delete"],
   workspace: ["upload", "batch-upload", "list", "read", "delete", "stats"],
+  completion: ["bash", "zsh", "fish"],
 };
 
 // GLOBAL_FLAGS are surfaced by the completer when the user starts typing

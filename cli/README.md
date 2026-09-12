@@ -190,6 +190,35 @@ top-level integration suite lives under `tests/` that mocks `fetch` and
 walks a full `auth login → boards list → tasks list → tasks complete`
 flow against a fake server.
 
+## Shell Completion
+
+The CLI ships with completion scripts for bash, zsh, and fish. Static
+suggestions (subcommands, flags) are baked into the script so
+completion is instant even when the API is unreachable; dynamic
+values (boardId, columnId, taskId, …) are fetched lazily through
+`kanban __complete <line>` whenever you press <kbd>Tab</kbd>.
+
+```bash
+# bash — system-wide (requires bash-completion):
+kanban completion bash | sudo tee /etc/bash_completion.d/kanban
+
+# bash — per-user:
+kanban completion bash > ~/.kanban-completion.bash
+echo 'source ~/.kanban-completion.bash' >> ~/.bashrc
+```
+
+```zsh
+# zsh — drop the file somewhere on $fpath:
+kanban completion zsh > "${fpath[1]}/_kanban"
+autoload -Uz compinit && compinit
+```
+
+```fish
+# fish — current session / persistent:
+kanban completion fish | source
+kanban completion fish > ~/.config/fish/completions/kanban.fish
+```
+
 ## License
 
 MIT
