@@ -36,6 +36,33 @@ All notable changes to this project will be documented in this file.
   binary as a child process, pipe scripted commands via stdin, and
   assert on banner output, the not-logged-in hint, the unknown-command
   error, the `kanban`-prefix strip, and the on-disk history file.
+- s-1092: ship the CLI runner end-to-end test, UX badge, and
+  `finish()` contract fixes that close out the `kanban run` MVP.
+  Backend migration 005 (sqlite + mysql) drops the
+  `task_runs.runner_id → users.id` foreign key so the wire-format
+  runnerId stays stable across claim / heartbeat / finish; `ClaimRun`
+  now persists `req.RunnerID` verbatim, `version_map.go` gains a
+  0.5.0 row that pins the migration counter at 4 (no schema delta vs
+  0.4.0) so the e2e helper's fresh in-memory SQLite still gets
+  migration 004, and `migrations_test.go` exercises both 005 up and
+  down steps. New `backend/cmd/e2e-runner` binary is a test-only HTTP
+  server with seeded admin + bot users, board, columns, two tasks,
+  and a `READY <apiUrl> <adminToken>` readiness line that mirrors
+  the production claim/heartbeat/finish/release/get + OAuth device
+  flow + `/__test__/auto-approve` route surface. CLI gains
+  `cli/tests/e2e/runner.test.ts` (spawns the helper, writes
+  `.kanban-runner.yaml` + a node mock agent that exits 0, runs
+  `kanban run --once`, and asserts the task advances from `todo` to
+  `review` while the runner id surfaces in stderr), plus `test:e2e`
+  and `test:unit` scripts in `package.json` so CI can split the
+  suites. `cli/README.md` gets a new Runner section with quick
+  start, both modes (board-bound and `--mine`), flag table,
+  configuration discovery, signal handling, and a troubleshooting
+  block covering the common 401/403/409 paths. Frontend renders a
+  violet `🤖 <runnerId> · <elapsed>` badge on task cards while a CLI
+  runner holds the task (polls `GET /api/v1/runs/:taskId` via the
+  new `useTaskRun` hook with a 5s cadence), with a Vitest suite
+  covering the claimed and null states.
 
 ### Bug Fixes
 
