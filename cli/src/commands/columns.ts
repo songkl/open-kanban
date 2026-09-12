@@ -17,6 +17,7 @@ import chalk from "chalk";
 import Table from "cli-table3";
 import { HttpClient, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
+import { formatStructured } from "../output/format.js";
 
 export interface ColumnRecord {
   id?: string;
@@ -45,7 +46,7 @@ export interface ColumnReport {
   column: ColumnRecord;
 }
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface RunColumnsListOptions {
   apiUrl: string;
@@ -131,8 +132,9 @@ export async function runColumnsList(
     positions: positions.length > 0 ? positions : undefined,
     columns: projected,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatColumnsTable(report, fields) + "\n");
   }
@@ -166,8 +168,9 @@ export async function runColumnsGet(
   }
   const projected = projectColumn(column, fields);
   const report: ColumnReport = { apiUrl, column: projected };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatColumnTable(report, fields) + "\n");
   }

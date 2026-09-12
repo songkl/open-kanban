@@ -17,6 +17,7 @@ import { Command } from "commander";
 import { HttpClient } from "./http/client.js";
 import { parseColorFlag } from "./output/color.js";
 import { setColorOverride } from "./config.js";
+import { resolveOutputFormat } from "./output/format.js";
 import {
   FileSecretProvider,
   OAuthClient,
@@ -254,7 +255,7 @@ export function createProgram(
       try {
         await runStatus({
           apiUrl: opts.apiUrl,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -271,7 +272,7 @@ export function createProgram(
       try {
         await runDashboard({
           apiUrl: opts.apiUrl,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -292,7 +293,7 @@ export function createProgram(
       try {
         await runBoardsList({
           apiUrl: opts.apiUrl,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           fields: cmdOpts.fields,
           http,
         });
@@ -312,7 +313,7 @@ export function createProgram(
         await runBoardsGet(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             fields: cmdOpts.fields,
             http,
           },
@@ -360,7 +361,7 @@ export function createProgram(
             apiUrl: opts.apiUrl,
             boardId: cmdOpts.board,
             positions: cmdOpts.positions,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             fields: cmdOpts.fields,
             http,
           });
@@ -388,7 +389,7 @@ export function createProgram(
         await runColumnsGet(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             fields: cmdOpts.fields,
             http,
           },
@@ -480,7 +481,7 @@ export function createProgram(
             tag: cmdOpts.tag,
             lightweight: cmdOpts.lightweight,
             fields: cmdOpts.fields,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           });
         } catch (err) {
@@ -499,7 +500,7 @@ export function createProgram(
         await runTaskGet(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -556,7 +557,7 @@ export function createProgram(
             assignee: cmdOpts.assignee,
             meta: parseMetaArgs(cmdOpts.meta),
             published: cmdOpts.publish,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           });
         } catch (err) {
@@ -610,7 +611,7 @@ export function createProgram(
               meta: parseMetaArgs(cmdOpts.meta),
               columnId: cmdOpts.column,
               status: cmdOpts.status as TaskStatus | undefined,
-              format: o.output === "json" ? "json" : "table",
+              format: resolveOutputFormat(o.output),
               http,
             },
             id
@@ -633,7 +634,7 @@ export function createProgram(
           {
             apiUrl: opts.apiUrl,
             yes: true,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -655,7 +656,7 @@ export function createProgram(
         await runTaskComplete(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -688,7 +689,7 @@ export function createProgram(
               apiUrl: opts.apiUrl,
               columnId: cmdOpts.column,
               status: cmdOpts.status as TaskStatus | undefined,
-              format: o.output === "json" ? "json" : "table",
+              format: resolveOutputFormat(o.output),
               http,
             },
             id
@@ -769,7 +770,7 @@ export function createProgram(
           await runTasksBatchCreate({
             apiUrl: opts.apiUrl,
             tasks,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           });
         } catch (err) {
@@ -817,7 +818,7 @@ export function createProgram(
             status: cmdOpts.status as TaskStatus | undefined,
             priority: cmdOpts.priority as TaskPriority | undefined,
             assignee: cmdOpts.assignee,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           });
         } catch (err) {
@@ -850,7 +851,7 @@ export function createProgram(
             apiUrl: opts.apiUrl,
             ids: allIds,
             yes: true,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           });
         } catch (err) {
@@ -890,7 +891,7 @@ export function createProgram(
         await runDraftsList({
           apiUrl: opts.apiUrl,
           boardId: cmdOpts.board,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -908,7 +909,7 @@ export function createProgram(
         await runDraftsPublish(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -930,7 +931,7 @@ export function createProgram(
         await runDraftsUnpublish(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -960,7 +961,7 @@ export function createProgram(
         await runArchivedList({
           apiUrl: opts.apiUrl,
           boardId: cmdOpts.board,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -982,7 +983,7 @@ export function createProgram(
           {
             apiUrl: opts.apiUrl,
             yes: true,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -1004,7 +1005,7 @@ export function createProgram(
         await runArchivedRestore(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -1042,7 +1043,7 @@ export function createProgram(
             apiUrl: opts.apiUrl,
             body: cmdOpts.body,
             author: cmdOpts.author,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           taskId
@@ -1062,7 +1063,7 @@ export function createProgram(
         await runCommentsList(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           taskId
@@ -1091,7 +1092,7 @@ export function createProgram(
         await runSubtasksList(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           taskId
@@ -1113,7 +1114,7 @@ export function createProgram(
           {
             apiUrl: opts.apiUrl,
             title: cmdOpts.title,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           taskId
@@ -1146,7 +1147,7 @@ export function createProgram(
               apiUrl: opts.apiUrl,
               title: cmdOpts.title,
               completed: cmdOpts.completed,
-              format: o.output === "json" ? "json" : "table",
+              format: resolveOutputFormat(o.output),
               http,
             },
             id
@@ -1169,7 +1170,7 @@ export function createProgram(
           {
             apiUrl: opts.apiUrl,
             yes: true,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -1205,7 +1206,7 @@ export function createProgram(
           apiUrl: opts.apiUrl,
           boardId: cmdOpts.board,
           lightweight: cmdOpts.lightweight,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -1242,7 +1243,7 @@ export function createProgram(
           apiUrl: opts.apiUrl,
           file,
           remotePath: cmdOpts.path,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -1262,7 +1263,7 @@ export function createProgram(
         await runWorkspaceBatchUpload({
           apiUrl: opts.apiUrl,
           files,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -1281,7 +1282,7 @@ export function createProgram(
         await runWorkspaceList({
           apiUrl: opts.apiUrl,
           path: cmdOpts.path,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {
@@ -1301,7 +1302,7 @@ export function createProgram(
         await runWorkspaceRead(
           {
             apiUrl: opts.apiUrl,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -1325,7 +1326,7 @@ export function createProgram(
           {
             apiUrl: opts.apiUrl,
             yes: true,
-            format: o.output === "json" ? "json" : "table",
+            format: resolveOutputFormat(o.output),
             http,
           },
           id
@@ -1344,7 +1345,7 @@ export function createProgram(
       try {
         await runWorkspaceStats({
           apiUrl: opts.apiUrl,
-          format: o.output === "json" ? "json" : "table",
+          format: resolveOutputFormat(o.output),
           http,
         });
       } catch (err) {

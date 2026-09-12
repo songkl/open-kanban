@@ -15,6 +15,7 @@
 import chalk from "chalk";
 import Table from "cli-table3";
 import { HttpClient, AuthError } from "../http/client.js";
+import { formatStructured } from "../output/format.js";
 
 export interface DashboardStats {
   totalTasks?: number;
@@ -33,7 +34,7 @@ export interface DashboardReport {
   stats: DashboardStats;
 }
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface RunDashboardOptions {
   apiUrl: string;
@@ -71,8 +72,9 @@ export async function runDashboard(
     throw err;
   }
   const report: DashboardReport = { apiUrl, stats };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatDashboardTable(report) + "\n");
   }

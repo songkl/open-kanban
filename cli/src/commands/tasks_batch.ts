@@ -19,6 +19,7 @@ import Table from "cli-table3";
 import { HttpClient, AuthError, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
+import { formatStructured } from "../output/format.js";
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -348,8 +349,9 @@ export async function runTasksBatchCreate(
     tasks: Array.isArray(result.tasks) ? result.tasks : [],
     errors: Array.isArray(result.errors) ? result.errors : [],
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatBatchCreateTable(report) + "\n");
   }
@@ -484,8 +486,9 @@ export async function runTasksBatchUpdate(
     failed: result.failed ?? 0,
     errors: Array.isArray(result.errors) ? result.errors : [],
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatBatchUpdateTable(report) + "\n");
   }
@@ -541,8 +544,9 @@ export async function runTasksBatchDelete(
     failed: result.failed ?? 0,
     errors: Array.isArray(result.errors) ? result.errors : [],
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatBatchDeleteTable(report) + "\n");
   }

@@ -10,12 +10,13 @@
 // It depends on chalk + cli-table3 via the sibling `color.ts` and
 // `table.ts` modules so each piece can be unit-tested in isolation.
 
+import { stringify as stringifyYaml } from "yaml";
 import type { ColorPalette } from "./color.js";
 import { createPalette } from "./color.js";
 import { renderListTable, renderRecordTable } from "./table.js";
 import { getColorOverride } from "../config.js";
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export const DEFAULT_OUTPUT_FORMAT: OutputFormat = "table";
 
@@ -28,6 +29,7 @@ export function resolveOutputFormat(value: unknown): OutputFormat {
   if (typeof value !== "string") return DEFAULT_OUTPUT_FORMAT;
   const v = value.trim().toLowerCase();
   if (v === "json") return "json";
+  if (v === "yaml" || v === "yml") return "yaml";
   if (v === "table" || v === "") return "table";
   return DEFAULT_OUTPUT_FORMAT;
 }
@@ -90,6 +92,27 @@ export function stripTrailingSlash(url: string): string {
  */
 export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2) + "\n";
+}
+
+/**
+ * Serialize a value as YAML followed by a newline. Uses the `yaml` package
+ * (already a CLI dependency for batch task input parsing) so the round-trip
+ * behaviour matches `kanban tasks batch create --file tasks.yaml`. Cycles
+ * fall back to a string annotation rather than throwing so a malformed
+ * payload never crashes the CLI mid-report.
+ */
+export function formatYaml(value: unknown): string {
+  try {
+    return stringifyYaml(value, { indent: 2, lineWidth: 0 }) + "\n";
+  } catch {
+    // stringifyYaml only throws on cycles and exotic BigInt values;
+    // stringify the value instead so the user at least sees *something*.
+    try {
+      return stringifyYaml(String(value), { indent: 2, lineWidth: 0 }) + "\n";
+    } catch {
+      return "<unserialisable value>\n";
+    }
+  }
 }
 
 /**
@@ -173,6 +196,7 @@ export function normalizeFields(
  * Dispatch the "render this report" tail that every command ended with.
  *
  *   * JSON mode: serialises `report` with `formatJson`.
+ *   * YAML mode: serialises `report` with `formatYaml`.
  *   * Table mode: calls `renderTable(report, ctx)` (the caller wires in the
  *     resource-specific renderer).
  *
@@ -190,7 +214,25 @@ export function emitReport<T>(
     stdout.write(formatJson(report));
     return;
   }
+  if (ctx.format === "yaml") {
+    stdout.write(formatYaml(report));
+    return;
+  }
   stdout.write(renderTable(report, ctx) + "\n");
+}
+
+/**
+ * Build the non-table render of a report. Returns the JSON string when
+ * `format === "json"`, the YAML string when `format === "yaml"`, and an
+ * empty string otherwise (so callers can fall back to their own table
+ * rendering). Used by commands that still have bespoke table renderers
+ * (`columns`, `tasks`, `workspace`, …) but want yaml/json emission to flow
+ * through the same shared formatter.
+ */
+export function formatStructured<T>(report: T, format: OutputFormat): string {
+  if (format === "json") return formatJson(report);
+  if (format === "yaml") return formatYaml(report);
+  return "";
 }
 
 /**

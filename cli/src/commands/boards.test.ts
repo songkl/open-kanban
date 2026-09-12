@@ -166,6 +166,24 @@ describe("runBoardsList", () => {
     });
   });
 
+  it("emits YAML when format=yaml", async () => {
+    scriptFetch([{ status: 200, body: BOARDS_PAYLOAD }]);
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    const cap = makeCapture();
+    await runBoardsList({
+      apiUrl: "http://kanban.example.com",
+      http,
+      format: "yaml",
+      io: cap.io,
+    });
+    const { stdout } = cap.read();
+    expect(stdout).toContain("apiUrl: http://kanban.example.com");
+    expect(stdout).toContain("boards:");
+    expect(stdout).toContain("id: b1");
+    expect(stdout).toContain("name: Alpha");
+    expect(stdout).not.toContain("┌"); // no table box drawing
+  });
+
   it("honors --fields for the default and json output", async () => {
     scriptFetch([{ status: 200, body: BOARDS_PAYLOAD }]);
     const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
@@ -321,6 +339,22 @@ describe("runBoardsGet", () => {
     const { stdout } = cap.read();
     const parsed = JSON.parse(stdout.trim());
     expect(Object.keys(parsed.board).sort()).toEqual(["id", "name"]);
+  });
+
+  it("emits YAML when format=yaml", async () => {
+    scriptFetch([{ status: 200, body: SINGLE_BOARD_PAYLOAD }]);
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    const cap = makeCapture();
+    await runBoardsGet(
+      { apiUrl: "http://kanban.example.com", http, format: "yaml", io: cap.io },
+      "b1"
+    );
+    const { stdout } = cap.read();
+    expect(stdout).toContain("apiUrl: http://kanban.example.com");
+    expect(stdout).toContain("board:");
+    expect(stdout).toContain("  id: b1"); // 2-space indent under board:
+    expect(stdout).toContain("name: Alpha");
+    expect(stdout).not.toContain("┌"); // no table box drawing
   });
 
   it("encodes ids with special characters", async () => {

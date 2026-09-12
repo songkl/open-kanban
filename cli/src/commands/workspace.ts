@@ -46,8 +46,9 @@ import Table from "cli-table3";
 import { HttpClient, AuthError, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
+import { formatStructured } from "../output/format.js";
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface WorkspaceFileEntry {
   name?: string;
@@ -229,8 +230,9 @@ export async function runWorkspaceUpload(
     size: storedSize,
     raw,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(
       `${chalk.green("Uploaded")} ${storedPath} (${storedSize} bytes)\n`
@@ -303,8 +305,9 @@ export async function runWorkspaceBatchUpload(
     }
   }
   const report: WorkspaceBatchResult = { apiUrl, results, summary };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatBatchTable(report) + "\n");
   }
@@ -343,8 +346,9 @@ export async function runWorkspaceList(
     path: query.path,
     files,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatFilesTable(report) + "\n");
   }
@@ -385,7 +389,7 @@ export async function runWorkspaceRead(
   const content = typeof raw?.content === "string" ? raw.content : "";
   const size = typeof raw?.size === "number" ? raw.size : Buffer.byteLength(content, "utf8");
 
-  if (format === "json") {
+  if (format === "json" || format === "yaml") {
     const encoded = Buffer.from(content, "utf8").toString("base64");
     const result: WorkspaceReadJsonResult = {
       apiUrl,
@@ -394,8 +398,11 @@ export async function runWorkspaceRead(
       encoding: "base64",
       size,
     };
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
-    return result;
+    const structured = formatStructured(result, format);
+    if (structured) {
+      stdout.write(structured);
+      return result;
+    }
   }
   stdout.write(content);
   if (!content.endsWith("\n")) stdout.write("\n");
@@ -434,8 +441,9 @@ export async function runWorkspaceDelete(
     path: trimmed,
     success: true,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(`${chalk.green("Deleted")} ${trimmed}\n`);
   }
@@ -469,8 +477,9 @@ export async function runWorkspaceStats(
     directoryCount: numberOrZero(raw?.directoryCount),
   };
   const report: WorkspaceStatsReport = { apiUrl, stats };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatStatsTable(report) + "\n");
   }

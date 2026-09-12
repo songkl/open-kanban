@@ -21,8 +21,9 @@ import { HttpClient, AuthError, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
 import { TaskRecord } from "./tasks.js";
+import { formatStructured } from "../output/format.js";
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface DraftsReport {
   apiUrl: string;
@@ -90,8 +91,9 @@ export async function runDraftsList(
     boardId: query.boardId,
     drafts,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatDraftsTable(report) + "\n");
   }
@@ -132,8 +134,9 @@ async function applyPublishToggle(
     published,
     task,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(
       `${chalk.green(published ? "Published" : "Unpublished")} task ${id}\n`

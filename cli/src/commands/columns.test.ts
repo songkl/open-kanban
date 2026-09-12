@@ -203,6 +203,23 @@ describe("runColumnsList", () => {
     expect(report.positions).toEqual([1, 2]);
   });
 
+  it("emits YAML when format=yaml", async () => {
+    scriptFetch([{ status: 200, body: COLUMNS_PAYLOAD }]);
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    const cap = makeCapture();
+    await runColumnsList({
+      apiUrl: "http://kanban.example.com",
+      http,
+      format: "yaml",
+      io: cap.io,
+    });
+    const { stdout } = cap.read();
+    expect(stdout).toContain("apiUrl: http://kanban.example.com");
+    expect(stdout).toContain("columns:");
+    expect(stdout).toContain("id: c1");
+    expect(stdout).not.toContain("┌"); // no table box drawing
+  });
+
   it("honors --fields projection", async () => {
     scriptFetch([{ status: 200, body: COLUMNS_PAYLOAD }]);
     const http = new HttpClient({ apiUrl: "http://kanban.example.com" });

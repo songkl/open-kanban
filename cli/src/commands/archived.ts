@@ -22,8 +22,9 @@ import { HttpClient, AuthError, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
 import { TaskRecord } from "./tasks.js";
+import { formatStructured } from "../output/format.js";
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface ArchivedReport {
   apiUrl: string;
@@ -92,8 +93,9 @@ export async function runArchivedList(
     boardId: query.boardId,
     tasks,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatArchivedTable(report) + "\n");
   }
@@ -137,8 +139,9 @@ async function applyArchiveToggle(
     archived,
     task,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(
       `${chalk.green(archived ? "Archived" : "Restored")} task ${id}\n`

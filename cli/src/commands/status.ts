@@ -8,6 +8,7 @@
 
 import chalk from "chalk";
 import { HttpClient } from "../http/client.js";
+import { formatStructured } from "../output/format.js";
 
 export interface StatusReport {
   apiUrl: string;
@@ -25,7 +26,7 @@ export interface BoardSummary {
   columns: number;
 }
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface RunStatusOptions {
   apiUrl: string;
@@ -80,8 +81,9 @@ export async function runStatus(
     error,
     timestamp,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatStatusTable(report) + "\n");
     if (status === "offline") {

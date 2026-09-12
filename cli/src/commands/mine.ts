@@ -18,6 +18,7 @@ import chalk from "chalk";
 import Table from "cli-table3";
 import { HttpClient, AuthError } from "../http/client.js";
 import { NotLoggedInError } from "./dashboard.js";
+import { formatStructured } from "../output/format.js";
 
 // Re-exported so callers (and tests) can route login-required failures to
 // the documented exit code without depending on the dashboard module.
@@ -59,7 +60,7 @@ export interface MineReport {
   tasks: MyTaskRecord[];
 }
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export const MINE_DEFAULT_FIELDS = [
   "id",
@@ -137,8 +138,9 @@ export async function runMine(opts: RunMineOptions): Promise<MineReport> {
     tasks,
   };
 
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatMineTable(report) + "\n");
   }

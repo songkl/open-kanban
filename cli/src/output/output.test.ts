@@ -27,6 +27,8 @@ import {
   emitRecordReport,
   emitReport,
   formatJson,
+  formatStructured,
+  formatYaml,
   normalizeFields,
   projectFields,
   reportNotFound,
@@ -406,5 +408,176 @@ describe("table renderers", () => {
     const labelFor = makeLabelFor({ x: "y" });
     expect(labelFor("x")).toBe("y");
     expect(labelFor("z")).toBe("z");
+  });
+});
+
+describe("formatYaml", () => {
+  it("serialises objects as YAML with a trailing newline", () => {
+    const out = formatYaml({ apiUrl: "http://x", boards: [{ id: "b1" }] });
+    expect(out.endsWith("\n")).toBe(true);
+    expect(out).toContain("apiUrl: http://x");
+    expect(out).toContain("boards:");
+    expect(out).toContain("id: b1");
+  });
+
+  it("serialises arrays at the top level", () => {
+    const out = formatYaml([{ id: "a" }, { id: "b" }]);
+    expect(out).toContain("- id: a");
+    expect(out).toContain("- id: b");
+  });
+
+  it("falls back to a placeholder when the payload cannot be serialised", () => {
+    const a: Record<string, unknown> = {};
+    a.self = a;
+    const out = formatYaml(a);
+    expect(typeof out).toBe("string");
+  });
+});
+
+describe("formatStructured", () => {
+  it("returns JSON for the json format", () => {
+    const out = formatStructured({ a: 1 }, "json");
+    expect(JSON.parse(out.trim())).toEqual({ a: 1 });
+  });
+
+  it("returns YAML for the yaml format", () => {
+    const out = formatStructured({ a: 1 }, "yaml");
+    expect(out).toContain("a: 1");
+  });
+
+  it("returns an empty string for table format (callers render their own table)", () => {
+    expect(formatStructured({ a: 1 }, "table")).toBe("");
+  });
+});
+
+describe("resolveOutputFormat (extended)", () => {
+  it("recognises yaml / yml as the yaml format", () => {
+    expect(resolveOutputFormat("yaml")).toBe("yaml");
+    expect(resolveOutputFormat("YAML")).toBe("yaml");
+    expect(resolveOutputFormat("yml")).toBe("yaml");
+    expect(resolveOutputFormat("  Yaml  ")).toBe("yaml");
+  });
+});
+
+describe("snapshot-style table output", () => {
+  // These tests pin down the *exact* bytes the table renderer emits so
+  // that future formatting tweaks surface as a test diff. The colour
+  // palette is forced off so the assertions don't depend on TTY detection.
+  const palette = createPalette({ forced: "off" });
+
+  it("renderListTable matches the canonical 2-row layout", () => {
+    const out = renderListTable({
+      title: "Boards",
+      apiUrl: "http://x",
+      fields: ["id", "name"],
+      rows: [
+        { id: "b1", name: "Alpha" },
+        { id: "b2", name: "Beta" },
+      ],
+      renderField: (r, f) => String((r as Record<string, unknown>)[f] ?? ""),
+      palette,
+    });
+    expect(out).toMatchInlineSnapshot(`
+      "Boards  http://x
+      ┌────┬───────┐
+      │ id │ name  │
+      ├────┼───────┤
+      │ b1 │ Alpha │
+      ├────┼───────┤
+      │ b2 │ Beta  │
+      └────┴───────┘"
+    `);
+  });
+
+  it("renderListTable renders the empty-state placeholder without a grid", () => {
+    const out = renderListTable({
+      title: "Boards",
+      apiUrl: "http://x",
+      emptyMessage: "no boards",
+      fields: ["id"],
+      rows: [],
+      renderField: () => "",
+      palette,
+    });
+    expect(out).toMatchInlineSnapshot(`
+      "Boards  http://x
+        no boards"
+    `);
+  });
+
+  it("renderRecordTable matches the canonical key/value layout", () => {
+    const out = renderRecordTable({
+      title: "Board",
+      apiUrl: "http://x",
+      fields: ["id", "name"],
+      values: { id: "b1", name: "Alpha" },
+      renderField: (_k, v) => String(v ?? ""),
+      palette,
+    });
+    expect(out).toMatchInlineSnapshot(`
+      "Board  http://x
+        id: b1
+        name: Alpha"
+    `);
+  });
+
+  it("emitReport writes the JSON snapshot when format=json", () => {
+    const { io, read } = makeIo();
+    const ctx: CommandContext = {
+      apiUrl: "http://x",
+      format: "json",
+      io,
+      palette: createPalette({ forced: "off" }),
+    };
+    emitReport(
+      { apiUrl: "http://x", items: [{ id: "b1" }] },
+      ctx,
+      () => "should not be called"
+    );
+    const expected = JSON.stringify(
+      { apiUrl: "http://x", items: [{ id: "b1" }] },
+      null,
+      2
+    );
+    expect(read().stdout).toBe(expected + "\n");
+  });
+
+  it("emitReport writes the YAML snapshot when format=yaml", () => {
+    const { io, read } = makeIo();
+    const ctx: CommandContext = {
+      apiUrl: "http://x",
+      format: "yaml",
+      io,
+      palette: createPalette({ forced: "off" }),
+    };
+    emitReport(
+      { apiUrl: "http://x", items: [{ id: "b1" }] },
+      ctx,
+      () => "should not be called"
+    );
+    const expected =
+      "apiUrl: http://x\nitems:\n  - id: b1\n";
+    const out = read().stdout;
+    // The `yaml` package adds a trailing newline before the document-end
+    // marker; trim before comparing so the assertion is robust against
+    // formatting tweaks in the dependency.
+    expect(out.trimEnd()).toBe(expected.trimEnd());
+    expect(out.endsWith("\n")).toBe(true);
+  });
+
+  it("emitReport falls back to the table renderer when format=table", () => {
+    const { io, read } = makeIo();
+    const ctx: CommandContext = {
+      apiUrl: "http://x",
+      format: "table",
+      io,
+      palette: createPalette({ forced: "off" }),
+    };
+    emitReport(
+      { apiUrl: "http://x" },
+      ctx,
+      (r, _c) => `header:${r.apiUrl}`
+    );
+    expect(read().stdout).toBe("header:http://x\n");
   });
 });

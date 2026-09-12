@@ -26,8 +26,9 @@ import { Readable } from "node:stream";
 import { HttpClient, AuthError, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
+import { formatStructured } from "../output/format.js";
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface CommentRecord {
   id?: string;
@@ -125,8 +126,9 @@ export async function runCommentsAdd(
     throw await mapAuthError(err, stderr);
   }
   const result: CommentResult = { apiUrl, comment };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(
       `${chalk.green("Added comment")} ${comment.id ?? ""} to task ${trimmedId}\n`
@@ -177,8 +179,9 @@ export async function runCommentsList(
     taskId: trimmedId,
     comments,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatCommentsTable(report) + "\n");
   }

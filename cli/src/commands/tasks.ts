@@ -25,6 +25,7 @@ import Table from "cli-table3";
 import { HttpClient, AuthError, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
+import { formatStructured } from "../output/format.js";
 
 export interface TaskRecord {
   id?: string;
@@ -81,7 +82,7 @@ export interface DeleteResult {
   success: boolean;
 }
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export const TASKS_LIST_DEFAULT_FIELDS = [
   "id",
@@ -375,8 +376,9 @@ export async function runTasksList(
     tasks: projected,
   };
 
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatTasksTable(report, opts) + "\n");
   }
@@ -537,8 +539,9 @@ export async function runTaskGet(
     throw err;
   }
   const report: TaskReport = { apiUrl, task };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatTaskTable(report) + "\n");
   }
@@ -671,8 +674,9 @@ export async function runTaskCreate(
     throw await mapAuthError(err, stderr);
   }
   const report: TaskReport = { apiUrl, task };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatTaskTable(report) + "\n");
   }
@@ -755,8 +759,9 @@ export async function runTaskUpdate(
     throw await mapAuthError(err, stderr);
   }
   const report: TaskReport = { apiUrl, task };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatTaskTable(report) + "\n");
   }
@@ -792,8 +797,9 @@ export async function runTaskDelete(
     throw await mapAuthError(err, stderr);
   }
   const result: DeleteResult = { apiUrl, id, success: true };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(chalk.green(`Deleted task ${id}\n`));
   }
@@ -828,8 +834,9 @@ export async function runTaskComplete(
     throw await mapAuthError(err, stderr);
   }
   const report: TaskReport = { apiUrl, task };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatTaskTable(report) + "\n");
   }

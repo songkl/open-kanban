@@ -31,8 +31,9 @@ import Table from "cli-table3";
 import { HttpClient, AuthError, NotFoundError } from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
+import { formatStructured } from "../output/format.js";
 
-export type OutputFormat = "table" | "json";
+export type OutputFormat = "table" | "json" | "yaml";
 
 export interface SubtaskRecord {
   id?: string;
@@ -146,8 +147,9 @@ export async function runSubtasksList(
     taskId: trimmedId,
     subtasks,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(report, null, 2) + "\n");
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(formatSubtasksTable(report) + "\n");
   }
@@ -191,8 +193,9 @@ export async function runSubtasksCreate(
     throw await mapAuthError(err, stderr);
   }
   const result: SubtaskResult = { apiUrl, subtask };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(
       `${chalk.green("Created subtask")} ${subtask.id ?? ""} on task ${trimmedId}\n`
@@ -251,8 +254,9 @@ export async function runSubtasksUpdate(
     throw await mapAuthError(err, stderr);
   }
   const result: SubtaskResult = { apiUrl, subtask };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(
       `${chalk.green("Updated subtask")} ${subtask.id ?? trimmedId}\n`
@@ -293,8 +297,9 @@ export async function runSubtasksDelete(
     id: trimmedId,
     success: true,
   };
-  if (format === "json") {
-    stdout.write(JSON.stringify(result, null, 2) + "\n");
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
   } else {
     stdout.write(`${chalk.green("Deleted subtask")} ${trimmedId}\n`);
   }
