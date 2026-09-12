@@ -1,12 +1,13 @@
-// Token store for the MCP server's OAuth-managed credentials.
+// Token store for the MCP server / CLI OAuth-managed credentials.
 //
 // Persistence strategy:
-// - Default: encrypted file at ~/.config/kanban-mcp/credentials.json
-//   keyed by API URL so multiple kanban instances are isolated.
+// - Default: encrypted file at $XDG_CONFIG_HOME/<appName>/credentials-<url>.json
+//   (defaults to ~/.config/kanban-mcp/credentials-<url>.json when appName is
+//   omitted) keyed by API URL so multiple kanban instances are isolated.
 // - The file is written with mode 0600. The encryption key is derived from
-//   a machine-local secret (the kanban-mcp binary location + hostname)
-//   using PBKDF2. This is best-effort protection at rest; the real security
-//   boundary is the OAuth access token's short TTL.
+//   a machine-local secret (the binary location + hostname) using PBKDF2.
+//   This is best-effort protection at rest; the real security boundary is
+//   the OAuth access token's short TTL.
 // - No keytar dependency by default. A future enhancement can swap the
 //   SecretProvider to use the OS keychain transparently.
 
@@ -18,6 +19,11 @@ import { hostname } from "node:os";
 export interface StoredCredentials {
   apiUrl: string;
   clientId: string;
+  // clientName records which registered client_name the credentials were
+  // issued for (e.g. "open-kanban-mcp" or "open-kanban-cli"). The OAuth
+  // server uses it in audit logs so operators can tell which tool made
+  // a given call.
+  clientName?: string;
   accessToken?: string;
   refreshToken?: string;
   accessExpiresAt?: number;
@@ -95,12 +101,14 @@ function deriveKey(saltB64: string): Buffer {
   return pbkdf2Sync(localSecret, Buffer.from(saltB64, "base64"), 100_000, 32, "sha256");
 }
 
-// DefaultFilePath resolves to $XDG_CONFIG_HOME/kanban-mcp/credentials.json
-// (or ~/.config/kanban-mcp/credentials.json when XDG_CONFIG_HOME is unset).
-export function defaultFilePath(apiUrl: string): string {
+// DefaultFilePath resolves to $XDG_CONFIG_HOME/<appName>/credentials-<url>.json
+// (or ~/.config/<appName>/credentials-<url>.json when XDG_CONFIG_HOME is unset).
+// The appName lets the CLI and MCP server keep their credential stores in
+// separate directories so they register and refresh as distinct clients.
+export function defaultFilePath(apiUrl: string, appName: string = "kanban-mcp"): string {
   const safe = apiUrl.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
   const base = process.env.XDG_CONFIG_HOME || join(process.env.HOME || "~", ".config");
-  return join(base, "kanban-mcp", `credentials-${safe}.json`);
+  return join(base, appName, `credentials-${safe}.json`);
 }
 
 // Make the unused scryptSync import intentional (re-export so tree-shaking does

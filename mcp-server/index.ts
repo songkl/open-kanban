@@ -68,7 +68,7 @@ async function bootstrapAuth(): Promise<void> {
     return;
   }
   try {
-    const client = await OAuthClient.fromConfig({ apiUrl });
+    const client = await OAuthClient.fromConfig({ apiUrl, clientName: "open-kanban-mcp", appName: "kanban-mcp" });
     const creds = client.loadCredentials();
     if (creds?.accessToken || creds?.refreshToken) {
       setOAuthClient(client);
@@ -78,6 +78,8 @@ async function bootstrapAuth(): Promise<void> {
     // the user via the MCP "logging" facility when wired up.
     await client.authorizeInteractive({
       apiUrl,
+      clientName: "open-kanban-mcp",
+      appName: "kanban-mcp",
       onPrompt: async (poll) => {
         process.stderr.write(
           `\n[kanban-mcp] OAuth authorization required\n` +

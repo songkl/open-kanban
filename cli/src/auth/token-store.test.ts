@@ -1,0 +1,1 @@
+../../../mcp-server/src/auth/token-store.test.ts

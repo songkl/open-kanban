@@ -23,7 +23,15 @@ import type {
 
 export interface AuthorizeOptions {
   apiUrl: string;
+  // clientName is the value sent to the OAuth server as `client_name` during
+  // dynamic client registration. The server records it in audit logs so it
+  // can distinguish calls made by the MCP server vs the CLI. Defaults to
+  // "open-kanban-mcp" for backwards compatibility.
   clientName?: string;
+  // appName controls the directory under XDG_CONFIG_HOME where credentials
+  // are persisted (via defaultFilePath). Defaults to "kanban-mcp"; the CLI
+  // passes "kanban-cli" so its credentials stay separate from the MCP server.
+  appName?: string;
   scope?: string;
   onPrompt?: (poll: TrackedPoll) => Promise<"approve" | "deny">;
   onPoll?: (outcome: PollOutcome) => void;
@@ -31,6 +39,9 @@ export interface AuthorizeOptions {
   // sleepFn is injectable for tests; defaults to a real setTimeout.
   sleepFn?: (ms: number) => Promise<void>;
 }
+
+const DEFAULT_CLIENT_NAME = "open-kanban-mcp";
+const DEFAULT_APP_NAME = "kanban-mcp";
 
 export class OAuthClient {
   constructor(
@@ -41,7 +52,8 @@ export class OAuthClient {
 
   static async fromConfig(opts: AuthorizeOptions): Promise<OAuthClient> {
     const metadata = await discover(opts.apiUrl);
-    const provider = opts.secretProvider ?? new FileSecretProvider(defaultFilePath(opts.apiUrl));
+    const appName = opts.appName ?? DEFAULT_APP_NAME;
+    const provider = opts.secretProvider ?? new FileSecretProvider(defaultFilePath(opts.apiUrl, appName));
     return new OAuthClient(opts.apiUrl, metadata, provider);
   }
 
@@ -52,11 +64,12 @@ export class OAuthClient {
     return stored;
   }
 
-  async ensureRegistered(): Promise<StoredCredentials> {
+  async ensureRegistered(opts: AuthorizeOptions = { apiUrl: this.apiUrl }): Promise<StoredCredentials> {
     const existing = this.loadCredentials();
     if (existing?.clientId) return existing;
+    const clientName = opts.clientName ?? DEFAULT_CLIENT_NAME;
     const request: RegisterRequest = {
-      client_name: "open-kanban-mcp",
+      client_name: clientName,
       grant_types: ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
       token_endpoint_auth_method: "none",
       redirect_uris: [],
@@ -66,6 +79,7 @@ export class OAuthClient {
     const stored: StoredCredentials = {
       apiUrl: this.apiUrl,
       clientId: reg.client_id,
+      clientName,
       scope: reg.scope
     };
     this.secretProvider.write(stored);
@@ -73,7 +87,7 @@ export class OAuthClient {
   }
 
   async authorizeInteractive(opts: AuthorizeOptions): Promise<TokenResponse> {
-    const creds = await this.ensureRegistered();
+    const creds = await this.ensureRegistered(opts);
     const scope = opts.scope || creds.scope || this.metadata.scopes_supported?.join(" ") || "kanban:read";
     const poll = await requestDeviceCode(this.metadata, creds.clientId, scope);
     if (opts.onPrompt) {
@@ -115,9 +129,11 @@ export class OAuthClient {
       }
       if (res.ok) {
         const tok = (await res.json()) as TokenResponse;
+        const stored = this.loadCredentials();
         this.secretProvider.write({
           apiUrl: this.apiUrl,
           clientId,
+          clientName: stored?.clientName,
           accessToken: tok.access_token,
           refreshToken: tok.refresh_token,
           accessExpiresAt: Date.now() + tok.expires_in * 1000,
@@ -168,6 +184,7 @@ export class OAuthClient {
     this.secretProvider.write({
       apiUrl: this.apiUrl,
       clientId: stored.clientId,
+      clientName: stored.clientName,
       accessToken: tok.access_token,
       refreshToken: tok.refresh_token ?? stored.refreshToken,
       accessExpiresAt: Date.now() + tok.expires_in * 1000,

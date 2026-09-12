@@ -11,6 +11,8 @@ frontend/dist/
 frontend/dist-ssr/
 mcp-server/dist/
 mcp-server/node_modules/
+cli/dist/
+cli/node_modules/
 
 # Salt file (in user home directory)
 .openkanban/
