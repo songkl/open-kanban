@@ -161,18 +161,19 @@ func TestSQLiteMigrationsAllowNewPermissionActions(t *testing.T) {
 	}
 }
 
-// TestSQLiteMigrationsTaskRunsUpDown exercises migration
-// 004_task_runs end-to-end on SQLite. It verifies the new
-// task_runs table + its three indexes come up cleanly, that the
-// schema matches the §3.3 contract (PK is task_id, FKs point at
-// tasks/users, nullable finished_at / exit_code / error), and
-// that the migration is fully reversible: stepping back down to 3
-// drops the table, and re-running up brings it back without
-// errors. The MySQL migration is structurally identical to the
-// SQLite one and is covered separately by
-// TestMySQLMigrationsHaveUtf8Mb4Collation (charset / ENGINE) plus
-// the integration test that runs the full suite against a live
-// MySQL instance.
+// TestSQLiteMigrationsTaskRunsUpDown exercises the task_runs
+// migrations end-to-end on SQLite. It verifies the table + its
+// indexes come up cleanly, that the schema matches the §3.3
+// contract (PK is task_id, FKs point at tasks/users, nullable
+// finished_at / exit_code / error), and that the migrations are
+// fully reversible: stepping back down past 006 (history
+// indexes), 005 (FK relaxation) and 004 (table creation) drops
+// the indexes and table, and re-running up brings everything
+// back without errors. The MySQL migration is structurally
+// identical to the SQLite one and is covered separately by
+// TestMySQLMigrationsHaveUtf8Mb4Collation (charset / ENGINE)
+// plus the integration test that runs the full suite against a
+// live MySQL instance.
 func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
 	if err != nil {
@@ -195,8 +196,10 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 		t.Fatalf("failed to create migrate instance: %v", err)
 	}
 
-	// 1. Apply every migration up to the tip (004). After this,
-	//    task_runs must exist with the expected indexes.
+	// 1. Apply every migration up to the tip (006). After this,
+	//    task_runs must exist with the indexes from both 004 and
+	//    006 — the latter are the history indexes the
+	//    /api/v1/runs/history endpoint relies on (s-1106).
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("initial up: %v", err)
 	}
@@ -211,7 +214,13 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 		t.Fatalf("expected task_runs table after up, got count=%d", taskRunsFound)
 	}
 
-	for _, idx := range []string{"idx_task_runs_expires", "idx_task_runs_runner", "idx_task_runs_status"} {
+	for _, idx := range []string{
+		"idx_task_runs_expires",
+		"idx_task_runs_runner",
+		"idx_task_runs_status",
+		"idx_task_runs_finished_at",
+		"idx_task_runs_status_finished_at",
+	} {
 		var c int
 		if err := db.QueryRow(
 			"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", idx,
@@ -225,15 +234,45 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 	}
 
 	// 2. Insert a minimal but FK-valid row, then drop the table
-	//    via the down migration to prove the down SQL works and
+	//    via the down migrations to prove the down SQL works and
 	//    that the FKs / indexes line up with §3.3.
 	//
-	//    Migration 005 (relax task_runs.runner_id FK) sits on top
-	//    of the task_runs lifecycle, so "drop task_runs via the
-	//    down migration" means rolling past both 005 and 004. We
-	//    assert each rollback step individually so a regression in
-	//    either migration surfaces with its own failing assertion.
+	//    "Drop task_runs via the down migration" means rolling
+	//    past 006, 005 and 004. We assert each rollback step
+	//    individually so a regression in any of the three
+	//    migrations surfaces with its own failing assertion:
+	//
+	//      step -1: 006 (history indexes) — task_runs untouched
+	//      step -2: 005 (FK relaxation)   — task_runs untouched
+	//      step -3: 004 (table creation)  — task_runs dropped
 	seedTaskRun(t, db)
+
+	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("down to 005: %v", err)
+	}
+	// After rolling back 006, task_runs must still exist and
+	// the 004 indexes must still be in place. The 006 history
+	// indexes should be gone.
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_runs'",
+	).Scan(&taskRunsFound); err != nil {
+		t.Fatalf("check task_runs after rolling back 006: %v", err)
+	}
+	if taskRunsFound != 1 {
+		t.Fatalf("expected task_runs table after rolling back 006, got count=%d", taskRunsFound)
+	}
+	for _, idx := range []string{"idx_task_runs_finished_at", "idx_task_runs_status_finished_at"} {
+		var c int
+		if err := db.QueryRow(
+			"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", idx,
+		).Scan(&c); err != nil {
+			t.Errorf("check residual index %s after rolling back 006: %v", idx, err)
+			continue
+		}
+		if c != 0 {
+			t.Errorf("expected index %s to be dropped after rolling back 006, got count=%d", idx, c)
+		}
+	}
 
 	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("down to 004: %v", err)
