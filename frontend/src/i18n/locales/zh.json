@@ -221,6 +221,30 @@
     "archivedAt": "归档：",
     "recover": "恢复"
   },
+  "runs": {
+    "title": "运行历史",
+    "empty": "暂无已结束的运行。当 Runner 完成（completed / failed / released）后将显示在此处。",
+    "emptyFiltered": "没有匹配当前筛选条件的运行。",
+    "loading": "正在加载运行历史...",
+    "loadFailed": "加载运行历史失败",
+    "retry": "重试",
+    "refresh": "刷新",
+    "searchPlaceholder": "搜索任务标题 / ID / Runner",
+    "runner": "Runner",
+    "status": "状态",
+    "statusCompleted": "已完成",
+    "statusFailed": "失败",
+    "statusReleased": "已释放",
+    "count": "{{shown}} / {{total}} 条运行",
+    "column": {
+      "time": "时间",
+      "taskTitle": "任务标题",
+      "runner": "Runner",
+      "status": "状态",
+      "duration": "耗时",
+      "error": "错误信息"
+    }
+  },
   "completed": {
     "title": "已完成管理",
     "empty": "暂无已完成任务",

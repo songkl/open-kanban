@@ -221,6 +221,30 @@
     "archivedAt": "Archived:",
     "recover": "Recover"
   },
+  "runs": {
+    "title": "Run History",
+    "empty": "No terminal runs yet. Once a runner finishes (completed / failed / released), it will appear here.",
+    "emptyFiltered": "No runs match the current filters.",
+    "loading": "Loading run history...",
+    "loadFailed": "Failed to load run history.",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search task title / id / runner",
+    "runner": "Runner",
+    "status": "Status",
+    "statusCompleted": "Completed",
+    "statusFailed": "Failed",
+    "statusReleased": "Released",
+    "count": "{{shown}} / {{total}} runs",
+    "column": {
+      "time": "Time",
+      "taskTitle": "Task Title",
+      "runner": "Runner",
+      "status": "Status",
+      "duration": "Duration",
+      "error": "Error"
+    }
+  },
   "completed": {
     "title": "Completed Management",
     "empty": "No completed tasks",

@@ -320,11 +320,13 @@ export const commentsApi = {
     }),
 };
 
-// Runs API — see devDoc/CLI_RUNNER_PLAN_2026-09-12.md §3.4.
+// Runs API — see devDoc/CLI_RUNNER_PLAN_2026-09-12.md §3.4 and §9.
 // `getByTask` returns the live `task_runs` row (claimed or running) or
 // `null` when the row has been cleaned up by finish() / reaper. 401s
 // bubble up unchanged so the global handler can redirect to login;
 // network errors are surfaced as ApiError so the hook can stop polling.
+// `list` hits `GET /api/v1/runs/history` and returns the terminal rows
+// (completed / failed / released) that power the /runs page.
 export const runsApi = {
   getByTask: async (taskId: string, signal?: AbortSignal): Promise<TaskRun | null> => {
     try {
@@ -336,6 +338,22 @@ export const runsApi = {
       if (err instanceof ApiError && err.status === 404) return null;
       throw err;
     }
+  },
+  list: async (params?: {
+    runnerId?: string;
+    status?: 'completed' | 'failed' | 'released';
+    taskId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<TaskRun[]> => {
+    const query = new URLSearchParams();
+    if (params?.runnerId) query.set('runnerId', params.runnerId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.taskId) query.set('taskId', params.taskId);
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return fetchApi<TaskRun[]>(`runs/history${qs ? `?${qs}` : ''}`);
   },
 };
 
