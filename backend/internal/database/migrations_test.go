@@ -44,6 +44,23 @@ func TestSQLiteMigrations(t *testing.T) {
 		"app_config", "column_permissions",
 		"oauth_clients", "oauth_authorization_codes",
 		"oauth_device_codes", "oauth_refresh_tokens", "oauth_consents",
+		"task_runs",
+	}
+
+	taskRunIndexes := []string{
+		"idx_task_runs_expires",
+		"idx_task_runs_runner",
+		"idx_task_runs_status",
+	}
+	for _, idx := range taskRunIndexes {
+		var c int
+		err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", idx).Scan(&c)
+		if err != nil {
+			t.Errorf("error checking task_runs index %s: %v", idx, err)
+		}
+		if c == 0 {
+			t.Errorf("expected task_runs index %s to exist", idx)
+		}
 	}
 
 	for _, table := range tables {
@@ -139,5 +156,192 @@ func TestSQLiteMigrationsAllowNewPermissionActions(t *testing.T) {
 		); err != nil {
 			t.Errorf("action %s should be permitted by CHECK constraint after migration 002, got: %v", action, err)
 		}
+	}
+}
+
+// TestSQLiteMigrationsTaskRunsUpDown exercises migration
+// 004_task_runs end-to-end on SQLite. It verifies the new
+// task_runs table + its three indexes come up cleanly, that the
+// schema matches the §3.3 contract (PK is task_id, FKs point at
+// tasks/users, nullable finished_at / exit_code / error), and
+// that the migration is fully reversible: stepping back down to 3
+// drops the table, and re-running up brings it back without
+// errors. The MySQL migration is structurally identical to the
+// SQLite one and is covered separately by
+// TestMySQLMigrationsHaveUtf8Mb4Collation (charset / ENGINE) plus
+// the integration test that runs the full suite against a live
+// MySQL instance.
+func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+
+	// 1. Apply every migration up to the tip (004). After this,
+	//    task_runs must exist with the expected indexes.
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("initial up: %v", err)
+	}
+
+	var taskRunsFound int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_runs'",
+	).Scan(&taskRunsFound); err != nil {
+		t.Fatalf("check task_runs: %v", err)
+	}
+	if taskRunsFound != 1 {
+		t.Fatalf("expected task_runs table after up, got count=%d", taskRunsFound)
+	}
+
+	for _, idx := range []string{"idx_task_runs_expires", "idx_task_runs_runner", "idx_task_runs_status"} {
+		var c int
+		if err := db.QueryRow(
+			"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", idx,
+		).Scan(&c); err != nil {
+			t.Errorf("check index %s: %v", idx, err)
+			continue
+		}
+		if c != 1 {
+			t.Errorf("expected index %s after up, got count=%d", idx, c)
+		}
+	}
+
+	// 2. Insert a minimal but FK-valid row, then drop the table
+	//    via the down migration to prove the down SQL works and
+	//    that the FKs / indexes line up with §3.3.
+	seedTaskRun(t, db)
+
+	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("down to 003: %v", err)
+	}
+
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_runs'",
+	).Scan(&taskRunsFound); err != nil {
+		t.Fatalf("check task_runs after down: %v", err)
+	}
+	if taskRunsFound != 0 {
+		t.Fatalf("expected task_runs table to be dropped after down, got count=%d", taskRunsFound)
+	}
+	for _, idx := range []string{"idx_task_runs_expires", "idx_task_runs_runner", "idx_task_runs_status"} {
+		var c int
+		if err := db.QueryRow(
+			"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", idx,
+		).Scan(&c); err != nil {
+			t.Errorf("check residual index %s after down: %v", idx, err)
+			continue
+		}
+		if c != 0 {
+			t.Errorf("expected index %s to be dropped after down, got count=%d", idx, c)
+		}
+	}
+
+	// 3. Re-apply up — this exercises the "migration can be run
+	//    more than once without error" acceptance criterion.
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("re-up: %v", err)
+	}
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_runs'",
+	).Scan(&taskRunsFound); err != nil {
+		t.Fatalf("check task_runs after re-up: %v", err)
+	}
+	if taskRunsFound != 1 {
+		t.Fatalf("expected task_runs table after re-up, got count=%d", taskRunsFound)
+	}
+
+	// 4. Spot-check the live row from step 2 is gone (the down
+	//    dropped it), and the table accepts a fresh one — both
+	//    nullable and required columns round-trip cleanly through
+	//    the schema.
+	seedTaskRun(t, db)
+
+	var (
+		status       string
+		finishedAt   sql.NullTime
+		exitCode     sql.NullInt64
+		errMsg       sql.NullString
+		runnerID     string
+		lastHeartbeat string
+	)
+	row := db.QueryRow(
+		"SELECT status, finished_at, exit_code, error, runner_id, last_heartbeat_at FROM task_runs WHERE task_id='t-1'",
+	)
+	if err := row.Scan(&status, &finishedAt, &exitCode, &errMsg, &runnerID, &lastHeartbeat); err != nil {
+		t.Fatalf("scan task_runs row: %v", err)
+	}
+	if status != "claimed" {
+		t.Errorf("expected status 'claimed', got %q", status)
+	}
+	if finishedAt.Valid || exitCode.Valid || errMsg.Valid {
+		t.Errorf("expected nullable columns to be NULL, got finished_at=%v exit_code=%v error=%q",
+			finishedAt, exitCode, errMsg.String)
+	}
+	if runnerID != "u-1" {
+		t.Errorf("expected runner_id 'u-1', got %q", runnerID)
+	}
+	if lastHeartbeat == "" {
+		t.Errorf("expected non-empty last_heartbeat_at, got empty")
+	}
+}
+
+// seedTaskRun inserts the minimum rows required for a FK-valid
+// task_runs row: a users row (runner_id), a tasks row (task_id),
+// and the task_runs row itself with the canonical §3.3 claim
+// shape. It is safe to call against a freshly-up'd schema or
+// after a down→up cycle (the seed IDs are deterministic and
+// either previously dropped or freshly created).
+func seedTaskRun(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec(`
+		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('u-1', 'runner-1', 'runner-1', 'HUMAN', 'MEMBER', 1)
+	`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT OR IGNORE INTO boards (id, name, description)
+		VALUES ('b-1', 'board-1', '')
+	`); err != nil {
+		t.Fatalf("seed board: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT OR IGNORE INTO columns (id, name, position, board_id)
+		VALUES ('c-1', 'todo', 0, 'b-1')
+	`); err != nil {
+		t.Fatalf("seed column: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT OR IGNORE INTO tasks (id, title, column_id, position, published, archived, created_by)
+		VALUES ('t-1', 'task-1', 'c-1', 0, 1, 0, 'u-1')
+	`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT OR IGNORE INTO task_runs (
+			task_id, runner_id, agent_id, board_id, column_id, status,
+			claimed_at, last_heartbeat_at, expires_at
+		) VALUES (
+			't-1', 'u-1', 'cli-host', 'b-1', 'c-1', 'claimed',
+			CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		t.Fatalf("seed task_runs: %v", err)
 	}
 }

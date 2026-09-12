@@ -25,6 +25,13 @@ var VersionMigrationMap = []VersionMigration{
 	// the new "owner can manage permissions" branch in
 	// SetPermission / DeletePermission have a real owner to act on.
 	{Version: "0.3.0", From: 1, To: 3},
+	// 0.4.0 added migration 004 to introduce the task_runs table
+	// (CLI runner claim/heartbeat lock — see
+	// devDoc/CLI_RUNNER_PLAN_2026-09-12.md §3.3). The plan's §7 lists
+	// the upstream CLI work as a sibling change in the same release;
+	// only the schema lands in this tag, the API/handler layer ships
+	// under a follow-up.
+	{Version: "0.4.0", From: 1, To: 4},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {
