@@ -10,10 +10,12 @@ import {
   authExitCodeForError,
   runLogin,
   runLogout,
-  runStatus,
+  runStatus as runAuthStatus,
   runWhoami,
 } from "./src/auth/commands.js";
 import { exitCodeForError } from "./src/http/client.js";
+import { runStatus } from "./src/commands/status.js";
+import { runDashboard } from "./src/commands/dashboard.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -76,7 +78,7 @@ authCmd
     const opts = program.opts<{ apiUrl: string; profile?: string }>();
     const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
     try {
-      await runStatus({ apiUrl: opts.apiUrl, profile: opts.profile }, { oauth });
+      await runAuthStatus({ apiUrl: opts.apiUrl, profile: opts.profile }, { oauth });
     } catch (err) {
       process.stderr.write(`${(err as Error).message}\n`);
       process.exit(authExitCodeForError(err));
@@ -116,6 +118,44 @@ authCmd
       // (4 not found, 5 server, 6 network). authExitCodeForError handles 2/3/6;
       // fall back to the http-layer mapping for everything else.
       process.exit(authExitCodeForError(err) === 1 ? exitCodeForError(err) : authExitCodeForError(err));
+    }
+  });
+
+program
+  .command("status")
+  .description("probe the Kanban API and report latency / boardsCount / apiUrl")
+  .action(async () => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    try {
+      await runStatus({
+        apiUrl: opts.apiUrl,
+        format: (opts.output === "json" ? "json" : "table"),
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(exitCodeForError(err));
+    }
+  });
+
+program
+  .command("dashboard")
+  .description("fetch GET /api/v1/dashboard/stats and print a tabular summary")
+  .action(async () => {
+    const opts = program.opts<{ apiUrl: string; profile?: string; output?: string }>();
+    const oauth = buildOAuthClient(opts.apiUrl, opts.profile);
+    const http = new HttpClient({ apiUrl: opts.apiUrl, profile: opts.profile });
+    http.attachOAuth(oauth);
+    try {
+      await runDashboard({
+        apiUrl: opts.apiUrl,
+        format: (opts.output === "json" ? "json" : "table"),
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(authExitCodeForError(err));
     }
   });
 
