@@ -1,0 +1,71 @@
+name: CLI Release
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  cli-publish:
+    name: Publish CLI to npm
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: cli/package-lock.json
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify dist/index.js is executable
+        run: |
+          head -1 dist/index.js | grep -q "^#!/usr/bin/env node" \
+            || (echo "Missing shebang in dist/index.js" && exit 1)
+          test -x dist/index.js \
+            || chmod +x dist/index.js
+
+      - name: Extract CLI version from tag
+        id: cli_version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#cli-v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Publishing open-kanban-cli@${VERSION}"
+
+      - name: Sync package.json version with tag
+        run: npm version "${{ steps.cli_version.outputs.version }}" --no-git-tag-version
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-dist-${{ steps.cli_version.outputs.version }}
+          path: cli/dist
+          if-no-files-found: error
+          retention-days: 30

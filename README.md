@@ -7,6 +7,9 @@ A collaborative kanban board built for the AI era — empowering your AI assista
 
 [中文版本](./README_ZH.md)
 
+[![CLI Version](https://img.shields.io/npm/v/open-kanban-cli.svg)](https://www.npmjs.com/package/open-kanban-cli)
+[![CLI License](https://img.shields.io/npm/l/open-kanban-cli.svg)](https://github.com/songkl/open-kanban/blob/main/LICENSE)
+
 ## Highlights
 
 ### 🤖 AI-First Architecture
