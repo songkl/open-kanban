@@ -4,7 +4,7 @@
 > Task: `s-1082`
 > Parent context: `s-1061` (CLI project), `s-1060` (Runner CLI research)
 > Sub-tasks created in `s-1083`: `s-1084` … `s-1092`
-> Status: Plan approved — sub-tasks created and awaiting execution
+> Status: Plan executed — sub-tasks s-1084 … s-1092 merged to `main` (2026-09-12)
 
 ---
 
@@ -502,16 +502,16 @@ work in parallel after s-1084.
 
 ## 10. Definition of Done
 
-- [ ] All sub-tasks s-1084 … s-1092 merged to `main`.
-- [ ] `go test ./...` green.
-- [ ] `npm test` in `cli/` green.
-- [ ] `npm run build` produces a working `dist/index.js` with
+- [x] All sub-tasks s-1084 … s-1092 merged to `main`.
+- [x] `go test ./...` green.
+- [x] `npm test` in `cli/` green.
+- [x] `npm run build` produces a working `dist/index.js` with
       `kanban run --help` and a man page.
-- [ ] e2e test green in CI.
-- [ ] `cli/README.md` updated with a "Runner" section.
+- [x] e2e test green in CI.
+- [x] `cli/README.md` updated with a "Runner" section.
 - [ ] A short demo recorded: one terminal shows the runner, one shows
       the kanban UI updating live.
-- [ ] Migration `004` applied to the demo instance without downtime.
+- [x] Migration `004` applied to the demo instance without downtime.
 
 ---
 
