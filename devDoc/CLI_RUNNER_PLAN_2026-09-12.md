@@ -470,6 +470,34 @@ work in parallel after s-1084.
 3. **Run-history UI** — Defer to a follow-up? Or part of v1? Current plan:
    defer (s-1109 leaves a follow-up ticket stub).
 
+   **Follow-up ticket stub (s-1092 leaves this for s-1109):**
+
+   - **Title:** Build run-history page (CLI runner)
+   - **Acceptance criteria:**
+     1. New backend endpoint `GET /api/v1/runs?runnerId=…&status=…`
+        that returns the last N `task_runs` rows (default: 50) for the
+        caller's accessible boards, ordered by `last_heartbeat_at DESC`.
+        The current per-task `GET /api/v1/runs/:taskId` handler
+        already returns the row shape — extend it with a list variant
+        that joins `tasks.title` so the UI can render context inline.
+     2. New frontend page at `/runs` (registered in the existing
+        board/page route table) that lists failed / released runs from
+        the last 7 days with a "View task" link. Hooks into the same
+        WebSocket broadcast path the badge uses so the list updates
+        live when a runner finishes.
+     3. CLI surface: `kanban runs [--runner-id ID] [--status STATUS]
+        [--limit N]` for operators who want the same view in their
+        terminal without opening the web UI. Reuses the new
+        `runsApi.list(...)` so the page and the CLI never drift.
+   - **Out of scope for s-1109:** retention policy (how long to keep
+     `task_runs` rows after `finished_at`), bulk reaping controls, or
+     cross-runner correlation UI — those land as their own tickets once
+     operators have real data to drive the design.
+   - **References:**
+     - Plan §5 ("UI Touchpoints" — Run history row)
+     - Plan §9 ("Open Questions" — Run-history UI deferral)
+     - Plan §7 ("Execution Plan" — s-1109 placeholder row)
+
 ---
 
 ## 10. Definition of Done

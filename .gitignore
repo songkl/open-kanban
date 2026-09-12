@@ -52,6 +52,11 @@ kanban.env
 backend/kanban.env
 **/kanban.env
 
+# CLI runner — local override file (see devDoc/CLI_RUNNER_PLAN_2026-09-12.md
+# §2.1). Machine-local config that should never be committed; the project
+# shared config (.kanban-runner.yaml) is checked in.
+.kanban-runner.local.yaml
+
 .swarm/
 devDoc/*.md
 !devDoc/.gitkeep

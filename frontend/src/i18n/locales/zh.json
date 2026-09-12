@@ -614,7 +614,12 @@
     "moreSubtasks": "+{{count}} 更多",
     "completed": "已完成",
     "viewComments": "查看评论",
-    "selectTask": "选择任务"
+    "selectTask": "选择任务",
+    "runnerBadge": "🤖 {{runnerId}} · {{elapsed}}",
+    "runnerBadgeAria": "任务正由运行器 {{runnerId}} 处理，已运行 {{elapsed}}",
+    "runnerElapsedSeconds": "{{count}}秒",
+    "runnerElapsedMinutes": "{{count}}分",
+    "runnerElapsedHours": "{{count}}时"
   },
   "taskModal": {
     "justNow": "刚刚",

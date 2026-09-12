@@ -329,8 +329,8 @@ func TestClaimRun_HappyPath(t *testing.T) {
 	if resp.Run["status"] != "claimed" {
 		t.Errorf("expected run.status=claimed, got %v", resp.Run["status"])
 	}
-	if resp.Run["runnerId"] != "u-admin" {
-		t.Errorf("expected run.runnerId=u-admin, got %v", resp.Run["runnerId"])
+	if resp.Run["runnerId"] != "runner-A" {
+		t.Errorf("expected run.runnerId=runner-A (the wire-format runner id), got %v", resp.Run["runnerId"])
 	}
 	if resp.Run["columnId"] != "c-todo" {
 		t.Errorf("expected run.columnId=c-todo (snapshot), got %v", resp.Run["columnId"])

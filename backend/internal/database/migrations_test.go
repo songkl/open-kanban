@@ -225,7 +225,28 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 	// 2. Insert a minimal but FK-valid row, then drop the table
 	//    via the down migration to prove the down SQL works and
 	//    that the FKs / indexes line up with §3.3.
+	//
+	//    Migration 005 (relax task_runs.runner_id FK) sits on top
+	//    of the task_runs lifecycle, so "drop task_runs via the
+	//    down migration" means rolling past both 005 and 004. We
+	//    assert each rollback step individually so a regression in
+	//    either migration surfaces with its own failing assertion.
 	seedTaskRun(t, db)
+
+	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("down to 004: %v", err)
+	}
+	// After rolling back 005, task_runs must still exist (its
+	// schema hasn't been touched yet) and the runner_id FK to
+	// users.id should be back in force.
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='task_runs'",
+	).Scan(&taskRunsFound); err != nil {
+		t.Fatalf("check task_runs after rolling back 005: %v", err)
+	}
+	if taskRunsFound != 1 {
+		t.Fatalf("expected task_runs table after rolling back 005, got count=%d", taskRunsFound)
+	}
 
 	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("down to 003: %v", err)

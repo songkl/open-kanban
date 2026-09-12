@@ -1,4 +1,4 @@
-import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry } from '@/types/kanban';
+import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, TaskRun } from '@/types/kanban';
 import i18n from '@/i18n';
 
 export interface Permission {
@@ -318,6 +318,25 @@ export const commentsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+};
+
+// Runs API — see devDoc/CLI_RUNNER_PLAN_2026-09-12.md §3.4.
+// `getByTask` returns the live `task_runs` row (claimed or running) or
+// `null` when the row has been cleaned up by finish() / reaper. 401s
+// bubble up unchanged so the global handler can redirect to login;
+// network errors are surfaced as ApiError so the hook can stop polling.
+export const runsApi = {
+  getByTask: async (taskId: string, signal?: AbortSignal): Promise<TaskRun | null> => {
+    try {
+      return await fetchApi<TaskRun>(`runs/${encodeURIComponent(taskId)}`, {
+        skip401Handling: true,
+        signal,
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
 };
 
 // Subtasks API

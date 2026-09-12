@@ -114,14 +114,14 @@ export class ChildProcessSpawner implements ProcessSpawner {
   }
 
   spawn(opts: SpawnOptions): { process: AgentProcess; cleanup: () => void } {
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(opts.bin, opts.args, {
-        cwd: opts.cwd,
-        env: opts.env,
-        stdio: opts.pipeStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
-      });
-    } catch (err) {
+      let child: ReturnType<typeof spawn>;
+      try {
+        child = spawn(opts.bin, opts.args, {
+          cwd: opts.cwd,
+          env: opts.env,
+          stdio: opts.pipeStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
+        });
+      } catch (err) {
       const reason: AgentResult = {
         exitCode: null,
         signal: null,
@@ -173,6 +173,17 @@ export class ChildProcessSpawner implements ProcessSpawner {
         }
         stderrTruncated = true;
       });
+    }
+    // Drain stdout so the child's pipe buffer never fills up. The
+    // mock agents used in the e2e suite write nothing to stdout,
+    // but real-world agents (opencode, claude, cursor) do — and a
+    // full pipe would block the child until SIGTERM, hiding the
+    // actual exit reason from the loop. We discard the bytes
+    // because the plan's prompt rendering is via temp file / arg,
+    // never via stdout capture.
+    if (child.stdout) {
+      child.stdout.on("data", () => undefined);
+      child.stdout.resume();
     }
     if (opts.pipeStdin && child.stdin) {
       try {

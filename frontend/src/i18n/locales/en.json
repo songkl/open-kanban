@@ -614,7 +614,12 @@
     "moreSubtasks": "+{{count}} more",
     "completed": "Completed",
     "viewComments": "View comments",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "runnerBadge": "🤖 {{runnerId}} · {{elapsed}}",
+    "runnerBadgeAria": "Task is being processed by runner {{runnerId}} for {{elapsed}}",
+    "runnerElapsedSeconds": "{{count}}s",
+    "runnerElapsedMinutes": "{{count}}m",
+    "runnerElapsedHours": "{{count}}h"
   },
   "taskModal": {
     "justNow": "Just now",

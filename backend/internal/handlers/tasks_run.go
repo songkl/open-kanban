@@ -191,7 +191,14 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		claim, err := repo.ClaimRun(boardID, taskID, columnID, user.ID, req.AgentType, inProgressColumnID, lockTimeoutMs)
+		// Persist req.RunnerID (the stable runner identity the CLI
+		// generated, e.g. "host-pid-uuid") rather than user.ID so
+		// the heartbeat + finish round-trips can verify ownership
+		// against the same value the runner sends back. Using
+		// user.ID here would mean the runner's heartbeat is
+		// rejected with 409 the first time its own runnerId string
+		// doesn't happen to match the user record primary key.
+		claim, err := repo.ClaimRun(boardID, taskID, columnID, req.RunnerID, req.AgentType, inProgressColumnID, lockTimeoutMs)
 		if err != nil {
 			if err == repositories.ErrLockHeld {
 				// Transient — another runner beat us to this

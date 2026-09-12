@@ -21,6 +21,9 @@ vi.mock('react-i18next', () => ({
     },
     i18n: { language: 'en' },
   }),
+  // Required because TaskList -> TaskCard -> useTaskRun -> services/api
+  // pulls in src/i18n/index.ts which calls i18n.use(initReactI18next).
+  initReactI18next: { type: '3rdParty' },
 }));
 
 const mockColumn: ColumnType = {

@@ -54,6 +54,26 @@ export interface Task {
   };
 }
 
+/**
+ * TaskRun mirrors the server-side `task_runs` row (see
+ * `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §3.3 and
+ * `devDoc/CLI_RUNNER_OPENAPI_2026-09-12.yaml` §TaskRun). Only the
+ * `claimed` and `running` states are visible here — finished rows are
+ * deleted by the server, so a 404 from `/api/v1/runs/:taskId` is the
+ * "no active run" signal the UI uses to hide the badge.
+ */
+export interface TaskRun {
+  taskId: string;
+  runnerId: string;
+  agentId: string;
+  boardId: string;
+  columnId: string;
+  status: 'claimed' | 'running';
+  claimedAt: string;
+  lastHeartbeatAt: string;
+  expiresAt: string;
+}
+
 export interface Column {
   id: string;
   name: string;

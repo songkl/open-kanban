@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { Task } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
 import { UserAvatar } from './UserAvatar';
+import { useTaskRun } from '../hooks/useTaskRun';
 
 interface TaskCardProps {
   task: Task;
@@ -42,6 +43,54 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
+/**
+ * Format the elapsed time since `claimedAt` into a short human label
+ * (e.g. "12s", "3m", "1h"). Stays short on purpose — the badge has
+ * limited horizontal space on a task card.
+ */
+function formatRunElapsed(claimedAt: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  const startMs = new Date(claimedAt).getTime();
+  if (Number.isNaN(startMs)) return t('taskCard.runnerElapsedSeconds', { count: 0 });
+  const elapsedSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+  if (elapsedSec < 60) return t('taskCard.runnerElapsedSeconds', { count: elapsedSec });
+  if (elapsedSec < 3600) {
+    return t('taskCard.runnerElapsedMinutes', { count: Math.floor(elapsedSec / 60) });
+  }
+  return t('taskCard.runnerElapsedHours', { count: Math.floor(elapsedSec / 3600) });
+}
+
+/**
+ * RunnerBadge — small pill rendered on a task card while a CLI runner
+ * is processing it (see `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5).
+ * Refreshes the elapsed label every second so the running timer is
+ * accurate without re-querying the API on every tick.
+ */
+function RunnerBadge({ runnerId, label }: { runnerId: string; label: string }) {
+  const { t } = useTranslation();
+  // Re-render every second so the elapsed label stays accurate. The
+  // 1s cadence is intentional — finer granularity wastes CPU on every
+  // task card on the board; coarser granularity makes the badge feel
+  // stale.
+  const [, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const handle = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(handle);
+  }, []);
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700/50"
+      aria-label={t('taskCard.runnerBadgeAria', { runnerId, elapsed: label })}
+      title={label}
+      data-testid="runner-badge"
+    >
+      <span aria-hidden>🤖</span>
+      <span className="font-mono">{runnerId}</span>
+      <span aria-hidden>·</span>
+      <span>{label}</span>
+    </span>
+  );
+}
+
 export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
@@ -57,6 +106,11 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
     onConfirm: () => void;
     variant?: 'danger' | 'warning' | 'default';
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  // Poll for an in-flight CLI runner. The badge only renders when the
+  // server returns a live `task_runs` row (claimed or running); a 404
+  // flips `run` back to null and the badge disappears.
+  const { run } = useTaskRun(task?.id, { intervalMs: 5000 });
 
   const {
     attributes,
@@ -326,7 +380,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
         </div>
       )}
       <div className="flex items-center justify-between pl-3 pt-1 border-t border-zinc-100 dark:border-zinc-700/50">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {columnName === t('task.status.done') && (
             <span className="text-green-500" title={t('taskCard.completed')}>✓</span>
           )}
@@ -337,6 +391,12 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           >
             {task.priority === 'high' ? t('task.priority.high') : task.priority === 'medium' ? t('task.priority.medium') : t('task.priority.low')}
           </span>
+          {run && (
+            <RunnerBadge
+              runnerId={run.runnerId}
+              label={formatRunElapsed(run.claimedAt, t)}
+            />
+          )}
           {task.subtasks && task.subtasks.length > 0 && (
             <span className="text-xs text-zinc-400 dark:text-zinc-400">
               ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}

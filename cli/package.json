@@ -12,6 +12,8 @@
     "add-shebang": "echo '#!/usr/bin/env node' | cat - dist/index.js > temp.js && mv temp.js dist/index.js",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
+    "test:e2e": "vitest run tests/e2e/runner.test.ts",
+    "test:unit": "vitest run --exclude 'tests/e2e/**'",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "dev": "tsc --watch"

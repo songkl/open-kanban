@@ -1,8 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskCard } from './TaskCard';
 import type { Task } from '@/types/kanban';
+
+// Mock the polling hook so the badge tests can drive `run` directly
+// without faking timers. The hook is exercised end-to-end in
+// `useTaskRun.test.ts`; here we only care that the card renders the
+// runner id and elapsed label when the hook returns a row, and hides
+// itself when it returns null.
+vi.mock('../hooks/useTaskRun', () => ({
+  useTaskRun: vi.fn(),
+}));
+import { useTaskRun } from '../hooks/useTaskRun';
+const mockedUseTaskRun = useTaskRun as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
@@ -49,6 +60,10 @@ describe('TaskCard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The polling hook is mocked at module scope; every test starts
+    // with the "no active run" baseline so unrelated assertions aren't
+    // affected by the badge.
+    mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
   });
 
   it('renders task title', () => {
@@ -193,5 +208,45 @@ describe('TaskCard', () => {
     const taskWithManySubtasks = { ...mockTask, subtasks: manySubtasks };
     render(<TaskCard {...defaultProps} task={taskWithManySubtasks} />);
     expect(screen.getByText(/taskCard.moreSubtasks/)).toBeInTheDocument();
+  });
+
+  describe('runner badge', () => {
+    beforeEach(() => {
+      mockedUseTaskRun.mockReset();
+    });
+
+    it('does not render the badge when no run is active', () => {
+      mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
+      render(<TaskCard {...defaultProps} />);
+      expect(screen.queryByTestId('runner-badge')).not.toBeInTheDocument();
+    });
+
+    it('renders the runner id and elapsed seconds when a run is active', async () => {
+      const claimedAt = new Date(Date.now() - 12_000).toISOString(); // 12s ago
+      mockedUseTaskRun.mockReturnValue({
+        run: {
+          taskId: 'task-1',
+          runnerId: 'runner-foo',
+          agentId: 'opencode',
+          boardId: 'b-1',
+          columnId: 'c-1',
+          status: 'claimed',
+          claimedAt,
+          lastHeartbeatAt: claimedAt,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskCard {...defaultProps} />);
+      const badge = screen.getByTestId('runner-badge');
+      expect(badge).toBeInTheDocument();
+      // runner id surfaces verbatim so operators can grep logs.
+      expect(badge.textContent).toContain('runner-foo');
+      // 12 seconds of elapsed time, formatted as the i18n key with
+      // count substituted in by the test mock that just returns the
+      // key.
+      await waitFor(() => expect(badge.textContent).toContain('taskCard.runnerElapsedSeconds'));
+    });
   });
 });

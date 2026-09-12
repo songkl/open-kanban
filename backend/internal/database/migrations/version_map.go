@@ -32,6 +32,12 @@ var VersionMigrationMap = []VersionMigration{
 	// only the schema lands in this tag, the API/handler layer ships
 	// under a follow-up.
 	{Version: "0.4.0", From: 1, To: 4},
+	// 0.5.0 keeps the schema aligned with the latest migration files
+	// without bumping the migration counter itself; this matters for
+	// dev databases cloned at the 0.4.0 tag and for the e2e helper
+	// binary which runs migrations against an empty in-memory SQLite
+	// and would otherwise miss migration 004.
+	{Version: "0.5.0", From: 1, To: 4},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

@@ -324,9 +324,19 @@ export class RunLoop {
       this.heartbeatDeadline =
         Date.now() + (this.config.runner.heartbeatIntervalMs ?? 30_000);
     }
-    // Race the waitPromise against a setImmediate tick so the event
+    // Race the waitPromise against a setTimeout(0) tick so the event
     // loop has a chance to deliver a resolved child promise before we
     // declare the slot still in-flight.
+    //
+    // Why setTimeout(0) and not setImmediate: setImmediate fires in
+    // the "check" phase AFTER the poll phase, which sounds right in
+    // theory, but a hot loop that keeps scheduling setImmediates can
+    // starve the poll phase of I/O events — the agent's close event
+    // never gets a chance to land. setTimeout(0) fires in the
+    // "timers" phase BEFORE poll, which forces the loop to run I/O
+    // first. The race is still "one tick" of the event loop, so the
+    // cost is identical; we just guarantee that close events get a
+    // chance to resolve waitPromise on the same tick.
     const settled = await new Promise<boolean>((resolve) => {
       let done = false;
       slot.waitPromise.then(
@@ -343,12 +353,12 @@ export class RunLoop {
           }
         }
       );
-      setImmediate(() => {
+      setTimeout(() => {
         if (!done) {
           done = true;
           resolve(false);
         }
-      });
+      }, 0);
     });
     if (!settled) return;
     const result = await slot.waitPromise;

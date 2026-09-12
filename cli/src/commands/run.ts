@@ -308,6 +308,12 @@ export function buildCommentPoster(
  * Default loop factory: wires `RunClaimClient` + `HeartbeatScheduler`
  * + `ChildProcessSpawner` + the `TaskHydrator` against the supplied
  * `HttpClient`. Tests can pass a `buildLoop` override to inject a stub.
+ *
+ * The loop's logger defaults to a no-op so unit tests stay terse; the
+ * CLI passes a stderr-backed logger so operators can correlate log
+ * lines with the in-flight task on the server (the loop logs the
+ * runnerId at start, every claim, and every finish — see
+ * `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5).
  */
 export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
   const { config, runnerId, agentType, http, signal } = deps;
@@ -331,8 +337,31 @@ export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
       timeoutMs: config.agent.timeoutMs ?? 1_800_000,
     }),
     signal,
+    logger: stderrLoopLogger(),
   });
   return loop;
+}
+
+/**
+ * Stderr-backed logger for the runner loop. The CLI is a long-lived
+ * process that operators tail, so routing log lines to stderr (and
+ * not stdout, which is reserved for command output / piped JSON)
+ * matches the convention of every other kanban subcommand. Lines are
+ * prefixed with `[kanban-runner]` so the operator can grep them out
+ * of a mixed log stream.
+ */
+export function stderrLoopLogger(): import("../runner/loop.js").RunLoopLogger {
+  return {
+    info(msg: string): void {
+      process.stderr.write(`[kanban-runner] ${msg}\n`);
+    },
+    warn(msg: string): void {
+      process.stderr.write(`[kanban-runner] warn: ${msg}\n`);
+    },
+    error(msg: string): void {
+      process.stderr.write(`[kanban-runner] error: ${msg}\n`);
+    },
+  };
 }
 
 /**
