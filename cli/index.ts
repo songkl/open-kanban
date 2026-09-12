@@ -16,6 +16,15 @@ import {
 import { exitCodeForError } from "./src/http/client.js";
 import { runStatus } from "./src/commands/status.js";
 import { runDashboard } from "./src/commands/dashboard.js";
+import {
+  runBoardsList,
+  runBoardsGet,
+  InvalidUsageError as BoardsInvalidUsageError,
+} from "./src/commands/boards.js";
+import {
+  runColumnsList,
+  runColumnsGet,
+} from "./src/commands/columns.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -156,6 +165,131 @@ program
     } catch (err) {
       process.stderr.write(`${(err as Error).message}\n`);
       process.exit(authExitCodeForError(err));
+    }
+  });
+
+const boardsCmd = program.command("boards").description("manage boards");
+
+boardsCmd
+  .command("list")
+  .description("list non-deleted boards (GET /api/v1/boards)")
+  .option("--fields <fields>", "comma-separated list of fields to show", (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean))
+  .action(async (cmdOpts: { fields?: string[] }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    try {
+      await runBoardsList({
+        apiUrl: opts.apiUrl,
+        format: opts.output === "json" ? "json" : "table",
+        fields: cmdOpts.fields,
+        http,
+      });
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(exitCodeForError(err));
+    }
+  });
+
+boardsCmd
+  .command("get <id>")
+  .description("fetch a single board by id (GET /api/v1/boards/:id)")
+  .option("--fields <fields>", "comma-separated list of fields to show", (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean))
+  .action(async (id: string, cmdOpts: { fields?: string[] }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    try {
+      await runBoardsGet(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          fields: cmdOpts.fields,
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      if (err instanceof BoardsInvalidUsageError) {
+        process.exit(1);
+      }
+      process.exit(exitCodeForError(err));
+    }
+  });
+
+const columnsCmd = program.command("columns").description("manage columns");
+
+columnsCmd
+  .command("list")
+  .description("list columns (GET /api/v1/columns)")
+  .option("--board <id>", "filter by board id")
+  .option(
+    "--positions <list>",
+    "comma-separated list of positions to include (e.g. 1,3,5)",
+    (v: string) =>
+      v
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n))
+  )
+  .option(
+    "--fields <fields>",
+    "comma-separated list of fields to show",
+    (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean)
+  )
+  .action(
+    async (cmdOpts: {
+      board?: string;
+      positions?: number[];
+      fields?: string[];
+    }) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      try {
+        await runColumnsList({
+          apiUrl: opts.apiUrl,
+          boardId: cmdOpts.board,
+          positions: cmdOpts.positions,
+          format: opts.output === "json" ? "json" : "table",
+          fields: cmdOpts.fields,
+          http,
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        if (err instanceof BoardsInvalidUsageError) {
+          process.exit(1);
+        }
+        process.exit(exitCodeForError(err));
+      }
+    }
+  );
+
+columnsCmd
+  .command("get <id>")
+  .description("fetch a single column by id (GET /api/v1/columns/:id)")
+  .option(
+    "--fields <fields>",
+    "comma-separated list of fields to show",
+    (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean)
+  )
+  .action(async (id: string, cmdOpts: { fields?: string[] }) => {
+    const opts = program.opts<{ apiUrl: string; output?: string }>();
+    const http = new HttpClient({ apiUrl: opts.apiUrl });
+    try {
+      await runColumnsGet(
+        {
+          apiUrl: opts.apiUrl,
+          format: opts.output === "json" ? "json" : "table",
+          fields: cmdOpts.fields,
+          http,
+        },
+        id
+      );
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      if (err instanceof BoardsInvalidUsageError) {
+        process.exit(1);
+      }
+      process.exit(exitCodeForError(err));
     }
   });
 
