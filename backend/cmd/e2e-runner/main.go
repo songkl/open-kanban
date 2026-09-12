@@ -232,6 +232,10 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 		authPublic.GET("/me", handlers.GetMe(db))
 	}
 
+	// /api/v1/users/me mirrors /api/v1/auth/me for CLI callers that use the
+	// REST-style /users/me URL (see cmd/server/main.go setupAPIRoutes).
+	r.GET("/api/v1/users/me", handlers.GetMe(db))
+
 	// Protected auth endpoints used by the runner (GetMe mostly;
 	// CreateToken is wired in case the suite wants to issue a fresh
 	// user_agent token).

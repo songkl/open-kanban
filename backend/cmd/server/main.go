@@ -273,6 +273,9 @@ func setupOnlyRoutes(r *gin.Engine, onConfigPersisted func(path string)) {
 		// a nil DB by returning the "setup needed" payload without touching
 		// the database, so it is safe to call before the wizard runs.
 		auth.GET("/me", handlers.GetMe(nil))
+		// /api/v1/users/me mirrors /api/v1/auth/me for CLI/agent callers that
+		// follow the REST convention of /users/me rather than /auth/me.
+		r.GET("/api/v1/users/me", handlers.GetMe(nil))
 	}
 }
 
@@ -318,6 +321,10 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		auth.GET("/me", handlers.GetMe(db))
 		auth.GET("/config", handlers.GetAppConfig(db))
 	}
+
+	// /api/v1/users/me is an alias for /api/v1/auth/me so external callers
+	// (CLI, OAuth agents) using the REST-style /users/me URL don't 404.
+	r.GET("/api/v1/users/me", handlers.GetMe(db))
 
 	authProtected := r.Group("/api/v1/auth")
 	authProtected.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))

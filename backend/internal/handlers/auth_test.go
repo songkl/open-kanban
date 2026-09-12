@@ -1040,6 +1040,152 @@ func TestGetMeHandler(t *testing.T) {
 	})
 }
 
+func TestUsersMeAlias(t *testing.T) {
+	// /api/v1/users/me is the alias used by the CLI's `auth whoami`
+	// command; it must mirror /api/v1/auth/me across the same auth
+	// surfaces (cookie, bearer, no token, lazy setup).
+	t.Run("needsSetup when no users exist (no auth)", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		db.Exec("DELETE FROM users")
+
+		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		if resp["user"] != nil {
+			t.Errorf("expected nil user without token, got %v", resp["user"])
+		}
+		if resp["needsSetup"] != true {
+			t.Errorf("expected needsSetup=true, got %v", resp["needsSetup"])
+		}
+	})
+
+	t.Run("unauthorized without any credential", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		db.Exec("DELETE FROM users")
+		setupTestUser(t, db, "alice", "", "MEMBER")
+
+		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("returns user with valid bearer token (CLI flow)", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		handlers.ResetTokenCacheForTest()
+		db.Exec("DELETE FROM users")
+		userID := setupTestUser(t, db, "cli-user", "", "MEMBER")
+		tokenKey := "cli-bearer-token"
+		setupTestToken(t, db, userID, tokenKey)
+
+		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenKey)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		user, ok := resp["user"].(map[string]interface{})
+		if !ok || user == nil {
+			t.Fatalf("expected user object in response, got %v", resp["user"])
+		}
+		if user["username"] != "cli-user" {
+			t.Errorf("expected username 'cli-user', got %v", user["username"])
+		}
+		if resp["needsSetup"] != false {
+			t.Errorf("expected needsSetup=false with valid token, got %v", resp["needsSetup"])
+		}
+	})
+
+	t.Run("returns user with valid cookie (frontend flow)", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		handlers.ResetTokenCacheForTest()
+		db.Exec("DELETE FROM users")
+		userID := setupTestUser(t, db, "web-user", "", "MEMBER")
+		tokenKey := "web-cookie-token"
+		setupTestToken(t, db, userID, tokenKey)
+
+		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: tokenKey})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		user, ok := resp["user"].(map[string]interface{})
+		if !ok || user == nil {
+			t.Fatalf("expected user object in response, got %v", resp["user"])
+		}
+		if user["username"] != "web-user" {
+			t.Errorf("expected username 'web-user', got %v", user["username"])
+		}
+	})
+
+	t.Run("nil db (lazy setup) returns needsSetup=true", func(t *testing.T) {
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(nil))
+
+		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		if resp["user"] != nil {
+			t.Errorf("expected nil user in lazy-setup, got %v", resp["user"])
+		}
+		if resp["needsSetup"] != true {
+			t.Errorf("expected needsSetup=true in lazy-setup, got %v", resp["needsSetup"])
+		}
+	})
+}
+
 func TestGetTokensHandler(t *testing.T) {
 	t.Run("unauthorized without token returns 401", func(t *testing.T) {
 		db := setupTestDB(t)

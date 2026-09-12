@@ -677,6 +677,11 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 
 		tokenKey, err := c.Cookie("kanban-token")
 		if err != nil {
+			if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+				tokenKey = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+		}
+		if tokenKey == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"user":            nil,
 				"needsSetup":      false,
