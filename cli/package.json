@@ -10,7 +10,9 @@
     "add-shebang": "echo '#!/usr/bin/env node' | cat - dist/index.js > temp.js && mv temp.js dist/index.js",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch"
   },
   "keywords": [
     "kanban",
