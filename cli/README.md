@@ -386,6 +386,42 @@ kanban run --once
 kanban run --mine
 ```
 
+### Modes
+
+The runner has two mutually exclusive modes; the validator fails
+fast (exit code 1) if both are present at once.
+
+**Mode 1 — board-bound.** The runner claims from a fixed column on
+a fixed board. Pair `--board <id>` with `--status <s>` (or set
+`boardId` + `status` in the config). Every task in that column
+whose `column_agents` grant includes your agent type is fair
+game. This is the canonical "team pool" mode.
+
+**Mode 2 — identity-bound (`--mine`).** The runner asks the
+server for the next task in your profile's inbox (the same
+endpoint `kanban mine` reads from). The runner's OAuth token
+must have `kanban:read` + `tasks:write` and the resolved task
+must live on a board you can access. There is no column
+filter — the server picks. Drop `boardId` / `status` from the
+config and set `mode: mine` (or pass `--mine` on the command
+line) to use this mode.
+
+A minimal mode-2 config:
+
+```yaml
+version: 1
+mode: mine
+agent:
+  bin: opencode
+  cwd: .
+  args: ["--non-interactive"]
+  timeoutMs: 1800000
+runner:
+  pollIntervalMs: 5000
+  heartbeatIntervalMs: 30000
+  lockTimeoutMs: 120000
+```
+
 ### Flags
 
 | Flag | Default | Description |
@@ -418,6 +454,84 @@ The loop installs `SIGINT` and `SIGTERM` handlers that call
 `SIGTERM`, the loop waits up to 15 s for it to drain, then
 `POST /api/v1/runs/release` is called to release any orphan locks
 before the process exits.
+
+### Troubleshooting
+
+**`no runner config found: walked up from '<cwd>' looking for ...`**
+
+The discovery walk didn't find `.kanban-runner.local.yaml`,
+`.kanban-runner.yaml`, or `~/.config/kanban-cli/runner.json`.
+Either drop a config in the working directory, point at one
+explicitly with `--config <path>`, or create the global
+fallback file under `~/.config/kanban-cli/`.
+
+**`config is incomplete: provide either 'boardId' + 'status' or 'mode: mine'`**
+
+You picked neither mode-1 nor mode-2. Add both `boardId` and
+`status` to the config (or pass `--board X --status todo`), or
+add `mode: mine` (or pass `--mine`). The two modes are
+mutually exclusive; combining them is rejected with a different
+error.
+
+**`config is ambiguous: 'mode: mine' is mutually exclusive with 'boardId' / 'status'`**
+
+Drop the `boardId` / `status` keys when `mode: mine` is set,
+or vice versa.
+
+**`agent.bin '<x>' is neither an absolute path nor resolvable via PATH`**
+
+`agent.bin` must be on `$PATH` (e.g. `opencode`) or be an
+absolute path to an executable. The runner does not search
+`./node_modules/.bin` for you — use `npx <tool>` or an
+absolute path. If the binary lives in a non-standard location,
+`agent.binPath` overrides the resolution path entirely.
+
+**`runner.lockTimeoutMs (...) must be greater than 2 × runner.heartbeatIntervalMs (...)`**
+
+The server uses `lockTimeoutMs` as the deadline after which a
+stalled run is reaped. To avoid the loop racing the reaper,
+`lockTimeoutMs` must be at least twice `heartbeatIntervalMs`,
+otherwise a single missed heartbeat would let the server reap
+the lock while the runner is still alive.
+
+**`mode 'mine' requires CLI profile '<x>' to be logged in; run 'kanban auth login' first`**
+
+Mode-2 needs OAuth credentials on disk. Run `kanban auth login`
+(or pass `--api-url` + `--profile <name>` to log in to a
+non-default profile) before starting the loop.
+
+**`claim failed: ... (retryable=false)` / loop exits with code 1**
+
+Non-retryable claim errors are surfaced immediately and shut
+the loop down. Common causes:
+
+* `401 Unauthorized` — the OAuth token is stale or wrong
+  profile; `kanban auth logout && kanban auth login`.
+* `403 Forbidden: No permission to claim tasks in this column` —
+  the runner's user / token doesn't have WRITE on the column
+  (or its board fallback). Add a `board_permissions` grant or
+  use a token whose user has the right role.
+* `403 Forbidden: token user_agent does not match agentType` —
+  the token was issued for a different agent type than the
+  config's `runner.mode` / the server's `column_agents` allow.
+  Re-issue the token with the correct `user_agent`, or change
+  the column's `column_agents` to include the runner's type.
+
+**`task ... finish returned 409 (lost)`**
+
+Another runner (or the reaper) took the lock between claim and
+finish. The loop logs `warn` and increments the `failed`
+counter; the task is left in its current column (typically
+`in_progress`). Re-claim it manually if you want to retry.
+
+**The agent exits cleanly (0) but the task stays in `in_progress`**
+
+`finish()` only moves the task when `status='completed'`.
+The runner sends `'completed'` only when the agent exited
+with code 0 AND the exit reason was `'exit'` (not a signal /
+timeout / spawn error). If the agent was killed by SIGTERM
+because it ran past `agent.timeoutMs`, you'll see the task
+revert on the next loop iteration via the server's reaper.
 
 ## License
 
