@@ -19,6 +19,23 @@ All notable changes to this project will be documented in this file.
   `subtasks delete <id>` DELETEs the record with `--yes` as the
   default. 42 vitest cases mock HTTP and cover URL/body shape, JSON
   output, table rendering, ID encoding, and 401/404 error mapping.
+- s-1077: add `kanban shell`, an interactive readline REPL that wraps the
+  same Commander program used by the top-level CLI. Features include
+  up/down arrow history persisted to `~/.kanban_shell_history`
+  (overridable via `KANBAN_SHELL_HISTORY`), Tab completion for top-level
+  commands, subcommands, and global flags, and built-ins `help`,
+  `exit`/`quit`, `clear`, `whoami`. On entry the shell automatically
+  runs `auth status` and prints a yellow "not logged in" hint when no
+  credentials are stored while keeping the REPL open; a leading `kanban`
+  token is stripped from each line so users can paste full commands;
+  and `process.exit` is shimmed so commands that request an exit code do
+  not terminate the shell. 13 unit tests cover `completeLine`,
+  `defaultHistoryPath`, banner rendering, the auth-probe short-circuit,
+  dispatch with shell-level flag injection, and the `process.exit`
+  shim, while 3 e2e tests in `tests/shell.test.ts` spawn the CLI
+  binary as a child process, pipe scripted commands via stdin, and
+  assert on banner output, the not-logged-in hint, the unknown-command
+  error, the `kanban`-prefix strip, and the on-disk history file.
 
 ### Bug Fixes
 
