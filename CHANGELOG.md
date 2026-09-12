@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
   human approver's OAuth session. `auth status` now reports
   `Identity: Agent / Human` and `auth agent bind` validates the token
   via `GET /api/v1/users/me` to refuse HUMAN tokens.
+- s-1073: add `kanban subtasks {list,create,update,delete}` so the CLI
+  can manage task subtasks. `subtasks list <taskId>` GETs
+  `/api/v1/subtasks?taskId=<id>`, `subtasks create <taskId> --title <t>`
+  POSTs `{ taskId, title }`, `subtasks update <id> [--title <t>]
+  [--completed|--no-completed]` PUTs the supplied fields, and
+  `subtasks delete <id>` DELETEs the record with `--yes` as the
+  default. 42 vitest cases mock HTTP and cover URL/body shape, JSON
+  output, table rendering, ID encoding, and 401/404 error mapping.
 
 ### Bug Fixes
 
