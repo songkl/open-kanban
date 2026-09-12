@@ -1,8 +1,11 @@
 # Kanban CLI — Command Reference
 
 This document is the detailed flag-level reference for every command exposed
-by the `kanban` binary. For an end-to-end onboarding flow, configuration
-overview, troubleshooting, and exit-code table, see [`cli/README.md`](../cli/README.md).
+by the `kanban` binary. For a beginner-friendly tutorial-style walkthrough
+(mixed CN/EN) with runnable examples, see
+[`docs/CLI_USER_GUIDE.md`](./CLI_USER_GUIDE.md). For an end-to-end onboarding
+flow, configuration overview, troubleshooting, and exit-code table, see
+[`cli/README.md`](../cli/README.md).
 
 > Source of truth: [`cli/src/program.ts`](../cli/src/program.ts) and the
 > per-command modules under [`cli/src/commands/`](../cli/src/commands/).
@@ -891,3 +894,15 @@ Environment variables consulted (in priority order):
 
 The config file lives at `~/.config/kanban-cli/config.json` or
 `${XDG_CONFIG_HOME}/kanban-cli/config.json`.
+
+---
+
+## Where to go next
+
+- Tutorial-style walkthrough with runnable examples (mixed CN/EN):
+  [`docs/CLI_USER_GUIDE.md`](./CLI_USER_GUIDE.md)
+- End-to-end onboarding, troubleshooting, exit-code table:
+  [`cli/README.md`](../cli/README.md)
+- Runner design (`kanban run`):
+  [`devDoc/CLI_RUNNER_PLAN_2026-09-12.md`](../devDoc/CLI_RUNNER_PLAN_2026-09-12.md)
+- Manpage: [`cli/man/kanban.1`](../cli/man/kanban.1)

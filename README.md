@@ -219,6 +219,27 @@ open-kanban/
 cd mcp-server && npm publish
 ```
 
+## CLI Usage
+
+The `kanban` CLI ships with three layers of documentation:
+
+| Doc | Purpose |
+|---|---|
+| [`docs/CLI_USER_GUIDE.md`](./docs/CLI_USER_GUIDE.md) | Beginner-friendly tutorial (mixed CN/EN) — login, create tasks, batch ops, runner |
+| [`docs/CLI_COMMANDS.md`](./docs/CLI_COMMANDS.md) | Full flag-level reference for every command |
+| [`cli/README.md`](./cli/README.md) | Onboarding, configuration, troubleshooting, exit codes |
+| [`cli/man/kanban.1`](./cli/man/kanban.1) | Manpage (`man kanban`) |
+
+Quick start:
+
+```bash
+npm install -g open-kanban-cli
+export KANBAN_API_URL=http://localhost:8080
+kanban auth login        # device flow → approve in browser
+kanban status            # probe the API
+kanban tasks list        # list tasks
+```
+
 ## Shell Completion
 
 The CLI ships with completion scripts for bash, zsh, and fish. Static

@@ -117,6 +117,10 @@ kanban auth logout
 
 ## Commands at a glance
 
+> New to the CLI? Start with [**docs/CLI_USER_GUIDE.md**](../docs/CLI_USER_GUIDE.md)
+> — a tutorial-style walkthrough (mixed CN/EN) with runnable examples for
+> every common workflow.
+
 The full flag-level reference (every option, every example) lives in
 [**docs/CLI_COMMANDS.md**](../docs/CLI_COMMANDS.md). Here is the high-level
 shape of the command tree:

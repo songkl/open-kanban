@@ -1,0 +1,763 @@
+# Kanban CLI — 使用指南 / User Guide
+
+> **新手从这里开始 / Start here if you're new.**
+> For the technical flag-by-flag reference, see [`CLI_COMMANDS.md`](./CLI_COMMANDS.md).
+> For end-to-end onboarding / troubleshooting, see [`cli/README.md`](../cli/README.md).
+
+`kanban` 是 Open Kanban 看板的命令行客户端 (command-line client).
+它让你在终端里读写任务、上传文件、跑自动化 agent —— 同一个 OAuth 会话同时被 CLI、MCP server 和 Web UI 共享。
+
+This guide walks you through everything from your first login to advanced
+automation, with runnable examples at every step. 中文段落解释了**为什么**
+这么做;English snippets give you the exact commands to copy.
+
+---
+
+## 目录 / Table of contents
+
+1. [安装 / Installation](#1-安装--installation)
+2. [第一次登录 / First login](#2-第一次登录--first-login)
+3. [看懂看板 / Reading the board](#3-看懂看板--reading-the-board)
+4. [创建并流转任务 / Creating and moving tasks](#4-创建并流转任务--creating-and-moving-tasks)
+5. [评论与子任务 / Comments & subtasks](#5-评论与子任务--comments--subtasks)
+6. [草稿、归档、批量操作 / Drafts, archive, batch operations](#6-草稿归档批量操作--drafts-archive-batch-operations)
+7. [配置文件 / Configuration files](#7-配置文件--configuration-files)
+8. [脚本与管道 / Shell pipelines & scripting](#8-脚本与管道--shell-pipelines--scripting)
+9. [退出码与错误处理 / Exit codes & errors](#9-退出码与错误处理--exit-codes--errors)
+10. [Runner: 让 CLI 帮你跑 agent / Runner loop](#10-runner-让-cli-帮你跑-agent--runner-loop)
+11. [常见问答 / FAQ](#11-常见问答--faq)
+
+---
+
+## 1. 安装 / Installation
+
+CLI is a single Node.js (>= 18) binary. Pick the install flavour that fits:
+
+| 场景 / Scenario | 命令 / Command |
+|---|---|
+| **全局 npm (推荐)** / Global npm (recommended) | `npm install -g open-kanban-cli` |
+| **不安装,直接跑** / No install, run on demand | `npx -y open-kanban-cli --help` |
+| **从源码构建** / Build from source | `cd cli && npm install && npm run build && node ./dist/index.js --help` |
+
+After installing, verify the binary is reachable and the version looks sane:
+
+```bash
+kanban --version       # should print 0.1.0 (or newer)
+node --version         # must be v18.x or newer
+which kanban           # should resolve to a path
+```
+
+> **Homebrew tap:** planned but not yet published. Track
+> [the GitHub repo](https://github.com/songkl/open-kanban) for the tap formula.
+
+---
+
+## 2. 第一次登录 / First login
+
+CLI 使用 OAuth 2.1 的 **device authorization grant** —— 你不需要把密码敲进终端,只需要在浏览器里点一次确认。
+
+The CLI uses OAuth 2.1's device authorization grant, so your password never
+touches the terminal. The flow is:
+
+1. CLI 自动注册一个公共 OAuth 客户端 (`POST /oauth/register`)
+2. CLI 向 server 请求一个 `device_code` + 用户码 (`POST /oauth/device/code`)
+3. 终端打印**验证 URL** 和**用户码** 到 stderr
+4. 你在浏览器里打开 URL,输入用户码,点确认
+5. CLI 后台轮询 `/oauth/token`,拿到 token 后加密落盘
+
+```bash
+# Step 1 — point at your Kanban server
+export KANBAN_API_URL="https://kanban.example.com"
+
+# Step 2 — start the device flow
+kanban auth login
+#   stderr output:
+#     Open Kanban authorization required
+#       Visit:  https://kanban.example.com/oauth/device
+#       Code:   HSXL-KQPR
+#       Scope:  kanban:read tasks:write
+#       Waiting for approval (expires in 600s)...
+```
+
+You have **600 seconds** to approve in the browser. If the timer runs out,
+the CLI exits with code `3` — just rerun `kanban auth login`.
+
+After approval, the CLI stores the issued tokens at:
+
+```
+$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json    # mode 0600
+```
+
+(`<api>` is the API URL slugged into a filename-safe string, so each
+server you log in to gets its own credentials file.)
+
+确认登录成功 / Verify the session:
+
+```bash
+kanban auth status    # prints: profile, host, scope, token expiry
+kanban auth whoami    # calls GET /api/v1/users/me and prints your account
+```
+
+登出 / Sign out (idempotent — safe to run even if you're not logged in):
+
+```bash
+kanban auth logout
+```
+
+> **Tip / 小提示:** 每换一个 `--api-url`,CLI 就会创建一份新的凭据文件。
+> 所以在同一台机器上可以同时登录 `work` 和 `personal` 两个看板,
+>互不干扰。
+>
+> Switching `--api-url` produces a fresh credentials file. So you can be
+> logged in to `work` and `personal` boards at the same time on the same
+> machine — they live in separate files.
+
+---
+
+## 3. 看懂看板 / Reading the board
+
+Before you write anything, take a look at what's already there.
+
+### `kanban status` — API 探测 / API probe
+
+不要求登录。返回 server 是否在线、延迟、看板块数。
+
+Does not require auth. Reports whether the server is reachable, latency,
+and the count of non-deleted boards.
+
+```bash
+kanban status
+# Kanban API   https://kanban.example.com
+# Status       online
+# Latency      42 ms
+# Boards       3
+# Timestamp    2026-09-12T04:00:00Z
+#
+#   ID                                   NAME
+#   ──────────────────────────────────── ────────────────────────────
+#   board-1                              Engineering
+#   board-2                              Design
+#   board-3                              Operations
+```
+
+### `kanban boards list` / `boards get` — 浏览看板 / Browse boards
+
+```bash
+kanban boards list                       # default projection
+kanban boards list --fields id,name,columnCount
+kanban boards get board-1
+```
+
+### `kanban columns list` / `columns get` — 浏览列 / Browse columns
+
+```bash
+kanban columns list                      # all columns on all boards
+kanban columns list --board board-1 --positions 1,2,3
+```
+
+### `kanban dashboard` — 工作区统计 / Workspace stats
+
+要求登录。返回总数、按状态 / 按优先级分布。
+
+Auth required. Returns totals plus per-status / per-priority breakdowns.
+
+```bash
+kanban dashboard
+```
+
+### `kanban tasks list` — 列任务 / List tasks
+
+`tasks list` 把过滤做在客户端,server 只返回原始 column 数据。
+
+`tasks list` does filtering client-side; the server returns raw column
+data. This means every filter is cheap to add and works on cached columns.
+
+```bash
+kanban tasks list                                  # every published task
+kanban tasks list --status in_progress --priority high
+kanban tasks list --assignee alice --since thisWeek
+kanban tasks list --search "OAuth"                 # substring match on title/description
+kanban tasks list --tag security                   # substring match on any meta value
+kanban tasks list --board board-1 --column col-todo
+```
+
+> **注意 / Note:** `--column` and `--status` are mutually exclusive —
+> if you pass both, the CLI exits with code `1` before any HTTP traffic.
+
+### `kanban tasks get <id>` — 单个任务 / Fetch a single task
+
+公开端点,无需登录。
+
+Public endpoint — no auth required.
+
+```bash
+kanban tasks get task-123
+```
+
+---
+
+## 4. 创建并流转任务 / Creating and moving tasks
+
+### 4.1 创建任务 / Create
+
+`tasks create` 是写操作,**要求登录**。至少要传 `--title`。
+
+`tasks create` is a write — **auth required**. `--title` is mandatory.
+
+```bash
+# Simplest case — let the server pick the column
+kanban tasks create --title "Ship docs"
+
+# Pin a column explicitly
+kanban tasks create --title "Refactor auth" \
+    --column col-doing --priority high --assignee alice
+
+# Use --status instead — CLI resolves to the matching column
+kanban tasks create --title "Bug: 401 on refresh" \
+    --board board-1 --status todo
+
+# Create as a draft (not yet visible to other viewers)
+kanban tasks create --title "Idea: dark mode" --no-publish
+
+# Attach metadata (repeatable or comma-separated)
+kanban tasks create --title "Write spec" \
+    --meta tag=docs,sprint=q3 --meta reviewer=alice
+```
+
+> **解析规则 / Resolution rules:** explicit `--column` wins → then
+> `--status` is resolved to a column by name within `--board` (or any
+> board) → then the first column of `--board` → then the first column
+> globally. See `CLI_COMMANDS.md` for the full chain.
+
+### 4.2 流转任务 / Move tasks through the board
+
+Two equivalent commands exist:
+
+| 命令 / Command | 用途 / Purpose |
+|---|---|
+| `kanban tasks complete <id>` | 推进到**下一列** / Advance to the next column |
+| `kanban tasks move <id> --status <s>` | 跳到任意列 / Jump to any column |
+
+```bash
+kanban tasks move task-123 --status in_progress   # explicit target
+kanban tasks complete task-123                    # advance one column
+```
+
+### 4.3 更新任务 / Update
+
+`tasks update` 一次能改任意字段组合。至少要传一个改动 flag。
+
+`tasks update` accepts any subset of patch flags. At least one is required.
+
+```bash
+kanban tasks update task-123 --priority high
+kanban tasks update task-123 --assignee bob --description "Updated notes"
+kanban tasks update task-123 --meta tag=urgent
+kanban tasks update task-123 --column col-review    # move + edit at once
+```
+
+### 4.4 删除任务 / Delete
+
+```bash
+kanban tasks delete task-123
+# `--yes` is the default and accepted for symmetry with other commands
+```
+
+---
+
+## 5. 评论与子任务 / Comments & subtasks
+
+### 5.1 评论 / Comments
+
+`comments add` 接受 `--body` 文本,或者 `--body -` 从 stdin 读。
+
+`comments add` accepts either inline text or `--body -` to read from stdin.
+
+```bash
+# Inline
+kanban comments add task-123 --body "LGTM, ship it"
+
+# Multi-line from stdin
+echo "Reviewed the OAuth flow.
+Looks good overall. Suggest bumping the refresh interval." \
+    | kanban comments add task-123 --body -
+
+# Read body from a file
+kanban comments add task-123 --body "$(cat review.md)"
+
+# Override author (rare — server uses the authenticated user by default)
+kanban comments add task-123 --body "Spoken on behalf of PM" --author pm-bot
+```
+
+`comments list` 按 `createdAt` 升序返回 (oldest first):
+
+```bash
+kanban comments list task-123
+```
+
+### 5.2 子任务 / Subtasks
+
+```bash
+kanban subtasks list task-123
+kanban subtasks create task-123 --title "Set up DB migration"
+kanban subtasks update subtask-456 --title "Set up DB schema" --completed
+kanban subtasks update subtask-456 --no-completed      # mark incomplete
+kanban subtasks delete subtask-456
+```
+
+> **字段约束 / Validation:** `--title` for create must be non-empty
+> after trim. `--update` requires at least one of `--title / --completed /
+> --no-completed`.
+
+---
+
+## 6. 草稿、归档、批量操作 / Drafts, archive, batch operations
+
+### 6.1 草稿 / Drafts
+
+`--no-publish` 让任务**保存为草稿**,不上看板。
+
+Pass `--no-publish` to keep the task out of the public view:
+
+```bash
+kanban drafts list
+kanban drafts list --board board-1
+kanban drafts publish draft-123          # move draft → live
+kanban drafts unpublish task-456         # move live → draft
+```
+
+### 6.2 归档 / Archive
+
+归档是把任务从主列隐藏起来,而不是物理删除。
+
+Archiving hides a task from active boards; the row stays around and can
+be restored.
+
+```bash
+kanban archived list
+kanban archived archive task-123
+kanban archived restore task-123
+```
+
+### 6.3 批量操作 / Batch operations
+
+`tasks batch` 把多个写操作打成一次 HTTP 请求,**要求登录**。
+
+`tasks batch` bundles multiple writes into one HTTP request — **auth
+required**.
+
+```bash
+# Create multiple tasks from repeated flags (positional alignment)
+kanban tasks batch create \
+    --title "Write spec"   --column col-todo  --priority high \
+    --title "Implement X"  --column col-doing --priority medium
+
+# Or load from a JSON / YAML file
+kanban tasks batch create --file ./tasks.yaml
+
+# Bulk-update (one patch applied to many tasks)
+kanban tasks batch update task-1 task-2 task-3 --status done
+kanban tasks batch update --file ./ids.txt --priority low --assignee alice
+
+# Bulk-delete
+kanban tasks batch delete task-1 task-2 task-3
+```
+
+YAML / JSON file schema (single object or array of objects):
+
+```yaml
+# tasks.yaml — single object
+title: "Ship docs"
+columnId: col-todo
+priority: high
+assignee: alice
+meta:
+  tag: docs
+  sprint: q3
+---
+# tasks.yaml — array
+- title: "Spec"
+  columnId: col-todo
+  priority: high
+- title: "Build"
+  columnId: col-doing
+  status: in_progress
+```
+
+`--file` accepts UTF-8 text files; id files for `batch update` / `batch
+delete` accept one id per line with `#` comments and blank lines skipped.
+
+---
+
+## 7. 配置文件 / Configuration files
+
+CLI 解析所有配置时遵循四级优先级链:
+
+The CLI resolves every setting through a four-level priority chain:
+
+> **CLI flag > 环境变量 (env var) > 配置文件 (config file) > 内置默认值 (built-in default)**
+
+### 7.1 全局 flag / Global flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--api-url <url>` | `http://localhost:8080` | Kanban API base URL |
+| `--profile <name>` | _(unset)_ | Credential profile (e.g. `work` / `personal`) |
+| `--output <format>` | `table` | `table` (default) / `json`. `yaml` is accepted but currently renders as `table` |
+| `--no-color` | color on | Disable ANSI color. Equivalent to `--color=off` |
+| `--color <mode>` | `auto` | `on` / `off` / `auto`. Honours `NO_COLOR` / `FORCE_COLOR` |
+
+### 7.2 环境变量 / Environment variables
+
+| 变量 / Variable | 解析为 / Resolves to |
+|---|---|
+| `KANBAN_API_URL` | `apiUrl` |
+| `KANBAN_CLI_PROFILE` | `profile` |
+| `KANBAN_CLI_OUTPUT` | `output` |
+| `KANBAN_CLI_TIMEOUT` | `timeout` (HTTP timeout ms; config-only) |
+| `NO_COLOR` / `FORCE_COLOR` | ANSI color override |
+
+### 7.3 配置文件 / Config file
+
+默认位置 / Default location:
+
+```
+~/.config/kanban-cli/config.json          # honours XDG_CONFIG_HOME
+```
+
+写入时 mode `0600` (只有你能读写 / owner-only read/write).
+
+```bash
+# View resolved values + their source
+kanban config get
+# config file: ~/.config/kanban-cli/config.json
+# apiUrl=http://localhost:8080 (default)
+# output=table (default)
+# profile=<unset> (default)
+# timeout=30000 (default)
+
+# View a single key
+kanban config get apiUrl
+# http://localhost:8080 (default)
+
+# Persist a value
+kanban config set apiUrl https://kanban.example.com
+# stdout: set apiUrl=https://kanban.example.com
+# stderr: saved to ~/.config/kanban-cli/config.json
+
+kanban config set output json
+kanban config set timeout 60000
+kanban config set profile work
+kanban config set profile ""      # clear the active profile
+```
+
+支持 keys / Supported keys: `apiUrl`, `output`, `profile`, `timeout`.
+
+校验规则 / Validation rules:
+
+| Key | Allowed values |
+|---|---|
+| `apiUrl` | any URL string |
+| `output` | `table` / `json` / `yaml` |
+| `profile` | any string (empty string clears) |
+| `timeout` | positive integer (milliseconds) |
+
+未知 key 或非法 value → 退出码 `1`,**不修改文件**。
+
+Unknown keys or invalid values exit with code `1` and **leave the file
+untouched**.
+
+---
+
+## 8. 脚本与管道 / Shell pipelines & scripting
+
+### 8.1 JSON 输出 / JSON output
+
+每个命令都支持 `--output json`,适合 `jq` / `yq` 后处理。
+
+Every command supports `--output json`, perfect for piping into `jq` /
+`yq`.
+
+```bash
+# Count tasks per status
+kanban tasks list --output json | jq 'group_by(.status) | map({status: .[0].status, count: length})'
+
+# Watch my own inbox every 30 seconds
+while true; do
+  clear
+  kanban mine --output json | jq -r '.[] | "[\(.priority)] \(.title)"'
+  sleep 30
+done
+
+# Bulk-update only the highest-priority tasks
+kanban tasks list --priority high --output json \
+  | jq -r '.[].id' \
+  | xargs kanban tasks batch update --status in_progress
+```
+
+### 8.2 Shell 集成 / Shell integration
+
+```bash
+# Bash: assert the API is reachable before running a script
+kanban status >/dev/null || { echo "kanban offline"; exit 1; }
+
+# Cron: drain my inbox once a day at 02:30
+30 2 * * *  KANBAN_API_URL=https://kanban.example.com kanban run --mine --once >> /var/log/kanban.log 2>&1
+
+# Make: drive a workflow from a Makefile
+.PHONY: sync
+sync:
+    kanban boards list --output json | jq -r '.[].id' | xargs -I{} kanban columns list --board {} --output json
+```
+
+### 8.3 历史 / REPL history
+
+`kanban shell` 启动一个交互式 REPL,history 写在 `~/.kanban_shell_history`
+(可被 `KANBAN_SHELL_HISTORY` 覆盖)。
+
+`kanban shell` launches an interactive REPL; history persists at
+`~/.kanban_shell_history` (override via `KANBAN_SHELL_HISTORY`).
+
+```bash
+kanban shell
+# kanban> help
+# kanban> boards list
+# kanban> exit
+```
+
+REPL 内置命令 / Built-in REPL commands:
+
+| Command | Description |
+|---|---|
+| `help` | Print REPL help |
+| `exit` / `quit` | Close the REPL |
+| `clear` | Clear screen (no-op when piped) |
+| `whoami` | Call `GET /api/v1/users/me` |
+
+其他输入会被分发给 `program.parseAsync(...)`,所以完整 CLI 在 REPL 里也能用。
+
+Anything else is dispatched to `program.parseAsync(...)`, so the full
+CLI surface is available inside the REPL.
+
+---
+
+## 9. 退出码与错误处理 / Exit codes & errors
+
+CLI 使用稳定的 POSIX 退出码,脚本不需要解析 stderr:
+
+The CLI uses stable POSIX exit codes so scripts can branch on outcomes
+without parsing stderr:
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Invalid usage (missing / conflicting flags) or other unexpected error |
+| `2` | Not logged in (run `kanban auth login` first) |
+| `3` | User denied / device code expired during login, **or** HTTP 404 (`NotFoundError`) |
+| `4` | Server error (HTTP 5xx) |
+| `5` | HTTP not_found (e.g. board / task / column id missing) |
+| `6` | Network error (server unreachable, DNS failure, TLS error, …) |
+
+**怎么用 / How to use them:**
+
+```bash
+# Stop the script if not logged in
+kanban dashboard || {
+  code=$?
+  if [ "$code" = "2" ]; then
+    echo "Please run: kanban auth login"
+    exit 1
+  fi
+  exit "$code"
+}
+
+# Retry on network errors
+kanban status || {
+  code=$?
+  [ "$code" = "6" ] && sleep 5 && kanban status
+}
+```
+
+> **历史兼容 / Legacy note:** the docs table records both `3` (auth
+> denial / expiry) and `5` (generic 404). Both mappings remain in place
+> for backward compatibility — `3` covers denial and the `NotFoundError`
+> thrown by `boards get` / `columns get` when the id is missing, while
+> `5` covers generic 404s surfaced by the HTTP layer.
+
+---
+
+## 10. Runner: 让 CLI 帮你跑 agent / Runner loop
+
+> **TL;DR:** `kanban run` 是一个常驻进程,它循环地从看板或你的 inbox 里
+> 抢 (claim) 任务 → 启动你配置的 agent 二进制 → 周期性发送心跳 →
+> 任务结束后把结果回报给 server。
+
+> **TL;DR:** `kanban run` is a long-lived process that loops: claim a
+> task from a board column (or your agent inbox) → spawn your configured
+> agent binary → send heartbeats → POST the outcome back when the agent
+> exits.
+
+完整设计见 [`devDoc/CLI_RUNNER_PLAN_2026-09-12.md`](../devDoc/CLI_RUNNER_PLAN_2026-09-12.md);
+manpage 在 [`cli/man/kanban-run.1.md`](../cli/man/kanban-run.1.md).
+
+### 10.1 两种模式 / Two modes
+
+| Mode | Flag pair | Use case |
+|---|---|---|
+| **Mode 1 (board-bound)** | `--board <id> --status <s>` | Team-pool: watch a single column |
+| **Mode 2 (identity-bound)** | `--mine` | Agent inbox: pick any task assigned to your profile |
+
+两种模式互斥 / The two modes are mutually exclusive.
+
+### 10.2 快速上手 / Quick start
+
+```bash
+# 1. Log in once
+kanban auth login
+
+# 2a. Use the interactive wizard (recommended)
+kanban run init
+#    Walks through mode → board/status → agent block → runner cadences.
+#    Boards and columns are fetched live so you never paste ids blind.
+
+# 2b. Or: write the config by hand
+cat > .kanban-runner.yaml <<'YAML'
+version: 1
+boardId: sys
+status: todo
+agent:
+  bin: opencode
+  cwd: .
+  args: ["--non-interactive"]
+  timeoutMs: 1800000
+runner:
+  pollIntervalMs: 5000
+  heartbeatIntervalMs: 30000
+  lockTimeoutMs: 120000
+YAML
+
+# 3. Start the loop (foreground; Ctrl-C triggers a graceful drain)
+kanban run
+
+# 4. Or: drain a single task and exit (cron-friendly)
+kanban run --once
+
+# 5. Or: watch your agent inbox instead of a fixed column
+kanban run --mine
+```
+
+### 10.3 配置文件查找顺序 / Config discovery
+
+When `--config` is not supplied, the runner walks up from `cwd` looking
+for the first hit:
+
+1. `./.kanban-runner.local.yaml` — machine-local override (gitignored)
+2. `./.kanban-runner.yaml` — project-shared config (checked in)
+3. `~/.config/kanban-cli/runner.json` — global fallback
+
+当同目录下同时有 local override 和 project 文件,deep-merge 后 local 优先
+(数组类字段如 `args` 整体替换)。
+
+When both files exist at the same directory, they're deep-merged (local
+wins on conflict; array fields like `args` are replaced wholesale).
+
+### 10.4 信号处理 / Signal handling
+
+The loop installs `SIGINT` and `SIGTERM` handlers that call
+`requestShutdown()`. The current in-flight agent (if any) is sent
+`SIGTERM`, the loop waits up to 15 s for it to drain, then
+`POST /api/v1/runs/release` is called to release any orphan locks
+before the process exits.
+
+`Ctrl-C` 在大多数场景下都能干净退出 —— 在跑任务时按 Ctrl-C 会先 SIGTERM
+agent,等最多 15 秒,然后释放锁再退出。
+
+### 10.5 常见报错 / Common errors
+
+| 错误 / Error | 原因 / Cause | 解决 / Fix |
+|---|---|---|
+| `no runner config found` | Discovery walk found nothing | Drop a `.kanban-runner.yaml` next to your code, or pass `--config <path>` |
+| `config is incomplete: provide either 'boardId'+'status' or 'mode: mine'` | Picked neither mode | Add both `boardId`+`status` or set `mode: mine` |
+| `config is ambiguous: 'mode: mine' is mutually exclusive with 'boardId' / 'status'` | Set both | Drop the `boardId`/`status` keys when `mode: mine` is set |
+| `agent.bin '...' is neither an absolute path nor resolvable via PATH` | Bad `bin` | Use an absolute path or one on `$PATH` |
+| `runner.lockTimeoutMs (...) must be greater than 2 × runner.heartbeatIntervalMs (...)` | Lock timeout too short | Bump `lockTimeoutMs` |
+| `mode 'mine' requires CLI profile '<x>' to be logged in` | No OAuth session | `kanban auth login` |
+| `claim failed: ... (retryable=false)` / loop exits with code 1 | 401 / 403 / token mismatch | Re-login or fix the column's `column_agents` grant |
+
+---
+
+## 11. 常见问答 / FAQ
+
+### `kanban: command not found`
+
+- You didn't install globally. Run `npm install -g open-kanban-cli` or use `npx open-kanban-cli`.
+- Your global `node_modules/.bin` is not on `PATH`. Add it (`echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc`) and reload.
+
+### `Not logged in. Run 'kanban auth login' first.`
+
+Credentials cache is missing or expired.
+
+```bash
+kanban auth status             # what does the CLI see?
+kanban auth logout             # wipe and re-login
+kanban auth login
+```
+
+### `Network error` / `ECONNREFUSED`
+
+The CLI can't reach `KANBAN_API_URL`. Verify with `kanban status` (it
+marks the API as `offline` and reports latency):
+
+- Wrong `--api-url` (run `kanban config get apiUrl` to confirm).
+- Server is on `localhost` but you're inside a container / WSL / remote
+  shell — use the host's reachable address (e.g. `host.docker.internal`).
+- TLS error — self-signed certs require adding the cert to the OS trust
+  store; the CLI does not currently accept a `--insecure-skip-verify` flag.
+
+### `401 Unauthorized` on every call
+
+Tokens were issued against a different API URL than the one currently
+configured. Each `--api-url` (or `KANBAN_API_URL`) gets its own
+credential file. Switch back to the original URL or re-run
+`kanban auth logout && kanban auth login` against the new endpoint.
+
+### `exit code 3: DeniedAuthorizationError`
+
+OAuth login was denied or the device code expired (default 600 s). Re-run
+`kanban auth login` and approve faster.
+
+### `exit code 1: invalid --fields value: ...`
+
+`kanban tasks list --fields` only accepts `id` or `id+updated`. Anything
+else fails fast (no HTTP traffic). Drop `--fields` for the default
+projection.
+
+### `--output yaml` renders as a table
+
+`yaml` is accepted by the flag for forward compatibility, but the
+renderers currently normalise anything other than `json` to `table`.
+Use `--output json` and pipe through `yq` / `jq` for now.
+
+### `mine` output looks wrong
+
+`kanban mine --board <id>` prints
+`warning: --board is not supported by /api/v1/mcp/my-tasks; ignoring boardId=<id>`
+to stderr. The flag is a forward-compatibility shim — the endpoint does
+not accept a board filter. Drop the flag and filter client-side instead.
+
+### How do I uninstall the CLI?
+
+```bash
+npm uninstall -g open-kanban-cli
+rm -rf ~/.config/kanban-cli   # wipe config + credentials
+```
+
+---
+
+## 下一步 / Where to go next
+
+- 全 flag 参考 / Full flag reference: [`docs/CLI_COMMANDS.md`](./CLI_COMMANDS.md)
+- 故障排查 + 退出码表 / Troubleshooting + exit codes: [`cli/README.md`](../cli/README.md)
+- Runner 详细设计 / Runner design: [`devDoc/CLI_RUNNER_PLAN_2026-09-12.md`](../devDoc/CLI_RUNNER_PLAN_2026-09-12.md)
+- OpenAPI 规约 / API spec: [`docs/openapi.yaml`](./openapi.yaml)
+- Manpage / `man kanban`: [`cli/man/kanban.1`](../cli/man/kanban.1)

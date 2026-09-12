@@ -102,6 +102,10 @@ kanban auth logout
 
 ## 命令一览
 
+> 第一次用 CLI？先看 [**docs/CLI_USER_GUIDE.md**](../docs/CLI_USER_GUIDE.md)
+> —— 一份中英文混合、按场景走完整套常用流程的入门教程,每个步骤都有可
+> 直接拷贝的示例。
+
 完整的 flag 级参考文档（每个选项、每个示例）请见
 [**docs/CLI_COMMANDS.md**](../docs/CLI_COMMANDS.md)。下面是命令树的高层结构：
 
