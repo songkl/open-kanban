@@ -99,9 +99,14 @@ import {
   runWorkspaceStats,
 } from "./commands/workspace.js";
 import { runShell } from "./commands/shell.js";
+import {
+  runConfigGet,
+  runConfigSet,
+  InvalidConfigKeyError,
+  InvalidConfigValueError,
+  extractCliFlags,
+} from "./commands/config.js";
 
-const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
-const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
 const DEFAULT_APP_NAME = "kanban-cli";
 const PROGRAM_VERSION = "0.1.0";
 
@@ -164,7 +169,7 @@ export function createProgram(
     .version(version)
     .option("--api-url <url>", "Kanban API base URL", opts.apiUrl)
     .option("--profile <name>", "credential profile to use", opts.profile)
-    .option("--output <format>", "output format (table|json)", "table")
+    .option("--output <format>", "output format (table|json|yaml)", "table")
     .option("--no-color", "disable ANSI color in table output")
     .option("--color <mode>", "force color on/off (on|off|auto)", "auto");
 
@@ -1363,7 +1368,63 @@ export function createProgram(
       );
     });
 
+  // ---- config ----
+  // Inspects and updates the persistent CLI configuration. The priority
+  // chain (CLI flag > env var > config file > built-in default) is owned
+  // by `commands/config.ts`; the command group just wires the two user-
+  // facing verbs (`get` / `set`) to that module.
+  const configCmd = program
+    .command("config")
+    .description("view or update CLI configuration (API URL, profile, output, timeout)");
+
+  configCmd
+    .command("get [key]")
+    .description(
+      "print the effective value for <key> (apiUrl|output|profile|timeout); with no key, prints every supported key alongside its source"
+    )
+    .action(async (key?: string) => {
+      // We scan the original argv instead of reading program.opts()
+      // because Commander reports the *default* value (the resolved
+      // apiUrl/profile) when the user did not pass the flag — that
+      // would always show source=cli and hide the env/file/default
+      // chain. `extractCliFlags` returns only the flags the user
+      // explicitly typed.
+      const cliFlags = extractCliFlags(process.argv);
+      try {
+        await runConfigGet({ key, cliFlags });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        if (
+          err instanceof InvalidConfigKeyError ||
+          err instanceof InvalidConfigValueError
+        ) {
+          process.exit(1);
+        }
+        process.exit(exitCodeForError(err));
+      }
+    });
+
+  configCmd
+    .command("set <key> <value>")
+    .description(
+      "write <key>=<value> to ~/.config/kanban-cli/config.json; supported keys: apiUrl, output, profile, timeout"
+    )
+    .action(async (key: string, value: string) => {
+      try {
+        await runConfigSet({ key, value });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        if (
+          err instanceof InvalidConfigKeyError ||
+          err instanceof InvalidConfigValueError
+        ) {
+          process.exit(1);
+        }
+        process.exit(exitCodeForError(err));
+      }
+    });
+
   return program;
 }
 
-export { DEFAULT_API_URL, DEFAULT_PROFILE };
+export { resolveRootConfig } from "./config.js";

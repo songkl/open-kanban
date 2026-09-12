@@ -1,17 +1,24 @@
-// CLI entry point. Resolves runtime options from env vars / flags, builds
-// the OAuth + Http collaborators, hands them to `createProgram` (which
+// CLI entry point. Resolves runtime options from the priority chain
+// (CLI flag > env var > config file > built-in default), builds the
+// OAuth + Http collaborators, hands them to `createProgram` (which
 // wires the full command tree in cli/src/program.ts), and parses argv.
 
 import { Command } from "commander";
 import { buildOAuthClient, createProgram } from "./src/program.js";
 import { HttpClient } from "./src/http/client.js";
+import { resolveRootConfig } from "./src/config.js";
 
-// extractEarlyFlags scans argv for `--api-url` and `--profile` *before*
-// Commander sees them. Without this, the shared OAuth + Http clients
-// would always be constructed against the env-var defaults — even when
-// the user explicitly passed `--api-url` at the command line — because
-// action handlers consume `program.opts()` *after* parsing, but the
-// shared clients are wired at boot.
+// extractEarlyFlags scans argv for the global flags Commander consumes at
+// root level (`--api-url`, `--profile`) *before* Commander sees them.
+// Without this, the shared OAuth + Http clients would always be
+// constructed against the env-var defaults — even when the user
+// explicitly passed `--api-url` on the command line — because action
+// handlers read `program.opts()` after parsing, but the shared clients
+// are wired at boot.
+//
+// `--output` is intentionally not extracted here; the bootstrap layer
+// only needs apiUrl + profile. The output format is consulted per-action
+// via `program.opts()`.
 function extractEarlyFlags(
   argv: string[]
 ): { apiUrl?: string; profile?: string } {
@@ -40,8 +47,15 @@ function extractEarlyFlags(
 }
 
 const early = extractEarlyFlags(process.argv);
-const apiUrl = early.apiUrl ?? process.env.KANBAN_API_URL ?? "http://localhost:8080";
-const profile = early.profile ?? process.env.KANBAN_CLI_PROFILE;
+// Resolve through the shared priority chain so the bootstrap honours the
+// same rules (`config set apiUrl …`, KANBAN_API_URL, etc.) that the
+// `kanban config get` command prints.
+const resolved = resolveRootConfig({
+  apiUrl: early.apiUrl,
+  profile: early.profile,
+});
+const apiUrl = resolved.apiUrl;
+const profile = resolved.profile;
 
 const oauth = buildOAuthClient(apiUrl, profile);
 const http = new HttpClient({ apiUrl, profile });
