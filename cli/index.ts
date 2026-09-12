@@ -41,6 +41,16 @@ import {
 } from "./src/commands/tasks.js";
 import { InvalidUsageError as TasksInvalidUsageError } from "./src/commands/boards.js";
 import { NotLoggedInError as TasksNotLoggedInError } from "./src/commands/dashboard.js";
+import {
+  runTasksBatchCreate,
+  runTasksBatchUpdate,
+  runTasksBatchDelete,
+  alignFlagTasks,
+  loadTasksFile,
+  parseIdsFile,
+  splitFlagValues,
+  type BatchTaskSpec,
+} from "./src/commands/tasks_batch.js";
 
 const DEFAULT_API_URL = process.env.KANBAN_API_URL || "http://localhost:8080";
 const DEFAULT_PROFILE = process.env.KANBAN_CLI_PROFILE;
@@ -621,6 +631,185 @@ tasksCmd
       }
     }
   );
+
+const tasksBatchCmd = tasksCmd
+  .command("batch")
+  .description("batch task operations (create / update / delete)");
+
+function tasksBatchExitCode(err: unknown): number {
+  if (err instanceof TasksInvalidUsageError) return 1;
+  if (err instanceof TasksNotLoggedInError) return authExitCodeForError(err);
+  return authExitCodeForError(err);
+}
+
+tasksBatchCmd
+  .command("create")
+  .description(
+    "create multiple tasks (POST /api/v1/tasks/batch); input from --file or repeated --title/--column flags"
+  )
+  .option(
+    "--file <path>",
+    "read tasks from a JSON or YAML file (single object or array of objects)"
+  )
+  .option(
+    "--title <title>",
+    "task title; repeat for multiple tasks",
+    splitFlagValues
+  )
+  .option("--description <description>", "task description", splitFlagValues)
+  .option("--column <id>", "target column id", splitFlagValues)
+  .option(
+    "--status <status>",
+    "target status (todo|in_progress|review|done)",
+    splitFlagValues
+  )
+  .option(
+    "--priority <priority>",
+    "task priority (low|medium|high)",
+    splitFlagValues
+  )
+  .option("--assignee <username>", "task assignee username", splitFlagValues)
+  .option("--published", "publish each task (default behaviour)", splitFlagValues)
+  .action(
+    async (cmdOpts: {
+      file?: string;
+      title?: string[];
+      description?: string[];
+      column?: string[];
+      status?: string[];
+      priority?: string[];
+      assignee?: string[];
+      published?: boolean[] | string[];
+    }) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const oauth = buildOAuthClient(opts.apiUrl, undefined);
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      http.attachOAuth(oauth);
+      try {
+        let tasks: BatchTaskSpec[];
+        if (cmdOpts.file) {
+          tasks = await loadTasksFile(cmdOpts.file);
+        } else {
+          tasks = alignFlagTasks({
+            titles: splitFlagValues(cmdOpts.title),
+            columns: splitFlagValues(cmdOpts.column),
+            descriptions: splitFlagValues(cmdOpts.description),
+            priorities: splitFlagValues(cmdOpts.priority),
+            assignees: splitFlagValues(cmdOpts.assignee),
+            statuses: splitFlagValues(cmdOpts.status),
+            publisheds: coerceBooleans(splitFlagValues(cmdOpts.published as string[] | string | undefined)),
+          });
+        }
+        await runTasksBatchCreate({
+          apiUrl: opts.apiUrl,
+          tasks,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksBatchExitCode(err));
+      }
+    }
+  );
+
+tasksBatchCmd
+  .command("update <ids...>")
+  .description(
+    "update multiple tasks (PUT /api/v1/tasks/batch) with the same column/status/priority/assignee"
+  )
+  .option(
+    "--file <path>",
+    "read ids from a UTF-8 text file (one id per line, # comments allowed)"
+  )
+  .option("--column <id>", "move tasks to this column (mutually exclusive with --status)")
+  .option(
+    "--status <status>",
+    "move tasks to the column with this status (todo|in_progress|review|done); mutually exclusive with --column"
+  )
+  .option("--priority <priority>", "new priority (low|medium|high)")
+  .option("--assignee <username>", "new assignee username")
+  .action(
+    async (
+      ids: string[],
+      cmdOpts: {
+        file?: string;
+        column?: string;
+        status?: string;
+        priority?: string;
+        assignee?: string;
+      }
+    ) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const oauth = buildOAuthClient(opts.apiUrl, undefined);
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      http.attachOAuth(oauth);
+      try {
+        const fromFile = cmdOpts.file ? await parseIdsFile(cmdOpts.file) : [];
+        const allIds = [...ids, ...fromFile];
+        await runTasksBatchUpdate({
+          apiUrl: opts.apiUrl,
+          ids: allIds,
+          columnId: cmdOpts.column,
+          status: cmdOpts.status as TaskStatus | undefined,
+          priority: cmdOpts.priority as TaskPriority | undefined,
+          assignee: cmdOpts.assignee,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksBatchExitCode(err));
+      }
+    }
+  );
+
+tasksBatchCmd
+  .command("delete <ids...>")
+  .description(
+    "delete multiple tasks (DELETE /api/v1/tasks/batch); --yes is the default and can be omitted"
+  )
+  .option(
+    "--file <path>",
+    "read ids from a UTF-8 text file (one id per line, # comments allowed)"
+  )
+  .option("--yes", "skip confirmation prompt (default behaviour)", false)
+  .action(
+    async (
+      ids: string[],
+      cmdOpts: { file?: string; yes?: boolean }
+    ) => {
+      const opts = program.opts<{ apiUrl: string; output?: string }>();
+      const oauth = buildOAuthClient(opts.apiUrl, undefined);
+      const http = new HttpClient({ apiUrl: opts.apiUrl });
+      http.attachOAuth(oauth);
+      try {
+        const fromFile = cmdOpts.file ? await parseIdsFile(cmdOpts.file) : [];
+        const allIds = [...ids, ...fromFile];
+        await runTasksBatchDelete({
+          apiUrl: opts.apiUrl,
+          ids: allIds,
+          yes: true,
+          format: opts.output === "json" ? "json" : "table",
+          http,
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksBatchExitCode(err));
+      }
+    }
+  );
+
+function coerceBooleans(values: string[]): boolean[] {
+  return values.map((v) => {
+    const t = String(v).trim().toLowerCase();
+    if (t === "true" || t === "1" || t === "yes") return true;
+    if (t === "false" || t === "0" || t === "no") return false;
+    throw new TasksInvalidUsageError(
+      `invalid boolean value: ${v} (allowed: true|false)`
+    );
+  });
+}
 
 program.parseAsync(process.argv).catch((err: Error) => {
   process.stderr.write(`${err.message}\n`);

@@ -122,6 +122,39 @@ On `kanban auth login`, the CLI:
 | `kanban tasks delete <id> [--yes]` | Delete a task (`DELETE /api/v1/tasks/:id`). |
 | `kanban tasks complete <id>` | Advance a task to the next column (`POST /api/v1/tasks/:id/complete`). |
 | `kanban tasks move <id> [--column <id>\|--status <s>]` | Move a task to a target column or status. |
+| `kanban tasks batch create [--file <json\|yaml>] [--title ...] [--column ...] [--description ...] [--priority ...] [--assignee ...] [--status ...]` | Create multiple tasks (`POST /api/v1/tasks/batch`). Either supply `--file` or repeat the field flags to build a positional list. |
+| `kanban tasks batch update <ids...> [--file <ids.txt>] [--column\|--status] [--priority] [--assignee]` | Update multiple tasks at once (`PUT /api/v1/tasks/batch`). Ids may come from the positional list or a newline-delimited text file. |
+| `kanban tasks batch delete <ids...> [--file <ids.txt>] [--yes]` | Delete multiple tasks (`DELETE /api/v1/tasks/batch`). `--yes` is the default and may be omitted. |
+
+### Batch input examples
+
+```bash
+# Create from a YAML file (a single object or a list of objects is fine).
+kanban tasks batch create --file ./tasks.yaml
+
+# Create from a JSON file.
+kanban tasks batch create --file ./tasks.json
+
+# Create from repeated flags; positions align across --title / --column /
+# --priority / etc.
+kanban tasks batch create \
+  --title "Write spec"   --column col-todo   --priority high \
+  --title "Implement X"  --column col-doing  --priority medium
+
+# Update several tasks at once with the same patch.
+kanban tasks batch update t1 t2 t3 --status done
+kanban tasks batch update --file ./ids.txt --priority low --assignee alice
+
+# Delete a list of ids (positions + file are concatenated, duplicates removed).
+kanban tasks batch delete t1 t2 t3
+kanban tasks batch delete --file ./ids.txt
+```
+
+The batch `--file` format accepts JSON or YAML. Each entry must include a
+non-empty `title`; `columnId`, `priority`, `status`, `description`,
+`assignee`, `published`, and `meta` are optional. An unknown status or
+priority in the file raises an `InvalidUsageError` (exit code 1) before
+any HTTP traffic, so typos fail fast.
 
 ## Exit codes
 
