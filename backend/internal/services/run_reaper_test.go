@@ -15,10 +15,19 @@ import (
 
 func setupReaperDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite3", ":memory:")
+	// `mode=memory&cache=shared` is required so the reaper's
+	// background goroutine sees the same in-memory database as
+	// the test goroutine — without it go-sqlite3 hands each
+	// pooled connection its own private `:memory:` instance
+	// and the reaper sweep hits "no such table". SetMaxOpenConns(1)
+	// further pins everything to a single connection so the
+	// reaper's RunOnce and the test's polling QueryRow serialise
+	// without competing for the SQLite write lock.
+	db, err := sql.Open("sqlite3", "file:run_reaper_test.db?mode=memory&cache=shared")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	db.SetMaxOpenConns(1)
 
 	schema := `
 	CREATE TABLE users (
