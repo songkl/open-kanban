@@ -26,6 +26,10 @@ import { Writable } from "node:stream";
 import { HttpClient } from "../src/http/client.js";
 import { InMemorySecretProvider, OAuthClient } from "../src/auth/client.js";
 import type { OAuthMetadata } from "../src/auth/types.js";
+import {
+  runLogin,
+  runStatus as runAuthStatus,
+} from "../src/auth/commands.js";
 import { runBoardsList } from "../src/commands/boards.js";
 import { runTasksList, runTaskComplete } from "../src/commands/tasks.js";
 
@@ -453,4 +457,157 @@ describe("CLI end-to-end (auth login → boards list → tasks list → task com
     expect(stored?.clientId).toBe("cid-cli-2");
     expect(stored?.accessToken).toBeUndefined();
   });
+
+  it(
+    "walks the full Phase 1 user journey via the CLI command wrappers",
+    async () => {
+      // The two scenarios above reach into OAuthClient directly so they
+      // can pin the device-flow protocol wire format. This scenario
+      // exercises the SAME flow through the command wrappers a real
+      // user hits when typing `kanban auth login` / `kanban auth status`
+      // / `kanban boards list` / `kanban tasks list` / `kanban tasks
+      // complete <id>` at a shell. The intent is to catch regressions
+      // where the command surface drifts away from the underlying
+      // OAuth/HTTP primitives (e.g. a new flag that drops the bearer
+      // token, or a wrapper that swallows an error).
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+
+      const { calls } = scriptFetch([
+        // runLogin → authorizeInteractive → ensureRegistered
+        {
+          status: 201,
+          body: {
+            client_id: "cid-cli-journey",
+            client_name: "open-kanban-cli",
+            scope: "kanban:read tasks:write",
+            token_endpoint_auth_method: "none",
+          },
+        },
+        // runLogin → authorizeInteractive → requestDeviceCode
+        {
+          status: 200,
+          body: {
+            device_code: "dev-code-journey",
+            user_code: "JOUR-NEY1",
+            verification_uri: `${API_URL}/oauth/device`,
+            verification_uri_complete: `${API_URL}/oauth/device?code=JOUR-NEY1`,
+            expires_in: 600,
+            interval: 1,
+            scope: "kanban:read tasks:write",
+          },
+        },
+        // First poll: pending
+        {
+          status: 400,
+          body: { error: "authorization_pending" },
+        },
+        // Second poll: approved
+        {
+          status: 200,
+          body: {
+            access_token: "at-journey-1",
+            token_type: "Bearer",
+            expires_in: 3600,
+            refresh_token: "rt-journey-1",
+            scope: "kanban:read tasks:write",
+          },
+        },
+        // runAuthStatus → loadCredentials (no network call) — but the
+        // HttpClient is wired, so we still emit a placeholder; the
+        // status command does not actually need it. Keeping the slot
+        // for the boards list call that follows.
+        // boards list
+        { status: 200, body: BOARDS_PAYLOAD },
+        // tasks list
+        { status: 200, body: COLUMNS_PAYLOAD },
+        // task complete
+        { status: 200, body: COMPLETED_TASK_PAYLOAD },
+      ]);
+
+      // ---- Step 1: kanban auth login (runLogin wrapper) -----------------
+      // This is the exact code path the `auth login` Commander action
+      // handler invokes. The wrapper prints the verification URL +
+      // user code to stderr (so a terminal captures them) and writes
+      // the "Logged in to ..." line to stdout.
+      const provider = new InMemorySecretProvider();
+      const oauth = new OAuthClient(API_URL, METADATA, provider);
+      const capLogin = makeCapture();
+      const loginResult = await runLogin(
+        { apiUrl: API_URL, profile: "default" },
+        { oauth, io: capLogin.io }
+      );
+      expect(loginResult.credentials?.accessToken).toBe("at-journey-1");
+      const { stdout: loginStdout, stderr: loginStderr } = capLogin.read();
+      expect(loginStdout).toMatch(/Logged in to/);
+      expect(loginStdout).toContain("cid-cli-journey");
+      expect(loginStderr).toContain("JOUR-NEY1");
+      expect(loginStderr).toContain(`${API_URL}/oauth/device`);
+
+      // ---- Step 2: kanban auth status (runAuthStatus wrapper) -----------
+      // Reads credentials from the in-memory store and prints the
+      // formatted status report to stdout. No HTTP calls.
+      const capStatus = makeCapture();
+      const statusReport = await runAuthStatus(
+        { apiUrl: API_URL, profile: "default" },
+        { oauth, io: capStatus.io }
+      );
+      expect(statusReport.clientId).toBe("cid-cli-journey");
+      expect(statusReport.scope).toBe("kanban:read tasks:write");
+      expect(statusReport.hasRefreshToken).toBe(true);
+      expect(statusReport.accessTokenRemainingSeconds).toBeGreaterThan(0);
+      const { stdout: statusStdout } = capStatus.read();
+      expect(statusStdout).toContain("cid-cli-journey");
+      expect(statusStdout).toContain("kanban:read tasks:write");
+
+      // ---- Step 3: attach OAuth + run boards list / tasks list / complete
+      const http = new HttpClient({ apiUrl: API_URL });
+      http.attachOAuth(oauth);
+
+      const capBoards = makeCapture();
+      const boardsReport = await runBoardsList({
+        apiUrl: API_URL,
+        http,
+        format: "json",
+        io: capBoards.io,
+      });
+      expect(boardsReport.boards.map((b) => b.id)).toEqual(["b1", "b2"]);
+
+      const capTasks = makeCapture();
+      const tasksReport = await runTasksList({
+        apiUrl: API_URL,
+        http,
+        format: "json",
+        io: capTasks.io,
+      });
+      expect(tasksReport.tasks).toHaveLength(3);
+
+      const capComplete = makeCapture();
+      const completed = await runTaskComplete(
+        { apiUrl: API_URL, http, format: "json", io: capComplete.io },
+        "t1"
+      );
+      expect(completed.task.id).toBe("t1");
+      expect(completed.task.columnId).toBe("col-doing");
+
+      // ---- Network-shape assertions --------------------------------------
+      // The journey must ride on the bearer token issued by the device
+      // flow — verify every auth-required request carries it.
+      const completeHeaders = calls[6].init?.headers as Record<string, string>;
+      expect(completeHeaders.Authorization).toBe("Bearer at-journey-1");
+      const tasksHeaders = calls[5].init?.headers as Record<string, string>;
+      expect(tasksHeaders.Authorization).toBe("Bearer at-journey-1");
+
+      // The OAuth choreography hit each endpoint in the expected order:
+      // register → device/code → 2× token → boards → columns → complete.
+      expect(calls.map((c) => c.url)).toEqual([
+        `${API_URL}/oauth/register`,
+        `${API_URL}/oauth/device/code`,
+        `${API_URL}/oauth/token`,
+        `${API_URL}/oauth/token`,
+        `${API_URL}/api/v1/boards`,
+        `${API_URL}/api/v1/columns`,
+        `${API_URL}/api/v1/tasks/t1/complete`,
+      ]);
+    }
+  );
 });
