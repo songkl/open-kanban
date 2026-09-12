@@ -63,6 +63,65 @@ All notable changes to this project will be documented in this file.
   runner holds the task (polls `GET /api/v1/runs/:taskId` via the
   new `useTaskRun` hook with a 5s cadence), with a Vitest suite
   covering the claimed and null states.
+- s-1093: ship the runner run-history surface end-to-end so ops and
+  PMs can audit which runner ran which task, when, and how it ended.
+  Closes the original v1 placeholder; the v2 scope it deferred has
+  been delivered across sibling tasks s-1105 / s-1106 / s-1108 /
+  s-1109 / s-1110 / s-1111. Backend (s-1108): `FinishRun` now stamps
+  the row in place — status=`completed|failed`, `finished_at`,
+  `exit_code`, `error` — instead of issuing a `DELETE`, unifying the
+  three terminal states (completed / failed / released) on the same
+  "row stays" contract; migration 006 (sqlite + mysql) adds
+  `idx_task_runs_finished_at` and
+  `idx_task_runs_status_finished_at` to keep `/runs/history` cheap;
+  `version_map.go` bumps the 0.6.0 entry to `From=1 To=6`. New
+  `GET /api/v1/runs/history` (Bearer-authed) accepts `runnerId`,
+  `status` (completed|failed|released), `boardId` (csv), `taskId`,
+  `from`/`to` (RFC3339 or `YYYY-MM-DD`; `to < from` → 400), `limit`
+  (1–200, default 50), `offset` (≥0, default 0); orders by
+  `finished_at DESC`; post-filters by column READ access for
+  non-ADMIN callers; returns `[]` not `null` on empty. Frontend
+  (s-1109): `frontend/src/pages/RunHistoryPage.tsx` consumes
+  `runsApi.list` and renders a table (time, task title, runner,
+  status, duration, error) with status / runner / date-range filters
+  plus a search box matching task title, id, and runner id; lazy
+  `/runs` route registered in `App.tsx`; `TaskRun` extended with the
+  terminal statuses and `finishedAt / exitCode / error`; `runs.*`
+  translation block added to `en.json` / `zh.json`; 9 Vitest cases
+  cover loading, table render, status filter, search filter, both
+  empty states, error+retry, and back link. CLI (s-1110):
+  `kanban runs list [--runner-id] [--since <1d|2h|30m|1w|45s|abs>]
+  [--status completed|failed|released] [--task <id>] [--board <id>]
+  [--limit <n>] [--offset <n>]`; relative `--since` resolves to
+  `?from=<now - dur>`; honours global `--output` (table / json /
+  yaml); auth failures map to `NotLoggedInError` so the bootstrap
+  exit-codes 2; new `FLAG_VALUES_PER_COMMAND` makes
+  `runs list --status` offer the terminal run states instead of the
+  default column states, wired into the bash / zsh / fish
+  generators, the dynamic `__complete` runner, and the shell REPL;
+  man page gains a "Run history" section; 25 new unit tests plus
+  completion tests cover all of the above. Docs (s-1111):
+  `devDoc/CLI_RUNNER_OPENAPI_2026-09-12.yaml` gains the
+  `/runs/history` operation (`listRunsHistory`) under the existing
+  `Runs` tag plus the `RunHistoryStatus` and
+  `ListRunsHistoryResponse` schemas. Backend tests (s-1105): the
+  eight per-case `TestListRunsHistory_*` functions are collapsed
+  into one table-driven `TestListRunsHistory` with 19 subtests
+  (happy path, `runnerId` / `status` / `boardId` filters, RFC3339 +
+  `YYYY-MM-DD` time window, inverted / bad timestamp, single + csv
+  `boardId` scope, viewer-vs-admin permission post-filter, empty
+  result, pagination, unauthenticated), each seeding fixtures via a
+  closure against the in-memory `setupRunsDB`. Migration test
+  (s-1106): `TestSQLiteMigrationsTaskRunsUpDown` now walks the
+  006 → 005 → 004 rollback chain and asserts that rolling back 006
+  drops both history indexes while leaving the table + 004 indexes
+  intact; the up-phase assertion also lists the history indexes so
+  a regression in 006 surfaces as a single failing assertion. All
+  v2 acceptance criteria from s-1093 are met: terminal
+  (completed / failed / released) rows are queryable, READ and
+  WRITE callers see the rows they have column access to, viewers
+  without access get a 403-style filter, and the handler returns
+  `[]` not `null` when the time window or filter set is empty.
 
 ### Bug Fixes
 
