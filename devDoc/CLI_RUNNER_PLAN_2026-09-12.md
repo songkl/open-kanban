@@ -458,19 +458,27 @@ work in parallel after s-1084.
 
 ## 9. Open Questions
 
-1. **Auth scoping for the runner** — Should the claim endpoint require
-   `column WRITE`, or accept any authenticated user? Current plan:
-   `WRITE` (matches "you can already create tasks here"). Confirm with
-   the PM.
-2. **Heartbeat hook in the agent** — Do we expect every supported agent
-   (`opencode`, `claude`, `cursor`) to emit heartbeats, or should the
-   runner rely solely on the child process being alive? Current plan:
-   process-alive only, with a hard `agent.timeoutMs` ceiling. Confirm
-   once we know what real agents look like.
-3. **Run-history UI** — Defer to a follow-up? Or part of v1? Current plan:
-   defer (s-1109 leaves a follow-up ticket stub).
+> *Resolved by s-1084 design review (2026-09-12). Conclusions
+> reflected in the implementation; see `s-1084` task comment for the
+> audit trail.*
 
-   **Follow-up ticket stub (s-1092 leaves this for s-1109):**
+1. **Auth scoping for the runner** — *Resolved:* claim requires
+   `WRITE` access on the target column (with board fallback via
+   `HasColumnWrite`, shipped in s-1088). ADMIN short-circuits. For
+   `mode=mine` the per-board WRITE check runs after the task is
+   resolved, mirroring how `GetMyTasks` already gates visibility.
+2. **Heartbeat hook in the agent** — *Resolved:* process-alive only.
+   The CLI watches the child process and POSTs
+   `/runs/{taskId}/heartbeat` every `heartbeatIntervalMs`. No
+   agent-binary hook required for v1; the hard `agent.timeoutMs`
+   ceiling (default 30m) is the safety net. In-band progress
+   signaling from real agents can be added as a follow-up.
+3. **Run-history UI** — *Resolved (not deferred):* shipped in s-1109
+   (`RunHistoryPage` + `GET /api/v1/runs/history` + `kanban runs
+   list` CLI). Wired into WebSocket fanout for live updates.
+   OpenAPI extended in s-1111.
+
+   **Original follow-up ticket stub (s-1092 left this for s-1109):**
 
    - **Title:** Build run-history page (CLI runner)
    - **Acceptance criteria:**
