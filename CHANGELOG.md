@@ -66,6 +66,20 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- s-1100: validate the OAuth 2.1 JWT access token in `GetMe` and the
+  WebSocket auth handshake. The device flow completed and the CLI
+  stored a JWT, but `auth whoami` (and every other `/api/v1/users/me`
+  call) still rejected the request with `Session expired. Run
+  'kanban auth login' again.` because the handler handed the bearer
+  straight to `getCurrentUserFromToken`, which only looks up opaque
+  rows in the `tokens` table. The new `getCurrentUserFromRequest`
+  resolves the user by trying `oauth.Signer.VerifyAccessToken` first
+  and then falling back to the existing kanban-token / cookie path,
+  so device-flow access tokens now work for `/api/v1/users/me`, the
+  dashboard, the mine endpoint, and WS upgrades. Covered by
+  `TestUsersMeAliasJWTBearer` (valid access JWT, unknown subject,
+  expired JWT, tampered signature, kanban-token fallback).
+
 ### Improvements
 
 ### Documentation
