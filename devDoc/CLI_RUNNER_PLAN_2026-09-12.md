@@ -3,7 +3,8 @@
 > Created: 2026-09-12
 > Task: `s-1082`
 > Parent context: `s-1061` (CLI project), `s-1060` (Runner CLI research)
-> Status: Draft — awaiting review before implementation
+> Sub-tasks created in `s-1083`: `s-1084` … `s-1092`
+> Status: Plan approved — sub-tasks created and awaiting execution
 
 ---
 
@@ -415,30 +416,30 @@ picked up.
 
 ```mermaid
 graph TD
-  S1[S-1101: design data model + endpoints] --> S2[S-1102: backend migration 004 + model]
-  S1 --> S3[S-1103: backend handlers + reaper]
-  S3 --> S4[S-1104: backend tests]
-  S4 --> S5[S-1105: wire routes in cmd/server/main.go]
-  S1 --> S6[S-1106: CLI runner/config + validation]
-  S6 --> S7[S-1107: CLI runner/loop + claim + heartbeat + spawn]
-  S7 --> S8[S-1108: CLI kanban run subcommand + tests]
-  S8 --> S9[S-1109: e2e test + README + UX badges]
+  S1[s-1084: design data model + endpoints] --> S2[s-1085: backend migration 004 + model]
+  S1 --> S3[s-1086: backend handlers + reaper]
+  S3 --> S4[s-1087: backend tests]
+  S4 --> S5[s-1088: wire routes in cmd/server/main.go]
+  S1 --> S6[s-1089: CLI runner/config + validation]
+  S6 --> S7[s-1090: CLI runner/loop + claim + heartbeat + spawn]
+  S7 --> S8[s-1091: CLI kanban run subcommand + tests]
+  S8 --> S9[s-1092: e2e test + README + UX badges]
 ```
 
 | ID | Title | Effort | Owner-area |
 |----|-------|--------|------------|
-| s-1101 | **Design review** of the data model + endpoints in this doc; produce the final OpenAPI snippet | 0.5 d | backend lead |
-| s-1102 | Migration `004_task_runs.{up,down}.sql` for sqlite + mysql, bump `version_map.go`, add `models.TaskRun` | 0.5 d | backend |
-| s-1103 | `handlers/tasks_run.go` (claim/heartbeat/finish/release/get), `services/run_reaper.go`, register reaper at boot | 2 d | backend |
-| s-1104 | `handlers/tasks_run_test.go` + `services/run_reaper_test.go`, including two-parallel-claim race test | 1.5 d | backend |
-| s-1105 | Wire `/api/v1/runs/*` routes in `cmd/server/main.go` (already gated by `RequireAuth`); extend `permission_helper.go` so claims require column WRITE | 0.5 d | backend |
-| s-1106 | `cli/src/runner/config.ts` (discovery, deep-merge, validation) + `runner/config.test.ts` | 1 d | CLI |
-| s-1107 | `cli/src/runner/{claim,heartbeat,spawn,prompt,loop}.ts` + unit tests | 2.5 d | CLI |
-| s-1108 | `cli/src/commands/run.ts` — `kanban run [--config FILE] [--board ID --status S | --mine] [--once]`; vitest suite; man page entry | 1 d | CLI |
-| s-1109 | e2e test (`tests/e2e/runner.test.ts`), `cli/README.md` "Runner" section, kanban UI badge for in-flight run, follow-up ticket for run-history page | 1.5 d | both |
+| s-1084 | **Design review** of the data model + endpoints in this doc; produce the final OpenAPI snippet | 0.5 d | backend lead |
+| s-1085 | Migration `004_task_runs.{up,down}.sql` for sqlite + mysql, bump `version_map.go`, add `models.TaskRun` | 0.5 d | backend |
+| s-1086 | `handlers/tasks_run.go` (claim/heartbeat/finish/release/get), `services/run_reaper.go`, register reaper at boot | 2 d | backend |
+| s-1087 | `handlers/tasks_run_test.go` + `services/run_reaper_test.go`, including two-parallel-claim race test | 1.5 d | backend |
+| s-1088 | Wire `/api/v1/runs/*` routes in `cmd/server/main.go` (already gated by `RequireAuth`); extend `permission_helper.go` so claims require column WRITE | 0.5 d | backend |
+| s-1089 | `cli/src/runner/config.ts` (discovery, deep-merge, validation) + `runner/config.test.ts` | 1 d | CLI |
+| s-1090 | `cli/src/runner/{claim,heartbeat,spawn,prompt,loop}.ts` + unit tests | 2.5 d | CLI |
+| s-1091 | `cli/src/commands/run.ts` — `kanban run [--config FILE] [--board ID --status S | --mine] [--once]`; vitest suite; man page entry | 1 d | CLI |
+| s-1092 | e2e test (`tests/e2e/runner.test.ts`), `cli/README.md` "Runner" section, kanban UI badge for in-flight run, follow-up ticket for run-history page | 1.5 d | both |
 
 Total: ~11 working days for one engineer; ~6 days if backend and CLI
-work in parallel after s-1101.
+work in parallel after s-1084.
 
 ---
 
@@ -473,7 +474,7 @@ work in parallel after s-1101.
 
 ## 10. Definition of Done
 
-- [ ] All sub-tasks s-1101 … s-1109 merged to `main`.
+- [ ] All sub-tasks s-1084 … s-1092 merged to `main`.
 - [ ] `go test ./...` green.
 - [ ] `npm test` in `cli/` green.
 - [ ] `npm run build` produces a working `dist/index.js` with
