@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { runsApi, tasksApi, authApi } from '@/services/api';
 import { useSetupGuard } from '@/hooks/useSetupGuard';
 import { CustomDropdown } from '@/components/CustomDropdown';
+import { FilterPanelContent } from '@/components/FilterPanelContent';
+import type { FilterState } from '@/hooks/useFilters';
 import type { TaskRun } from '@/types/kanban';
 
 type RunStatusFilter = '' | 'completed' | 'failed' | 'released';
@@ -180,6 +182,11 @@ export function RunHistoryPage() {
     setFilters({ status: '', runnerId: '', search: '', dateRange: '' });
   };
 
+  const noopFiltersState: FilterState = useMemo(
+    () => ({ priority: '', assignee: '', searchQuery: '', dateRange: filters.dateRange, tag: '' }),
+    [filters.dateRange]
+  );
+
   if (loading && runs.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -243,63 +250,66 @@ export function RunHistoryPage() {
                 ref={filterPanelRef}
                 className="absolute right-0 top-full mt-2 w-64 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-3 shadow-lg z-50"
               >
-                <div className="mb-3">
-                  <label htmlFor="runs-filter-status" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">
-                    {t('runs.status')}
-                  </label>
-                  <CustomDropdown
-                    id="runs-filter-status"
-                    options={[
-                      { value: '', label: t('filter.all') },
-                      { value: 'completed', label: t('runs.statusCompleted') },
-                      { value: 'failed', label: t('runs.statusFailed') },
-                      { value: 'released', label: t('runs.statusReleased') },
-                    ]}
-                    value={filters.status}
-                    onChange={(val) => setFilters((prev) => ({ ...prev, status: val as RunStatusFilter }))}
-                    className="w-full"
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="runs-filter-runner" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">
-                    {t('runs.runner')}
-                  </label>
-                  <CustomDropdown
-                    id="runs-filter-runner"
-                    options={[
-                      { value: '', label: t('filter.all') },
-                      ...uniqueRunners.map((runner) => ({ value: runner, label: runner })),
-                    ]}
-                    value={filters.runnerId}
-                    onChange={(val) => setFilters((prev) => ({ ...prev, runnerId: val }))}
-                    className="w-full"
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="runs-filter-dateRange" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">
-                    {t('filter.dateRange')}
-                  </label>
-                  <CustomDropdown
-                    id="runs-filter-dateRange"
-                    options={[
-                      { value: '', label: t('filter.all') },
-                      { value: 'today', label: t('filter.today') },
-                      { value: 'thisWeek', label: t('filter.thisWeek') },
-                      { value: 'thisMonth', label: t('filter.thisMonth') },
-                    ]}
-                    value={filters.dateRange}
-                    onChange={(val) => setFilters((prev) => ({ ...prev, dateRange: val as DateRangeFilter }))}
-                    className="w-full"
-                  />
-                </div>
-                <div className="flex gap-2 pt-2 border-t border-zinc-100">
-                  <button
-                    onClick={clearFilters}
-                    className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-2 py-1.5 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600"
-                  >
-                    {t('filter.clear')}
-                  </button>
-                </div>
+                <FilterPanelContent
+                  filters={noopFiltersState}
+                  uniqueAssignees={[]}
+                  uniqueTags={[]}
+                  filterPresets={[]}
+                  showPresetDropdown={false}
+                  onSetFilters={() => undefined}
+                  onClearFilters={clearFilters}
+                  hideBoardDefaults
+                >
+                  <div className="mb-3">
+                    <label htmlFor="runs-filter-status" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">
+                      {t('runs.status')}
+                    </label>
+                    <CustomDropdown
+                      id="runs-filter-status"
+                      options={[
+                        { value: '', label: t('filter.all') },
+                        { value: 'completed', label: t('runs.statusCompleted') },
+                        { value: 'failed', label: t('runs.statusFailed') },
+                        { value: 'released', label: t('runs.statusReleased') },
+                      ]}
+                      value={filters.status}
+                      onChange={(val) => setFilters((prev) => ({ ...prev, status: val as RunStatusFilter }))}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="runs-filter-runner" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">
+                      {t('runs.runner')}
+                    </label>
+                    <CustomDropdown
+                      id="runs-filter-runner"
+                      options={[
+                        { value: '', label: t('filter.all') },
+                        ...uniqueRunners.map((runner) => ({ value: runner, label: runner })),
+                      ]}
+                      value={filters.runnerId}
+                      onChange={(val) => setFilters((prev) => ({ ...prev, runnerId: val }))}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="runs-filter-dateRange" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">
+                      {t('filter.dateRange')}
+                    </label>
+                    <CustomDropdown
+                      id="runs-filter-dateRange"
+                      options={[
+                        { value: '', label: t('filter.all') },
+                        { value: 'today', label: t('filter.today') },
+                        { value: 'thisWeek', label: t('filter.thisWeek') },
+                        { value: 'thisMonth', label: t('filter.thisMonth') },
+                      ]}
+                      value={filters.dateRange}
+                      onChange={(val) => setFilters((prev) => ({ ...prev, dateRange: val as DateRangeFilter }))}
+                      className="w-full"
+                    />
+                  </div>
+                </FilterPanelContent>
               </div>
             )}
           </div>

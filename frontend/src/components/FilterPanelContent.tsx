@@ -10,10 +10,12 @@ interface FilterPanelContentProps {
   showPresetDropdown: boolean;
   onSetFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   onClearFilters: () => void;
-  onSaveCurrentAsPreset: () => void;
-  onApplyPreset: (preset: FilterPreset) => void;
-  onDeletePreset: (presetId: string) => void;
-  onSetShowPresetDropdown: (show: boolean) => void;
+  onSaveCurrentAsPreset?: () => void;
+  onApplyPreset?: (preset: FilterPreset) => void;
+  onDeletePreset?: (presetId: string) => void;
+  onSetShowPresetDropdown?: (show: boolean) => void;
+  hideBoardDefaults?: boolean;
+  children?: React.ReactNode;
 }
 
 export function FilterPanelContent({
@@ -28,69 +30,77 @@ export function FilterPanelContent({
   onApplyPreset,
   onDeletePreset,
   onSetShowPresetDropdown,
+  hideBoardDefaults = false,
+  children,
 }: FilterPanelContentProps) {
   const { t } = useTranslation();
+  const showSavePreset = filterPresets.length > 0 && !!onSaveCurrentAsPreset;
 
   return (
     <>
-      <div className="mb-3">
-        <label htmlFor="filter-priority" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.priority')}</label>
-        <CustomDropdown
-          id="filter-priority"
-          options={[
-            { value: '', label: t('filter.all') },
-            { value: 'high', label: t('filter.high') },
-            { value: 'medium', label: t('filter.medium') },
-            { value: 'low', label: t('filter.low') },
-          ]}
-          value={filters.priority}
-          onChange={(val) => onSetFilters((prev) => ({ ...prev, priority: val }))}
-          className="w-full"
-        />
-      </div>
-      <div className="mb-3">
-        <label htmlFor="filter-assignee" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.assignee')}</label>
-        <CustomDropdown
-          id="filter-assignee"
-          options={[
-            { value: '', label: t('filter.all') },
-            ...uniqueAssignees.map((a) => ({ value: a, label: a })),
-          ]}
-          value={filters.assignee}
-          onChange={(val) => onSetFilters((prev) => ({ ...prev, assignee: val }))}
-          className="w-full"
-        />
-      </div>
-      <div className="mb-3">
-        <label htmlFor="filter-dateRange" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.dateRange')}</label>
-        <CustomDropdown
-          id="filter-dateRange"
-          options={[
-            { value: '', label: t('filter.all') },
-            { value: 'today', label: t('filter.today') },
-            { value: 'thisWeek', label: t('filter.thisWeek') },
-            { value: 'thisMonth', label: t('filter.thisMonth') },
-          ]}
-          value={filters.dateRange}
-          onChange={(val) => onSetFilters((prev) => ({ ...prev, dateRange: val }))}
-          className="w-full"
-        />
-      </div>
-      {uniqueTags.length > 0 && (
-        <div className="mb-3">
-          <label htmlFor="filter-tag" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.tag')}</label>
-          <CustomDropdown
-            id="filter-tag"
-            options={[
-              { value: '', label: t('filter.all') },
-              ...uniqueTags.map((tag) => ({ value: tag, label: tag })),
-            ]}
-            value={filters.tag}
-            onChange={(val) => onSetFilters((prev) => ({ ...prev, tag: val }))}
-            className="w-full"
-          />
-        </div>
+      {!hideBoardDefaults && (
+        <>
+          <div className="mb-3">
+            <label htmlFor="filter-priority" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.priority')}</label>
+            <CustomDropdown
+              id="filter-priority"
+              options={[
+                { value: '', label: t('filter.all') },
+                { value: 'high', label: t('filter.high') },
+                { value: 'medium', label: t('filter.medium') },
+                { value: 'low', label: t('filter.low') },
+              ]}
+              value={filters.priority}
+              onChange={(val) => onSetFilters((prev) => ({ ...prev, priority: val }))}
+              className="w-full"
+            />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="filter-assignee" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.assignee')}</label>
+            <CustomDropdown
+              id="filter-assignee"
+              options={[
+                { value: '', label: t('filter.all') },
+                ...uniqueAssignees.map((a) => ({ value: a, label: a })),
+              ]}
+              value={filters.assignee}
+              onChange={(val) => onSetFilters((prev) => ({ ...prev, assignee: val }))}
+              className="w-full"
+            />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="filter-dateRange" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.dateRange')}</label>
+            <CustomDropdown
+              id="filter-dateRange"
+              options={[
+                { value: '', label: t('filter.all') },
+                { value: 'today', label: t('filter.today') },
+                { value: 'thisWeek', label: t('filter.thisWeek') },
+                { value: 'thisMonth', label: t('filter.thisMonth') },
+              ]}
+              value={filters.dateRange}
+              onChange={(val) => onSetFilters((prev) => ({ ...prev, dateRange: val }))}
+              className="w-full"
+            />
+          </div>
+          {uniqueTags.length > 0 && (
+            <div className="mb-3">
+              <label htmlFor="filter-tag" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.tag')}</label>
+              <CustomDropdown
+                id="filter-tag"
+                options={[
+                  { value: '', label: t('filter.all') },
+                  ...uniqueTags.map((tag) => ({ value: tag, label: tag })),
+                ]}
+                value={filters.tag}
+                onChange={(val) => onSetFilters((prev) => ({ ...prev, tag: val }))}
+                className="w-full"
+              />
+            </div>
+          )}
+        </>
       )}
+      {children}
       <div className="flex gap-2 pt-2 border-t border-zinc-100">
         <button
           onClick={onClearFilters}
@@ -98,19 +108,21 @@ export function FilterPanelContent({
         >
           {t('filter.clear')}
         </button>
-        <button
-          onClick={onSaveCurrentAsPreset}
-          className="flex-1 rounded-md bg-blue-500 px-2 py-1.5 text-sm text-white hover:bg-blue-600"
-        >
-          {t('filter.savePreset')}
-        </button>
+        {showSavePreset && onSaveCurrentAsPreset && (
+          <button
+            onClick={onSaveCurrentAsPreset}
+            className="flex-1 rounded-md bg-blue-500 px-2 py-1.5 text-sm text-white hover:bg-blue-600"
+          >
+            {t('filter.savePreset')}
+          </button>
+        )}
       </div>
-      {filterPresets.length > 0 && (
+      {showSavePreset && filterPresets.length > 0 && (
         <div className="mt-3 pt-3 border-t border-zinc-100">
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-medium text-zinc-500 dark:text-zinc-500">{t('filter.preset')}</label>
             <button
-              onClick={() => onSetShowPresetDropdown(!showPresetDropdown)}
+              onClick={() => onSetShowPresetDropdown?.(!showPresetDropdown)}
               className="text-xs text-blue-500 hover:text-blue-600"
             >
               {showPresetDropdown ? t('filter.collapse') : t('filter.expand')}
@@ -121,13 +133,13 @@ export function FilterPanelContent({
               {filterPresets.map((preset) => (
                 <div key={preset.id} className="flex items-center justify-between group">
                   <button
-                    onClick={() => onApplyPreset(preset)}
+                    onClick={() => onApplyPreset?.(preset)}
                     className="flex-1 text-left px-2 py-1 text-sm rounded hover:bg-zinc-100 dark:hover:bg-zinc-600"
                   >
                     {preset.name}
                   </button>
                   <button
-                    onClick={() => onDeletePreset(preset.id)}
+                    onClick={() => onDeletePreset?.(preset.id)}
                     className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-600 px-1"
                   >
                     <svg
