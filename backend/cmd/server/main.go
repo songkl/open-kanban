@@ -361,6 +361,14 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.DELETE("/oauth/consents", oauth.RevokeConsentHandler(db))
 		authProtected.GET("/oauth/config", oauth.GetOAuthConfigHandler(db))
 		authProtected.PUT("/oauth/config", oauth.UpdateOAuthConfigHandler(db))
+		// External IdP provider CRUD (s-1141). Each handler enforces
+		// role=ADMIN itself so the same routes can later move into
+		// /api/v1/admin/... without a route rewrite.
+		authProtected.GET("/oauth/providers", oauth.ListAdminProvidersHandler(db))
+		authProtected.POST("/oauth/providers", oauth.CreateAdminProviderHandler(db))
+		authProtected.GET("/oauth/providers/:id", oauth.GetAdminProviderHandler(db))
+		authProtected.PUT("/oauth/providers/:id", oauth.UpdateAdminProviderHandler(db))
+		authProtected.DELETE("/oauth/providers/:id", oauth.DeleteAdminProviderHandler(db))
 	}
 
 	boards := r.Group("/api/v1/boards")
