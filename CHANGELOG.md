@@ -129,6 +129,32 @@ All notable changes to this project will be documented in this file.
   WRITE callers see the rows they have column access to, viewers
   without access get a 403-style filter, and the handler returns
   `[]` not `null` when the time window or filter set is empty.
+- s-1112: ship per-flow Agent-identity selection in the OAuth device
+  flow so `kanban run` always binds to an `users.type='AGENT'`
+  bearer. `DeviceApproveRequest` now accepts an optional `agent_id`
+  that resolves the bind target before falling back to the legacy
+  global `oauth_device_agent_id` and then the human approver; the
+  agent id is validated as an enabled AGENT row and gated by an
+  ADMIN-or-owner permission check. `DeviceLookupHandler` adds
+  `agent_selection_required` plus a role-filtered `available_agents`
+  list for the browser page, and a new public
+  `GET /oauth/device/agents` endpoint lets the page re-fetch that
+  list. Consent rows and audit activities now key on the bound
+  Agent id rather than silently overwriting the human approver's
+  id. Frontend `OAuthDevicePage` renders an "Authorise as" selector
+  (with "Myself" / per-Agent / server-default options) before the
+  approve/deny buttons and posts the chosen `agent_id`; the
+  `OAuthSettings` admin page adds the corresponding toggle.
+  **Opt-in hardening:** the new
+  `oauth_device_require_agent_selection` config key defaults to
+  `"0"` so existing deployments keep the current "human approver
+  binds" behaviour. When an admin flips it to `"1"`, the device
+  flow rejects human-as-approver approvals with
+  `400 invalid_request` (unless the approver is themselves
+  `type='AGENT'`), enforcing the "CLI runner is for Agent use"
+  hard requirement at the server boundary — review
+  `devDoc/DEVICE_AUTH_AGENT_SELECTION_PLAN_2026-09-13.md`
+  (plan §5 row 14) before enabling on production.
 
 ### Bug Fixes
 
