@@ -263,4 +263,35 @@ describe('OAuthSettings', () => {
     const payload = apiMock.updateOAuthConfig.mock.calls[0][0] as Record<string, string>;
     expect(payload.oauth_device_agent_id).toBe('agent-1');
   });
+
+  it('toggles oauth_device_require_agent_selection via checkbox', async () => {
+    apiMock.getOAuthConfig.mockResolvedValue({
+      dynamicRegistrationEnabled: true,
+      config: [
+        {
+          key: 'oauth_device_require_agent_selection',
+          value: '0',
+          default: '0',
+          description: 'Hardens device flow to require Agent binding (CLI runner is for agent use only)'
+        }
+      ]
+    });
+    const { OAuthSettings: Comp } = await import('./OAuthSettings');
+    render(<Comp currentUser={{ id: 'u1', role: 'ADMIN' }} />);
+    await waitFor(() => expect(screen.getByText('Settings')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Settings'));
+    const checkbox = (await waitFor(() =>
+      screen.getByTestId('oauth-config-oauth_device_require_agent_selection')
+    )) as HTMLInputElement;
+    expect(checkbox.type).toBe('checkbox');
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(true);
+    fireEvent.click(screen.getByTestId('oauth-save-config'));
+    await waitFor(() => {
+      expect(apiMock.updateOAuthConfig).toHaveBeenCalled();
+    });
+    const payload = apiMock.updateOAuthConfig.mock.calls[0][0] as Record<string, string>;
+    expect(payload.oauth_device_require_agent_selection).toBe('1');
+  });
 });

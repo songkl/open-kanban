@@ -236,7 +236,9 @@ function ConfigRow({
   onChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
-  const isToggle = row.key === 'oauth_device_enabled';
+  const isToggle =
+    row.key === 'oauth_device_enabled' ||
+    row.key === 'oauth_device_require_agent_selection';
   const isAgentSelect = row.key === 'oauth_device_agent_id';
 
   return (
