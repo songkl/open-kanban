@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
@@ -116,6 +116,65 @@ vi.mock('@/services/api', () => ({
 vi.mock('@/hooks/useSetupGuard', () => ({
   useSetupGuard: () => undefined,
 }));
+
+type Listener<T> = (event: { data: T }) => void;
+
+class FakeWebSocket {
+  static instances: FakeWebSocket[] = [];
+
+  url: string;
+  readyState: number = FakeWebSocket.OPEN;
+  onopen: (() => void) | null = null;
+  onclose: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onmessage: Listener<string> | null = null;
+  sentFrames: string[] = [];
+
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
+  constructor(url: string) {
+    this.url = url;
+    FakeWebSocket.instances.push(this);
+    queueMicrotask(() => {
+      if (this.onopen) this.onopen();
+    });
+  }
+
+  send(data: string): void {
+    this.sentFrames.push(data);
+  }
+
+  close(): void {
+    this.readyState = FakeWebSocket.CLOSED;
+    if (this.onclose) this.onclose();
+  }
+
+  // Test helpers -----------------------------------------------------
+  emit(data: string): void {
+    if (this.onmessage) this.onmessage({ data });
+  }
+
+  emitJson(payload: unknown): void {
+    this.emit(JSON.stringify(payload));
+  }
+
+  emitError(): void {
+    if (this.onerror) this.onerror();
+  }
+}
+
+beforeEach(() => {
+  FakeWebSocket.instances = [];
+  vi.stubGlobal('WebSocket', FakeWebSocket as unknown as typeof WebSocket);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  FakeWebSocket.instances = [];
+});
 
 const renderPage = () =>
   render(
@@ -254,5 +313,77 @@ describe('RunHistoryPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Back' })).toBeInTheDocument();
     });
+  });
+
+  it('opens a WebSocket on mount and refreshes when a finish notification arrives', async () => {
+    renderPage();
+
+    // First fetch happens in the mount effect.
+    await waitFor(() => {
+      expect(screen.getByText('Implement login page')).toBeInTheDocument();
+    });
+    const initialCalls = mockList.mock.calls.length;
+
+    // The page should have opened exactly one WebSocket.
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    const ws = FakeWebSocket.instances[0];
+
+    // Simulate the backend broadcasting a finish notification.
+    ws.emitJson({ type: 'task_notification', boardId: 'sys', taskId: 'task-X', action: 'finish' });
+
+    // Debounced refresh should trigger another list call within ~500ms.
+    await waitFor(() => {
+      expect(mockList.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+  });
+
+  it('refreshes when a release notification arrives', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Implement login page')).toBeInTheDocument();
+    });
+    const initialCalls = mockList.mock.calls.length;
+    const ws = FakeWebSocket.instances[0];
+
+    ws.emitJson({ type: 'task_notification', boardId: 'sys', taskId: 'task-Y', action: 'release' });
+
+    await waitFor(() => {
+      expect(mockList.mock.calls.length).toBeGreaterThan(initialCalls);
+    });
+  });
+
+  it('ignores task_notification actions that do not represent a terminal run', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Implement login page')).toBeInTheDocument();
+    });
+    const initialCalls = mockList.mock.calls.length;
+    const ws = FakeWebSocket.instances[0];
+
+    ws.emitJson({ type: 'task_notification', boardId: 'sys', taskId: 'task-Z', action: 'update_status' });
+    ws.emitJson({ type: 'task_notification', boardId: 'sys', taskId: 'task-Z', action: 'attach' });
+    ws.emitJson({ type: 'heartbeat_ack' });
+
+    // Allow microtasks + any debounced timers to flush.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockList.mock.calls.length).toBe(initialCalls);
+  });
+
+  it('ignores malformed WebSocket frames', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Implement login page')).toBeInTheDocument();
+    });
+    const initialCalls = mockList.mock.calls.length;
+    const ws = FakeWebSocket.instances[0];
+
+    ws.emit('not-json');
+    ws.emitJson({ type: 'unknown' });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockList.mock.calls.length).toBe(initialCalls);
   });
 });

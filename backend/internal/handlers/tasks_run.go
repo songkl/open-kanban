@@ -570,6 +570,12 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 		// Surface the terminal state to the WebSocket fanout
 		// so the UI can re-render without polling.
 		broadcast()
+		// Targeted notification: pages watching the run history
+		// stream (RunHistoryPage) only need to refetch when a run
+		// actually finishes, not for every board-level refresh.
+		// The action="finish" token lets those subscribers avoid
+		// re-fetching on unrelated task updates.
+		BroadcastTaskNotificationExternal(boardID, taskID, "finish")
 
 		c.JSON(http.StatusOK, gin.H{
 			"success":  true,
@@ -609,6 +615,10 @@ func ReleaseRuns(db *sql.DB) gin.HandlerFunc {
 
 		if released > 0 {
 			broadcast()
+			for _, id := range req.TaskIDs {
+				boardID, _ := getBoardIDForTask(db, id)
+				BroadcastTaskNotificationExternal(boardID, id, "release")
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{"released": released})

@@ -8,6 +8,17 @@ import { FilterPanelContent } from '@/components/FilterPanelContent';
 import type { FilterState } from '@/hooks/useFilters';
 import type { TaskRun } from '@/types/kanban';
 
+const RUN_REFRESH_DEBOUNCE_MS = 500;
+
+function getRunHistoryWsUrl(): string {
+  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+  if (import.meta.env.DEV) {
+    return `ws://localhost:8080/ws`;
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws`;
+}
+
 type RunStatusFilter = '' | 'completed' | 'failed' | 'released';
 type DateRangeFilter = '' | 'today' | 'thisWeek' | 'thisMonth';
 
@@ -135,6 +146,96 @@ export function RunHistoryPage() {
     // need to be in deps. Including it would trigger infinite loops.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);
+
+  // Incremental refresh via WebSocket: when the backend broadcasts
+  // a task_notification with action="finish" or "release" (from
+  // FinishRun / ReleaseRuns), refetch the run history so the page
+  // shows the new terminal row without waiting for the user to
+  // click the refresh button. The connection retries with backoff
+  // on failure so the page degrades to manual refresh instead of
+  // hammering the API when the WS server is unreachable.
+  const loadRunsRef = useRef(loadRuns);
+
+  useEffect(() => {
+    loadRunsRef.current = loadRuns;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    let reconnectAttempt = 0;
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        loadRunsRef.current();
+      }, RUN_REFRESH_DEBOUNCE_MS);
+    };
+
+    const connect = () => {
+      if (cancelled) return;
+      try {
+        ws = new WebSocket(getRunHistoryWsUrl());
+      } catch {
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message && message.type === 'task_notification') {
+            const action = message.action;
+            if (action === 'finish' || action === 'release') {
+              scheduleRefresh();
+            }
+          } else if (message && message.type === 'refresh') {
+            scheduleRefresh();
+          }
+        } catch {
+          // ignore malformed frames
+        }
+      };
+
+      ws.onerror = () => {
+        // onclose will fire next; reconnect logic lives there.
+      };
+
+      ws.onclose = () => {
+        if (cancelled) return;
+        scheduleReconnect();
+      };
+    };
+
+    const scheduleReconnect = () => {
+      if (cancelled) return;
+      if (reconnectAttempt >= 5) return;
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
+      reconnectAttempt += 1;
+      reconnectTimer = setTimeout(() => {
+        connect();
+      }, delay);
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onclose = null;
+        try {
+          ws.close();
+        } catch {
+          // ignore close errors during teardown
+        }
+      }
+    };
+    // Connect once on mount; reconnect/backoff is handled inside the effect.
+  }, []);
 
   const loadTaskTitles = useCallback(async (taskIds: string[]) => {
     const unique = Array.from(new Set(taskIds.filter(Boolean)));
