@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,6 +77,14 @@ func setupColumnsDB(t *testing.T) *sql.DB {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+	);
+	CREATE TABLE column_agents (
+		id TEXT PRIMARY KEY,
+		column_id TEXT UNIQUE NOT NULL,
+		agent_types TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
 	);
 	CREATE TABLE tasks (
 		id TEXT PRIMARY KEY,
@@ -606,4 +615,140 @@ func TestGetColumnSlugHandler(t *testing.T) {
 			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+}
+
+// TestGetColumnsBatchedQueries verifies that GetColumns returns tasks and
+// agent configs for many columns correctly via batched queries (fixes N+1).
+func TestGetColumnsBatchedQueries(t *testing.T) {
+	db := setupColumnsDB(t)
+	defer db.Close()
+
+	// Add 10 more columns to stress the batching path.
+	for i := 0; i < 10; i++ {
+		_, err := db.Exec(
+			`INSERT INTO columns (id, name, board_id, position) VALUES (?, ?, 'b1', ?)`,
+			fmt.Sprintf("extra-c%d", i), fmt.Sprintf("Extra %d", i), 100+i,
+		)
+		if err != nil {
+			t.Fatalf("failed to insert extra column: %v", err)
+		}
+		// Add a task per extra column to ensure tasks batching is exercised.
+		_, err = db.Exec(
+			`INSERT INTO tasks (id, title, column_id, position, published) VALUES (?, ?, ?, 0, 1)`,
+			fmt.Sprintf("extra-task-%d", i), fmt.Sprintf("Extra Task %d", i), fmt.Sprintf("extra-c%d", i),
+		)
+		if err != nil {
+			t.Fatalf("failed to insert extra task: %v", err)
+		}
+	}
+	// Add agent configs to a subset of columns.
+	for i := 0; i < 5; i++ {
+		_, err := db.Exec(
+			`INSERT INTO column_agents (id, column_id, agent_types) VALUES (?, ?, ?)`,
+			fmt.Sprintf("agent-cfg-%d", i),
+			fmt.Sprintf("c%d", i+1),
+			`["claude","codex"]`,
+		)
+		if err != nil {
+			t.Fatalf("failed to insert agent config: %v", err)
+		}
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.GET("/api/columns", handlers.GetColumns(db))
+
+	req, _ := http.NewRequest("GET", "/api/columns?boardId=b1", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(resp) != 15 {
+		t.Fatalf("expected 15 columns, got %d", len(resp))
+	}
+
+	// Each column in the response must have its tasks array populated.
+	// (The legacy N+1 implementation could miss tasks when the SQLite
+	// connection pool routed the inner query to a fresh in-memory database.)
+	taskCounts := map[string]int{}
+	for _, col := range resp {
+		tasks, _ := col["tasks"].([]interface{})
+		taskCounts[col["id"].(string)] = len(tasks)
+	}
+	if taskCounts["c1"] != 2 {
+		t.Errorf("expected c1 to have 2 tasks, got %d", taskCounts["c1"])
+	}
+	for i := 0; i < 10; i++ {
+		id := fmt.Sprintf("extra-c%d", i)
+		if taskCounts[id] != 1 {
+			t.Errorf("expected %s to have 1 task, got %d", id, taskCounts[id])
+		}
+	}
+
+	// Agent configs should be populated for the columns that have them.
+	agentConfigsByCol := map[string]map[string]interface{}{}
+	for _, col := range resp {
+		if ac, ok := col["agentConfig"].(map[string]interface{}); ok {
+			agentConfigsByCol[col["id"].(string)] = ac
+		}
+	}
+	if len(agentConfigsByCol) != 5 {
+		t.Errorf("expected 5 columns with agentConfig, got %d", len(agentConfigsByCol))
+	}
+	for i := 1; i <= 5; i++ {
+		id := fmt.Sprintf("c%d", i)
+		if _, ok := agentConfigsByCol[id]; !ok {
+			t.Errorf("expected agentConfig for %s", id)
+		}
+	}
+	// agentConfig should never be set on columns that have no row in column_agents.
+	if _, ok := agentConfigsByCol["c6"]; ok {
+		t.Errorf("did not expect agentConfig for c6")
+	}
+}
+
+// TestGetColumnsEmptyBoard verifies that the batched helpers handle the
+// empty-result case without error.
+func TestGetColumnsEmptyBoard(t *testing.T) {
+	db := setupColumnsDB(t)
+	defer db.Close()
+
+	// Insert a brand-new board with no columns.
+	_, err := db.Exec(`INSERT INTO boards (id, name) VALUES ('b-empty', 'Empty Board')`)
+	if err != nil {
+		t.Fatalf("failed to insert empty board: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('bp-empty', 'u1', 'b-empty', 'ADMIN')`)
+	if err != nil {
+		t.Fatalf("failed to insert empty board permission: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.GET("/api/columns", handlers.GetColumns(db))
+
+	req, _ := http.NewRequest("GET", "/api/columns?boardId=b-empty", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp []interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(resp) != 0 {
+		t.Errorf("expected 0 columns, got %d", len(resp))
+	}
 }

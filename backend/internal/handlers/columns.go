@@ -97,120 +97,208 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get column"})
 			return
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
-		columns := []gin.H{}
+		type columnRow struct {
+			col            models.Column
+			status         sql.NullString
+			description    sql.NullString
+			ownerAgentID   sql.NullString
+		}
+		columnRecords := []columnRow{}
+		columnIDs := []string{}
 		for rows.Next() {
-			var col models.Column
-			var status sql.NullString
-			var description sql.NullString
-			var ownerAgentId sql.NullString
-			if err := rows.Scan(&col.ID, &col.Name, &status, &col.Position, &col.Color, &description, &ownerAgentId, &col.BoardID, &col.CreatedAt, &col.UpdatedAt); err == nil {
-				if status.Valid {
-					col.Status = &status.String
-				}
-				if description.Valid {
-					col.Description = description.String
-				}
-				if ownerAgentId.Valid {
-					col.OwnerAgentID = &ownerAgentId.String
-				}
-
-				tasks := []gin.H{}
-				taskRows, err := db.Query(`
-					SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
-					       t.published, t.archived, t.archived_at, t.created_at, t.updated_at,
-					       COALESCE(cc.cnt, 0) as comment_count,
-					       COALESCE(sc.cnt, 0) as subtask_count
-					FROM tasks t
-					INNER JOIN columns c ON t.column_id = c.id AND c.board_id = ?
-					LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
-					LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
-					WHERE t.column_id = ? AND t.archived = false AND t.published = true
-					ORDER BY t.position ASC, t.created_at ASC
-				`, col.BoardID, col.ID)
-				if err == nil {
-					defer taskRows.Close()
-					rowCount := 0
-					for taskRows.Next() {
-						rowCount++
-						var task models.Task
-						var desc, assignee, meta sql.NullString
-						var archivedAt sql.NullTime
-						var commentCount, subtaskCount int
-						scanErr := taskRows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
-							&task.Published, &task.Archived, &archivedAt, &task.CreatedAt, &task.UpdatedAt,
-							&commentCount, &subtaskCount)
-						if scanErr == nil {
-							if desc.Valid {
-								task.Description = &desc.String
-							}
-							if assignee.Valid {
-								task.Assignee = &assignee.String
-							}
-							if meta.Valid {
-								task.Meta = &meta.String
-							}
-							if archivedAt.Valid {
-								task.ArchivedAt = &archivedAt.Time
-							}
-
-							tasks = append(tasks, gin.H{
-								"id":          task.ID,
-								"title":       task.Title,
-								"description": task.Description,
-								"priority":    task.Priority,
-								"assignee":    task.Assignee,
-								"meta":        task.Meta,
-								"columnId":    task.ColumnID,
-								"position":    task.Position,
-								"published":   task.Published,
-								"archived":    task.Archived,
-								"archivedAt":  task.ArchivedAt,
-								"createdAt":   task.CreatedAt,
-								"updatedAt":   task.UpdatedAt,
-								"_count": gin.H{
-									"comments": commentCount,
-									"subtasks": subtaskCount,
-								},
-							})
-						}
-					}
-				}
-
-				var agentConfig *gin.H
-				var agentTypesStr string
-				err = db.QueryRow(
-					"SELECT agent_types FROM column_agents WHERE column_id = ?",
-					col.ID,
-				).Scan(&agentTypesStr)
-				if err == nil {
-					var agentTypes []string
-					json.Unmarshal([]byte(agentTypesStr), &agentTypes)
-					agentConfig = &gin.H{
-						"agentTypes": agentTypes,
-					}
-				}
-
-				columns = append(columns, gin.H{
-					"id":           col.ID,
-					"name":         col.Name,
-					"status":       col.Status,
-					"position":     col.Position,
-					"color":        col.Color,
-					"description":  col.Description,
-					"ownerAgentId": col.OwnerAgentID,
-					"boardId":      col.BoardID,
-					"createdAt":    col.CreatedAt,
-					"updatedAt":    col.UpdatedAt,
-					"tasks":        tasks,
-					"agentConfig":  agentConfig,
-				})
+			var rec columnRow
+			if err := rows.Scan(&rec.col.ID, &rec.col.Name, &rec.status, &rec.col.Position, &rec.col.Color, &rec.description, &rec.ownerAgentID, &rec.col.BoardID, &rec.col.CreatedAt, &rec.col.UpdatedAt); err == nil {
+				columnRecords = append(columnRecords, rec)
+				columnIDs = append(columnIDs, rec.col.ID)
 			}
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to iterate columns"})
+			return
+		}
+		_ = rows.Close()
+
+		// Batch-load tasks for all returned columns in a single query (fixes N+1).
+		tasksByColumn, err := loadTasksForColumns(db, columnIDs, boardID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load tasks"})
+			return
+		}
+
+		// Batch-load agent configs for all returned columns in a single query (fixes N+1).
+		agentConfigByColumn, err := loadAgentConfigsForColumns(db, columnIDs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load agent configs"})
+			return
+		}
+
+		columns := make([]gin.H, 0, len(columnRecords))
+		for _, rec := range columnRecords {
+			col := rec.col
+			if rec.status.Valid {
+				col.Status = &rec.status.String
+			}
+			if rec.description.Valid {
+				col.Description = rec.description.String
+			}
+			if rec.ownerAgentID.Valid {
+				col.OwnerAgentID = &rec.ownerAgentID.String
+			}
+
+			tasks := tasksByColumn[col.ID]
+			if tasks == nil {
+				tasks = []gin.H{}
+			}
+
+			columns = append(columns, gin.H{
+				"id":           col.ID,
+				"name":         col.Name,
+				"status":       col.Status,
+				"position":     col.Position,
+				"color":        col.Color,
+				"description":  col.Description,
+				"ownerAgentId": col.OwnerAgentID,
+				"boardId":      col.BoardID,
+				"createdAt":    col.CreatedAt,
+				"updatedAt":    col.UpdatedAt,
+				"tasks":        tasks,
+				"agentConfig":  agentConfigByColumn[col.ID],
+			})
 		}
 
 		c.JSON(http.StatusOK, columns)
 	}
+}
+
+// loadTasksForColumns fetches all non-archived, published tasks for the given column IDs in a single batched query.
+// boardID is optional; when non-empty it scopes results to that board (preserves the legacy board_id check).
+// Returns a map keyed by column_id with task data shaped for the API response.
+func loadTasksForColumns(db *sql.DB, columnIDs []string, boardID string) (map[string][]gin.H, error) {
+	result := make(map[string][]gin.H)
+	if len(columnIDs) == 0 {
+		return result, nil
+	}
+
+	args := make([]interface{}, 0, len(columnIDs)+1)
+	whereClause := "WHERE t.column_id IN " + buildInClause(len(columnIDs))
+	for _, id := range columnIDs {
+		args = append(args, id)
+	}
+	if boardID != "" {
+		whereClause += " AND col.board_id = ?"
+		args = append(args, boardID)
+	}
+
+	query := `
+		SELECT t.id, t.title, t.description, t.priority, t.assignee, t.meta, t.column_id, t.position,
+		       t.published, t.archived, t.archived_at, t.created_at, t.updated_at,
+		       COALESCE(cc.cnt, 0) as comment_count,
+		       COALESCE(sc.cnt, 0) as subtask_count
+		FROM tasks t
+		JOIN columns col ON t.column_id = col.id
+		LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM comments GROUP BY task_id) cc ON t.id = cc.task_id
+		LEFT JOIN (SELECT task_id, COUNT(*) as cnt FROM subtasks GROUP BY task_id) sc ON t.id = sc.task_id
+		` + whereClause + `
+		  AND t.archived = false AND t.published = true
+		ORDER BY col.position ASC, t.position ASC, t.created_at ASC
+	`
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var task models.Task
+		var desc, assignee, meta sql.NullString
+		var archivedAt sql.NullTime
+		var commentCount, subtaskCount int
+		if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position,
+			&task.Published, &task.Archived, &archivedAt, &task.CreatedAt, &task.UpdatedAt,
+			&commentCount, &subtaskCount); err != nil {
+			continue
+		}
+		if desc.Valid {
+			task.Description = &desc.String
+		}
+		if assignee.Valid {
+			task.Assignee = &assignee.String
+		}
+		if meta.Valid {
+			task.Meta = &meta.String
+		}
+		if archivedAt.Valid {
+			task.ArchivedAt = &archivedAt.Time
+		}
+
+		result[task.ColumnID] = append(result[task.ColumnID], gin.H{
+			"id":            task.ID,
+			"title":         task.Title,
+			"description":   task.Description,
+			"priority":      task.Priority,
+			"assignee":      task.Assignee,
+			"meta":          task.Meta,
+			"columnId":      task.ColumnID,
+			"position":      task.Position,
+			"published":     task.Published,
+			"archived":      task.Archived,
+			"archivedAt":    task.ArchivedAt,
+			"createdAt":     task.CreatedAt,
+			"updatedAt":     task.UpdatedAt,
+			"commentCount":  commentCount,
+			"subtaskCount":  subtaskCount,
+			"_count": gin.H{
+				"comments": commentCount,
+				"subtasks": subtaskCount,
+			},
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// loadAgentConfigsForColumns fetches agent configs for the given column IDs in a single batched query.
+// Returns a map keyed by column_id with agent config data shaped for the API response.
+func loadAgentConfigsForColumns(db *sql.DB, columnIDs []string) (map[string]*gin.H, error) {
+	result := make(map[string]*gin.H)
+	if len(columnIDs) == 0 {
+		return result, nil
+	}
+
+	args := make([]interface{}, 0, len(columnIDs))
+	for _, id := range columnIDs {
+		args = append(args, id)
+	}
+
+	query := "SELECT column_id, agent_types FROM column_agents WHERE column_id IN " + buildInClause(len(columnIDs))
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var columnID, agentTypesStr string
+		if err := rows.Scan(&columnID, &agentTypesStr); err != nil {
+			continue
+		}
+		var agentTypes []string
+		if err := json.Unmarshal([]byte(agentTypesStr), &agentTypes); err != nil {
+			continue
+		}
+		result[columnID] = &gin.H{
+			"agentTypes": agentTypes,
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // GetColumnSlug returns a pinyin slug for a given name
