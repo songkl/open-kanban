@@ -90,6 +90,7 @@ parse_backend_args() {
   for arg in "$@"; do
     # Bare GOOS (single token, no space).
     if ! [[ "$arg" == *\ * ]]; then
+      local bare_match=0
       for pair in "${ALL_PLATFORMS[@]}"; do
         # `local` keeps these set -- assignments from clobbering the
         # outer $* / positional parameters; without it the error
@@ -101,8 +102,14 @@ parse_backend_args() {
         if [ "$pgoos" = "$arg" ]; then
           PLATFORMS+=("$pair")
           matched=$((matched + 1))
+          bare_match=1
         fi
       done
+      if [ "$bare_match" = 0 ]; then
+        echo "release.sh backend: unknown GOOS '$arg'" >&2
+        echo "  valid GOOS: linux darwin windows" >&2
+        exit 1
+      fi
       continue
     fi
     # Full "GOOS GOARCH".
@@ -261,6 +268,13 @@ if [ "$DO_BACKEND" = 1 ]; then
   #     the SQLite-default build can't be produced and the caller should
   #     skip it (the MySQL-only build, which uses a pure-Go driver, can still
   #     be cross-compiled for any target).
+  #
+  # The triple list tries the most common packaging names first so a host
+  # with multiple cross-compilers (apt + Homebrew + a vendored toolchain)
+  # always picks the conventional one. If the binary name ends in a version
+  # suffix (Debian/Ubuntu gcc-X / clang-X packages sometimes only symlink
+  # the versioned form into /usr/bin), we also accept `<triple>-gcc-*` to
+  # avoid a spurious SKIP when only the versioned symlink is on PATH.
   cross_cc() {
     local goos=$1 goarch=$2
     if [ "$goos" = "$HOST_GOOS" ] && [ "$goarch" = "$HOST_GOARCH" ]; then
@@ -274,12 +288,26 @@ if [ "$DO_BACKEND" = 1 ]; then
           amd64)
             # Debian/Ubuntu: gcc-x86-64-linux-gnu provides x86_64-linux-gnu-gcc.
             # Homebrew (Apple Silicon & Linuxbrew): x86_64-linux-gnu-gcc.
+            # Gentoo crossdev: x86_64-pc-linux-gnu-gcc.
+            # Fedora/RHEL: gcc-x86_64-linux-gnu (same binary name as Debian).
             # Some distros also ship a musl variant for static builds.
-            triples=("x86_64-linux-gnu" "x86_64-linux-musl" "x86_64-elf")
+            triples=(
+              "x86_64-linux-gnu"
+              "x86_64-pc-linux-gnu"
+              "x86_64-linux-musl"
+              "x86_64-elf"
+            )
             ;;
           arm64)
             # Debian/Ubuntu: gcc-aarch64-linux-gnu; Homebrew: aarch64-linux-gnu-gcc.
-            triples=("aarch64-linux-gnu" "aarch64-linux-musl" "aarch64-elf")
+            # Gentoo crossdev: aarch64-unknown-linux-gnu-gcc.
+            triples=(
+              "aarch64-linux-gnu"
+              "aarch64-unknown-linux-gnu"
+              "aarch64-pc-linux-gnu"
+              "aarch64-linux-musl"
+              "aarch64-elf"
+            )
             ;;
         esac
         ;;
@@ -297,21 +325,37 @@ if [ "$DO_BACKEND" = 1 ]; then
         ;;
       darwin)
         # CGO cross from a non-darwin host requires osxcross (clang + SDK).
-        # Probe for the standard osxcross wrapper binaries.
+        # Probe for the standard osxcross wrapper binaries first, then
+        # newer SDK-versioned names that recent osxcross releases ship.
+        local osxcross_wrappers=()
         case "$goarch" in
           amd64)
-            if command -v o64-clang >/dev/null 2>&1; then
-              echo "o64-clang"
-              return
-            fi
+            osxcross_wrappers=(
+              "o64-clang"
+              "x86_64-apple-darwin-clang"
+              "x86_64-apple-darwin20.4-clang"
+              "x86_64-apple-darwin21-clang"
+              "x86_64-apple-darwin22-clang"
+            )
             ;;
           arm64)
-            if command -v oa64-clang >/dev/null 2>&1; then
-              echo "oa64-clang"
-              return
-            fi
+            osxcross_wrappers=(
+              "oa64-clang"
+              "arm64-apple-darwin-clang"
+              "aarch64-apple-darwin-clang"
+              "arm64-apple-darwin20.4-clang"
+              "arm64-apple-darwin21-clang"
+              "arm64-apple-darwin22-clang"
+            )
             ;;
         esac
+        local wrapper
+        for wrapper in "${osxcross_wrappers[@]}"; do
+          if command -v "$wrapper" >/dev/null 2>&1; then
+            echo "$wrapper"
+            return
+          fi
+        done
         echo ""
         return
         ;;
@@ -322,12 +366,47 @@ if [ "$DO_BACKEND" = 1 ]; then
     esac
     # Try a list of suffixes per triple: the GNU -gcc form is most
     # common on Debian/Ubuntu and Homebrew; some toolchains ship clang
-    # under the GNU name instead, so probe that too.
-    local triple suffix
+    # under the GNU name instead, so probe that too. After the bare
+    # names, also probe `<triple>-gcc-*` / `<triple>-clang-*` to catch
+    # Debian's `update-alternatives` symlinks that only expose the
+    # versioned binary (e.g. aarch64-linux-gnu-gcc-12) on PATH.
+    local triple suffix candidate_bin
     for triple in "${triples[@]}"; do
       for suffix in "-gcc" "-cc" "-clang"; do
         if command -v "${triple}${suffix}" >/dev/null 2>&1; then
           echo "${triple}${suffix}"
+          return
+        fi
+      done
+      # Versioned fallbacks: walk every PATH directory and pick the
+      # highest-versioned `<triple>-{gcc,clang}-X[.Y]*` so we don't
+      # spuriously SKIP a host where only `update-alternatives` has
+      # installed the versioned symlink (common on Debian/Ubuntu and
+      # RHEL after `update-alternatives --set`). The numeric-only
+      # case keeps unrelated tooling (e.g. `<triple>-gcc-ar` from
+      # binutils) out of the result set.
+      for suffix in "-gcc-" "-clang-"; do
+        local found_bin=""
+        local IFS=':'
+        local _path_dirs
+        read -r -a _path_dirs <<< "${PATH:-}"
+        local dir candidate_bin
+        for dir in "${_path_dirs[@]}"; do
+          [ -d "$dir" ] || continue
+          for candidate_bin in "$dir/${triple}${suffix}"*; do
+            [ -x "$candidate_bin" ] || continue
+            case "$(basename "$candidate_bin")" in
+              ${triple}${suffix}[0-9]*)
+                if [ -z "$found_bin" ] \
+                  || [ "$(basename "$candidate_bin")" \> "$(basename "$found_bin")" ]; then
+                  found_bin="$candidate_bin"
+                fi
+                ;;
+            esac
+          done
+        done
+        if [ -n "$found_bin" ]; then
+          echo "$found_bin"
           return
         fi
       done
@@ -347,11 +426,13 @@ if [ "$DO_BACKEND" = 1 ]; then
         case "$goarch" in
           amd64)
             echo "            apt:    sudo apt-get install -y gcc-x86-64-linux-gnu" >&2
+            echo "            dnf:    sudo dnf install -y gcc-x86_64-linux-gnu" >&2
             echo "            brew:   brew install x86_64-linux-gnu-gcc" >&2
-            echo "            musl:   sudo apt-get install -y gcc-x86_64-linux-musl" >&2
+            echo "            musl:   sudo apt-get install -y gcc-x86-64-linux-musl" >&2
             ;;
           arm64)
             echo "            apt:    sudo apt-get install -y gcc-aarch64-linux-gnu" >&2
+            echo "            dnf:    sudo dnf install -y gcc-aarch64-linux-gnu" >&2
             echo "            brew:   brew install aarch64-linux-gnu-gcc" >&2
             echo "            musl:   sudo apt-get install -y gcc-aarch64-linux-musl" >&2
             ;;
@@ -381,6 +462,39 @@ if [ "$DO_BACKEND" = 1 ]; then
   # user reported when no cross-toolchain is installed).
   SQLITE_BUILT=()
   SQLITE_SKIPPED=()
+
+  # Pre-flight: verify that a system C compiler is actually reachable when
+  # the target matrix contains the host platform. Without this check the
+  # user gets a cryptic "gcc: command not found" from `go build` deep into
+  # the loop — after the frontend/MCP builds already burned minutes of
+  # time. Probe `cc` first (the POSIX name Go falls back to), then the
+  # distro-packaged gcc/clang, so Alpine (musl, `cc` symlink to gcc-mllib)
+  # and minimal containers (only `cc`) both resolve cleanly. Uses an
+  # in-shell loop instead of grep so it works on minimal PATHs (e.g.
+  # scratch containers, musl rescue shells) where grep itself is missing.
+  _NATIVE_TARGET_HIT=0
+  _P_PLATFORM=""
+  for _P_PLATFORM in "${PLATFORMS[@]}"; do
+    if [ "$_P_PLATFORM" = "${HOST_GOOS} ${HOST_GOARCH}" ]; then
+      _NATIVE_TARGET_HIT=1
+      break
+    fi
+  done
+  if [ "$_NATIVE_TARGET_HIT" = 1 ]; then
+    if ! command -v cc >/dev/null 2>&1 \
+       && ! command -v gcc >/dev/null 2>&1 \
+       && ! command -v clang >/dev/null 2>&1; then
+      echo "    ERROR: native build for ${HOST_GOOS}/${HOST_GOARCH} needs a C" >&2
+      echo "           compiler (cc / gcc / clang) but none were found on PATH." >&2
+      echo "           Install one, e.g.:" >&2
+      echo "             apt:   sudo apt-get install -y gcc" >&2
+      echo "             dnf:   sudo dnf install -y gcc" >&2
+      echo "             brew:  brew install gcc" >&2
+      echo "             apk:   sudo apk add gcc musl-dev" >&2
+      echo "           Then re-run this script." >&2
+      exit 1
+    fi
+  fi
 
   for PLATFORM in "${PLATFORMS[@]}"; do
     set -- $PLATFORM
