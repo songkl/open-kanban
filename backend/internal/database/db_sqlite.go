@@ -5,6 +5,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"open-kanban/internal/database/migrations"
+	"open-kanban/internal/version"
 )
 
 type DBConfig struct {
@@ -111,6 +113,50 @@ func runSQLiteMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create SQLite migrate instance: %w", err)
 	}
 
+	// Dev builds (commits past the closest tag) skip VersionMigrationMap
+	// and run every embedded migration file so locally-developed schema
+	// changes (e.g. 008 users.created_by from s-1131) are applied on
+	// startup. See db.go's isDevGitBuild for the detection rule.
+	if isDevGitBuild() {
+		log.Printf("[SQLite] Dev build detected (%s > %s), running all embedded migrations",
+			version.GetFullGitVersion(), version.GetGitVersion())
+		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+			if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
+				if forceErr := m.Force(0); forceErr != nil {
+					return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+				}
+			} else {
+				return fmt.Errorf("failed to run SQLite migrations: %w", err)
+			}
+		}
+		return nil
+	}
+
+	gitVersion := version.GetGitVersion()
+	if gitVersion != "" {
+		if fromMig, toMig, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			log.Printf("[SQLite] Running migrations from version %s (migrations %d to %d)", gitVersion, fromMig, toMig)
+			if err := m.Migrate(uint(toMig)); err != nil && err != migrate.ErrNoChange {
+				if strings.Contains(err.Error(), "Dirty") {
+					if forceErr := m.Force(toMig); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else if strings.Contains(err.Error(), "no migration found") {
+					log.Printf("[SQLite] Migration %d not found, forcing to current version", toMig)
+					if forceErr := m.Force(toMig - 1); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else {
+					return fmt.Errorf("failed to run SQLite migrations: %w", err)
+				}
+			}
+			if err := storeSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[SQLite] Warning: failed to store schema version: %v", err)
+			}
+			return nil
+		}
+	}
+
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
 			if forceErr := m.Force(7); forceErr != nil {
@@ -122,6 +168,15 @@ func runSQLiteMigrations(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func storeSchemaVersion(db *sql.DB, ver string) error {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS schema_version (version TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, datetime('now'))", ver)
+	return err
 }
 
 func InitDB() (*sql.DB, error) {

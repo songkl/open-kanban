@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- s-1134: fix `POST /api/v1/auth/agents` returning `500 {"error":"Failed to create"}`
+  on dev builds. The migration runner used the tag-only `git describe`
+  output (e.g. `0.2.0`) to look up `VersionMigrationMap`, which mapped
+  `0.2.0` to migrations `1..2` and stopped there — so the s-1131
+  migration `008_agent_created_by` (adding `users.created_by`) was
+  never applied at startup. The `CreateAgent` handler then tripped
+  `no such column: created_by` on every INSERT and translated it into
+  the generic 500. The runner now detects "dev build" via the full
+  `git describe --tags` output (carrying a `-N-gXXXX` suffix past the
+  closest tag) and applies every embedded migration in that case,
+  keeping the schema in sync with the application code under test.
+  Production-tagged builds still honour `VersionMigrationMap` so
+  operators retain explicit control over which migrations ship in each
+  release. 1 new helper (`isDevGitBuild`) + 4 unit tests cover the
+  detection rule, the dev-build migration path, idempotent re-runs,
+  and the legacy fallback when no tag is present.
+
 ### Features
 
 - s-1131: tighten the CLI auth login UX and surface Agent creator

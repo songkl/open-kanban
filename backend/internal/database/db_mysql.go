@@ -17,6 +17,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
 	"open-kanban/internal/database/migrations"
+	"open-kanban/internal/version"
 )
 
 type DBConfig struct {
@@ -298,6 +299,50 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 		return fmt.Errorf("failed to create MySQL migrate instance: %w", err)
 	}
 
+	// Dev builds (commits past the closest tag) skip VersionMigrationMap
+	// and run every embedded migration file so locally-developed schema
+	// changes (e.g. 008 users.created_by from s-1131) are applied on
+	// startup. See db.go's isDevGitBuild for the detection rule.
+	if isDevGitBuild() {
+		log.Printf("[MySQL] Dev build detected (%s > %s), running all embedded migrations",
+			version.GetFullGitVersion(), version.GetGitVersion())
+		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+			if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
+				if forceErr := m.Force(0); forceErr != nil {
+					return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+				}
+			} else {
+				return fmt.Errorf("failed to run MySQL migrations: %w", err)
+			}
+		}
+		return nil
+	}
+
+	gitVersion := version.GetGitVersion()
+	if gitVersion != "" {
+		if fromMig, toMig, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			log.Printf("[MySQL] Running migrations from version %s (migrations %d to %d)", gitVersion, fromMig, toMig)
+			if err := m.Migrate(uint(toMig)); err != nil && err != migrate.ErrNoChange {
+				if strings.Contains(err.Error(), "Dirty") {
+					if forceErr := m.Force(toMig); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else if strings.Contains(err.Error(), "no migration found") {
+					log.Printf("[MySQL] Migration %d not found, forcing to current version", toMig)
+					if forceErr := m.Force(toMig - 1); forceErr != nil {
+						return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+					}
+				} else {
+					return fmt.Errorf("failed to run MySQL migrations: %w", err)
+				}
+			}
+			if err := storeMySQLSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[MySQL] Warning: failed to store schema version: %v", err)
+			}
+			return nil
+		}
+	}
+
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
 			// With the consolidated schema there is only one migration
@@ -313,6 +358,15 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 	}
 
 	return nil
+}
+
+func storeMySQLSchemaVersion(db *sql.DB, ver string) error {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS schema_version (version VARCHAR(255) PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("INSERT INTO schema_version (version, applied_at) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE version = VALUES(version), applied_at = VALUES(applied_at)", ver)
+	return err
 }
 
 // TestMySQLRecoveryDDL_HasColumnPermissions is a sanity guard: if a

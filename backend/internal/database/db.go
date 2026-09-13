@@ -187,6 +187,28 @@ func runSQLiteMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create SQLite migrate instance: %w", err)
 	}
 
+	// isDevBuild is true when the binary was built from a commit that is
+	// strictly after the most recent annotated tag. In that situation the
+	// tag-only version (e.g. "0.2.0") maps to a stale migration count in
+	// VersionMigrationMap and would skip locally-developed schema changes
+	// (for example, the migration 008 that adds users.created_by for
+	// s-1131). Running every embedded migration file on a dev build keeps
+	// the schema aligned with the application code under test.
+	if isDevGitBuild() {
+		log.Printf("[SQLite] Dev build detected (%s > %s), running all embedded migrations",
+			version.GetFullGitVersion(), version.GetGitVersion())
+		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+			if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
+				if forceErr := m.Force(0); forceErr != nil {
+					return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+				}
+			} else {
+				return fmt.Errorf("failed to run SQLite migrations: %w", err)
+			}
+		}
+		return nil
+	}
+
 	gitVersion := version.GetGitVersion()
 	if gitVersion != "" {
 		if fromMig, toMig, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
@@ -229,6 +251,10 @@ func runSQLiteMigrations(db *sql.DB) error {
 	return nil
 }
 
+// isDevGitBuild lives in dev_build.go so the per-driver build-tag
+// variants (db_sqlite.go / db_mysql.go) and the combined build
+// (db.go) all share the same detection rule.
+
 func storeSchemaVersion(db *sql.DB, ver string) error {
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS schema_version (version TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
 	if err != nil {
@@ -261,6 +287,25 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 	m, err := migrate.NewWithInstance("iofs", d, databaseName, driver)
 	if err != nil {
 		return fmt.Errorf("failed to create MySQL migrate instance: %w", err)
+	}
+
+	// Dev builds (commits past the closest tag) skip VersionMigrationMap
+	// so locally-added migrations (e.g. 008 for users.created_by in
+	// s-1131) are applied on startup. See isDevGitBuild for the
+	// detection rule and the SQLite sibling for a parallel comment.
+	if isDevGitBuild() {
+		log.Printf("[MySQL] Dev build detected (%s > %s), running all embedded migrations",
+			version.GetFullGitVersion(), version.GetGitVersion())
+		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+			if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
+				if forceErr := m.Force(0); forceErr != nil {
+					return fmt.Errorf("failed to force clean migration state: %w", forceErr)
+				}
+			} else {
+				return fmt.Errorf("failed to run MySQL migrations: %w", err)
+			}
+		}
+		return nil
 	}
 
 	gitVersion := version.GetGitVersion()
