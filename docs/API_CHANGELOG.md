@@ -2,6 +2,90 @@
 
 This document tracks changes to the Open-Kanban API specification.
 
+## [Unreleased] — Event Center multi-stage Webhook (s-1156)
+
+### Added
+
+- **Webhook configuration CRUD (s-1143 / s-1156)** — admin
+  endpoints to manage outbound webhooks end-to-end:
+  - `POST   /api/v1/webhooks` — create a webhook. Body carries
+    `name`, `url`, `eventTypes`, `filters`, `headers`,
+    `timeoutSec`, `maxRetries`, `enabled`. The response includes
+    the redacted `WebhookView` plus a one-shot
+    `plaintextSecret` (hex, 64 chars). The plaintext is never
+    returned again — subsequent reads return `"********"` for
+    the `secret` field. `RequireAuth` + ADMIN role.
+  - `GET    /api/v1/webhooks` — list every configured webhook,
+    secrets redacted, ordered by `created_at DESC`. `RequireAuth`
+    + ADMIN role.
+  - `GET    /api/v1/webhooks/:id` — fetch one webhook.
+  - `PUT    /api/v1/webhooks/:id` — update mutable fields.
+    Secret rotation goes through the dedicated `/rotate`
+    endpoint so the audit trail records it as a distinct
+    action. `RequireAuth` + ADMIN role.
+  - `DELETE /api/v1/webhooks/:id` — remove a webhook; cascades
+    into `webhook_deliveries`. `RequireAuth` + ADMIN role.
+  - `POST   /api/v1/webhooks/:id/rotate` — mint a fresh 256-bit
+    signing secret, return the plaintext exactly once, audit
+    `webhook.rotated`. `RequireAuth` + ADMIN role.
+  - `GET    /api/v1/webhooks/events` — already shipped in
+    s-1154 (event catalogue); listed here so the full
+    webhook surface stays in one place.
+
+- **Webhook event catalogue (s-1154)** — `GET /api/v1/webhooks/events`
+  returns the fixed, versioned list of 12 webhook events the Event
+  Center can emit, including event name, displayName, trigger
+  description, simplified JSON Schema subset for the payload
+  (type / required / properties), and the §3.2 filter categories
+  that apply. The frontend §7.2 event picker renders directly
+  from this endpoint so adding a new event is a backend-only
+  change. Requires authentication (Bearer or signature).
+
+- **Outbound webhook signing (s-1156)** — every outbound POST
+  carries an HMAC-SHA256 signature the receiver can verify with
+  the canonical openssl incantation:
+  ```
+  to_sign   = "<X-Webhook-Timestamp>.<raw_body>"
+  signature = hex( HMAC_SHA256(secret, to_sign) )
+  Headers:
+    X-Webhook-Id:        <webhook.id>
+    X-Webhook-Event:     <event.type>
+    X-Webhook-Delivery:  <delivery.id>
+    X-Webhook-Timestamp: <unix seconds>
+    X-Webhook-Signature: sha256=<hex hmac>
+  ```
+  Receivers reject events whose `X-Webhook-Timestamp` is more
+  than 5 minutes off (`replay window`) and recompute the HMAC
+  over the raw request body. The signed end-to-end test
+  (`backend/internal/services/webhook_e2e_test.go`) asserts
+  byte-for-byte parity with the openssl vector.
+
+- **Retry / exhaustion (s-1156)** — failed deliveries are
+  re-attempted with exponential backoff and jitter
+  (`delay = min(60s, 2^attempt) + rand(0..1s)`); after
+  `webhooks.max_retries` unsuccessful tries the delivery
+  transitions to `EXHAUSTED` and stops being picked up. The
+  retry sweeper polls every 5 s (`RetrySweepInterval`); the
+  end-to-end test in
+  `backend/internal/services/webhook_e2e_test.go` exercises
+  the round-trip against an httptest.Server that always
+  returns 500.
+
+### Behavior
+
+- **Migration note** — the schema change lands in
+  `012_webhook_center` (not `009` as originally drafted — see
+  the migration header for the renumber rationale).
+  Operators upgrading from a pre-s-1140 build should run
+  migrations up to and including 014.
+- **Secret rotation is observable** — every write path
+  (`webhook.created`, `webhook.updated`, `webhook.deleted`,
+  `webhook.rotated`, `webhook.tested`) appends to the existing
+  `auth_activity` log so admin changes are traceable.
+- **Plaintext secret is returned exactly once** — the
+  `plaintextSecret` field is on Create + RotateSecret responses
+  only; every other read redacts to `"********"`.
+
 ## [1.0.0] - 2026-03-31
 
 ### Added

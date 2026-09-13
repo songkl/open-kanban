@@ -389,6 +389,39 @@ func (c *EventCenter) runDeliver(ctx context.Context, job *DeliveryJob) {
 	}
 }
 
+// Requeue pushes a previously-attempted delivery back onto the
+// worker pool. The retry sweeper (retry_sweeper.go) calls this
+// after it loads a FAILED row whose next_retry_at has elapsed.
+// Returns ErrBusClosed when the EventCenter has been stopped,
+// so the sweeper can leave the row in FAILED and pick it up on
+// the next tick.
+//
+// A nil job is a no-op so the sweeper doesn't have to nil-check
+// every job it dequeues from its query.
+//
+// Implementation note: Stop closes stopCh before draining the
+// worker pool, so the post-stop window where the queue still
+// has buffer space is reachable. We explicitly check stopCh
+// before attempting the push so a select race against the
+// buffered queue doesn't accidentally enqueue work into a
+// draining worker pool.
+func (c *EventCenter) Requeue(job *DeliveryJob) error {
+	if job == nil {
+		return nil
+	}
+	select {
+	case <-c.stopCh:
+		return ErrBusClosed
+	default:
+	}
+	select {
+	case <-c.stopCh:
+		return ErrBusClosed
+	case c.deliveryQueue <- job:
+		return nil
+	}
+}
+
 // defaultDeliver is the worker function used when no
 // SetDeliverFunc call has happened. It intentionally does
 // nothing: the s-1141 spec is for bus + dispatcher + worker
@@ -457,7 +490,7 @@ func (d *SQLDBDispatcher) Matches(ctx context.Context, event Event, env Envelope
 	defer rows.Close()
 
 	var (
-		out    []*MatchedWebhook
+		out     []*MatchedWebhook
 		matched int
 	)
 	for rows.Next() {

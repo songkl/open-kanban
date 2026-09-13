@@ -584,11 +584,11 @@ func TestEventCenter_DispatchLoop_OnlySpawnsConfiguredWorkers(t *testing.T) {
 	seedWebhook(t, db, "wh-12", "https://example.com/12", `["task.created"]`, `{}`)
 
 	var (
-		inFlight   atomic.Int32
-		peakSeen   atomic.Int32
-		doneJobs   atomic.Int32
-		releaseCh  = make(chan struct{})
-		allDone    = make(chan struct{})
+		inFlight  atomic.Int32
+		peakSeen  atomic.Int32
+		doneJobs  atomic.Int32
+		releaseCh = make(chan struct{})
+		allDone   = make(chan struct{})
 	)
 	deliver := func(ctx context.Context, job *services.DeliveryJob) error {
 		cur := inFlight.Add(1)
@@ -730,6 +730,33 @@ func TestEventCenter_PublishAfterBusCloseReturnsErr(t *testing.T) {
 
 	if err := bus.Publish(&fakeEvent{typ: "task.created", id: "evt-after-stop"}); !errors.Is(err, services.ErrBusClosed) {
 		t.Errorf("Publish after bus Close: err = %v, want ErrBusClosed", err)
+	}
+}
+
+// ----------------------------------------------------------------------
+// Requeue — the retry sweeper feeds re-enqueued jobs back
+// through this method (plan §5 — "Retry sweeper ... re-enqueues
+// when due").
+// ----------------------------------------------------------------------
+
+func TestEventCenter_Requeue_NilJobIsNoop(t *testing.T) {
+	bus := services.NewChannelEventBus(1)
+	defer bus.Close()
+	center := services.NewEventCenter(nil, bus, 1)
+	if err := center.Requeue(nil); err != nil {
+		t.Errorf("Requeue(nil) should return nil; got %v", err)
+	}
+}
+
+func TestEventCenter_Requeue_ReturnsErrAfterStop(t *testing.T) {
+	bus := services.NewChannelEventBus(1)
+	defer bus.Close()
+	center := services.NewEventCenter(nil, bus, 1)
+	center.Start()
+	center.Stop()
+	err := center.Requeue(&services.DeliveryJob{DeliveryID: "del-1"})
+	if !errors.Is(err, services.ErrBusClosed) {
+		t.Errorf("Requeue after Stop: err = %v, want ErrBusClosed", err)
 	}
 }
 

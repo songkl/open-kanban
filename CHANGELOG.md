@@ -4,6 +4,99 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Event Center — multi-stage Webhook
+
+> **Status**: in progress. The infrastructure laid out in
+> `docs/EVENT_CENTER_PLAN_s-1138.md` (in-memory `EventBus` +
+> `EventCenter` worker pool, `webhooks` + `webhook_deliveries`
+> tables, CRUD service, audit hooks, event catalogue endpoint)
+> is now joined end-to-end by the production HMAC-signed
+> deliverer and the retry → exhaustion sweeper. The
+> end-to-end test suite exercises the full pipeline against a
+> live `httptest.Server` receiver (success path) and a 500
+> receiver (exhaustion path).
+
+- **New endpoints / contract surface**
+  - `POST /api/v1/webhooks` (admin only) — create a webhook;
+    returns the redacted view plus the one-shot plaintext
+    signing secret (handled by `WebhookConfigService.Create`).
+  - `GET /api/v1/webhooks` (admin only) — list configured
+    webhooks with secrets redacted.
+  - `GET /api/v1/webhooks/:id` (admin only) — fetch one
+    webhook.
+  - `PUT /api/v1/webhooks/:id` (admin only) — update mutable
+    fields; secret rotation is exposed via a separate
+    endpoint to keep the audit trail distinct.
+  - `DELETE /api/v1/webhooks/:id` (admin only) — remove a
+    webhook; cascades into `webhook_deliveries`.
+  - `POST /api/v1/webhooks/:id/rotate` (admin only) — mint a
+    new 256-bit signing secret; returns the plaintext exactly
+    once.
+  - `GET /api/v1/webhooks/events` (any authenticated user) —
+    canonical event catalogue the operator UI renders from.
+    Mounted since s-1141; documented here for completeness.
+
+- **New event types** (full list — see §3 of
+  `docs/EVENT_CENTER_PLAN_s-1138.md` for the envelope shape
+  and filter contract):
+  - `task.created` / `task.updated` / `task.moved` /
+    `task.completed` / `task.deleted` / `task.assigned` /
+    `task.commented`
+  - `column.created` / `column.updated` / `column.deleted`
+  - `board.created` / `board.updated`
+
+- **Migration note**: the schema change lives in migration
+  **`012_webhook_center`** (not `009` as originally drafted in
+  the plan — see the migration header for the renumber
+  rationale). Operators upgrading from a pre-s-1140 build
+  should run migrations up to and including 014
+  (`014_webhook_admin_audit_activity`).
+
+- **Wire format** (plan §5.2; verifiable with the canonical
+  openssl incantation):
+  ```
+  to_sign   = "<X-Webhook-Timestamp>.<raw_body>"
+  signature = hex( HMAC_SHA256(secret, to_sign) )
+  Headers:
+    X-Webhook-Id:        <webhook.id>
+    X-Webhook-Event:     <event.type>
+    X-Webhook-Delivery:  <delivery.id>
+    X-Webhook-Timestamp: <unix seconds>
+    X-Webhook-Signature: sha256=<hex hmac>
+  ```
+  Receivers reject events whose timestamp is more than 5
+  minutes off (`replay window`) and recompute the HMAC over
+  the raw request body.
+
+- **Retry / backoff** (plan §5.1):
+  - Exponential with jitter:
+    `delay = min(60s, 2^attempt) + rand(0..1s)`
+  - Per-attempt state machine:
+    `PENDING → SUCCESS` on 2xx,
+    `PENDING → FAILED` on non-2xx / network error,
+    `FAILED → FAILED` on retry,
+    `FAILED → EXHAUSTED` once `attempt > webhooks.max_retries`.
+  - The retry sweeper runs every 5 s
+    (`RetrySweepInterval`); operators tune the cadence via
+    `WEBHOOK_WORKERS` (default 4) without redeploying the
+    policy.
+
+- **Code map**
+  - `backend/internal/services/webhook_delivery.go` — the
+    production `DeliverFunc`: HMAC sign + POST + status
+    update on every attempt.
+  - `backend/internal/services/webhook_delivery_test.go` —
+    unit tests for the openssl-equivalent HMAC vector and the
+    backoff curve.
+  - `backend/internal/services/retry_sweeper.go` —
+    `RetrySweeper` with `SweepOnce` for tests; production
+    callers run `Start` / `Stop` alongside `EventCenter`.
+  - `backend/internal/services/retry_sweeper_test.go` —
+    requeue / exhaustion / lifecycle coverage.
+  - `backend/internal/services/webhook_e2e_test.go` — the
+    full pipeline test (httptest receiver + signature
+    parity + EXHAUSTED after `max_retries`).
+
 ### Features
 
 - s-1144: wire the `/login` page to the external OAuth
