@@ -106,6 +106,20 @@ var VersionMigrationMap = []VersionMigration{
 	// app_config / oauth_consents lands a row in the existing
 	// activities table rather than silently disappearing.
 	{Version: "0.13.0", From: 1, To: 13},
+	// 0.14.0 added migration 014 to extend the activities.action
+	// CHECK constraint with the webhook-centre admin-operation
+	// actions in the dotted "<surface>.<verb>" notation the
+	// plan document uses (webhook.created / updated / deleted /
+	// rotated / tested, plan §6.2 in
+	// docs/EVENT_CENTER_PLAN_s-1138.md), and widen
+	// activities.target_type to include WEBHOOK (s-1140). The
+	// Webhook config service / Webhook handler / dispatcher
+	// sub-tasks (s-1141 / s-1142 / s-1143) ship in the same
+	// release against the wider CHECK; this migration closes
+	// the audit-log gap so every admin write to webhooks lands
+	// a row in the existing activities table rather than
+	// silently disappearing at the SQL CHECK constraint.
+	{Version: "0.14.0", From: 1, To: 14},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

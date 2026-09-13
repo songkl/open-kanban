@@ -315,6 +315,85 @@ func TestSQLiteMigrationsAllowOAuthAdminAuditActivity(t *testing.T) {
 	}
 }
 
+// TestSQLiteMigrationsAllowWebhookAdminAuditActivity exercises
+// migration 014 (s-1140) and verifies the CHECK constraints on
+// activities.action and activities.target_type permit the
+// webhook-centre admin-operation actions in the dotted
+// "<surface>.<verb>" notation the plan document promises
+// (webhook.created / updated / deleted / rotated / tested,
+// plan §6.2 in docs/EVENT_CENTER_PLAN_s-1138.md) and the
+// WEBHOOK target_type added in the same migration. Mirrors
+// the OAuth audit-activity test above so a future narrowing
+// of either CHECK is caught here rather than in a handler.
+func TestSQLiteMigrationsAllowWebhookAdminAuditActivity(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('u1', 'alice', 'alice', 'HUMAN', 'ADMIN', 1)
+	`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	webhookActions := []string{
+		"webhook.created",
+		"webhook.updated",
+		"webhook.deleted",
+		"webhook.rotated",
+		"webhook.tested",
+	}
+	for i, action := range webhookActions {
+		id := "a-webhook-" + action
+		if _, err := db.Exec(
+			"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, ?, 'WEBHOOK', 'wh-1', 'web')",
+			id, "u1", action,
+		); err != nil {
+			t.Errorf("action %s (index=%d) should be permitted by CHECK constraint after migration 014, got: %v", action, i, err)
+		}
+	}
+
+	// Sanity: a typo on a webhook action must still be rejected
+	// so a future refactor that introduces an unknown value
+	// surfaces here rather than in the handler.
+	if _, err := db.Exec(
+		"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, 'webhook.create', 'WEBHOOK', 'wh-1', 'web')",
+		"a-webhook-typo",
+	); err == nil {
+		t.Errorf("expected action CHECK to reject unknown webhook.create (no past tense), got nil")
+	}
+
+	// Sanity: WEBHOOK target_type must not accept a misspelled
+	// value. Mirrors the OAuth sanity check above.
+	if _, err := db.Exec(
+		"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, 'webhook.created', 'NOT_WEBHOOK', 'wh-1', 'web')",
+		"a-webhook-bad-target",
+	); err == nil {
+		t.Errorf("expected target_type CHECK to reject unknown NOT_WEBHOOK, got nil")
+	}
+}
+
 // TestSQLiteMigrationsAgentCreatedBy exercises migration 008 (s-1131)
 // and verifies users.created_by can be INSERTed against a previously
 // inserted creator, that the index is in place, and that the column
