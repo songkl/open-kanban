@@ -1,4 +1,4 @@
-import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, TaskRun } from '@/types/kanban';
+import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, OAuthProvider, OAuthProviderCreate, OAuthProviderUpdate, TaskRun } from '@/types/kanban';
 import i18n from '@/i18n';
 
 export interface Permission {
@@ -485,6 +485,20 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify({ updates }),
     }),
+  getOAuthProviders: () => fetchApi<{ providers: OAuthProvider[] }>('auth/oauth/providers').then(res => res.providers || []),
+  getOAuthProvider: (id: string) => fetchApi<OAuthProvider>(`auth/oauth/providers/${id}`),
+  createOAuthProvider: (data: OAuthProviderCreate) =>
+    fetchApi<OAuthProvider>('auth/oauth/providers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateOAuthProvider: (id: string, data: OAuthProviderUpdate) =>
+    fetchApi<OAuthProvider>(`auth/oauth/providers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteOAuthProvider: (id: string) =>
+    fetchApi<{ deleted: string }>(`auth/oauth/providers/${id}`, { method: 'DELETE' }),
   getBoards: () => fetchApi<Board[]>('boards'),
   getPermissions: (userId: string) =>
     fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string }> }>(`auth/permissions?userId=${userId}`),

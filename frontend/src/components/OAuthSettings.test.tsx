@@ -21,6 +21,11 @@ vi.mock('react-i18next', () => ({
         'oauth.admin.configSaved': 'Settings saved.',
         'oauth.admin.dynamicRegistration': 'Dynamic registration is {{enabled}}.',
         'oauth.admin.noAgentBinding': 'No binding',
+        'oauth.admin.providers.tabProviders': 'Providers',
+        'oauth.admin.providers.empty': 'No identity providers configured.',
+        'oauth.admin.providers.add': 'Add provider',
+        'oauth.admin.providers.title': 'Identity providers',
+        'oauth.admin.providers.subtitle': 'Manage external OAuth / OIDC providers.',
         'common.delete': 'Delete',
         'common.save': 'Save',
         'common.enabled': 'Enabled',
@@ -45,7 +50,11 @@ let apiMock = {
   getAgents: vi.fn(),
   deleteOAuthClient: vi.fn(),
   revokeOAuthConsent: vi.fn(),
-  updateOAuthConfig: vi.fn()
+  updateOAuthConfig: vi.fn(),
+  getOAuthProviders: vi.fn(),
+  createOAuthProvider: vi.fn(),
+  updateOAuthProvider: vi.fn(),
+  deleteOAuthProvider: vi.fn()
 };
 
 vi.mock('../services/api', () => ({ authApi: apiMock }));
@@ -72,6 +81,11 @@ vi.mock('react-i18next', () => ({
         'oauth.admin.configSaved': 'Settings saved.',
         'oauth.admin.dynamicRegistration': 'Dynamic registration is {{enabled}}.',
         'oauth.admin.noAgentBinding': 'No binding',
+        'oauth.admin.providers.tabProviders': 'Providers',
+        'oauth.admin.providers.empty': 'No identity providers configured.',
+        'oauth.admin.providers.add': 'Add provider',
+        'oauth.admin.providers.title': 'Identity providers',
+        'oauth.admin.providers.subtitle': 'Manage external OAuth / OIDC providers.',
         'common.delete': 'Delete',
         'common.save': 'Save',
         'common.enabled': 'Enabled',
@@ -96,7 +110,11 @@ const baseApiMock = () => ({
   getAgents: vi.fn().mockResolvedValue([]),
   deleteOAuthClient: vi.fn().mockResolvedValue({ deleted: 'c1' }),
   revokeOAuthConsent: vi.fn().mockResolvedValue({ revoked: 'c1' }),
-  updateOAuthConfig: vi.fn().mockResolvedValue({ updated: 1 })
+  updateOAuthConfig: vi.fn().mockResolvedValue({ updated: 1 }),
+  getOAuthProviders: vi.fn().mockResolvedValue([]),
+  createOAuthProvider: vi.fn(),
+  updateOAuthProvider: vi.fn(),
+  deleteOAuthProvider: vi.fn()
 });
 
 describe('OAuthSettings', () => {
@@ -119,6 +137,27 @@ describe('OAuthSettings', () => {
     render(<Comp currentUser={{ id: 'u1', role: 'MEMBER' }} />);
     await waitFor(() => {
       expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides the providers tab for non-admin users', async () => {
+    const { OAuthSettings: Comp } = await import('./OAuthSettings');
+    render(<Comp currentUser={{ id: 'u1', role: 'MEMBER' }} />);
+    await waitFor(() => {
+      expect(screen.queryByText('Providers')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows the providers tab for admins and renders the providers panel', async () => {
+    apiMock.getOAuthProviders.mockResolvedValue([]);
+    const { OAuthSettings: Comp } = await import('./OAuthSettings');
+    render(<Comp currentUser={{ id: 'u1', role: 'ADMIN' }} />);
+    await waitFor(() => {
+      expect(screen.getByText('Providers')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Providers'));
+    await waitFor(() => {
+      expect(screen.getByTestId('oauth-providers-settings')).toBeInTheDocument();
     });
   });
 

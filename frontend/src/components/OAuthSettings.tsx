@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
+import { OAuthProvidersSettings } from './OAuthProvidersSettings';
 import type { Agent, OAuthClient, OAuthConsent, OAuthConfigEntry } from '@/types/kanban';
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
 
 export function OAuthSettings({ currentUser }: Props) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'clients' | 'consents' | 'config'>('clients');
+  const [tab, setTab] = useState<'clients' | 'consents' | 'config' | 'providers'>('clients');
   const [clients, setClients] = useState<OAuthClient[]>([]);
   const [consents, setConsents] = useState<OAuthConsent[]>([]);
   const [config, setConfig] = useState<OAuthConfigEntry[]>([]);
@@ -122,6 +123,11 @@ export function OAuthSettings({ currentUser }: Props) {
             {t('oauth.admin.tabConfig')}
           </TabButton>
         )}
+        {isAdmin && (
+          <TabButton active={tab === 'providers'} onClick={() => setTab('providers')}>
+            {t('oauth.admin.providers.tabProviders')}
+          </TabButton>
+        )}
       </div>
 
       {loading && <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-500">{t('oauth.admin.loading')}</p>}
@@ -221,6 +227,10 @@ export function OAuthSettings({ currentUser }: Props) {
             {t('common.save')}
           </button>
         </div>
+      )}
+
+      {tab === 'providers' && isAdmin && (
+        <OAuthProvidersSettings />
       )}
     </div>
   );

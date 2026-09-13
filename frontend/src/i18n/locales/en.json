@@ -818,6 +818,67 @@
       "deviceAgentBinding": "Device authorization bound agent",
       "requireAgentSelection": "Require Agent selection",
       "requireAgentSelectionDescription": "Reject device-flow approvals made by a human. Approvers must pick an Agent identity unless the approver themselves is already an Agent. Flip this on after every consumer has migrated to the new selector."
+    },
+    "providers": {
+      "title": "Identity providers",
+      "subtitle": "Manage external OAuth / OIDC providers users can sign in with.",
+      "tabProviders": "Providers",
+      "add": "Add provider",
+      "edit": "Edit provider",
+      "empty": "No identity providers configured.",
+      "confirmDelete": "Delete this provider? Users bound to it via {{provider}} will lose access on next sign-in.",
+      "providerCreated": "Provider created.",
+      "providerUpdated": "Provider saved.",
+      "providerDeleted": "Provider deleted.",
+      "providerEnabled": "Provider enabled.",
+      "providerDisabled": "Provider disabled.",
+      "enable": "Enable",
+      "disable": "Disable",
+      "enabledBadge": "Enabled",
+      "disabledBadge": "Disabled",
+      "secretSet": "Secret configured",
+      "secretUnset": "No secret",
+      "secretSetHelp": "A client secret is already stored. Enter a new value to overwrite, or leave blank to keep the existing one.",
+      "secretUnsetHelp": "Public clients (device flow, PKCE-only) may leave this blank.",
+      "secretWriteOnlyHelp": "Stored secrets are encrypted at rest and cannot be retrieved again. Re-enter the value to change it.",
+      "fields": {
+        "providerId": "Provider ID",
+        "providerIdHelp": "Lowercase slug used in URLs (e.g. \"corp-okta\"). Cannot be changed after creation.",
+        "name": "Display name",
+        "nameHelp": "Shown to end users on the login button.",
+        "type": "Provider type",
+        "typeHelp": "Built-in preset or generic OIDC.",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "scopes": "Scopes",
+        "scopesHelp": "Space-separated OAuth scopes (e.g. \"openid email profile\").",
+        "authEndpoint": "Authorization endpoint",
+        "tokenEndpoint": "Token endpoint",
+        "userinfoEndpoint": "Userinfo endpoint",
+        "issuer": "Issuer URL",
+        "issuerRequiredForOidc": "Issuer is required for OIDC providers.",
+        "extraConfig": "Extra config (JSON)",
+        "extraConfigHelp": "Optional JSON object merged into the provider config. Must be valid JSON.",
+        "position": "Order"
+      },
+      "typeLabels": {
+        "google": "Google",
+        "github": "GitHub",
+        "wecom": "WeCom",
+        "feishu": "Feishu",
+        "dingtalk": "DingTalk",
+        "oidc": "Generic OIDC"
+      },
+      "errors": {
+        "providerIdFormat": "Provider ID must be lowercase letters, digits, or dashes (3–64 chars).",
+        "nameRequired": "Display name is required.",
+        "clientIdRequired": "Client ID is required.",
+        "typeRequired": "Provider type is required.",
+        "issuerRequired": "Issuer URL is required for OIDC providers.",
+        "invalidUrl": "Must be a valid http(s) URL with a host.",
+        "invalidScopes": "Scopes must be lowercase tokens separated by spaces (e.g. openid email).",
+        "invalidJson": "Extra config must be valid JSON."
+      }
     }
   }
 }

@@ -818,6 +818,67 @@
       "deviceAgentBinding": "设备授权绑定的 Agent",
       "requireAgentSelection": "强制选择 Agent",
       "requireAgentSelectionDescription": "开启后，以 HUMAN 身份发起的设备授权请求将被服务器拒绝，除非授权人本身已是 Agent。请在所有使用者都熟悉新的选择器后再启用。"
+    },
+    "providers": {
+      "title": "身份提供商",
+      "subtitle": "管理可用的外部 OAuth / OIDC 登录提供商。",
+      "tabProviders": "提供商",
+      "add": "新增提供商",
+      "edit": "编辑提供商",
+      "empty": "暂未配置任何身份提供商。",
+      "confirmDelete": "删除该提供商？已通过 {{provider}} 绑定的用户将在下次登录时失去访问。",
+      "providerCreated": "提供商已创建。",
+      "providerUpdated": "提供商已保存。",
+      "providerDeleted": "提供商已删除。",
+      "providerEnabled": "提供商已启用。",
+      "providerDisabled": "提供商已停用。",
+      "enable": "启用",
+      "disable": "停用",
+      "enabledBadge": "已启用",
+      "disabledBadge": "已停用",
+      "secretSet": "已配置密钥",
+      "secretUnset": "未配置密钥",
+      "secretSetHelp": "已存储一个客户端密钥。填写新值将覆盖，留空则保留原有密钥。",
+      "secretUnsetHelp": "公共客户端（设备授权流、PKCE）可不填写。",
+      "secretWriteOnlyHelp": "密钥在服务端加密保存，无法再次读取，需修改时请重新输入。",
+      "fields": {
+        "providerId": "提供商 ID",
+        "providerIdHelp": "URL 中使用的小写 slug（如 \"corp-okta\"），创建后不可修改。",
+        "name": "显示名称",
+        "nameHelp": "展示在登录按钮上。",
+        "type": "提供商类型",
+        "typeHelp": "内置预设或通用 OIDC。",
+        "clientId": "客户端 ID",
+        "clientSecret": "客户端密钥",
+        "scopes": "授权范围",
+        "scopesHelp": "空格分隔的 OAuth scope（如 \"openid email profile\"）。",
+        "authEndpoint": "授权端点",
+        "tokenEndpoint": "令牌端点",
+        "userinfoEndpoint": "用户信息端点",
+        "issuer": "Issuer URL",
+        "issuerRequiredForOidc": "OIDC 类型的提供商必须填写 Issuer。",
+        "extraConfig": "额外配置（JSON）",
+        "extraConfigHelp": "可选 JSON 对象，会合并进提供商配置，必须是合法 JSON。",
+        "position": "排序"
+      },
+      "typeLabels": {
+        "google": "Google",
+        "github": "GitHub",
+        "wecom": "企业微信",
+        "feishu": "飞书",
+        "dingtalk": "钉钉",
+        "oidc": "通用 OIDC"
+      },
+      "errors": {
+        "providerIdFormat": "提供商 ID 仅可包含小写字母、数字、短横线（3–64 字符）。",
+        "nameRequired": "请填写显示名称。",
+        "clientIdRequired": "请填写客户端 ID。",
+        "typeRequired": "请选择提供商类型。",
+        "issuerRequired": "OIDC 提供商必须填写 Issuer URL。",
+        "invalidUrl": "必须是合法的 http(s) URL，且包含主机名。",
+        "invalidScopes": "Scopes 须由小写 token 通过空格分隔（如 openid email）。",
+        "invalidJson": "额外配置必须是合法的 JSON。"
+      }
     }
   }
 }

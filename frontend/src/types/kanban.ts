@@ -157,3 +157,66 @@ export interface OAuthConfigEntry {
   default: string;
   description: string;
 }
+
+// Wire shape for /api/v1/oauth/providers (admin CRUD).
+// Mirrors backend internal/oauth.AdminOAuthProvider —
+// client_secret is intentionally omitted; only the boolean
+// secretSet flag is exposed so the form can show whether a
+// secret has already been stored. Re-entry is the only way
+// to change a stored secret.
+export interface OAuthProvider {
+  id: string;
+  providerId: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+  position: number;
+  clientId: string;
+  secretSet: boolean;
+  scopes: string;
+  authEndpoint: string;
+  tokenEndpoint: string;
+  userinfoEndpoint: string;
+  issuer: string;
+  extraConfig: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Payload for POST /api/v1/oauth/providers. clientSecret is
+// optional because some providers (device flow, PKCE-only) are
+// public clients.
+export interface OAuthProviderCreate {
+  providerId: string;
+  name: string;
+  type: string;
+  enabled?: boolean;
+  position?: number;
+  clientId: string;
+  clientSecret?: string;
+  scopes?: string;
+  authEndpoint?: string;
+  tokenEndpoint?: string;
+  userinfoEndpoint?: string;
+  issuer?: string;
+  extraConfig?: string;
+}
+
+// Payload for PUT /api/v1/oauth/providers/:id. Every field is
+// optional — absent fields keep their stored value. clientSecret
+// being absent keeps the stored secret; supplying one overwrites.
+export interface OAuthProviderUpdate {
+  name?: string;
+  type?: string;
+  enabled?: boolean;
+  position?: number;
+  clientId?: string;
+  clientSecret?: string;
+  scopes?: string;
+  authEndpoint?: string;
+  tokenEndpoint?: string;
+  userinfoEndpoint?: string;
+  issuer?: string;
+  extraConfig?: string;
+}
