@@ -105,6 +105,35 @@ All notable changes to this project will be documented in this file.
   on `provider_id`, CHECK on `type`, BLOB ciphertext round-trip,
   `ON DELETE SET NULL` on `created_by`, and the lookup index.
 
+- s-1143: add the admin Settings → OAuth → Providers sub-tab on
+  top of the existing `/api/v1/oauth/providers` CRUD endpoints
+  from s-1141. The new `OAuthProvidersSettings` component renders
+  a sorted list of providers with an inline `enabled`/`disabled`
+  toggle switch, type / status / `secretSet` badges, and an
+  add / edit modal with full client-side validation: `providerId`
+  slug regex (`^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`), required
+  `name` / `clientId` / `type`, scope tokens (`^[a-z0-9._:-]{1,64}$`),
+  `http(s)` URLs (allowing `http://localhost`, `127.0.0.1`, `::1`
+  for local dev), parsed-JSON `extraConfig`, and `issuer` required
+  when `type === 'oidc'`. `providerId` is locked after creation
+  (the public route key); `client_secret` is never displayed — only
+  a "configured / not configured" badge — and is re-entered through
+  a password-style input that the backend never returns (mirrors
+  the OAuth client admin UX and avoids the secret leaking via
+  devtools / screen-share / network tab). New API methods
+  (`getOAuthProviders` / `getOAuthProvider` / `createOAuthProvider`
+  / `updateOAuthProvider` / `deleteOAuthProvider`) and matching
+  `OAuthProvider` / `OAuthProviderCreate` / `OAuthProviderUpdate`
+  types. The admin OAuth Settings tab is admin-only and now exposes
+  Providers alongside Apps / Permissions / Settings. 17 new
+  frontend tests cover list rendering, badges, empty state,
+  toggle, create / update payloads (including `clientSecret`
+  omission), validation, cancel, delete, error display; the
+  existing `OAuthSettings` tests gain admin-only visibility
+  cases. i18n keys added to both `en.json` and `zh.json` for
+  title, fields, validation errors, and per-type labels
+  (`google` / `github` / `wecom` / `feishu` / `dingtalk` / `oidc`).
+
 ### Bug Fixes
 
 - s-1134: fix `POST /api/v1/auth/agents` returning `500 {"error":"Failed to create"}`
