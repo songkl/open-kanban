@@ -158,3 +158,72 @@ func (b *ChannelEventBus) Close() error {
 func (b *ChannelEventBus) Channel() <-chan Event {
 	return b.ch
 }
+
+// ----------------------------------------------------------------------
+// Default EventBus singleton
+// ----------------------------------------------------------------------
+
+// defaultBus is the lazily-initialised EventBus the test-send
+// endpoint (plan §7.4) publishes synthetic events through. The
+// handler layer (POST /api/v1/webhooks/:id/test) cannot take an
+// EventBus as a constructor argument because the routing layer
+// is wired by main.go at boot time, so a package-level
+// singleton with an explicit SetDefaultEventBus override is the
+// minimum-friction way to plumb a real bus (or a fake) in.
+//
+// Production: main.go can either leave the lazy default (which
+// gives a 64-slot ChannelEventBus; events are queued even
+// without a wired EventCenter so the test endpoint returns
+// 202 immediately) or call SetDefaultEventBus with the bus
+// already feeding the running EventCenter.
+//
+// Tests: SetDefaultEventBus with an unbuffered or small bus so
+// the goroutine that drains publishes doesn't leak past the
+// test's defer boundary.
+var (
+	defaultBusMu  sync.Mutex
+	defaultBus    EventBus
+	defaultBusSet bool
+)
+
+// GetDefaultEventBus returns the process-wide EventBus used by
+// the test-send handler. Returns the lazy default (64-slot
+// ChannelEventBus) on the first call; subsequent callers share
+// the same instance. ResetDefaultEventBusForTest is the
+// supported way to swap it during a test run.
+func GetDefaultEventBus() EventBus {
+	defaultBusMu.Lock()
+	defer defaultBusMu.Unlock()
+	if defaultBus == nil {
+		defaultBus = NewChannelEventBus(64)
+	}
+	return defaultBus
+}
+
+// SetDefaultEventBus installs bus as the process-wide EventBus.
+// Pass nil to fall back to a fresh lazy default on the next
+// GetDefaultEventBus call. Intended for main.go (production
+// wiring) and ResetDefaultEventBusForTest (test cleanup).
+func SetDefaultEventBus(bus EventBus) {
+	defaultBusMu.Lock()
+	defer defaultBusMu.Unlock()
+	defaultBus = bus
+	defaultBusSet = true
+}
+
+// ResetDefaultEventBusForTest clears the singleton so the next
+// GetDefaultEventBus call returns a fresh ChannelEventBus.
+// Mirrors the Reset* helpers scattered through the auth layer:
+// tests that exercised a synthetic publish must not observe a
+// bus populated by an unrelated test's SetDefaultEventBus call.
+func ResetDefaultEventBusForTest() {
+	defaultBusMu.Lock()
+	defer defaultBusMu.Unlock()
+	if defaultBus != nil {
+		// Best-effort close so the worker goroutine (if any)
+		// exits cleanly between tests.
+		_ = defaultBus.Close()
+	}
+	defaultBus = nil
+	defaultBusSet = false
+}
