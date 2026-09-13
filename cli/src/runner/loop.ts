@@ -135,6 +135,8 @@ export class RunLoop {
   private shutdown = false;
   private nextClaimDelay: number | null = null;
   private heartbeatDeadline: number | null = null;
+  private wakePending = false;
+  private currentSleepReject: ((reason: Error) => void) | null = null;
 
   constructor(opts: RunLoopOptions) {
     this.opts = opts;
@@ -171,6 +173,41 @@ export class RunLoop {
    */
   requestShutdown(): void {
     this.shutdown = true;
+    // Wake the loop out of its idle sleep so SIGINT/SIGTERM
+    // handlers don't have to wait for the full pollInterval.
+    this.interruptSleep(new Error("shutdown requested"));
+  }
+
+  /**
+   * Signal that the runner should re-evaluate the queue right
+   * now. Used by the WebSocket subscription (s-1130) so a
+   * freshly-created task reaches the runner without waiting
+   * for the next `pollIntervalMs` tick. The flag is sticky:
+   * even if the loop is mid-sleep when `wake()` is called, the
+   * pending flag survives until the next tick consumes it.
+   */
+  wake(): void {
+    this.wakePending = true;
+    this.interruptSleep(new Error("wake"));
+  }
+
+  /**
+   * Abort the in-flight idle sleep so a `wake()` /
+   * `requestShutdown()` propagates immediately. The reject is
+   * swallowed by `sleep()` and converted into a no-op; the
+   * wakePending flag (or the shutdown flag) is what the loop
+   * actually consults on the next tick.
+   */
+  private interruptSleep(reason: Error): void {
+    const reject = this.currentSleepReject;
+    if (reject) {
+      this.currentSleepReject = null;
+      try {
+        reject(reason);
+      } catch {
+        // never let a wake() kill the loop
+      }
+    }
   }
 
   /** Snapshot of the loop state — for tests + the CLI final report. */
@@ -199,9 +236,8 @@ export class RunLoop {
       await this.tryClaim();
       if (this.shutdown) break;
       if (!this.inFlight) {
-        const delay = this.nextClaimDelay ?? this.config.runner.pollIntervalMs;
-        this.nextClaimDelay = null;
-        await this.sleep(delay);
+        const delay = this.computeNextDelay();
+        await this.sleepInterruptible(delay);
       }
     }
     await this.gracefulShutdown();
@@ -234,11 +270,69 @@ export class RunLoop {
       return false;
     }
     if (!this.inFlight) {
-      const delay = this.nextClaimDelay ?? this.config.runner.pollIntervalMs;
-      this.nextClaimDelay = null;
-      await this.sleep(delay);
+      const delay = this.computeNextDelay();
+      await this.sleepInterruptible(delay);
     }
     return !this.shutdown;
+  }
+
+  /**
+   * Resolve the delay for the next idle sleep, honouring the
+   * `wake()` shortcut. When a wake-up is pending we sleep
+   * "zero-ish" (still yields the event loop) so the loop spins
+   * up against the live WS event without thrashing CPU.
+   */
+  private computeNextDelay(): number {
+    if (this.wakePending) {
+      this.wakePending = false;
+      // Honour a pending back-off override (set by tryClaim on
+      // transient errors) but floor it at 1ms so the wake
+      // doesn't deadlock against an infinite back-off.
+      const override = this.nextClaimDelay ?? 0;
+      this.nextClaimDelay = null;
+      return Math.min(Math.max(override, 0), 50);
+    }
+    const delay = this.nextClaimDelay ?? this.config.runner.pollIntervalMs;
+    this.nextClaimDelay = null;
+    return delay;
+  }
+
+  /**
+   * Sleep that can be aborted early by `wake()` /
+   * `requestShutdown()`. The reject is swallowed so the
+   * interrupt is invisible to the run loop — the next iteration
+   * consults the wake flag / shutdown flag naturally.
+   */
+  private async sleepInterruptible(ms: number): Promise<void> {
+    if (this.shutdown) return;
+    if (ms <= 0) {
+      // Yield once so the event loop can deliver pending
+      // microtasks (notably the WS message queue) before we
+      // immediately re-poll.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      return;
+    }
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.currentSleepReject = null;
+          resolve();
+        }, ms);
+        if (this.currentSleepReject) {
+          // Defensive: a previous sleep left a reject handler
+          // dangling. Clear it before installing ours.
+          this.currentSleepReject(new Error("superseded"));
+        }
+        this.currentSleepReject = (reason: Error) => {
+          clearTimeout(timer);
+          reject(reason);
+        };
+      });
+    } catch {
+      // Expected: a wake()/shutdown rejected the sleep. The
+      // run loop will observe the corresponding flag on the
+      // next iteration.
+    }
   }
 
   private async tryClaim(): Promise<void> {

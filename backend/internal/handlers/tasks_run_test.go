@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 
 	"open-kanban/internal/handlers"
 	"open-kanban/internal/models"
@@ -276,6 +277,7 @@ func runsRouter(db *sql.DB) *gin.Engine {
 	group.POST("/release", handlers.ReleaseRuns(db))
 	group.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
 	group.POST("/:taskId/finish", handlers.FinishRun(db))
+	group.POST("/:taskId/attach", handlers.AttachRun(db))
 	group.GET("/:taskId", handlers.GetRun(db))
 	group.GET("/history", handlers.ListRunsHistory(db))
 	return router
@@ -1681,3 +1683,407 @@ func TestListRunsHistory(t *testing.T) {
 
 func intPtr(v int) *int       { return &v }
 func strPtr(s string) *string { return &s }
+
+// TestAttachRun_HappyPath covers the core "AI-first" attach
+// use-case: a runner / operator that already knows the task id
+// (e.g. surfaced through the UI, MCP, or a queue) can claim it
+// without owning the surrounding column or inbox.
+//
+// Verifies:
+//   * 200 with the canonical { task, run } payload (same shape
+//     as ClaimRun, so the CLI prompt-rendering path is identical).
+//   * task_runs row inserted with the supplied runnerId.
+//   * task moves into the in_progress column, just like ClaimRun.
+func TestAttachRun_HappyPath(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
+		"runnerId":  "runner-A",
+		"agentType": "opencoder",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Task map[string]interface{} `json:"task"`
+		Run  map[string]interface{} `json:"run"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Task == nil || resp.Task["id"] != "t-1" {
+		t.Errorf("expected task.id=t-1, got %+v", resp.Task)
+	}
+	if resp.Run["status"] != "claimed" {
+		t.Errorf("expected run.status=claimed, got %v", resp.Run["status"])
+	}
+	if resp.Run["runnerId"] != "runner-A" {
+		t.Errorf("expected run.runnerId=runner-A, got %v", resp.Run["runnerId"])
+	}
+
+	// Task should have moved into the in_progress column.
+	var columnID string
+	if err := db.QueryRow("SELECT column_id FROM tasks WHERE id = 't-1'").Scan(&columnID); err != nil {
+		t.Fatalf("query task column: %v", err)
+	}
+	if columnID != "c-doing" {
+		t.Errorf("expected task moved to c-doing, got %s", columnID)
+	}
+
+	// And the activity stream should have a CLAIM_TASK entry
+	// so the audit trail matches what ClaimRun produces.
+	var count int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM activities WHERE target_id = 't-1' AND action = 'CLAIM_TASK'",
+	).Scan(&count); err != nil {
+		t.Fatalf("query activities: %v", err)
+	}
+	if count < 1 {
+		t.Errorf("expected at least one CLAIM_TASK activity, got %d", count)
+	}
+}
+
+// TestAttachRun_TaskNotFound covers the 404 path. The handler
+// must distinguish a missing task from a missing run row so the
+// CLI can render a clean "no such task" hint instead of a
+// misleading lock-held error.
+func TestAttachRun_TaskNotFound(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-missing/attach", "admin-token", map[string]interface{}{
+		"runnerId": "runner-A",
+	})
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestAttachRun_ArchivedTaskRejected covers the 422 path.
+// Archived tasks must not be attach-able — once a task is in
+// the archive lane the runner should pick a different one
+// instead of resurrecting it.
+func TestAttachRun_ArchivedTaskRejected(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-archived/attach", "admin-token", map[string]interface{}{
+		"runnerId": "runner-A",
+	})
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestAttachRun_DraftTaskRejected covers the 422 path for
+// unpublished (draft) tasks. The attach endpoint is for the
+// AI-first workflow, which only acts on visible tasks.
+func TestAttachRun_DraftTaskRejected(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-draft/attach", "admin-token", map[string]interface{}{
+		"runnerId": "runner-A",
+	})
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestAttachRun_ViewerForbidden covers the 403 path. The
+// VIEWER role must never be able to attach — same baseline as
+// the rest of the runner API.
+func TestAttachRun_ViewerForbidden(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "viewer-token", map[string]interface{}{
+		"runnerId": "runner-A",
+	})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestAttachRun_NoRunnerIDReturns400 covers the input
+// validation. runnerId is required so the heartbeat / finish
+// round-trip can verify ownership against a stable identity.
+func TestAttachRun_NoRunnerIDReturns400(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestAttachRun_NoAuthReturns401 covers the auth path.
+func TestAttachRun_NoAuthReturns401(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "", map[string]interface{}{
+		"runnerId": "runner-A",
+	})
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestAttachRun_LockedByAnotherRunnerReturns409 covers the
+// contention path. The handler must surface a 409 (not 204)
+// because the caller named the task explicitly — they don't
+// have the option to "pick the next one".
+func TestAttachRun_LockedByAnotherRunnerReturns409(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	// Seed a pre-existing lock owned by runner-A so the
+	// second attach (from runner-B) is forced into the
+	// conflict branch.
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-1", "c-todo", "runner-A", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
+		"runnerId": "runner-B",
+	})
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestAttachRun_ReasonRecordedInActivity covers the optional
+// `reason` field — the activity stream should preserve it so
+// operators can tell apart "scanner grabbed it" from
+// "operator pinned this task to a specific runner".
+func TestAttachRun_ReasonRecordedInActivity(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
+		"runnerId": "runner-A",
+		"reason":   "manual escalation",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var details string
+	if err := db.QueryRow(
+		"SELECT details FROM activities WHERE target_id = 't-1' AND action = 'CLAIM_TASK' ORDER BY created_at DESC LIMIT 1",
+	).Scan(&details); err != nil {
+		t.Fatalf("query activity: %v", err)
+	}
+	if details != "attached: manual escalation" {
+		t.Errorf("expected reason in details, got %q", details)
+	}
+}
+
+// TestAttachRun_FallbackToTokenAgentType covers the path
+// where the body omits agentType — the handler should fall
+// back to the calling token's user_agent so existing runners
+// don't have to be retuned to use the new endpoint.
+func TestAttachRun_FallbackToTokenAgentType(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
+		"runnerId": "runner-A",
+		// agentType intentionally omitted
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var agentID string
+	if err := db.QueryRow("SELECT agent_id FROM task_runs WHERE task_id = 't-1'").Scan(&agentID); err != nil {
+		t.Fatalf("query agent_id: %v", err)
+	}
+	// admin-token in the seed has user_agent = 'opencoder'
+	if agentID != "opencoder" {
+		t.Errorf("expected agent_id=opencoder (from token), got %q", agentID)
+	}
+}
+
+// TestAttachRun_AgentTypeMismatchRejected covers the same
+// defence-in-depth check ClaimRun uses — the body's
+// agentType must match the calling token's user_agent so a
+// stolen token can't attach to tasks for an unrelated agent.
+func TestAttachRun_AgentTypeMismatchRejected(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
+		"runnerId":  "runner-A",
+		"agentType": "gpt",
+	})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestClaimRun_BroadcastsTaskNotification guards the realtime
+// fan-out added by s-1130: a successful claim must push a
+// task_notification so WS subscribers see the live state
+// change without waiting for the 5s refresh poll.
+//
+// We register a real WS client against the broadcastQueue,
+// fire a claim, then assert the server side receives a
+// task_notification frame. Using a real connection (rather
+// than the broadcastQueue channel) catches the end-to-end
+// pipe: handler → enqueueBroadcast → worker goroutine →
+// processBroadcast → conn.WriteMessage → wire → server
+// ReadMessage.
+func TestClaimRun_BroadcastsTaskNotification(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	handlers.InitBroadcastWorkerForTest()
+
+	clientConn, serverConn, cleanup := newBidirectionalWebSocket(t)
+	defer cleanup()
+
+	handlers.AddClientForTest(clientConn)
+	defer handlers.RemoveAllClientsForTest()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
+		"boardId":   "b1",
+		"status":    "todo",
+		"agentType": "opencoder",
+		"runnerId":  "runner-A",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// The broadcastQueue is async — give the worker a moment
+	// to pick the message up and write it to the conn. We
+	// use a short deadline so the test fails fast if the
+	// fan-out path is broken. The broadcast writes to
+	// clientConn, so we read from the server-side
+	// counterpart.
+	serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, payload, err := serverConn.ReadMessage()
+	if err != nil {
+		t.Fatalf("did not receive broadcast within deadline: %v", err)
+	}
+
+	var msg handlers.TaskNotification
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		t.Fatalf("decode broadcast: %v (raw=%s)", err, string(payload))
+	}
+	if msg.Type != "task_notification" {
+		t.Errorf("expected type=task_notification, got %q", msg.Type)
+	}
+	if msg.TaskID != "t-1" {
+		t.Errorf("expected taskId=t-1, got %q", msg.TaskID)
+	}
+	if msg.BoardID != "b1" {
+		t.Errorf("expected boardId=b1, got %q", msg.BoardID)
+	}
+	// ClaimRun fans out with action=update_status so the
+	// front-end's existing useBoardWebSocket hook can diff-
+	// merge into the local cache without learning a new
+	// verb.
+	if msg.Action != "update_status" {
+		t.Errorf("expected action=update_status, got %q", msg.Action)
+	}
+}
+
+// TestAttachRun_BroadcastsTaskNotification is the
+// attach-specific counterpart of the ClaimRun broadcast test.
+// The action should be 'attach' so subscribers can tell
+// apart a scanner-grab from a manual escalation.
+func TestAttachRun_BroadcastsTaskNotification(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	handlers.InitBroadcastWorkerForTest()
+
+	clientConn, serverConn, cleanup := newBidirectionalWebSocket(t)
+	defer cleanup()
+
+	handlers.AddClientForTest(clientConn)
+	defer handlers.RemoveAllClientsForTest()
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-2/attach", "admin-token", map[string]interface{}{
+		"runnerId": "runner-A",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, payload, err := serverConn.ReadMessage()
+	if err != nil {
+		t.Fatalf("did not receive broadcast within deadline: %v", err)
+	}
+
+	var msg handlers.TaskNotification
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		t.Fatalf("decode broadcast: %v (raw=%s)", err, string(payload))
+	}
+	if msg.Action != "attach" {
+		t.Errorf("expected action=attach, got %q", msg.Action)
+	}
+	if msg.TaskID != "t-2" {
+		t.Errorf("expected taskId=t-2, got %q", msg.TaskID)
+	}
+}
+
+// newBidirectionalWebSocket pairs a client connection with
+// its server-side counterpart so the caller can drive both
+// ends of the wire directly. The existing newTestWebSocket
+// only returns the client conn; the s-1130 broadcast tests
+// need the server conn to read messages the server just
+// wrote (via the broadcast worker), since the broadcast
+// pipeline writes to the registered conn which is the
+// client-side handle in this test rig.
+func newBidirectionalWebSocket(t *testing.T) (*websocket.Conn, *websocket.Conn, func()) {
+	t.Helper()
+
+	serverConnCh := make(chan *websocket.Conn, 1)
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		serverConnCh <- c
+	}))
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	clientConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		server.Close()
+		t.Fatalf("client dial failed: %v", err)
+	}
+
+	serverConn := <-serverConnCh
+
+	cleanup := func() {
+		clientConn.Close()
+		serverConn.Close()
+		server.Close()
+	}
+
+	return clientConn, serverConn, cleanup
+}

@@ -221,6 +221,15 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Fan out a task_notification so any WebSocket
+		// subscriber watching this board sees the live state
+		// change without waiting for the 5-second refresh
+		// poll. Action mirrors the legacy `LogActivity` —
+		// `update_status` is what the front-end's
+		// `useBoardWebSocket` hook already knows how to
+		// diff-merge into the local cache.
+		BroadcastTaskNotificationExternal(boardID, taskID, "update_status")
+
 		c.JSON(http.StatusOK, gin.H{
 			"task": taskJSON,
 			"run":  claim.Run,
@@ -277,6 +286,195 @@ func HeartbeatRun(db *sql.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"expiresAt": expiresAt.UTC().Format(time.RFC3339),
+		})
+	}
+}
+
+// AttachRunRequest is the wire shape for POST
+// /api/v1/runs/:taskId/attach. Mirrors HeartbeatRunRequest
+// plus an optional `reason` field the operator can use to
+// annotate why the runner is grabbing this task (free-form,
+// surfaced through the activity stream so the audit trail
+// stays meaningful).
+type AttachRunRequest struct {
+	RunnerID      string `json:"runnerId"`
+	AgentType     string `json:"agentType,omitempty"`
+	LockTimeoutMs int    `json:"lockTimeoutMs,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+// AttachRun handles POST /api/v1/runs/:taskId/attach. Unlike
+// ClaimRun (which scans a column for the next eligible task),
+// the attach verb lets a runner / operator claim one specific
+// task by id without owning the surrounding column or inbox.
+//
+// This is the "AI-first" entry point — an agent that has been
+// handed a taskId (via the UI, MCP, or a queue) can attach to
+// it directly. The endpoint still enforces the same per-column
+// WRITE permission as the rest of the runner API so a stolen
+// token can't grab tasks on boards the runner has no access to.
+//
+// 200 — { task, run } in the same shape as ClaimRun so the CLI
+//        prompt-rendering path is identical.
+// 403 — caller lacks WRITE on the resolved column / board.
+// 404 — task does not exist.
+// 409 — task already locked by another runner with a non-expired
+//        claim (handler maps repositories.ErrLockHeld → 409).
+// 422 — task is archived or unpublished (the attach path only
+//        operates on visible, non-archive tasks).
+func AttachRun(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+		if requireNonViewer(c, user) {
+			return
+		}
+
+		taskID := c.Param("taskId")
+		if taskID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
+			return
+		}
+
+		var req AttachRunRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
+			return
+		}
+		if req.RunnerID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "runnerId is required"})
+			return
+		}
+
+		// Resolve task → column → board up front. We re-use
+		// the same helpers as GetRun so the access check and
+		// the claim transaction see the same column/board
+		// pair.
+		columnID, err := getColumnIDForTask(db, taskID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+				return
+			}
+			ServerError(c, "Failed to load task", err)
+			return
+		}
+		boardID, err := getBoardIDForColumn(db, columnID)
+		if err != nil {
+			ServerError(c, "Failed to resolve column board", err)
+			return
+		}
+
+		// Authorization: WRITE on the resolved column (with
+		// board fallback). This mirrors FinishRun so the
+		// attach path can't be used as a privilege escalation
+		// vector — you can only attach to tasks on boards
+		// you could already move.
+		if !HasColumnWrite(db, user, boardID, columnID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to attach to this task"})
+			return
+		}
+
+		// Reject archived / unpublished tasks up front so the
+		// caller gets a clear 422 instead of a misleading
+		// lock-held response.
+		var (
+			archived   bool
+			published  bool
+			taskTitle  string
+		)
+		if err := db.QueryRow(
+			"SELECT archived, published, title FROM tasks WHERE id = ?",
+			taskID,
+		).Scan(&archived, &published, &taskTitle); err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+				return
+			}
+			ServerError(c, "Failed to load task state", err)
+			return
+		}
+		if archived {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Task is archived"})
+			return
+		}
+		if !published {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Task is not published"})
+			return
+		}
+
+		// Resolve the agent type — prefer the explicit body
+		// value, fall back to the calling token's user_agent
+		// (same source-of-truth ClaimRun uses). When neither
+		// is set we leave agent_id empty so ClaimRun stores
+		// NULL — the lock row is still valid for ownership
+		// checks, we just don't tag it with an agent class.
+		agentType := strings.TrimSpace(req.AgentType)
+		if agentType == "" {
+			agentType = strings.TrimSpace(readTokenUserAgent(db, c))
+		}
+		if agentType != "" {
+			tokenUserAgent := strings.TrimSpace(readTokenUserAgent(db, c))
+			if tokenUserAgent != "" && tokenUserAgent != agentType {
+				c.JSON(http.StatusForbidden, gin.H{"error": "token user_agent does not match agentType"})
+				return
+			}
+		}
+
+		lockTimeoutMs := req.LockTimeoutMs
+		if lockTimeoutMs <= 0 {
+			lockTimeoutMs = DefaultRunLockTimeoutMs
+		}
+
+		repo := repositories.NewRunRepository(db)
+		inProgressColumnID, err := repo.FindInProgressColumn(boardID)
+		if err != nil {
+			ServerError(c, "Failed to find in_progress column", err)
+			return
+		}
+
+		claim, err := repo.ClaimRun(boardID, taskID, columnID, req.RunnerID, agentType, inProgressColumnID, lockTimeoutMs)
+		if err != nil {
+			switch err {
+			case repositories.ErrLockHeld:
+				c.JSON(http.StatusConflict, gin.H{"error": "Task is already locked by another runner"})
+			default:
+				ServerError(c, "Failed to attach task", err)
+			}
+			return
+		}
+
+		// Surface the attach event through the activity stream
+		// so the UI / other subscribers see the same audit trail
+		// as a normal claim. The reason (if supplied) lands in
+		// the details column so operators can tell apart
+		// "scanner grabbed it" from "operator pinned this
+		// task to a specific runner".
+		details := "attached via /api/v1/runs/:taskId/attach"
+		if req.Reason != "" {
+			details = "attached: " + req.Reason
+		}
+		LogActivity(db, user.ID, "CLAIM_TASK", "TASK", taskID, taskTitle, details, c.ClientIP(), getRequestSource(c))
+
+		// Fan out a task_notification so any WebSocket
+		// subscriber watching this board sees the live state
+		// change without waiting for the 5-second refresh
+		// poll. The broadcastQueue is async (goroutine), so
+		// the HTTP response isn't delayed by it.
+		BroadcastTaskNotificationExternal(boardID, taskID, "attach")
+
+		taskJSON, err := renderTaskJSON(db, taskID)
+		if err != nil {
+			ServerError(c, "Failed to load attached task", err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"task": taskJSON,
+			"run":  claim.Run,
 		})
 	}
 }

@@ -430,6 +430,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		runs.POST("/release", handlers.ReleaseRuns(db))
 		runs.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
 		runs.POST("/:taskId/finish", handlers.FinishRun(db))
+		runs.POST("/:taskId/attach", handlers.AttachRun(db))
 		runs.GET("/:taskId", handlers.GetRun(db))
 		runs.GET("/history", handlers.ListRunsHistory(db))
 	}

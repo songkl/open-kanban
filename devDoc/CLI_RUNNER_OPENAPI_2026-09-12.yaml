@@ -97,6 +97,77 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /runs/{taskId}/attach:
+    post:
+      summary: Attach a runner to a specific task by id (AI-first entry point)
+      description: |
+        Where `/runs/claim` scans a (boardId, status) tuple for the
+        next eligible task, `/runs/{taskId}/attach` lets a runner /
+        operator claim one specific task by id without owning the
+        surrounding column or inbox. This is the "AI-first" entry
+        point required by s-1130 — an agent that has been handed a
+        taskId (via the UI, MCP, or a queue) can attach to it directly.
+
+        The endpoint enforces the same per-column WRITE permission as
+        `/runs/finish` (with board-level fallback) so a stolen token
+        can't grab tasks on boards the caller has no access to.
+        Archived / unpublished tasks are rejected with `422` so the
+        runner doesn't accidentally resurrect a hidden task.
+
+        On success, a `task_notification` broadcast is fanned out
+        through the WebSocket hub with `action='attach'` so any
+        subscriber watching this board sees the live state change
+        without waiting for the 5s refresh poll.
+
+        See `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §3.4 for the
+        canonical contract.
+      operationId: attachRun
+      tags:
+        - Runs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachRunRequest'
+      responses:
+        '200':
+          description: Task successfully attached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimRunResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Task already locked by another runner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Task is archived or unpublished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /runs/{taskId}/heartbeat:
     post:
       summary: Refresh the lock expiry on an in-flight run
@@ -550,6 +621,36 @@ components:
         runnerId:
           type: string
           description: Must match the `runner_id` of the existing run row.
+
+    AttachRunRequest:
+      type: object
+      required: [runnerId]
+      properties:
+        runnerId:
+          type: string
+          description: |
+            Stable runner identity (e.g. `<host>-<pid>-<uuid>`). The
+            same value is echoed back through subsequent heartbeat
+            and finish calls so the server can verify ownership.
+        agentType:
+          type: string
+          description: |
+            Optional override of the agent class. Defaults to the
+            calling token's `user_agent` field, falling back to an
+            empty string when neither is set. When supplied, must
+            match the token's `user_agent` (defence-in-depth check
+            mirroring `/runs/claim`).
+        lockTimeoutMs:
+          type: integer
+          description: |
+            Server-side lock TTL in milliseconds. Defaults to the
+            server's `DefaultRunLockTimeoutMs` (120s).
+        reason:
+          type: string
+          description: |
+            Optional free-form note attached to the `CLAIM_TASK`
+            activity entry so operators can tell apart manual
+            escalation from a scanner grab.
 
     HeartbeatResponse:
       type: object

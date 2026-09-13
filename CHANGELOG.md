@@ -6,6 +6,27 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- s-1130: add `kanban attach <taskId>` so an AI agent / operator can
+  claim one specific task by id without owning the surrounding
+  column or inbox (the "AI-first" entry point). Backed by the new
+  `POST /api/v1/runs/:taskId/attach` endpoint, which enforces the
+  same per-column WRITE permission as `/runs/finish`, rejects
+  archived / unpublished tasks with `422`, and returns the same
+  `{ task, run }` payload as `/runs/claim` so the CLI prompt-
+  rendering path is unchanged. The runner loop (`kanban run`)
+  additionally subscribes to the server's `/ws` broadcast stream
+  and wakes immediately on a `task_notification` for the watched
+  board, replacing the old 5s polling fallback with WS push while
+  keeping the poll as a safety net for dropped connections. New
+  `ClaimRun` / `AttachRun` broadcasts fan out `update_status` /
+  `attach` actions through the existing broadcastQueue so the
+  web UI's `useBoardWebSocket` hook picks up the state change
+  without waiting for the next refresh tick. 14 backend tests
+  (attach happy / 404 / 422 / 403 / 401 / 409 / reason / agent-
+  type-fallback / agent-type-mismatch / ClaimRun broadcast /
+  AttachRun broadcast) and 13 CLI tests cover the new endpoint,
+  the new command, the loop wake-up path, and the WS subscription
+  reconnect logic.
 - s-1102: add `kanban auth agent {list,create,bind,delete}` so the CLI
   can bind to an Agent identity (long-lived API token) instead of the
   human approver's OAuth session. `auth status` now reports

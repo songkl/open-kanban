@@ -755,3 +755,120 @@ describe("RunLoop — heartbeat integration", () => {
     expect(events.some((e) => e.kind === "ok")).toBe(true);
   });
 });
+
+// s-1130 — the WS subscription shaves the worst-case
+// `pollIntervalMs` latency off the idle path. The loop has to
+// honour `wake()` so the next tick re-attempts a claim
+// immediately instead of sleeping through the new task.
+describe("RunLoop — wake() short-circuits the idle sleep", () => {
+  it("claims on the next tick after wake() even if a script had no eligible task yet", async () => {
+    // Two-script harness: first attempt sees nothing, second
+    // attempt (triggered by wake) finds a task. We prove the
+    // wake triggered the second attempt by counting transport
+    // calls — without wake, the harness's noopSleep would
+    // never resolve and the second attempt wouldn't happen
+    // within the test's lifecycle.
+    let attempts = 0;
+    const config = makeConfig({ pollIntervalMs: 10_000 });
+    const transport = makeClaimTransport([
+      {
+        request: {
+          boardId: "sys",
+          status: "todo",
+          agentType: "opencoder",
+          runnerId: "runner-1",
+        },
+        outcome: { status: 204, body: null },
+      },
+      {
+        request: {
+          boardId: "sys",
+          status: "todo",
+          agentType: "opencoder",
+          runnerId: "runner-1",
+        },
+        outcome: {
+          status: 200,
+          body: {
+            task: TASK_TEMPLATE,
+            run: { taskId: TASK_TEMPLATE.id, runnerId: "runner-1" },
+          },
+        },
+      },
+    ]);
+    // Count the actual claim POSTs so the assertion does not
+    // depend on the script table length.
+    const realPostJson = transport.transport.postJson.bind(transport.transport);
+    transport.transport.postJson = async (path, body, init) => {
+      if (path === "/runs/claim") attempts += 1;
+      return realPostJson(path, body, init);
+    };
+
+    const claimClient = new RunClaimClient(transport.transport);
+    const heartbeat = new HeartbeatScheduler(claimClient, "runner-1", {
+      intervalMs: 1_000,
+      setIntervalFn: ((cb: () => void) => ({
+        unref: () => undefined,
+        _cb: cb,
+      })) as unknown as (cb: () => void, ms: number) => unknown,
+      clearIntervalFn: () => undefined,
+      nowFn: () => 1_000_000,
+    });
+    const spawner = makeFakeSpawner();
+    const commentPoster: FailureCommentPoster = {
+      async postComment() {
+        return;
+      },
+    };
+
+    const loop = new RunLoop({
+      config,
+      runnerId: "runner-1",
+      agentType: "opencoder",
+      claimClient,
+      spawner,
+      heartbeat,
+      hydrator: makeHydrator(),
+      commentPoster,
+      sleepFn: async (ms) => {
+        // Real sleep so the wake() interrupt can land. We
+        // keep this short enough that the test finishes in
+        // tens of ms even if wake is never called.
+        await new Promise<void>((resolve) => setTimeout(resolve, Math.min(ms, 5)));
+      },
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      },
+    });
+
+    // Tick 1 — first claim (returns 204). Loop enters the
+    // sleep that would normally last 10s.
+    const stillRunning = await loop.tick();
+    expect(stillRunning).toBe(true);
+    expect(attempts).toBe(1);
+
+    // Kick the wake — the WS subscription would do this when
+    // a task_notification arrives. Wait briefly for the
+    // interrupt to propagate, then tick again. The second
+    // tick should immediately re-attempt a claim and pick
+    // up the script's second response.
+    loop.wake();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const stillRunningAfterWake = await loop.tick();
+    expect(stillRunningAfterWake).toBe(true);
+    expect(attempts).toBe(2);
+    expect(spawner.calls).toHaveLength(1);
+
+    // Cleanup so the test exits cleanly.
+    spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "",
+      reason: "exit",
+    });
+    loop.requestShutdown();
+    await loop.tick();
+  });
+});

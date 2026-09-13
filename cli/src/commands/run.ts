@@ -47,6 +47,10 @@ import { RunClaimClient } from "../runner/claim.js";
 import { HeartbeatScheduler } from "../runner/heartbeat.js";
 import { RunLoop, type RunLoopSummary } from "../runner/loop.js";
 import { ChildProcessSpawner } from "../runner/spawn.js";
+import {
+  watchBoardNotifications,
+  type RunWatchHandle,
+} from "../runner/watcher.js";
 import type {
   BoardContext,
   ColumnContext,
@@ -314,6 +318,14 @@ export function buildCommentPoster(
  * lines with the in-flight task on the server (the loop logs the
  * runnerId at start, every claim, and every finish — see
  * `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5).
+ *
+ * As of s-1130 the loop also subscribes to the server's WebSocket
+ * broadcast stream so a freshly-created task reaches the runner
+ * without waiting for the next `pollIntervalMs` tick. The underlying
+ * polling is preserved as a fallback so a WS disconnect can't strand
+ * the runner. mode=mine (no boardId) skips the subscription because
+ * the server doesn't broadcast "your task" events on the global
+ * stream — the poll path is the only mechanism there.
  */
 export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
   const { config, runnerId, agentType, http, signal } = deps;
@@ -339,7 +351,77 @@ export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
     signal,
     logger: stderrLoopLogger(),
   });
+  startBoardWatcherIfPossible({ loop, config, http, signal });
   return loop;
+}
+
+interface BoardWatcherDeps {
+  loop: RunLoop;
+  config: RunnerConfig;
+  http: HttpClient;
+  signal?: AbortSignal;
+}
+
+/**
+ * Subscribe to the server's task_notification stream when the
+ * runner is bound to a specific board (mode-1). mode=mine has no
+ * boardId to filter on so we skip — the underlying poll loop is
+ * the only wake-up mechanism in that case.
+ *
+ * Token resolution: prefer the HttpClient's bearer token (it
+ * already manages OAuth refresh); fall back to an empty string so
+ * the upgrade is rejected cleanly and the WS reconnects once the
+ * real token lands on the next poll.
+ *
+ * The watcher closes itself when the abort signal fires, so we
+ * don't leak the WS goroutine past graceful shutdown.
+ */
+function startBoardWatcherIfPossible(deps: BoardWatcherDeps): void {
+  const { loop, config, http, signal } = deps;
+  const boardId = config.boardId;
+  if (!boardId) {
+    // mode=mine: no boardId to filter on; skip.
+    return;
+  }
+  let handle: RunWatchHandle | null = null;
+  let cancelled = false;
+  void (async () => {
+    let token = "";
+    try {
+      token = (await http.bearerToken()) ?? "";
+    } catch {
+      token = "";
+    }
+    if (cancelled || !token) return;
+    handle = watchBoardNotifications({
+      apiUrl: http.apiUrl,
+      boardId,
+      token,
+      onNotification: () => {
+        // We only care about create / attach — the runner
+        // already knows about update_status from the
+        // heartbeat / claim cycle, so anything else would
+        // just thrash the wake-up path.
+        loop.wake();
+      },
+      onDisconnect: () => {
+        // The underlying poll loop covers disconnects; the
+        // watcher just shaves latency off the happy path.
+      },
+      signal,
+    });
+  })();
+  if (signal) {
+    const close = (): void => {
+      cancelled = true;
+      handle?.close();
+    };
+    if (signal.aborted) {
+      close();
+    } else {
+      signal.addEventListener("abort", close, { once: true });
+    }
+  }
 }
 
 /**

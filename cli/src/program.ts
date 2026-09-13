@@ -97,6 +97,7 @@ import {
   RunnerInitError as RunInitError,
 } from "./commands/run_init.js";
 import { runRunsList, InvalidUsageError as RunsInvalidUsageError } from "./commands/runs.js";
+import { runAttach, InvalidUsageError as AttachInvalidUsageError } from "./commands/attach.js";
 import {
   input as inquirerInput,
   select as inquirerSelect,
@@ -1605,6 +1606,80 @@ export function createProgram(
         } catch (err) {
           process.stderr.write(`${(err as Error).message}\n`);
           process.exit(runsExitCode(err));
+        }
+      }
+    );
+
+  // ---- attach ----
+  // AI-first entry point. Where `kanban run --board X --status Y`
+  // walks a column for the next eligible task, `kanban attach <id>`
+  // claims one specific task by id. The runner identity defaults to
+  // `<host>-<pid>-<uuid>` (the same format `kanban run` uses) so the
+  // operator can hand the printed runnerId to a follow-up heartbeat /
+  // finish curl without thinking about identity wiring.
+  //
+  // The endpoint enforces the same per-column WRITE permission as
+  // ClaimRun, so a stolen token can't grab tasks on boards the
+  // caller has no access to.
+  program
+    .command("attach <taskId>")
+    .description(
+      "attach the calling runner to a specific task by id (POST /api/v1/runs/:taskId/attach); AI-first entry point that does not require owning the surrounding column"
+    )
+    .option(
+      "--runner-id <id>",
+      "stable runner identity (defaults to <host>-<pid>-<uuid>); used by heartbeat/finish to verify ownership"
+    )
+    .option(
+      "--agent-type <type>",
+      "agent class the runner is willing to pick up; defaults to KANBAN_RUNNER_AGENT_TYPE or 'opencode'"
+    )
+    .option(
+      "--lock-timeout-ms <ms>",
+      "lock TTL in milliseconds (defaults to server's DefaultRunLockTimeoutMs)",
+      (v: string) => {
+        const n = Number(v);
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+          throw new AttachInvalidUsageError(
+            `invalid --lock-timeout-ms value: ${v} (must be a positive integer)`
+          );
+        }
+        return n;
+      }
+    )
+    .option(
+      "--reason <text>",
+      "free-form note attached to the audit activity so the operator can tell apart manual escalation from a scanner grab"
+    )
+    .action(
+      async (
+        taskId: string,
+        cmdOpts: {
+          runnerId?: string;
+          agentType?: string;
+          lockTimeoutMs?: number;
+          reason?: string;
+        }
+      ) => {
+        const o = program.opts<{ output?: string }>();
+        try {
+          await runAttach({
+            apiUrl: opts.apiUrl,
+            taskId,
+            runnerId: cmdOpts.runnerId,
+            agentType: cmdOpts.agentType,
+            lockTimeoutMs: cmdOpts.lockTimeoutMs,
+            reason: cmdOpts.reason,
+            format: resolveOutputFormat(o.output),
+            http,
+          });
+        } catch (err) {
+          if (err instanceof AttachInvalidUsageError) {
+            process.stderr.write(`${(err as Error).message}\n`);
+            process.exit(1);
+          }
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(authExitCodeForError(err));
         }
       }
     );

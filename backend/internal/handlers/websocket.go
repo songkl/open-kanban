@@ -62,6 +62,26 @@ func BroadcastRefreshForTest() {
 	BroadcastRefresh()
 }
 
+// BroadcastTaskNotificationForTest is a thin wrapper that
+// lets tests outside the handlers package trigger the same
+// broadcast the runner handlers use after a claim / finish /
+// attach. Used by s-1130's realtime-broadcast tests to
+// verify the fan-out path is reachable from the runner API
+// without spinning up a full WebSocket server.
+func BroadcastTaskNotificationForTest(boardID, taskID, action string) {
+	BroadcastTaskNotification(boardID, taskID, action)
+}
+
+// InitBroadcastWorkerForTest kicks off the async worker that
+// drains the broadcastQueue. Production code calls
+// initBroadcastWorker from inside WebSocketHandler — tests
+// that exercise the broadcast path without going through a
+// real WS upgrade need to start the worker explicitly so the
+// fan-out goroutine is running when the handler enqueues.
+func InitBroadcastWorkerForTest() {
+	initBroadcastWorker()
+}
+
 var (
 	upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
