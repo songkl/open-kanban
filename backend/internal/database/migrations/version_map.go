@@ -66,6 +66,13 @@ var VersionMigrationMap = []VersionMigration{
 	// a fresh DB pick up the table at startup without dragging in
 	// the yet-to-be-merged handler layer.
 	{Version: "0.9.0", From: 1, To: 9},
+	// 0.10.0 added migration 010 to land the user_identities
+	// binding table and the users.email lookup column (s-1142,
+	// plan §3.3 / §5). The OAuth callback handler and the
+	// user-mapping algorithm ship in the same release — the
+	// schema is meaningless on its own without the handler that
+	// writes to it, so unlike 0.9.0 we ship both together.
+	{Version: "0.10.0", From: 1, To: 10},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

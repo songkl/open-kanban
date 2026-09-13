@@ -315,6 +315,14 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	// rule per role lives in DeviceAgentsHandler (plan §4.1.3).
 	oauthGroup.GET("/device/agents", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceAgentsHandler(db))
 	oauthGroup.POST("/device/approve", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
+	// External IdP callback (s-1142). The full /login flow
+	// (state mint, PKCE, redirect to IdP) ships in s-1145;
+	// for now the callback handler accepts a code or
+	// already-fetched claims so the user-mapping algorithm
+	// is wired end-to-end without dragging in the per-kind
+	// IdP dance. Public — the whole point is to mint a fresh
+	// session.
+	r.POST("/oauth/external/:slug/callback", oauth.ExternalCallbackHandler(db))
 
 	auth := r.Group("/api/v1/auth")
 	{

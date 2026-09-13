@@ -6,6 +6,67 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- s-1142: implement the external-IdP callback handler and the
+  user-mapping algorithm promised in
+  `docs/OAUTH_EXTERNAL_PLAN_s-1139.md` §3.3 / §4.4 / §5. The new
+  `user_identities` table (migration 010, shipped for both SQLite
+  and MySQL) records the binding between a local `users` row and
+  an external IdP — columns `id` (ULID PK), `user_id` (FK to
+  `users.id` `ON DELETE CASCADE` for GDPR parity), `provider_id`
+  (FK to `oauth_providers.id` `ON DELETE CASCADE` so removing an
+  IdP in the admin UI tears down all its bindings atomically),
+  `subject` (the IdP-stable identifier — `sub` for OIDC, `id` for
+  GitHub, etc.), `raw_claims` (JSON snapshot of the last IdP
+  response so a future drift can be replayed without another
+  round-trip — capped at 64 KiB and UTF-8-sanitised per the
+  CLAUDE.md WebSocket-safety rule), `linked_at`, and
+  `last_used_at`, with `UNIQUE(provider_id, subject)` as the
+  natural key and `idx_user_identities_user` for the admin-side
+  "list bindings for this user" view. The migration also adds
+  `users.email` (nullable TEXT) with `idx_users_email` so the
+  auto-link-by-verified-email path in the callback handler
+  doesn't fall back to a table scan. The new `MapExternalIdentity`
+  pure function runs the three-pass algorithm — pass 1 returns
+  the existing identity row and refreshes `last_used_at` +
+  `raw_claims`; pass 2 auto-links by verified email (refusing
+  `AGENT` and `disabled` users per plan §4.4); pass 3 provisions
+  a fresh `HUMAN` user with a random unguessable password (the
+  column is NOT NULL so we have to write something), a
+  collision-suffixed username, a 50-char nickname derived from
+  the IdP display name / email local part / subject, the
+  avatar URL, and the role from `extra_config.default_role`
+  (default `MEMBER`, validated against the `users.role` CHECK
+  allow-list). The new `ExternalCallbackHandler` serves
+  `POST /oauth/external/:slug/callback` publicly (the whole
+  point is to mint a session) and accepts either an `code`
+  (delegated to the injectable `UserinfoFetcher`, default
+  generic-OIDC implementation) or already-fetched claims in the
+  body so the mapping algorithm is exercised end-to-end without
+  standing up a real IdP. The handler mints a base64url-encoded
+  kanban session token (distinct from the hex form used by
+  `handlers.Login` so an audit log can spot the IdP-issued tokens
+  at a glance), sets the `kanban-token` cookie, and returns the
+  same envelope as `POST /api/v1/auth/login` plus a `binding`
+  block that distinguishes `provisioned` / `linked` / `bound`
+  for the SPA to render the right welcome-back vs new-account
+  hint. CSRF state validation is intentionally not implemented
+  here — it ships in sibling sub-task s-1145; the field is
+  accepted on the request body and passed through to the
+  fetcher for that work to pick up. 26 unit tests cover the
+  three-pass algorithm, the auto-link guards (AGENT refused,
+  disabled refused, unverified-email fall-through), the
+  multi-IdP binding (one user, N identities), the cascade
+  behaviour on user and provider delete, the 64 KiB /
+  UTF-8 sanitisation, the collision-suffix loop, the
+  slug-disabled → 404 contract, the handler happy-path,
+  and the Bad-Gateway mapping for upstream IdP failures.
+  `TestSQLiteMigrationsUserIdentities` round-trips the full
+  up/down cycle on SQLite and pins column shape, default
+  values, `UNIQUE(provider_id, subject)`, both `ON DELETE
+  CASCADE` paths, and the `idx_users_email` lookup index.
+  `VersionMigrationMap` gains a `0.10.0` entry mapping to
+  migration 10.
+
 - s-1140: ship the `oauth_providers` table as the schema foundation
   for the pluggable external-IdP login flow planned in
   `docs/OAUTH_EXTERNAL_PLAN_s-1139.md` §3.2. The new

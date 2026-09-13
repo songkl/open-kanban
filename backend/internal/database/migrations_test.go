@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
@@ -46,7 +47,7 @@ func TestSQLiteMigrations(t *testing.T) {
 		"app_config", "column_permissions",
 		"oauth_clients", "oauth_authorization_codes",
 		"oauth_device_codes", "oauth_refresh_tokens", "oauth_consents",
-		"oauth_providers",
+		"oauth_providers", "user_identities",
 		"task_runs",
 	}
 
@@ -103,6 +104,8 @@ func TestSQLiteMigrations(t *testing.T) {
 		"idx_oauth_refresh_expires",
 		"idx_oauth_consents_user",
 		"idx_oauth_providers_enabled",
+		"idx_user_identities_user",
+		"idx_users_email",
 	}
 	for _, idx := range oauthIndexes {
 		var c int
@@ -607,6 +610,250 @@ func TestSQLiteMigrationsOAuthProviders(t *testing.T) {
 	}
 	if tableCount != 0 {
 		t.Errorf("expected oauth_providers to be dropped after rollback 009, got count=%d", tableCount)
+	}
+
+	// Re-apply so the shared in-memory db stays usable for
+	// the rest of the test suite.
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("re-up: %v", err)
+	}
+}
+
+// TestSQLiteMigrationsUserIdentities exercises migration 010
+// (s-1142) end-to-end on SQLite. It verifies:
+//
+//   - user_identities comes up with the columns documented in
+//     plan §3.3 of docs/OAUTH_EXTERNAL_PLAN_s-1139.md (id PK,
+//     user_id FK CASCADE to users, provider_id FK CASCADE to
+//     oauth_providers, subject NOT NULL, raw_claims defaults
+//     to '{}', linked_at + last_used_at auto-populated).
+//   - The UNIQUE(provider_id, subject) constraint rejects a
+//     duplicate row so the natural key is genuinely unique.
+//   - The ON DELETE CASCADE on user_id wipes the binding when
+//     the local user is deleted (GDPR parity per plan §3.3).
+//   - The ON DELETE CASCADE on provider_id wipes the binding
+//     when the admin removes the IdP via the admin UI.
+//   - users.email is added as a nullable TEXT column with the
+//     idx_users_email lookup index so the auto-link-by-email
+//     path in the callback handler stays indexed.
+//   - The down migration drops the index, the table, the email
+//     column, and the email index in the documented order.
+//
+// Mirrors the round-trip pattern used by 008 / 009 so a
+// future regression in any of the constraints above fails
+// before the external-callback handler tests do.
+func TestSQLiteMigrationsUserIdentities(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	// Enable FK enforcement on every connection in this pool.
+	// The migrate driver does this for its own connection, but
+	// the db.QueryRow / db.Exec calls below run on whatever
+	// connection the pool hands us, and SQLite's
+	// `PRAGMA foreign_keys = ON` is per-connection. Without
+	// this the ON DELETE CASCADE checks below would silently
+	// no-op.
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatalf("enable foreign keys: %v", err)
+	}
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	// 1. user_identities columns match the plan §3.3 contract.
+	wantCols := map[string]string{
+		"id":           "TEXT",
+		"user_id":      "TEXT",
+		"provider_id":  "TEXT",
+		"subject":      "TEXT",
+		"raw_claims":   "TEXT",
+		"linked_at":    "DATETIME",
+		"last_used_at": "DATETIME",
+	}
+	rows, err := db.Query("SELECT name, type FROM pragma_table_info('user_identities')")
+	if err != nil {
+		t.Fatalf("inspect user_identities columns: %v", err)
+	}
+	gotCols := map[string]string{}
+	for rows.Next() {
+		var name, typ string
+		if err := rows.Scan(&name, &typ); err != nil {
+			_ = rows.Close()
+			t.Fatalf("scan column: %v", err)
+		}
+		gotCols[name] = typ
+	}
+	_ = rows.Close()
+	for name, typ := range wantCols {
+		got, ok := gotCols[name]
+		if !ok {
+			t.Errorf("expected user_identities.%s column after migration 010, missing", name)
+			continue
+		}
+		if !strings.EqualFold(got, typ) {
+			t.Errorf("user_identities.%s type: want %s, got %s", name, typ, got)
+		}
+	}
+
+	// 2. users.email was added as a nullable TEXT column.
+	var (
+		emailNotNull int
+		emailType    string
+	)
+	if err := db.QueryRow(
+		"SELECT \"notnull\", type FROM pragma_table_info('users') WHERE name='email'",
+	).Scan(&emailNotNull, &emailType); err != nil {
+		t.Fatalf("inspect users.email: %v", err)
+	}
+	if emailNotNull != 0 {
+		t.Errorf("users.email should be nullable, got notnull=%d", emailNotNull)
+	}
+	if !strings.EqualFold(emailType, "TEXT") {
+		t.Errorf("users.email type: want TEXT, got %s", emailType)
+	}
+
+	// 3. Seed the FK targets: a local user, an oauth_provider,
+	//    then a user_identities row.
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, email, type, role, enabled)
+		VALUES ('u-1', 'alice', 'Alice', 'alice@example.com', 'HUMAN', 'MEMBER', 1)
+	`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO oauth_providers (
+			id, provider_id, name, type, client_id, created_at, updated_at
+		) VALUES ('p-1', 'google', 'Google', 'google', 'cid', ?, ?)
+	`, time.Now(), time.Now()); err != nil {
+		t.Fatalf("seed provider: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO user_identities (id, user_id, provider_id, subject, raw_claims)
+		 VALUES ('i-1', 'u-1', 'p-1', 'google-sub-1', '{"sub":"google-sub-1"}')`,
+	); err != nil {
+		t.Fatalf("seed identity: %v", err)
+	}
+
+	// 4. raw_claims defaults land — a fresh row with no
+	//    raw_claims argument stores '{}' rather than NULL so
+	//    downstream json.Unmarshal never has to nil-check.
+	if _, err := db.Exec(
+		`INSERT INTO user_identities (id, user_id, provider_id, subject)
+		 VALUES ('i-2', 'u-1', 'p-1', 'google-sub-2')`,
+	); err != nil {
+		t.Fatalf("seed identity defaults: %v", err)
+	}
+	var rc string
+	if err := db.QueryRow(
+		`SELECT raw_claims FROM user_identities WHERE id = 'i-2'`,
+	).Scan(&rc); err != nil {
+		t.Fatalf("read raw_claims default: %v", err)
+	}
+	if rc != "{}" {
+		t.Errorf("expected raw_claims default '{}', got %q", rc)
+	}
+
+	// 5. UNIQUE(provider_id, subject) rejects a duplicate
+	//    (provider_id, subject) row so the binding is the
+	//    natural key.
+	if _, err := db.Exec(
+		`INSERT INTO user_identities (id, user_id, provider_id, subject)
+		 VALUES ('i-dup', 'u-1', 'p-1', 'google-sub-1')`,
+	); err == nil {
+		t.Errorf("expected UNIQUE(provider_id, subject) to reject duplicate binding, got nil")
+	}
+
+	// 6. ON DELETE CASCADE on user_id wipes the binding when
+	//    the local user is removed — GDPR parity per plan §3.3.
+	if _, err := db.Exec(`DELETE FROM users WHERE id = 'u-1'`); err != nil {
+		t.Fatalf("delete user: %v", err)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM user_identities`).Scan(&n); err != nil {
+		t.Fatalf("count after user delete: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected CASCADE to drop identity rows after user delete, got %d", n)
+	}
+
+	// 7. ON DELETE CASCADE on provider_id wipes the bindings
+	//    when the admin removes the IdP via the admin UI.
+	//    Re-seed both sides first.
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('u-2', 'bob', 'Bob', 'HUMAN', 'MEMBER', 1)
+	`); err != nil {
+		t.Fatalf("re-seed user: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO user_identities (id, user_id, provider_id, subject)
+		 VALUES ('i-3', 'u-2', 'p-1', 'google-sub-3')`,
+	); err != nil {
+		t.Fatalf("re-seed identity: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM oauth_providers WHERE id = 'p-1'`); err != nil {
+		t.Fatalf("delete provider: %v", err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM user_identities`).Scan(&n); err != nil {
+		t.Fatalf("count after provider delete: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected CASCADE to drop identity rows after provider delete, got %d", n)
+	}
+
+	// 8. idx_users_email is in place so the auto-link-by-
+	//    email lookup in the callback handler stays indexed.
+	var idxCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_users_email'",
+	).Scan(&idxCount); err != nil {
+		t.Fatalf("check idx_users_email: %v", err)
+	}
+	if idxCount != 1 {
+		t.Errorf("expected idx_users_email after migration 010, got count=%d", idxCount)
+	}
+
+	// 9. The down migration drops idx_user_identities_user,
+	//    user_identities, idx_users_email, then users.email
+	//    in that order. Use m.Migrate(9) (the version strictly
+	//    before 010) rather than m.Steps(-1) so the test stays
+	//    correct when later migrations (011+) extend the tip.
+	if err := m.Migrate(9); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("rollback 010: %v", err)
+	}
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='user_identities'",
+	).Scan(&n); err != nil {
+		t.Fatalf("check user_identities after rollback: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected user_identities to be dropped after rollback 010, got count=%d", n)
+	}
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_users_email'",
+	).Scan(&idxCount); err != nil {
+		t.Fatalf("check idx_users_email after rollback: %v", err)
+	}
+	if idxCount != 0 {
+		t.Errorf("expected idx_users_email to be dropped after rollback 010, got count=%d", idxCount)
 	}
 
 	// Re-apply so the shared in-memory db stays usable for
