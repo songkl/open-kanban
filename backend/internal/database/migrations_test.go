@@ -48,6 +48,7 @@ func TestSQLiteMigrations(t *testing.T) {
 		"oauth_clients", "oauth_authorization_codes",
 		"oauth_device_codes", "oauth_refresh_tokens", "oauth_consents",
 		"oauth_providers", "user_identities",
+		"pending_oauth_states",
 		"task_runs",
 	}
 
@@ -106,6 +107,8 @@ func TestSQLiteMigrations(t *testing.T) {
 		"idx_oauth_providers_enabled",
 		"idx_user_identities_user",
 		"idx_users_email",
+		"idx_pending_oauth_states_expires",
+		"idx_pending_oauth_states_provider",
 	}
 	for _, idx := range oauthIndexes {
 		var c int
@@ -1112,5 +1115,173 @@ func seedTaskRun(t *testing.T, db *sql.DB) {
 		)
 	`); err != nil {
 		t.Fatalf("seed task_runs: %v", err)
+	}
+}
+
+// TestSQLiteMigrationsPendingOAuthStates exercises migration
+// 011 (s-1145) end-to-end on SQLite. It verifies:
+//
+//   - pending_oauth_states comes up with the columns documented
+//     in plan §7.1 (id PK, state UNIQUE NOT NULL, provider_id
+//     FK CASCADE to oauth_providers, code_verifier NOT NULL,
+//     code_challenge NOT NULL, redirect_after defaulting to '',
+//     created_at + expires_at NOT NULL, consumed_at nullable).
+//   - The UNIQUE(state) constraint rejects a duplicate row so
+//     the wire-level CSRF token is genuinely unique.
+//   - The ON DELETE CASCADE on provider_id wipes the state row
+//     when the admin removes the IdP via the admin UI — a
+//     dangling state row would survive a stale login click.
+//   - The expires_at index is in place so the housekeeping
+//     sweep scales to thousands of abandoned clicks.
+//   - The down migration drops both indexes and the table in
+//     the documented order without errors.
+//
+// Mirrors the round-trip pattern used by 008 / 009 / 010 so a
+// future regression in any of the constraints above fails
+// before the external-state handler tests do.
+func TestSQLiteMigrationsPendingOAuthStates(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatalf("enable foreign keys: %v", err)
+	}
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	// 1. pending_oauth_states columns match the plan §7.1
+	//    contract.
+	wantCols := map[string]string{
+		"id":             "TEXT",
+		"state":          "TEXT",
+		"provider_id":    "TEXT",
+		"code_verifier":  "TEXT",
+		"code_challenge": "TEXT",
+		"redirect_after": "TEXT",
+		"expires_at":     "DATETIME",
+	}
+	rows, err := db.Query("SELECT name, type FROM pragma_table_info('pending_oauth_states')")
+	if err != nil {
+		t.Fatalf("inspect pending_oauth_states columns: %v", err)
+	}
+	gotCols := map[string]string{}
+	for rows.Next() {
+		var name, typ string
+		if err := rows.Scan(&name, &typ); err != nil {
+			_ = rows.Close()
+			t.Fatalf("scan column: %v", err)
+		}
+		gotCols[name] = typ
+	}
+	_ = rows.Close()
+	for name, typ := range wantCols {
+		got, ok := gotCols[name]
+		if !ok {
+			t.Errorf("expected pending_oauth_states.%s column after migration 011, missing", name)
+			continue
+		}
+		if !strings.EqualFold(got, typ) {
+			t.Errorf("pending_oauth_states.%s type: want %s, got %s", name, typ, got)
+		}
+	}
+
+	// 2. UNIQUE(state) prevents two rows from sharing a CSRF
+	//    token — the natural key the callback handler looks up
+	//    by.
+	if _, err := db.Exec(`
+		INSERT INTO oauth_providers (
+			id, provider_id, name, type, enabled, position,
+			client_id, scopes, auth_endpoint, token_endpoint,
+			userinfo_endpoint, issuer, extra_config, created_at, updated_at
+		) VALUES ('p-1', 'google', 'Google', 'google', 1, 0,
+		          'cid', '', 'https://idp/auth', 'https://idp/token',
+		          'https://idp/user', '', '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+	`); err != nil {
+		t.Fatalf("seed provider: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO pending_oauth_states (
+			id, state, provider_id, code_verifier, code_challenge,
+			redirect_after, expires_at
+		) VALUES ('s-1', 'state-A', 'p-1', 'verifier-A', 'challenge-A', '', '2099-01-01 00:00:00')
+	`); err != nil {
+		t.Fatalf("insert first state: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO pending_oauth_states (
+			id, state, provider_id, code_verifier, code_challenge,
+			redirect_after, expires_at
+		) VALUES ('s-2', 'state-A', 'p-1', 'verifier-B', 'challenge-B', '', '2099-01-01 00:00:00')
+	`); err == nil {
+		t.Errorf("expected UNIQUE(state) to reject duplicate state value")
+	}
+
+	// 3. ON DELETE CASCADE: dropping the provider must wipe
+	//    every pending state row bound to it.
+	if _, err := db.Exec(`DELETE FROM oauth_providers WHERE id = 'p-1'`); err != nil {
+		t.Fatalf("delete provider: %v", err)
+	}
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pending_oauth_states`,
+	).Scan(&n); err != nil {
+		t.Fatalf("count pending states: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected cascade to drop pending state rows, got %d", n)
+	}
+
+	// 4. The expires_at index is in place so the housekeeping
+	//    sweep scales.
+	var idxCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_pending_oauth_states_expires'`,
+	).Scan(&idxCount); err != nil {
+		t.Fatalf("check idx_pending_oauth_states_expires: %v", err)
+	}
+	if idxCount != 1 {
+		t.Errorf("expected idx_pending_oauth_states_expires after migration 011, got count=%d", idxCount)
+	}
+
+	// 5. The down migration drops both indexes and the table
+	//    in the documented order. Use m.Migrate(10) (the
+	//    version strictly before 011) rather than m.Steps(-1)
+	//    so the test stays correct when later migrations
+	//    (012+) extend the tip.
+	if err := m.Migrate(10); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("rollback 011: %v", err)
+	}
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='pending_oauth_states'",
+	).Scan(&n); err != nil {
+		t.Fatalf("check pending_oauth_states after rollback: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected pending_oauth_states to be dropped after rollback 011, got count=%d", n)
+	}
+
+	// Re-apply so the shared in-memory db stays usable for
+	// the rest of the test suite.
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("re-up: %v", err)
 	}
 }

@@ -20,8 +20,11 @@ import (
 // setupCallbackDB returns an in-memory SQLite with the schema
 // the OAuth external-callback path touches: users (with the
 // 010 email column), tokens (for the session-mint step), the
-// oauth_providers table from 009, and the new user_identities
-// table from 010.
+// oauth_providers table from 009, the new user_identities
+// table from 010, and the pending_oauth_states table from 011
+// (s-1145) so the test seam can exercise the production code
+// path (code + state) without re-implementing the schema in
+// every test.
 //
 // FK enforcement is enabled per-connection so the
 // ON DELETE CASCADE assertions in the suite actually fire —
@@ -55,7 +58,41 @@ func setupCallbackDB(t *testing.T) *sql.DB {
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_user_identities_user ON user_identities(user_id)`); err != nil {
 		t.Fatalf("idx_user_identities_user: %v", err)
 	}
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS pending_oauth_states (
+			id              TEXT PRIMARY KEY,
+			state           TEXT NOT NULL UNIQUE,
+			provider_id     TEXT NOT NULL REFERENCES oauth_providers(id) ON DELETE CASCADE,
+			code_verifier   TEXT NOT NULL,
+			code_challenge  TEXT NOT NULL,
+			redirect_after  TEXT NOT NULL DEFAULT '',
+			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at      DATETIME NOT NULL,
+			consumed_at     DATETIME
+		)`); err != nil {
+		t.Fatalf("pending_oauth_states schema: %v", err)
+	}
 	return db
+}
+
+// seedPendingStateForTest inserts a row directly into
+// pending_oauth_states so the existing external-callback
+// tests can drive the production code path (code + state)
+// without going through the /login handler. Returns the row
+// id; not used by the callers today, kept for symmetry with
+// the other seed helpers.
+func seedPendingStateForTest(t *testing.T, db *sql.DB, providerInternalID, state, verifier, challenge string, expiresAt time.Time) string {
+	t.Helper()
+	if _, err := db.Exec(
+		`INSERT INTO pending_oauth_states (
+			id, state, provider_id, code_verifier, code_challenge,
+			redirect_after, expires_at
+		) VALUES (?, ?, ?, ?, ?, '', ?)`,
+		"state-"+state, state, providerInternalID, verifier, challenge, expiresAt,
+	); err != nil {
+		t.Fatalf("seed pending state: %v", err)
+	}
+	return "state-" + state
 }
 
 // insertCallbackProvider seeds an oauth_providers row with a
@@ -698,12 +735,24 @@ func TestExternalCallbackHandler_NeitherCodeNorClaims(t *testing.T) {
 //     delegates to the injected UserinfoFetcher. Pins the
 //     production code path; the stub asserts it was called
 //     exactly once.
+//
+//     Updated for s-1145: the production code path now requires
+//     a valid pending_oauth_states row matching the supplied
+//     `state`. To exercise the fetcher-delegation contract in
+//     isolation we mint a fresh state row, supply its value,
+//     and confirm the fetcher was called exactly once. State-
+//     validation failures get their own coverage in
+//     external_state_test.go.
 func TestExternalCallbackHandler_CodePathCallsFetcher(t *testing.T) {
 	db := setupCallbackDB(t)
 	defer db.Close()
-	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
+	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	stub := &stubFetcher{info: stubIdentity("sub-1", "alice@example.com", true)}
 	r := newCallbackServer(t, db, stub)
+
+	// Seed a live state row so the production code path
+	// (code + state) accepts the request.
+	seedPendingStateForTest(t, db, providerID, "fake-state", "v", "c", time.Now().Add(10*time.Minute))
 
 	body := `{"code":"fake-auth-code","state":"fake-state"}`
 	req := httptest.NewRequest(http.MethodPost, "/oauth/external/google/callback", strings.NewReader(body))
@@ -720,13 +769,21 @@ func TestExternalCallbackHandler_CodePathCallsFetcher(t *testing.T) {
 
 // 23. Fetcher failure surfaces as 502 — the IdP is upstream
 //     of us, so Bad Gateway is the semantically correct code.
+//
+//     Updated for s-1145: the production code path now requires
+//     a valid `state` when `code` is supplied, so the test seeds
+//     a live state row and supplies its value to drive the
+//     fetcher. State-validation failures get their own coverage
+//     in external_state_test.go.
 func TestExternalCallbackHandler_FetcherError(t *testing.T) {
 	db := setupCallbackDB(t)
 	defer db.Close()
-	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
+	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	r := newCallbackServer(t, db, &stubFetcher{err: errors.New("IdP down")})
 
-	body := `{"code":"x"}`
+	seedPendingStateForTest(t, db, providerID, "state-fetch-err", "v", "c", time.Now().Add(10*time.Minute))
+
+	body := `{"code":"x","state":"state-fetch-err"}`
 	req := httptest.NewRequest(http.MethodPost, "/oauth/external/google/callback", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

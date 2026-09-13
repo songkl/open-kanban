@@ -315,13 +315,24 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	// rule per role lives in DeviceAgentsHandler (plan §4.1.3).
 	oauthGroup.GET("/device/agents", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceAgentsHandler(db))
 	oauthGroup.POST("/device/approve", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
-	// External IdP callback (s-1142). The full /login flow
-	// (state mint, PKCE, redirect to IdP) ships in s-1145;
-	// for now the callback handler accepts a code or
-	// already-fetched claims so the user-mapping algorithm
-	// is wired end-to-end without dragging in the per-kind
-	// IdP dance. Public — the whole point is to mint a fresh
-	// session.
+	// External IdP login + callback (s-1144 + s-1145).
+	//
+	// /oauth/external/:slug/login mints the CSRF state and
+	// PKCE pair, persists the row in pending_oauth_states,
+	// and 302s the browser to the IdP authorize endpoint.
+	//
+	// /oauth/external/:slug/callback validates the state
+	// parameter against the same table (refusing expired /
+	// consumed / missing rows), exchanges the code, and runs
+	// the user-mapping algorithm. GET carries the production
+	// IdP redirect (code+state in the query string); POST is
+	// the test seam so unit tests can submit pre-fetched
+	// claims without standing up a real IdP.
+	//
+	// Both routes are public — the whole point is to mint a
+	// fresh session.
+	r.GET("/oauth/external/:slug/login", oauth.ExternalLoginHandler(db))
+	r.GET("/oauth/external/:slug/callback", oauth.ExternalCallbackHandler(db))
 	r.POST("/oauth/external/:slug/callback", oauth.ExternalCallbackHandler(db))
 
 	auth := r.Group("/api/v1/auth")

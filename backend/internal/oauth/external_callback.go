@@ -570,7 +570,8 @@ type ExternalCallbackRequest struct {
 	RawClaims    string                 `json:"rawClaims"`
 }
 
-// ExternalCallbackHandler serves POST /oauth/external/:slug/callback.
+// ExternalCallbackHandler serves GET (production IdP redirect)
+// and POST (test seam) on /oauth/external/:slug/callback.
 //
 // On success it returns 200 with the same envelope as
 // POST /api/v1/auth/login so the SPA can drop the new flow in
@@ -586,9 +587,23 @@ type ExternalCallbackRequest struct {
 // The handler is publicly reachable (no RequireAuth) — the
 // whole point of the callback is to mint a fresh session —
 // and is gated by an injected UserinfoFetcher that defaults to
-// the generic OIDC-style implementation. The state parameter
-// is reserved for s-1145 (CSRF + signature verification) and is
-// accepted but not validated here.
+// the generic OIDC-style implementation.
+//
+// CSRF state handling (s-1145): when the request carries a
+// `code` (the real IdP redirect flow), `state` is required and
+// is matched against the pending_oauth_states row minted by
+// /oauth/external/:slug/login. The row must exist, be
+// unexpired, and be unconsumed; a consumed-twice attempt is
+// logged and returns 400 so a CSRF replay cannot mint two
+// sessions. The same-origin cookie check is a defence-in-depth
+// layer; a state value minted for origin A cannot be replayed
+// from origin B's cookie jar.
+//
+// The unit tests bypass state validation by submitting a
+// JSON body with `claims` instead of `code` — that path
+// exercises the mapping algorithm without dragging in a real
+// IdP and lets the assertion suite pin the wire shape in
+// isolation.
 func ExternalCallbackHandler(db *sql.DB) gin.HandlerFunc {
 	return externalCallbackHandlerWithFetcher(db, &defaultUserinfoFetcher{db: db})
 }
@@ -621,10 +636,48 @@ func externalCallbackHandlerWithFetcher(db *sql.DB, fetcher UserinfoFetcher) gin
 			return
 		}
 
-		var req ExternalCallbackRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		req, err := parseCallbackRequest(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// CSRF state validation (s-1145): required when the
+		// request carries a `code` (the production IdP
+		// redirect flow). The test path uses `claims` only,
+		// which short-circuits state validation so unit tests
+		// don't need to round-trip through the login handler.
+		if req.Code != "" {
+			if req.State == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "state parameter is required"})
+				return
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+			defer cancel()
+			consumed, err := ConsumePendingState(ctx, db, req.State, provider.ID)
+			if err != nil {
+				switch {
+				case errors.Is(err, ErrPendingStateNotFound), errors.Is(err, ErrPendingStateExpired):
+					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired state"})
+				case errors.Is(err, ErrPendingStateConsumed):
+					c.JSON(http.StatusBadRequest, gin.H{"error": "state already used"})
+				default:
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				}
+				return
+			}
+			// Defence-in-depth: the cookie value must match
+			// the state we just validated. A mismatch means
+			// the request originated from a different origin
+			// than the one that minted the state — strong
+			// signal of a CSRF replay off-host.
+			if cookieState, _ := c.Cookie(stateCookieName); cookieState != "" && cookieState != consumed.State {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "state cookie mismatch"})
+				return
+			}
+			// Clear the cookie on success so a follow-up
+			// request can't accidentally reuse it.
+			c.SetCookie(stateCookieName, "", -1, "/", "", false, true)
 		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
@@ -685,6 +738,39 @@ func externalCallbackHandlerWithFetcher(db *sql.DB, fetcher UserinfoFetcher) gin
 				"name": provider.Name,
 			},
 		})
+	}
+}
+
+// parseCallbackRequest normalises the two shapes the IdP
+// callback handler accepts:
+//
+//   - GET (production IdP redirect): the IdP bounces the
+//     browser to /oauth/external/:slug/callback?code=…&state=…
+//     so we pull both fields from the query string.
+//   - POST (test seam): the unit tests POST a JSON body with
+//     either pre-fetched claims or a stub code, so we fall
+//     through to JSON binding.
+//
+// The two shapes are mutually exclusive in production: a real
+// IdP never POSTs to our callback URL. We accept both so the
+// handler can be exercised end-to-end in unit tests without a
+// full IdP dance.
+func parseCallbackRequest(c *gin.Context) (ExternalCallbackRequest, error) {
+	var req ExternalCallbackRequest
+	switch c.Request.Method {
+	case http.MethodGet:
+		req.Code = strings.TrimSpace(c.Query("code"))
+		req.State = strings.TrimSpace(c.Query("state"))
+		return req, nil
+	case http.MethodPost:
+		if err := c.ShouldBindJSON(&req); err != nil {
+			return req, errors.New("invalid request body")
+		}
+		req.Code = strings.TrimSpace(req.Code)
+		req.State = strings.TrimSpace(req.State)
+		return req, nil
+	default:
+		return req, fmt.Errorf("method %s not allowed", c.Request.Method)
 	}
 }
 

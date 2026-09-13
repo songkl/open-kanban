@@ -73,6 +73,16 @@ var VersionMigrationMap = []VersionMigration{
 	// schema is meaningless on its own without the handler that
 	// writes to it, so unlike 0.9.0 we ship both together.
 	{Version: "0.10.0", From: 1, To: 10},
+	// 0.11.0 added migration 011 to introduce the
+	// pending_oauth_states table (s-1145, plan §7.1 / §7.2).
+	// The CSRF state + PKCE verifier minted by
+	// /oauth/external/:slug/login live here for the 10-minute
+	// TTL between the click and the IdP callback; without this
+	// table the state parameter would be a signed cookie alone
+	// (vulnerable to cookie-drop attacks on a shared host) and
+	// PKCE would have nowhere to stash the verifier. The login
+	// redirect handler ships in the same release as the schema.
+	{Version: "0.11.0", From: 1, To: 11},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {
