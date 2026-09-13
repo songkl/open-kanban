@@ -309,6 +309,11 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	oauthGroup.POST("/device/code", oauth.DeviceFlowGate(db), oauth.RequestDeviceCode(db))
 	oauthGroup.POST("/token", oauth.TokenEndpoint(db, signer))
 	oauthGroup.GET("/device/lookup", oauth.DeviceFlowGate(db), handlers.OptionalAuth(db), oauth.DeviceLookupHandler(db))
+	// /oauth/device/agents lets the device authorization page re-fetch
+	// the list of enabled Agents the human approver is allowed to
+	// delegate to. Requires an authenticated session; the visibility
+	// rule per role lives in DeviceAgentsHandler (plan §4.1.3).
+	oauthGroup.GET("/device/agents", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceAgentsHandler(db))
 	oauthGroup.POST("/device/approve", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
 
 	auth := r.Group("/api/v1/auth")
