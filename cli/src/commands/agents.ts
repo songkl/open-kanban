@@ -62,6 +62,14 @@ export interface AgentRecord {
   // `token` is returned only by POST /api/v1/auth/agents and POST
   // /api/v1/auth/agents/reset-token; agents-list omits it.
   token?: string;
+  // s-1131: creator identification. Populated by
+  // GET /api/v1/auth/agents for Agents created via the API path; legacy
+  // AGENT rows (created before the column existed) leave these as
+  // undefined so the table renders a "(legacy)" placeholder instead of
+  // a misleading empty cell.
+  createdBy?: string;
+  createdByNickname?: string;
+  createdByUsername?: string;
 }
 
 export interface AgentsReport {
@@ -524,24 +532,38 @@ function formatAgentsTable(r: AgentsReport): string {
     lines.push(chalk.gray("(no agents)"));
     return lines.join("\n");
   }
+  // Detect whether any row carries creator info; if none do (e.g.
+  // an older server that hasn't shipped the column yet), drop the
+  // "Created by" column rather than render a wall of "(legacy)"
+  // placeholders.
+  const anyCreator = r.agents.some((a) => Boolean(a.createdBy));
+  const head: string[] = [
+    chalk.bold("ID"),
+    chalk.bold("Nickname"),
+    chalk.bold("Role"),
+    chalk.bold("Enabled"),
+    chalk.bold("Last active"),
+  ];
+  if (anyCreator) head.push(chalk.bold("Created by"));
   const table = new Table({
-    head: [
-      chalk.bold("ID"),
-      chalk.bold("Nickname"),
-      chalk.bold("Role"),
-      chalk.bold("Enabled"),
-      chalk.bold("Last active"),
-    ],
+    head,
     style: { head: [], border: [] },
   });
   for (const a of r.agents) {
-    table.push([
+    const row: (string | ReturnType<typeof chalk.red>)[] = [
       a.id ?? chalk.gray("(unknown)"),
       a.nickname ?? chalk.gray("(unnamed)"),
       a.role ?? chalk.gray("(none)"),
       a.enabled === false ? chalk.red("no") : chalk.green("yes"),
       a.lastActiveAt ?? chalk.gray("never"),
-    ]);
+    ];
+    if (anyCreator) {
+      // Legacy AGENT rows (pre-s-1131) have no creator recorded;
+      // surface that explicitly so operators can audit / backfill.
+      const creator = a.createdByNickname || a.createdByUsername || a.createdBy;
+      row.push(creator ? chalk.cyan(creator) : chalk.gray("(legacy)"));
+    }
+    table.push(row);
   }
   lines.push(table.toString());
   return lines.join("\n");
@@ -560,6 +582,9 @@ function formatAgentCreateTable(r: AgentCreateResult): string {
     ["Nickname", r.agent.nickname ?? chalk.gray("(unnamed)")],
     ["Type", r.agent.type ?? "AGENT"],
     ["Role", r.agent.role ?? chalk.gray("(none)")],
+    // s-1131: surface the creator so the operator can audit the
+    // new Agent row without flipping back to the web UI.
+    ["Created by", r.agent.createdBy ?? chalk.gray("(unknown)")],
     ["Token", r.token ? chalk.yellow(r.token) : chalk.gray("(none)")],
     ["Bound", r.bound ? chalk.green("yes") : chalk.red("no")]
   );

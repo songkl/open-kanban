@@ -335,8 +335,10 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 
 		rows, err := db.Query(`
 			SELECT u.id, u.nickname, u.avatar, u.type, u.role, u.enabled, u.created_at, u.updated_at, u.last_active_at,
+				u.created_by, cb.nickname, cb.username,
 				(SELECT COUNT(*) FROM tokens WHERE user_id = u.id) as token_count
 			FROM users u
+			LEFT JOIN users cb ON cb.id = u.created_by
 			WHERE u.type = 'AGENT'
 			ORDER BY u.created_at DESC
 		`)
@@ -351,7 +353,10 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 			var u models.User
 			var tokenCount int
 			var lastActiveAt sql.NullTime
-			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &tokenCount); err == nil {
+			var createdBy sql.NullString
+			var creatorNickname sql.NullString
+			var creatorUsername sql.NullString
+			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &createdBy, &creatorNickname, &creatorUsername, &tokenCount); err == nil {
 				agent := gin.H{
 					"id":         u.ID,
 					"nickname":   u.Nickname,
@@ -365,6 +370,15 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 				}
 				if lastActiveAt.Valid {
 					agent["lastActiveAt"] = lastActiveAt.Time
+				}
+				if createdBy.Valid {
+					agent["createdBy"] = createdBy.String
+				}
+				if creatorNickname.Valid {
+					agent["createdByNickname"] = creatorNickname.String
+				}
+				if creatorUsername.Valid {
+					agent["createdByUsername"] = creatorUsername.String
 				}
 				agents = append(agents, agent)
 			}
@@ -417,8 +431,8 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 		}
 
 		_, err := db.Exec(
-			"INSERT INTO users (id, username, nickname, avatar, type, role, created_at, updated_at, last_active_at) VALUES (?, ?, ?, ?, 'AGENT', ?, ?, ?, ?)",
-			agentID, req.Nickname, req.Nickname, avatar, role, now, now, now,
+			"INSERT INTO users (id, username, nickname, avatar, type, role, created_at, updated_at, last_active_at, created_by) VALUES (?, ?, ?, ?, 'AGENT', ?, ?, ?, ?, ?)",
+			agentID, req.Nickname, req.Nickname, avatar, role, now, now, now, user.ID,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create"})
@@ -467,6 +481,7 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 				"type":      "AGENT",
 				"token":     tokenKey,
 				"createdAt": now,
+				"createdBy": user.ID,
 			},
 		})
 	}

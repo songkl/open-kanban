@@ -788,6 +788,12 @@
       "identityServerDefault": "服务器默认",
       "identityEmpty": "暂无可用的 Agent 账号，请联系管理员启用后再继续授权。",
       "identityHelper": "选择设备应获得授权的身份。如果是给无人值守的 CLI / MCP 使用，请选择一个 Agent。",
+      "identityConfirmSelf": "确认按当前账号授权？",
+      "identityConfirmAgent": "确认按 Agent 授权？",
+      "identityConfirmSummary": "{{client}} 将以 {{identity}} 的身份获得访问权限。",
+      "identityConfirmSelfCta": "是的，按当前账号授权",
+      "identityConfirmAgentCta": "是的，按该 Agent 授权",
+      "identityConfirmCancel": "重新选择身份",
       "requireAgentTitle": "必须选择 Agent 身份",
       "requireAgentBody": "本服务器已关闭“按当前账号授权”。由于 kanban run CLI 仅供 Agent 使用，请在授权前选择一个 Agent 身份。"
     },

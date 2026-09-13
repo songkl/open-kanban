@@ -167,7 +167,64 @@ describe("runLogin", () => {
     expect(stderr).toContain("Visit:");
     expect(stderr).toContain("ABCD-EFGH");
     expect(stderr).toContain("http://localhost:8080/oauth/device");
+    // s-1131: the deep-link URL (with `?code=` pre-filled) is the
+    // preferred Visit line so users can paste / click it without
+    // retyping the code.
+    expect(stderr).toContain("?code=ABCD-EFGH");
     expect(result.credentials?.accessToken).toBe("at-1");
+  });
+
+  it("prints the identity-selection hint when the client name looks like a CLI", async () => {
+    const oauth = makeFakeOAuth({
+      authorize: vi.fn(async (params: { onPrompt?: (p: TrackedPoll) => Promise<"approve" | "deny"> }) => {
+        await params.onPrompt?.(makePoll());
+        return {
+          access_token: "at-1",
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "kanban:read",
+        };
+      }),
+    });
+    const cap = makeCapture();
+    await runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io });
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Identity selection/);
+    expect(stderr).toMatch(/Agent/);
+  });
+
+  it("omits the identity-selection hint when the client name is not CLI-like", async () => {
+    const oauth = makeFakeOAuth({
+      // Load credentials with a non-CLI name so runLogin picks that
+      // up; the default would otherwise match the heuristic.
+      loadCredentials: () => null,
+      authorize: vi.fn(async (params: { onPrompt?: (p: TrackedPoll) => Promise<"approve" | "deny"> }) => {
+        await params.onPrompt?.(makePoll());
+        return {
+          access_token: "at-1",
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "kanban:read",
+        };
+      }),
+    });
+    // Override authorizeInteractive so the test can drive clientName
+    // directly. The fake client's authorizeInteractive always sets
+    // clientName=open-kanban-cli internally; we patch it here by
+    // wrapping a new method that doesn't read credsBefore.
+    const cap = makeCapture();
+    // To test the non-CLI branch we need a client whose credsBefore
+    // resolves to a non-CLI name. Force-load a non-CLI name via
+    // secretProvider.
+    oauth.secretProvider.write({
+      apiUrl: "http://localhost:8080",
+      clientId: "cid",
+      clientName: "kanban-webapp",
+      accessToken: "stale",
+    });
+    await runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io });
+    const { stderr } = cap.read();
+    expect(stderr).not.toMatch(/Identity selection/);
   });
 
   it("maps user denial to DeniedAuthorizationError (exit 3)", async () => {

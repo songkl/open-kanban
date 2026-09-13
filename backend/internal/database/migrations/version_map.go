@@ -52,6 +52,12 @@ var VersionMigrationMap = []VersionMigration{
 	// /oauth/device/approve handler can write audit rows when a
 	// human approver delegates a device code to an Agent identity.
 	{Version: "0.7.0", From: 1, To: 7},
+	// 0.8.0 added migration 008 to add users.created_by (s-1131)
+	// so the API / CLI can answer "who created this Agent".
+	// Pre-existing AGENT rows have NULL; only newly-inserted Agents
+	// created via POST /api/v1/auth/agents (CLI `kanban auth agent
+	// create`) are guaranteed to carry a value.
+	{Version: "0.8.0", From: 1, To: 8},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

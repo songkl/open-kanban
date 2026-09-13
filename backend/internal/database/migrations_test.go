@@ -207,6 +207,113 @@ func TestSQLiteMigrationsAllowDeviceApproveActivity(t *testing.T) {
 	}
 }
 
+// TestSQLiteMigrationsAgentCreatedBy exercises migration 008 (s-1131)
+// and verifies users.created_by can be INSERTed against a previously
+// inserted creator, that the index is in place, and that the column
+// is genuinely nullable (the up-migration deliberately leaves the
+// column NULL for legacy AGENT rows so we cannot regress to NOT NULL
+// without flagging it).
+func TestSQLiteMigrationsAgentCreatedBy(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	// Seed the creator (admin1) — must pre-exist before the
+	// Agent row can reference it via the FK.
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('admin1', 'admin', 'Admin', 'HUMAN', 'ADMIN', 1)
+	`); err != nil {
+		t.Fatalf("seed creator: %v", err)
+	}
+
+	// 1. New AGENT row can reference the creator.
+	if _, err := db.Exec(
+		`INSERT INTO users (id, username, nickname, type, role, enabled, created_by)
+		 VALUES ('agent1', 'agent1', 'Agent One', 'AGENT', 'ADMIN', 1, 'admin1')`,
+	); err != nil {
+		t.Errorf("expected to insert AGENT with created_by FK after migration 008: %v", err)
+	}
+
+	// 2. Legacy AGENT row can omit created_by (the column is
+	//    nullable by design — see migration comment).
+	if _, err := db.Exec(
+		`INSERT INTO users (id, username, nickname, type, role, enabled)
+		 VALUES ('agent-legacy', 'agent-legacy', 'Legacy Agent', 'AGENT', 'ADMIN', 1)`,
+	); err != nil {
+		t.Errorf("expected legacy AGENT insert (no created_by) to succeed: %v", err)
+	}
+	var createdBy sql.NullString
+	if err := db.QueryRow("SELECT created_by FROM users WHERE id = 'agent-legacy'").Scan(&createdBy); err != nil {
+		t.Errorf("read created_by for legacy agent: %v", err)
+	}
+	if createdBy.Valid {
+		t.Errorf("legacy agent should have NULL created_by, got %q", createdBy.String)
+	}
+
+	// 3. The index must exist so future /api/v1/auth/agents
+	//    queries that filter by creator can use it.
+	var idxCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_users_created_by'",
+	).Scan(&idxCount); err != nil {
+		t.Errorf("check idx_users_created_by: %v", err)
+	}
+	if idxCount != 1 {
+		t.Errorf("expected idx_users_created_by after migration 008, got count=%d", idxCount)
+	}
+
+	// 4. Round-trip: reading created_by back returns the value we
+	//    inserted (smoke check that the FK didn't silently coerce
+	//    it).
+	var back string
+	if err := db.QueryRow("SELECT created_by FROM users WHERE id = 'agent1'").Scan(&back); err != nil {
+		t.Fatalf("read created_by back: %v", err)
+	}
+	if back != "admin1" {
+		t.Errorf("expected created_by=admin1, got %q", back)
+	}
+
+	// 5. The down migration drops the index and the column.
+	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("rollback 008: %v", err)
+	}
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_users_created_by'",
+	).Scan(&idxCount); err != nil {
+		t.Errorf("check idx_users_created_by after rollback: %v", err)
+	}
+	if idxCount != 0 {
+		t.Errorf("expected idx_users_created_by to be dropped after rollback 008, got count=%d", idxCount)
+	}
+
+	// Bring migrations back up so the shared in-memory db stays
+	// usable for the rest of the test suite.
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("re-up: %v", err)
+	}
+}
+
 // TestSQLiteMigrationsTaskRunsUpDown exercises the task_runs
 // migrations end-to-end on SQLite. It verifies the table + its
 // indexes come up cleanly, that the schema matches the §3.3

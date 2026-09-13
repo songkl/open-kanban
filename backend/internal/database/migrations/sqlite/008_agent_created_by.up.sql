@@ -1,0 +1,41 @@
+-- Track the human account that created each AGENT user.
+--
+-- Before this migration the users table did not record who created an
+-- Agent. Operators running `kanban auth agent create` (or the equivalent
+-- POST /api/v1/auth/agents call) only saw the Agent id, role and
+-- nickname in the response — the human creator's identity was lost. The
+-- CLI's `auth agent list` could not distinguish "alice-bot created by
+-- alice on 2026-09-01" from "alice-bot created by bob on 2026-09-12",
+-- which made ownership / audit questions hard to answer.
+--
+-- Adding the column lets the handler stamp the creator's user id at
+-- insert time, lets GET /api/v1/auth/agents expose createdBy + the
+-- creator's nickname / username, and lets `kanban auth agent list`
+-- render a "Created by" column.
+--
+-- The column is nullable on purpose:
+--
+--   - Pre-existing AGENT rows have no creator on file. Rejecting the
+--     migration because of NOT NULL would force operators to backfill a
+--     placeholder user, which would be misleading.
+--   - HUMAN rows must remain NULL — the bootstrap admin and every
+--     HUMAN created via /api/v1/auth/users predate this column, and
+--     stamping them with a creator would require a separate audit pass.
+--   - Only newly-inserted AGENT rows (via CreateAgent) are guaranteed
+--     to carry a non-null value.
+--
+-- The FK is intentionally NOT ON DELETE CASCADE: deleting the creator
+-- must not silently re-parent every Agent they made. SET NULL keeps
+-- the Agent alive but flags it as orphaned, which is the auditable
+-- outcome. ON DELETE RESTRICT would block legitimate user deletes; SET
+-- NULL is the conservative middle ground.
+--
+-- SQLite: ADD COLUMN supports nullable TEXT without a default. The
+-- CREATE INDEX runs after the column is added so the schema_migrations
+-- record stays accurate.
+--
+-- s-1131 / plan §4 (Agent creator identification).
+
+ALTER TABLE users ADD COLUMN created_by TEXT REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_users_created_by ON users(created_by);

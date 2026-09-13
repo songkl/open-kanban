@@ -30,7 +30,13 @@ vi.mock('react-i18next', () => ({
         'oauth.device.identityYouFallback': 'you',
         'oauth.device.identityAgent': 'Agent: {{name}}',
         'oauth.device.identityServerDefault': 'Server default',
-        'oauth.device.identityEmpty': 'No Agent accounts are available. Ask an administrator to enable one before approving a device.'
+        'oauth.device.identityEmpty': 'No Agent accounts are available. Ask an administrator to enable one before approving a device.',
+        'oauth.device.identityConfirmSelf': 'Authorise as yourself?',
+        'oauth.device.identityConfirmAgent': 'Authorise as an Agent?',
+        'oauth.device.identityConfirmSummary': '{{client}} will receive access on behalf of {{identity}}.',
+        'oauth.device.identityConfirmSelfCta': 'Yes, authorise as me',
+        'oauth.device.identityConfirmAgentCta': 'Yes, authorise as this Agent',
+        'oauth.device.identityConfirmCancel': 'Pick a different identity'
       };
       return map[key] || key;
     },
@@ -157,7 +163,15 @@ describe('OAuthDevicePage', () => {
     renderPage();
     fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'ABCD-EFGH' } });
     await waitFor(() => expect(screen.getByTestId('approve-btn')).not.toBeDisabled());
+    // s-1131: first click opens the confirmation banner, second
+    // click submits. Both are exercised so the legacy
+    // "approve as myself" path stays covered by the existing
+    // happy-path test.
     fireEvent.click(screen.getByTestId('approve-btn'));
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-confirm-approve')).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId('identity-confirm-approve'));
 
     await waitFor(() => {
       expect(screen.getByTestId('decision-banner').textContent).toMatch(/Approved/);
@@ -188,7 +202,14 @@ describe('OAuthDevicePage', () => {
     renderPage();
     fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'AAAA-BBBB' } });
     await waitFor(() => expect(screen.getByTestId('approve-btn')).not.toBeDisabled());
+    // s-1131: the approval request only fires after the user
+    // confirms in the banner; first click opens the banner, second
+    // click submits.
     fireEvent.click(screen.getByTestId('approve-btn'));
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-confirm-approve')).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId('identity-confirm-approve'));
 
     await waitFor(() => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
@@ -298,7 +319,17 @@ describe('OAuthDevicePage', () => {
     );
     fireEvent.click(screen.getByTestId('identity-agent-agent-alpha'));
     await waitFor(() => expect(screen.getByTestId('approve-btn')).not.toBeDisabled());
+    // s-1131: clicking Approve opens the confirmation banner; the
+    // network request only fires after the user clicks "Confirm" in
+    // the banner. We assert both halves of that flow.
     fireEvent.click(screen.getByTestId('approve-btn'));
+    expect(screen.getByTestId('identity-confirm-banner')).toBeInTheDocument();
+    // The first approve click MUST NOT have hit /oauth/device/approve yet.
+    const approveCallsBefore = fetchMock.mock.calls.filter(([u]) =>
+      typeof u === 'string' && u.startsWith('/oauth/device/approve')
+    );
+    expect(approveCallsBefore.length).toBe(0);
+    fireEvent.click(screen.getByTestId('identity-confirm-approve'));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -345,6 +376,11 @@ describe('OAuthDevicePage', () => {
     await waitFor(() => expect(screen.getByTestId('identity-self')).toBeInTheDocument());
     await waitFor(() => expect(screen.getByTestId('approve-btn')).not.toBeDisabled());
     fireEvent.click(screen.getByTestId('approve-btn'));
+    // s-1131: confirmation banner appears; legacy "Myself" path
+    // takes the same route so the approver can read the
+    // identitySummary line.
+    expect(screen.getByTestId('identity-confirm-banner')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('identity-confirm-approve'));
 
     await waitFor(() => {
       const approveCall = fetchMock.mock.calls.find(([u]) =>
@@ -579,5 +615,123 @@ describe('OAuthDevicePage', () => {
     });
     expect(screen.queryByTestId('identity-empty')).not.toBeInTheDocument();
     expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
+  });
+
+  it('opens a confirmation banner when Approve is clicked and only submits after Confirm', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            clientId: 'kanban-client-1',
+            clientName: 'open-kanban-cli',
+            scope: 'kanban:read tasks:write',
+            expiresAt: new Date().toISOString(),
+            status: 'pending',
+            agents: [{ id: 'agent-alpha', nickname: 'Alpha', role: 'AGENT' }]
+          })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ approved: true, boundTo: 'agent-alpha' }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'CONF-CONF' } });
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-alpha')).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId('identity-agent-agent-alpha'));
+    fireEvent.click(screen.getByTestId('approve-btn'));
+
+    // Banner visible, no network call yet.
+    expect(screen.getByTestId('identity-confirm-banner')).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(([u]) =>
+        typeof u === 'string' && u.startsWith('/oauth/device/approve')
+      ).length
+    ).toBe(0);
+
+    // Confirm — now the request fires.
+    fireEvent.click(screen.getByTestId('identity-confirm-approve'));
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.filter(([u]) =>
+          typeof u === 'string' && u.startsWith('/oauth/device/approve')
+        ).length
+      ).toBe(1);
+    });
+  });
+
+  it('cancels out of the confirmation banner without sending the approve', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            clientId: 'c',
+            clientName: 'C',
+            scope: 'kanban:read',
+            expiresAt: '',
+            status: 'pending',
+            agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+          })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ approved: true }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'BACK-BACK' } });
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-alpha')).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId('identity-agent-agent-alpha'));
+    fireEvent.click(screen.getByTestId('approve-btn'));
+    expect(screen.getByTestId('identity-confirm-banner')).toBeInTheDocument();
+
+    // Cancel: pick a different identity, banner disappears, no network call.
+    fireEvent.click(screen.getByTestId('identity-confirm-cancel'));
+    expect(screen.queryByTestId('identity-confirm-banner')).not.toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(([u]) =>
+        typeof u === 'string' && u.startsWith('/oauth/device/approve')
+      ).length
+    ).toBe(0);
+
+    // And the Approve button is re-enabled so the user can try again
+    // with the new selection.
+    expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
+  });
+
+  it('renders the agent-aware confirmation copy when an Agent is selected', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-client-1',
+        clientName: 'open-kanban-cli',
+        scope: 'kanban:read tasks:write',
+        expiresAt: new Date().toISOString(),
+        status: 'pending',
+        agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'AGNT-AGNT' } });
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-alpha')).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId('identity-agent-agent-alpha'));
+    fireEvent.click(screen.getByTestId('approve-btn'));
+
+    expect(screen.getByText('Authorise as an Agent?')).toBeInTheDocument();
+    // Approve-cta copy flips to the Agent-specific variant.
+    expect(screen.getByTestId('identity-confirm-approve')).toHaveTextContent(/Agent/);
   });
 });

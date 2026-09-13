@@ -91,6 +91,12 @@ export interface RunLoginResult {
 // subclass / wrap OAuthClient, or pass a custom onPrompt via a future
 // options field; for now runLogin hard-codes "approve" because the CLI
 // cannot click a browser button on the user's behalf.
+//
+// s-1131: the prompt also surfaces the deep-link URL (with the
+// user_code pre-filled via `?code=...`) and an explicit hint that
+// CLI / MCP clients must pick an identity (Human vs Agent) on the
+// approval page. Without the hint, unattended operators can miss
+// the picker and accidentally approve as their personal account.
 export async function runLogin(
   opts: CommandOptions,
   deps: { oauth: OAuthClient; io?: CommandIO }
@@ -107,17 +113,42 @@ export async function runLogin(
       clientName,
       appName,
       onPrompt: async (poll) => {
-        stderr.write(
-          [
+        const expiresIn = Math.max(0, Math.round((poll.expiresAt - Date.now()) / 1000));
+        // Prefer the deep link that already encodes the user_code
+        // (verification_uri_complete) so users can paste / click it
+        // into their browser without retyping the code. Falls back
+        // to the plain URL + manual-code path if the server didn't
+        // supply one — keeps the CLI working against older servers
+        // that only emit the bare verification URI.
+        const visitLine = poll.verificationUriComplete
+          ? `  Visit:  ${chalk.cyan(poll.verificationUriComplete)}`
+          : `  Visit:  ${chalk.cyan(poll.verificationUri)}  (code ${poll.userCode})`;
+        const isCliClient = isCliLikeClientName(clientName);
+        const lines: (string | null)[] = [
+          "",
+          chalk.bold("Open Kanban authorization required"),
+          visitLine,
+          poll.verificationUriComplete
+            ? `  Or enter code ${chalk.cyan(poll.userCode)} at ${chalk.cyan(poll.verificationUri)}`
+            : null,
+          `  Scope:  ${poll.scope}`,
+        ];
+        if (isCliClient) {
+          // The server's CLI-detection heuristic flags our client
+          // registration as a CLI / MCP consumer; the approval page
+          // will render the identity picker, so warn the operator
+          // up-front. Without this hint, unattended operators often
+          // miss the picker and accidentally approve as their
+          // personal account.
+          lines.push(
             "",
-            chalk.bold("Open Kanban authorization required"),
-            `  Visit:  ${chalk.cyan(poll.verificationUri)}`,
-            `  Code:   ${chalk.cyan(poll.userCode)}`,
-            `  Scope:  ${poll.scope}`,
-            `  Waiting for approval (expires in ${Math.max(0, Math.round((poll.expiresAt - Date.now()) / 1000))}s)...`,
-            "",
-          ].join("\n") + "\n"
-        );
+            chalk.yellow(
+              "  Identity selection: this client looks like a CLI runner. The approval page will ask you to authorise as either your account or an Agent — pick the Agent if this CLI is for unattended automation."
+            )
+          );
+        }
+        lines.push("", `  Waiting for approval (expires in ${expiresIn}s)...`, "");
+        stderr.write(lines.filter((l): l is string => l !== null).join("\n") + "\n");
         return "approve";
       },
     });
@@ -145,6 +176,26 @@ export async function runLogin(
     stderr.write(chalk.red(`Login failed: ${reason}\n`));
     throw err;
   }
+}
+
+// isCliLikeClientName mirrors the server's CLI-detection heuristic
+// (oauth.IsAgentIdSelectionRequired in backend/internal/oauth/device.go)
+// so the login prompt can warn the operator before the approval
+// page renders the identity picker. Mirrored on purpose: the CLI
+// has no way to query the server for the heuristic value until
+// after the device code has been issued, and we want the warning
+// to surface inline with the prompt. The pattern is intentionally
+// a subset (only the explicit names + the suffix) so false
+// positives don't add noise to a prompt that doesn't need it.
+function isCliLikeClientName(name: string | undefined): boolean {
+  if (!name) return false;
+  const trimmed = name.trim().toLowerCase();
+  if (!trimmed) return false;
+  return (
+    trimmed === "kanban-cli" ||
+    trimmed === "open-kanban-cli" ||
+    trimmed.endsWith("-cli")
+  );
 }
 
 // runStatus prints a one-screen summary of the active credential: profile,

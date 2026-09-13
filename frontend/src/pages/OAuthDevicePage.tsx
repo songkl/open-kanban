@@ -57,6 +57,13 @@ export function OAuthDevicePage() {
   // a pre-pinned kiosk deployment does not need extra clicks.
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [approvedAs, setApprovedAs] = useState<string>('');
+  // confirmingIdentity is the explicit "are you sure?" gate added by
+  // s-1131: the human approver must acknowledge which identity the
+  // device code will be bound to before the approve request leaves
+  // the browser. We separate it from `submitting` so the spinner
+  // only spins during the network round-trip; the gate itself is
+  // synchronous and can be cancelled by editing the selection.
+  const [confirmingIdentity, setConfirmingIdentity] = useState(false);
 
   useEffect(() => {
     authApi
@@ -145,6 +152,22 @@ export function OAuthDevicePage() {
   // i18n fallback copy is used.
   const approverLabel = '';
 
+  // selectedIdentityLabel returns the human-readable label of the
+  // identity the approver is about to authorise. Used by the
+  // confirmation banner so the approver can verify they picked the
+  // right one before the request leaves the page. Returns the empty
+  // string for the legacy "Myself" path.
+  const selectedIdentityLabel = (): string => {
+    if (!selectedAgentId) {
+      return t('oauth.device.identitySelf', { name: approverLabel || t('oauth.device.identityYouFallback') });
+    }
+    const found = agents?.find((a) => a.id === selectedAgentId);
+    if (!found) return selectedAgentId;
+    return t('oauth.device.identityAgent', { name: found.nickname || found.username || found.id });
+  };
+  const selectedIdentityKind = (): 'agent' | 'self' =>
+    selectedAgentId ? 'agent' : 'self';
+
   const decide = async (decision: 'approve' | 'deny') => {
     if (!code) return;
     setSubmitting(true);
@@ -183,7 +206,20 @@ export function OAuthDevicePage() {
       setError(t('oauth.device.failed'));
     } finally {
       setSubmitting(false);
+      setConfirmingIdentity(false);
     }
+  };
+
+  // requestApproval arms the confirmation gate; the actual approve
+  // request goes out only after the approver clicks "Confirm" in the
+  // banner. Lets the approver back out without round-tripping if
+  // they picked the wrong identity.
+  const requestApproval = () => {
+    if (!lookup || !hasValidSelection) return;
+    setConfirmingIdentity(true);
+  };
+  const cancelApproval = () => {
+    setConfirmingIdentity(false);
   };
 
   if (needsLogin) {
@@ -357,6 +393,49 @@ export function OAuthDevicePage() {
           </div>
         )}
 
+        {lookup && !decided && confirmingIdentity && (
+          <div
+            className="mt-3 rounded-md border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+            data-testid="identity-confirm-banner"
+            role="alertdialog"
+            aria-live="assertive"
+          >
+            <p className="font-medium">
+              {selectedIdentityKind() === 'agent'
+                ? t('oauth.device.identityConfirmAgent')
+                : t('oauth.device.identityConfirmSelf')}
+            </p>
+            <p className="mt-1 text-xs text-blue-800 dark:text-blue-300">
+              {t('oauth.device.identityConfirmSummary', {
+                client: lookup.clientName || lookup.clientId,
+                identity: selectedIdentityLabel(),
+              })}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => decide('approve')}
+                className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                data-testid="identity-confirm-approve"
+              >
+                {selectedIdentityKind() === 'agent'
+                  ? t('oauth.device.identityConfirmAgentCta')
+                  : t('oauth.device.identityConfirmSelfCta')}
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={cancelApproval}
+                className="flex-1 rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:opacity-50"
+                data-testid="identity-confirm-cancel"
+              >
+                {t('oauth.device.identityConfirmCancel')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {decided && (
           <div
             className={`mt-5 rounded-md p-3 text-sm ${
@@ -377,8 +456,8 @@ export function OAuthDevicePage() {
         <div className="mt-6 flex gap-3">
           <button
             type="button"
-            disabled={!lookup || submitting || decided !== null || !hasValidSelection}
-            onClick={() => decide('approve')}
+            disabled={!lookup || submitting || decided !== null || confirmingIdentity || !hasValidSelection}
+            onClick={requestApproval}
             className="flex-1 rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
             data-testid="approve-btn"
           >
@@ -386,7 +465,7 @@ export function OAuthDevicePage() {
           </button>
           <button
             type="button"
-            disabled={!lookup || submitting || decided !== null}
+            disabled={!lookup || submitting || decided !== null || confirmingIdentity}
             onClick={() => decide('deny')}
             className="flex-1 rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="deny-btn"

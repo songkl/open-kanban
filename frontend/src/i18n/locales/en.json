@@ -788,6 +788,12 @@
       "identityServerDefault": "Server default",
       "identityEmpty": "No Agent accounts are available. Ask an administrator to enable one before approving a device.",
       "identityHelper": "Pick the identity the device should receive access for. Pick an Agent if this CLI is for unattended automation.",
+      "identityConfirmSelf": "Authorise as yourself?",
+      "identityConfirmAgent": "Authorise as an Agent?",
+      "identityConfirmSummary": "{{client}} will receive access on behalf of {{identity}}.",
+      "identityConfirmSelfCta": "Yes, authorise as me",
+      "identityConfirmAgentCta": "Yes, authorise as this Agent",
+      "identityConfirmCancel": "Pick a different identity",
       "requireAgentTitle": "Agent selection required",
       "requireAgentBody": "This server has disabled \"Approve as myself\" for the device flow. The kanban run CLI is intended for Agent use only, so you must pick an Agent identity before approving."
     },

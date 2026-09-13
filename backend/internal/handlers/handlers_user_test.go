@@ -32,7 +32,8 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		enabled BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_active_at DATETIME
+		last_active_at DATETIME,
+		created_by TEXT REFERENCES users(id) ON DELETE SET NULL
 	);
 	CREATE TABLE tokens (
 		id TEXT PRIMARY KEY,
@@ -1173,9 +1174,15 @@ func TestGetAgentsHandler(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM users WHERE type = 'AGENT'").Scan(&count)
 	t.Logf("AGENT users count before insert: %d", count)
 
+	// agent1 — pre-existing AGENT, no creator on file (NULL).
 	_, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled) VALUES ('agent1', 'agent1', 'Test Agent', '', 'ADMIN', 'AGENT', 1)`)
 	if err != nil {
 		t.Fatalf("failed to insert agent: %v", err)
+	}
+	// agent2 — Agent whose creator is the seeded admin1.
+	_, err = db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled, created_by) VALUES ('agent2', 'agent2', 'Newer Agent', '', 'MEMBER', 'AGENT', 1, 'admin1')`)
+	if err != nil {
+		t.Fatalf("failed to insert agent with creator: %v", err)
 	}
 
 	router := gin.New()
@@ -1202,10 +1209,43 @@ func TestGetAgentsHandler(t *testing.T) {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
 
-		var resp map[string]interface{}
+		var resp struct {
+			Agents []map[string]interface{} `json:"agents"`
+		}
 		json.Unmarshal(w.Body.Bytes(), &resp)
-		if resp["agents"] == nil {
-			t.Errorf("expected agents in response")
+		if len(resp.Agents) < 2 {
+			t.Fatalf("expected at least 2 agents, got %d", len(resp.Agents))
+		}
+
+		// s-1131: agent2 (created by admin1) must surface
+		// createdBy + the creator's nickname / username; agent1
+		// (legacy, no creator) must not have the fields set.
+		var agent1, agent2 map[string]interface{}
+		for _, a := range resp.Agents {
+			switch a["id"] {
+			case "agent1":
+				agent1 = a
+			case "agent2":
+				agent2 = a
+			}
+		}
+		if agent1 == nil {
+			t.Fatalf("agent1 missing from response: %v", resp.Agents)
+		}
+		if agent2 == nil {
+			t.Fatalf("agent2 missing from response: %v", resp.Agents)
+		}
+		if _, ok := agent1["createdBy"]; ok {
+			t.Errorf("agent1 should not have createdBy, got %v", agent1["createdBy"])
+		}
+		if agent2["createdBy"] != "admin1" {
+			t.Errorf("agent2.createdBy = %v, want admin1", agent2["createdBy"])
+		}
+		if agent2["createdByNickname"] != "admin" {
+			t.Errorf("agent2.createdByNickname = %v, want admin", agent2["createdByNickname"])
+		}
+		if agent2["createdByUsername"] != "admin" {
+			t.Errorf("agent2.createdByUsername = %v, want admin", agent2["createdByUsername"])
 		}
 	})
 }
@@ -1285,6 +1325,22 @@ func TestCreateAgentHandler(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["agent"] == nil {
 			t.Errorf("expected agent in response")
+		}
+		agent := resp["agent"].(map[string]interface{})
+		// s-1131: agent must carry the creator's user id so the
+		// CLI / frontend can answer "who created this Agent".
+		if agent["createdBy"] != "admin1" {
+			t.Errorf("expected agent.createdBy=admin1, got %v", agent["createdBy"])
+		}
+
+		// Verify the row in the DB also has the creator.
+		var createdBy sql.NullString
+		err := db.QueryRow("SELECT created_by FROM users WHERE id = ?", agent["id"]).Scan(&createdBy)
+		if err != nil {
+			t.Fatalf("failed to read created_by back: %v", err)
+		}
+		if !createdBy.Valid || createdBy.String != "admin1" {
+			t.Errorf("expected DB created_by=admin1, got %v", createdBy)
 		}
 	})
 }

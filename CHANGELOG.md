@@ -6,6 +6,36 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- s-1131: tighten the CLI auth login UX and surface Agent creator
+  identity end-to-end so unattended operators stop accidentally
+  binding their human approver's session to the runner. The
+  device-flow approval page now requires an explicit confirmation
+  click before the approve request leaves the browser — the first
+  click on "Approve" opens a confirmation banner summarising which
+  identity (Human / Agent) the device code will be bound to, and
+  the second click submits. The banner copy is Agent-aware
+  ("Authorise as an Agent?") so the approver can't miss the
+  difference between the two paths. CLI `kanban auth login` now
+  prints the deep-link URL with the user_code pre-filled
+  (`?code=XXXX-XXXX`) instead of the bare verification URI, and
+  emits a yellow "Identity selection" hint whenever the OAuth
+  client registration looks like a CLI / MCP consumer so
+  unattended operators know they need to pick an Agent on the
+  approval page. Backend ships migration 008 (sqlite + mysql) that
+  adds `users.created_by TEXT REFERENCES users(id) ON DELETE SET
+  NULL`; `POST /api/v1/auth/agents` stamps the creator at insert
+  time, `GET /api/v1/auth/agents` surfaces `createdBy` plus the
+  creator's nickname / username via a `LEFT JOIN`, and the new
+  field round-trips through `kanban auth agent {list,create}` —
+  the list table grows a "Created by" column that auto-hides on
+  legacy payloads and renders "(legacy)" for individual rows the
+  server doesn't have creator info for. Pre-existing AGENT rows
+  created before this migration stay alive with `created_by =
+  NULL` (the column is intentionally nullable so the migration is
+  lossless; `ON DELETE SET NULL` keeps Agents alive when the
+  creator is removed). 4 backend tests + 7 CLI tests + 3
+  Vitest cases + 1 migration round-trip test cover the new
+  flow.
 - s-1130: add `kanban attach <taskId>` so an AI agent / operator can
   claim one specific task by id without owning the surrounding
   column or inbox (the "AI-first" entry point). Backed by the new

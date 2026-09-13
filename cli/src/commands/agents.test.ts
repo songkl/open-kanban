@@ -116,6 +116,12 @@ const AGENT_PAYLOAD = {
   enabled: true,
   createdAt: "2026-09-12T00:00:00Z",
   tokenCount: 1,
+  // s-1131: creator identification. Real server responses from
+  // 0.8.0+ include these fields; older payloads leave them off so
+  // the table renders a "(legacy)" placeholder.
+  createdBy: "admin-1",
+  createdByNickname: "Alice Admin",
+  createdByUsername: "alice",
 };
 
 const AGENTS_LIST_PAYLOAD = {
@@ -127,6 +133,9 @@ const AGENTS_LIST_PAYLOAD = {
       nickname: "docs-bot",
       role: "MEMBER",
       lastActiveAt: "2026-09-11T12:34:56Z",
+      createdBy: "admin-2",
+      createdByNickname: "Bob Owner",
+      createdByUsername: "bob",
     },
   ],
 };
@@ -201,6 +210,79 @@ describe("runAgentsList", () => {
     });
     const { stdout } = cap.read();
     expect(stdout).toContain("never");
+  });
+
+  it("renders the 'Created by' column when the server returns creator info (s-1131)", async () => {
+    scriptFetch([{ status: 200, body: AGENTS_LIST_PAYLOAD }]);
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    const cap = makeCapture();
+    await runAgentsList({
+      apiUrl: "http://kanban.example.com",
+      http,
+      io: cap.io,
+    });
+    const { stdout } = cap.read();
+    expect(stdout).toContain("Created by");
+    expect(stdout).toContain("Alice Admin");
+    expect(stdout).toContain("Bob Owner");
+  });
+
+  it("hides the 'Created by' column when the server returns no creator info (legacy servers)", async () => {
+    const legacyPayload = {
+      agents: [
+        {
+          id: "agent-legacy",
+          nickname: "legacy-bot",
+          type: "AGENT",
+          role: "ADMIN",
+          enabled: true,
+          createdAt: "2026-08-01T00:00:00Z",
+          tokenCount: 1,
+        },
+      ],
+    };
+    scriptFetch([{ status: 200, body: legacyPayload }]);
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    const cap = makeCapture();
+    await runAgentsList({
+      apiUrl: "http://kanban.example.com",
+      http,
+      io: cap.io,
+    });
+    const { stdout } = cap.read();
+    expect(stdout).not.toContain("Created by");
+  });
+
+  it("renders '(legacy)' for individual rows whose server omitted the creator", async () => {
+    // Mixed payload — one row carries the creator, the other
+    // does not. The column stays on (because at least one row
+    // has the field) but the missing row gets the placeholder.
+    const mixed = {
+      agents: [
+        AGENT_PAYLOAD,
+        {
+          id: "agent-legacy",
+          nickname: "legacy-bot",
+          type: "AGENT",
+          role: "ADMIN",
+          enabled: true,
+          createdAt: "2026-08-01T00:00:00Z",
+          tokenCount: 1,
+        },
+      ],
+    };
+    scriptFetch([{ status: 200, body: mixed }]);
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    const cap = makeCapture();
+    await runAgentsList({
+      apiUrl: "http://kanban.example.com",
+      http,
+      io: cap.io,
+    });
+    const { stdout } = cap.read();
+    expect(stdout).toContain("Created by");
+    expect(stdout).toContain("Alice Admin");
+    expect(stdout).toContain("(legacy)");
   });
 
   it("renders '(no agents)' when the list is empty", async () => {
@@ -302,6 +384,27 @@ describe("runAgentCreate", () => {
       avatar: "https://example.com/avatar.png",
       role: "MEMBER",
     });
+  });
+
+  it("surfaces the creator in the create table when the server returns it (s-1131)", async () => {
+    scriptFetch([{ status: 200, body: AGENT_CREATE_RESPONSE }]);
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    const oauth = makeOAuth();
+    const cap = makeCapture();
+    const result = await runAgentCreate(
+      {
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        io: cap.io,
+      },
+      "ci-runner"
+    );
+    const { stdout } = cap.read();
+    expect(stdout).toContain("Created by");
+    expect(stdout).toContain("admin-1");
+    // And the typed result mirrors the server payload.
+    expect(result.agent.createdBy).toBe("admin-1");
   });
 
   it("reports bound=false when --no-bind is passed (dry-run)", async () => {
