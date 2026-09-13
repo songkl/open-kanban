@@ -247,6 +247,18 @@ All notable changes to this project will be documented in this file.
 
 ### Documentation
 
+#### Added
+  - s-1127: add the third-generation product review report at
+    `docs/product-review-s-1127.md` covering user experience,
+    feature completeness, UI consistency, performance,
+    responsiveness, core user value, and prioritised improvement
+    recommendations (6 P0 + 12 P1 + 7 P2). The report builds on
+    `docs/pm-review-v2-report.md` (s-1058), tracks which items are
+    still open from v2 (raw `column.status` leak, hardcoded WS port,
+    dead components, etc.), adds the new "AI-first positioning"
+    analysis for `kanban run` / MCP / device-flow with agent
+    selection, and ends with a 12-week roadmap.
+
 #### Fixed
   - fix: tone down borders + the VIEWER badge in dark mode
   - fix: stop hiding more-menu icons in dark mode
