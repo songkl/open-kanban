@@ -196,16 +196,19 @@ All notable changes to this project will be documented in this file.
   (with "Myself" / per-Agent / server-default options) before the
   approve/deny buttons and posts the chosen `agent_id`; the
   `OAuthSettings` admin page adds the corresponding toggle.
-  **Opt-in hardening:** the new
+  **⚠ Opt-in breaking-warning:** the new
   `oauth_device_require_agent_selection` config key defaults to
   `"0"` so existing deployments keep the current "human approver
-  binds" behaviour. When an admin flips it to `"1"`, the device
-  flow rejects human-as-approver approvals with
-  `400 invalid_request` (unless the approver is themselves
-  `type='AGENT'`), enforcing the "CLI runner is for Agent use"
-  hard requirement at the server boundary — review
-  `devDoc/DEVICE_AUTH_AGENT_SELECTION_PLAN_2026-09-13.md`
-  (plan §5 row 14) before enabling on production.
+  binds" behaviour. **Flipping it to `"1"` is a breaking change**
+  for any deployment that currently relies on a human approver
+  completing the device flow without picking an Agent — the device
+  flow will reject those approvals with `400 invalid_request`
+  (unless the approver is themselves `type='AGENT'`). Use it to
+  enforce the "CLI runner is for Agent use" hard requirement at the
+  server boundary, but only after confirming that every CLI / MCP
+  client is bound to an enabled AGENT identity. Review
+  `devDoc/DEVICE_AUTH_AGENT_SELECTION_PLAN_2026-09-13.md` (plan
+  §5 row 14) before enabling on production.
 - s-1112.13: ship the device-flow-with-agent-selection CLI e2e
   test (plan §4.6). `cli/tests/e2e/agent-selection.test.ts` spawns
   the `kanban-e2e-runner` helper, drives `kanban auth login` end to
