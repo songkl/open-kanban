@@ -16,6 +16,11 @@ interface DeviceLookup {
   scope: string;
   expiresAt: string;
   status: string;
+  // AgentSelectionRequired is true when the device flow must bind to an
+  // Agent identity (CLI/MCP client or admin-enforced policy). When true
+  // the page renders the identity selector; when false (or absent) the
+  // legacy "authorize as the logged-in user" path is used.
+  agentSelectionRequired?: boolean;
   agents?: DeviceLookupAgent[];
   defaultAgentId?: string;
 }
@@ -221,8 +226,26 @@ export function OAuthDevicePage() {
     );
   }
 
-  const agents = lookup?.agents ?? [];
-  const showIdentityPicker = agents.length > 0;
+  // agents is the array of selectable Agent identities returned by the
+  // lookup. It is undefined when the lookup did not include the agents
+  // field (legacy / non-admin lookups) and an empty array when the
+  // server requires the picker but the deployment has no Agents yet.
+  const agents = lookup?.agents;
+  const hasAgents = Array.isArray(agents) && agents.length > 0;
+  const pickerRequired = lookup?.agentSelectionRequired === true;
+  // Render the picker whenever the server returned at least one Agent
+  // — the empty-state path below covers the picker-required-but-no-agents
+  // case. When the lookup omits the agents field (or returns it with
+  // length 0 and does not require a selection) the legacy behaviour
+  // applies and no identity chrome is shown.
+  const showIdentityPicker = hasAgents;
+  const showIdentityEmptyState = pickerRequired && !hasAgents;
+  // A valid selection exists whenever the picker is shown (the
+  // "Myself" radio is pre-selected, so a non-empty value is present)
+  // or the legacy path is in effect (the human approver is implicitly
+  // the bound user). The empty-state path is the only one with no
+  // valid selection, so we block the Approve button there.
+  const hasValidSelection = !showIdentityEmptyState;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">
@@ -288,28 +311,49 @@ export function OAuthDevicePage() {
               />
               <span>{t('oauth.device.identitySelf', { name: approverLabel || t('oauth.device.identityYouFallback') })}</span>
             </label>
-            {agents.map((a) => (
-              <label
-                key={a.id}
-                className="mt-1 flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
-              >
-                <input
-                  type="radio"
-                  name="identity"
-                  value={a.id}
-                  checked={selectedAgentId === a.id}
-                  onChange={() => setSelectedAgentId(a.id)}
-                  className="mt-0.5"
-                  data-testid={`identity-agent-${a.id}`}
-                />
-                <span>
-                  {t('oauth.device.identityAgent', { name: a.nickname || a.username || a.id })}
-                  {a.role ? (
-                    <span className="ml-1 text-xs text-zinc-500">({a.role})</span>
-                  ) : null}
-                </span>
-              </label>
-            ))}
+            {agents!.map((a) => {
+              const isServerDefault = lookup.defaultAgentId === a.id;
+              return (
+                <label
+                  key={a.id}
+                  className="mt-1 flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  <input
+                    type="radio"
+                    name="identity"
+                    value={a.id}
+                    checked={selectedAgentId === a.id}
+                    onChange={() => setSelectedAgentId(a.id)}
+                    className="mt-0.5"
+                    data-testid={`identity-agent-${a.id}`}
+                  />
+                  <span>
+                    {t('oauth.device.identityAgent', { name: a.nickname || a.username || a.id })}
+                    {isServerDefault ? (
+                      <span
+                        className="ml-1 inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                        data-testid={`identity-agent-${a.id}-default-badge`}
+                      >
+                        {t('oauth.device.identityServerDefault')}
+                      </span>
+                    ) : null}
+                    {a.role ? (
+                      <span className="ml-1 text-xs text-zinc-500">({a.role})</span>
+                    ) : null}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        {lookup && !decided && showIdentityEmptyState && (
+          <div
+            className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+            data-testid="identity-empty"
+            role="alert"
+          >
+            {t('oauth.device.identityEmpty')}
           </div>
         )}
 
@@ -333,7 +377,7 @@ export function OAuthDevicePage() {
         <div className="mt-6 flex gap-3">
           <button
             type="button"
-            disabled={!lookup || submitting || decided !== null}
+            disabled={!lookup || submitting || decided !== null || !hasValidSelection}
             onClick={() => decide('approve')}
             className="flex-1 rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
             data-testid="approve-btn"

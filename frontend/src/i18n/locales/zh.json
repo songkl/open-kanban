@@ -785,6 +785,7 @@
       "identityAsSelf": "按当前账号授权",
       "identityAgent": "Agent：{{name}}",
       "identityDefault": "请选择授权身份",
+      "identityServerDefault": "服务器默认",
       "identityEmpty": "暂无可用的 Agent 账号，请联系管理员启用后再继续授权。",
       "identityHelper": "选择设备应获得授权的身份。如果是给无人值守的 CLI / MCP 使用，请选择一个 Agent。",
       "requireAgentTitle": "必须选择 Agent 身份",

@@ -23,7 +23,14 @@ vi.mock('react-i18next', () => ({
         'oauth.device.approvedBanner': 'Approved. Return to device.',
         'oauth.device.deniedBanner': 'Denied.',
         'oauth.device.disabledTitle': 'Device authorization is disabled',
-        'oauth.device.disabledBody': 'An administrator has turned off the OAuth device flow.'
+        'oauth.device.disabledBody': 'An administrator has turned off the OAuth device flow.',
+        'oauth.device.identitySectionTitle': 'Authorize as',
+        'oauth.device.identityHelper': 'Pick the identity the device should receive access for.',
+        'oauth.device.identitySelf': 'Myself ({{name}})',
+        'oauth.device.identityYouFallback': 'you',
+        'oauth.device.identityAgent': 'Agent: {{name}}',
+        'oauth.device.identityServerDefault': 'Server default',
+        'oauth.device.identityEmpty': 'No Agent accounts are available. Ask an administrator to enable one before approving a device.'
       };
       return map[key] || key;
     },
@@ -458,5 +465,119 @@ describe('OAuthDevicePage', () => {
     const alphaRadio = screen.getByTestId('identity-agent-agent-alpha') as HTMLInputElement;
     expect(selfRadio.checked).toBe(true);
     expect(alphaRadio.checked).toBe(false);
+  });
+
+  it('shows a Server default badge on the agent that matches defaultAgentId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        defaultAgentId: 'agent-beta',
+        agents: [
+          { id: 'agent-alpha', nickname: 'Alpha' },
+          { id: 'agent-beta', nickname: 'Beta' }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'BADG-BADG' } });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-beta-default-badge')).toBeInTheDocument()
+    );
+    expect(screen.queryByTestId('identity-agent-agent-alpha-default-badge')).not.toBeInTheDocument();
+    expect(screen.getByTestId('identity-agent-agent-beta-default-badge').textContent).toMatch(
+      /Server default/
+    );
+  });
+
+  it('does not render a Server default badge when defaultAgentId does not match an agent', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: '',
+        expiresAt: '',
+        status: 'pending',
+        defaultAgentId: 'ghost-agent',
+        agents: [
+          { id: 'agent-alpha', nickname: 'Alpha' },
+          { id: 'agent-beta', nickname: 'Beta' }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'NBAD-NBAD' } });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-beta')).toBeInTheDocument()
+    );
+    expect(screen.queryByTestId('identity-agent-agent-alpha-default-badge')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('identity-agent-agent-beta-default-badge')).not.toBeInTheDocument();
+  });
+
+  it('renders the empty-state and disables Approve when agent_selection_required is true and no agents are available', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        agentSelectionRequired: true,
+        agents: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'EMPT-EMPT' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-empty')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('identity-empty').textContent).toMatch(/No Agent accounts/i);
+    expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('identity-self')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approve-btn')).toBeDisabled();
+    expect(screen.getByTestId('deny-btn')).not.toBeDisabled();
+  });
+
+  it('hides the empty-state and keeps Approve enabled when agents is empty but agent_selection_required is not set', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        agents: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'LEGC-LEGC' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId('identity-empty')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
   });
 });
