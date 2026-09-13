@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,42 @@ import (
 
 	"open-kanban/internal/models"
 )
+
+// cliClientNameRegex matches the OAuth client names that the device-flow
+// page treats as CLI / MCP consumers requiring an Agent identity. The
+// pattern follows plan §4.1.2 and the heuristic documented on
+// IsAgentSelectionRequired: the explicit `kanban-cli` / `open-kanban-cli`
+// literals are kept for readability even though `.*-cli` already covers
+// them, so future maintainers can grep the canonical names.
+var cliClientNameRegex = regexp.MustCompile(`(?i)^(kanban-cli|open-kanban-cli|.*-cli)$`)
+
+// IsAgentSelectionRequired reports whether the device-flow approval page
+// should render the Agent-identity picker for a given OAuth client. The
+// heuristic mirrors plan §4.1.2:
+//
+//   - client.name matches /^(kanban-cli|open-kanban-cli|.*-cli)$/i
+//     (case-insensitive), OR
+//   - client.grant_types contains the device_code grant AND the client
+//     is NOT flagged as first-party-human (oauth_clients.is_first_party
+//     = 1 — used by the in-house web SPA so it can still ask for
+//     device_code grants without tripping the CLI affordance).
+//
+// Returns false for nil clients and clients whose name and grant_types
+// both fall through the rules — that's the conservative default so the
+// legacy web approval page keeps rendering for any future client type we
+// haven't classified yet.
+func IsAgentSelectionRequired(client *models.OAuthClient) bool {
+	if client == nil {
+		return false
+	}
+	if cliClientNameRegex.MatchString(strings.TrimSpace(client.Name)) {
+		return true
+	}
+	if !client.IsFirstParty && ClientAllowsGrant(client, GrantTypeDeviceCode) {
+		return true
+	}
+	return false
+}
 
 // Device flow configuration keys & defaults (read once per request from
 // app_config; missing keys fall back to defaults).

@@ -457,10 +457,11 @@ func TestApproveAgentScenario12_LookupAgentSelectionRequiredFalseForSPA(t *testi
 
 // 13. Lookup returns the correct filtered agent list per role. The
 // plan §4.1.2 splits visibility: ADMIN sees all enabled Agents,
-// MEMBER/VIEWER see only non-ADMIN-role Agents. Today's lookup hides
-// the list from non-admin sessions entirely and shows all enabled
-// Agents to admins. This test pins both branches so the s-1112.3
-// refinement doesn't regress the happy path. (plan §4.1.6 #13)
+// MEMBER/VIEWER see only non-ADMIN-role Agents. The lookup payload
+// uses the `available_agents` key (s-1112.3) so the page and the
+// dedicated /oauth/device/agents endpoint share the same shape. The
+// list is always emitted (never omitted) so the frontend can iterate
+// the field unconditionally. (plan §4.1.6 #13)
 func TestApproveAgentScenario13_LookupAgentListFilteredByRole(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
@@ -482,17 +483,16 @@ func TestApproveAgentScenario13_LookupAgentListFilteredByRole(t *testing.T) {
 		}
 		var resp map[string]interface{}
 		_ = json.Unmarshal(w.Body.Bytes(), &resp)
-		agents, ok := resp["agents"].([]interface{})
+		agents, ok := resp["available_agents"].([]interface{})
 		if !ok || len(agents) != 3 {
-			t.Errorf("expected admin to see 3 agents, got %v", resp["agents"])
+			t.Errorf("expected admin to see 3 agents, got %v", resp["available_agents"])
 		}
 	})
 
-	t.Run("member sees no agents today", func(t *testing.T) {
-		// The legacy admin-only gate means non-admin sessions get an
-		// empty payload. s-1112.3 will replace this with the per-role
-		// filter; once it ships, this assertion will need to flip to
-		// expect exactly the non-ADMIN agents (member + viewer).
+	t.Run("member sees non-admin agents only", func(t *testing.T) {
+		// s-1112.3 replaces the admin-only gate with a per-role
+		// filter: MEMBER callers must see exactly the non-ADMIN
+		// Agents so they cannot delegate to ADMIN-role identities.
 		req := httptest.NewRequest(http.MethodGet, "/oauth/device/lookup?code=scen-0013", nil)
 		setApproveUserRole(req, db, "member-x", "MEMBER")
 		w := httptest.NewRecorder()
@@ -502,8 +502,19 @@ func TestApproveAgentScenario13_LookupAgentListFilteredByRole(t *testing.T) {
 		}
 		var resp map[string]interface{}
 		_ = json.Unmarshal(w.Body.Bytes(), &resp)
-		if _, hasAgents := resp["agents"]; hasAgents {
-			t.Errorf("expected no agents key for MEMBER, got %v", resp["agents"])
+		agents, ok := resp["available_agents"].([]interface{})
+		if !ok || len(agents) != 2 {
+			t.Fatalf("expected MEMBER to see 2 agents, got %v", resp["available_agents"])
+		}
+		seenRoles := map[string]bool{}
+		for _, entry := range agents {
+			m, _ := entry.(map[string]interface{})
+			if role, ok := m["role"].(string); ok {
+				seenRoles[role] = true
+			}
+		}
+		if seenRoles["ADMIN"] {
+			t.Errorf("MEMBER must not see ADMIN-role agents, got %v", seenRoles)
 		}
 	})
 }

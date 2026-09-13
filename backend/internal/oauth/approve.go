@@ -160,11 +160,21 @@ func bindUserForResponse(bound *string, approverID string) string {
 // for the verification page. Sensitive fields like the device_code are NOT
 // returned.
 //
-// When the caller is authenticated as an admin, the response also includes
-// the list of enabled Agents so the device authorization page can render
-// the identity selector ("Authorize as <Agent>" / "Authorize as myself").
-// Non-admin callers get the same payload without the agent list — they
-// cannot delegate authority to Agents they do not administer.
+// The response carries two plan-§4.1.2 affordances for the
+// authorization page:
+//
+//   - `agent_selection_required` (bool): true when the device flow's
+//     OAuth client looks like a CLI / MCP consumer, so the page should
+//     render the Agent-identity picker. See IsAgentSelectionRequired
+//     for the full heuristic.
+//   - `available_agents` (array): the Agent identities the caller is
+//     allowed to delegate to. ADMIN callers see every enabled Agent;
+//     MEMBER / VIEWER callers see only non-ADMIN-role Agents; anonymous
+//     callers get an empty list (the picker is hidden).
+//
+// The list is always emitted as `[]` (never `null`) so the frontend can
+// iterate the field unconditionally — see CLAUDE.md "Prefer returning
+// empty arrays `[]` over `null` for list responses".
 func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Prefer the modern `code` parameter that matches
@@ -192,9 +202,19 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Best effort: pull client display name.
-		var clientName string
-		if client, err := GetClient(db, dc.ClientID); err == nil {
+		// Pull the client record so we can both surface its display
+		// name AND evaluate the CLI-detection heuristic for
+		// agent_selection_required. Best effort: a missing client row
+		// (shouldn't happen because the device_codes.client_id is
+		// FOREIGN KEYed) defaults the name to "" and the CLI flag to
+		// false so the page keeps rendering.
+		var (
+			client    *models.OAuthClient
+			clientErr error
+		)
+		client, clientErr = GetClient(db, dc.ClientID)
+		clientName := ""
+		if clientErr == nil && client != nil {
 			clientName = client.Name
 		}
 
@@ -204,6 +224,12 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 			"scope":      dc.Scope,
 			"expiresAt":  dc.ExpiresAt,
 			"status":     dc.Status,
+			// plan §4.1.2: surface the CLI heuristic so the page can
+			// flip the identity picker on for `kanban run` / MCP
+			// clients. False when the client row can't be read so we
+			// don't accidentally hide the picker on a transient DB
+			// blip.
+			"agent_selection_required": IsAgentSelectionRequired(client),
 		}
 
 		// Surface the configured global binding (if any) so the UI can
@@ -214,12 +240,16 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 			resp["defaultAgentId"] = agentID
 		}
 
-		// Agent picker is admin-only: only admins can act on behalf of
-		// an Agent. Anonymous lookups (the legacy unauthenticated path)
-		// and non-admin sessions get the response without the list so
-		// the UI can hide the selector entirely.
-		if user := currentUserOrUnauthorized(c, db); user != nil && user.Role == "ADMIN" {
-			if agents, err := ListSelectableAgents(db); err == nil {
+		// plan §4.1.2: visible-Agent list filtered by caller role.
+		// Anonymous lookups get an empty slice (the picker hides
+		// itself); MEMBER / VIEWER callers see only non-ADMIN-role
+		// Agents so they cannot delegate outside their own authority
+		// tier; ADMIN callers see every enabled Agent. Reuse the
+		// shared helper that backs GET /oauth/device/agents so the
+		// two endpoints stay in lockstep.
+		availableAgents := []gin.H{}
+		if user := currentUserOrUnauthorized(c, db); user != nil {
+			if agents, err := listSelectableAgentsForRole(db, user.Role); err == nil {
 				items := make([]gin.H, 0, len(agents))
 				for _, a := range agents {
 					items = append(items, gin.H{
@@ -229,9 +259,10 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 						"role":     a.Role,
 					})
 				}
-				resp["agents"] = items
+				availableAgents = items
 			}
 		}
+		resp["available_agents"] = availableAgents
 
 		c.JSON(http.StatusOK, resp)
 	}
