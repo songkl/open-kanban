@@ -83,6 +83,17 @@ var VersionMigrationMap = []VersionMigration{
 	// PKCE would have nowhere to stash the verifier. The login
 	// redirect handler ships in the same release as the schema.
 	{Version: "0.11.0", From: 1, To: 11},
+	// 0.12.0 added migration 012 to introduce the webhooks +
+	// webhook_deliveries tables (s-1139, plan §4 in
+	// docs/EVENT_CENTER_PLAN_s-1138.md). Originally drafted
+	// as migration 009 in the plan, but the OAuth external-IdP
+	// work (s-1140 / s-1142 / s-1145) shipped first and
+	// claimed 009 / 010 / 011; this migration therefore lands
+	// as 012 to keep the golang-migrate alphabetical sequence
+	// monotonic. The CRUD / event-bus / signing / handler
+	// sub-tasks (s-1140 / s-1141 / s-1142 / s-1143) ship in
+	// follow-up releases against the same schema.
+	{Version: "0.12.0", From: 1, To: 12},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

@@ -3,6 +3,7 @@ package database_test
 import (
 	"bytes"
 	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +51,7 @@ func TestSQLiteMigrations(t *testing.T) {
 		"oauth_providers", "user_identities",
 		"pending_oauth_states",
 		"task_runs",
+		"webhooks", "webhook_deliveries",
 	}
 
 	taskRunIndexes := []string{
@@ -118,6 +120,21 @@ func TestSQLiteMigrations(t *testing.T) {
 		}
 		if c == 0 {
 			t.Errorf("expected oauth index %s to exist", idx)
+		}
+	}
+
+	webhookIndexes := []string{
+		"idx_webhook_deliveries_webhook_started",
+		"idx_webhook_deliveries_status_next_retry",
+	}
+	for _, idx := range webhookIndexes {
+		var c int
+		err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?", idx).Scan(&c)
+		if err != nil {
+			t.Errorf("error checking webhook index %s: %v", idx, err)
+		}
+		if c == 0 {
+			t.Errorf("expected webhook index %s to exist", idx)
 		}
 	}
 }
@@ -482,15 +499,15 @@ func TestSQLiteMigrationsOAuthProviders(t *testing.T) {
 	//    position=0, scopes='', all endpoint columns empty when
 	//    not overridden, created_at populated.
 	var (
-		enabled         int
-		position        int
-		scopes          string
-		authEndpoint    string
-		tokenEndpoint   string
+		enabled          int
+		position         int
+		scopes           string
+		authEndpoint     string
+		tokenEndpoint    string
 		userinfoEndpoint string
-		issuer          string
-		extraConfig     string
-		varCreatedAt    sql.NullString
+		issuer           string
+		extraConfig      string
+		varCreatedAt     sql.NullString
 	)
 	if err := db.QueryRow(`
 		SELECT enabled, position, scopes, auth_endpoint, token_endpoint,
@@ -1045,11 +1062,11 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 	seedTaskRun(t, db)
 
 	var (
-		status       string
-		finishedAt   sql.NullTime
-		exitCode     sql.NullInt64
-		errMsg       sql.NullString
-		runnerID     string
+		status        string
+		finishedAt    sql.NullTime
+		exitCode      sql.NullInt64
+		errMsg        sql.NullString
+		runnerID      string
 		lastHeartbeat string
 	)
 	row := db.QueryRow(
@@ -1124,7 +1141,7 @@ func seedTaskRun(t *testing.T, db *sql.DB) {
 //   - pending_oauth_states comes up with the columns documented
 //     in plan §7.1 (id PK, state UNIQUE NOT NULL, provider_id
 //     FK CASCADE to oauth_providers, code_verifier NOT NULL,
-//     code_challenge NOT NULL, redirect_after defaulting to '',
+//     code_challenge NOT NULL, redirect_after defaulting to ”,
 //     created_at + expires_at NOT NULL, consumed_at nullable).
 //   - The UNIQUE(state) constraint rejects a duplicate row so
 //     the wire-level CSRF token is genuinely unique.
@@ -1277,6 +1294,506 @@ func TestSQLiteMigrationsPendingOAuthStates(t *testing.T) {
 	}
 	if n != 0 {
 		t.Errorf("expected pending_oauth_states to be dropped after rollback 011, got count=%d", n)
+	}
+
+	// Re-apply so the shared in-memory db stays usable for
+	// the rest of the test suite.
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("re-up: %v", err)
+	}
+}
+
+// TestSQLiteMigrationsWebhookCenter exercises migration 012
+// (s-1139) end-to-end on SQLite. It verifies:
+//
+//   - webhooks + webhook_deliveries come up with the columns
+//     documented in plan §4 of docs/EVENT_CENTER_PLAN_s-1138.md
+//     (id PK, name / url / secret NOT NULL, enabled default 1,
+//     event_types / filters / headers as JSON text defaults,
+//     timeout_sec / max_retries with documented defaults,
+//     created_by FK SET NULL to users, created_at / updated_at,
+//     last_success_at / last_failure_at nullable).
+//   - Happy path: a fully-populated webhook row inserts and
+//     round-trips every column, including the BLOB secret and
+//     the JSON columns that downstream code parses.
+//   - Happy path: a fully-populated webhook_deliveries row
+//     inserts with status='PENDING' and round-trips the
+//     request_body, response_code, response_body, error,
+//     started_at, finished_at, next_retry_at columns.
+//   - ON DELETE CASCADE on webhook_deliveries.webhook_id wipes
+//     every delivery row bound to a webhook when the webhook
+//     is removed — the management UI's delete action depends
+//     on this so we never have a delivery row pointing at a
+//     vanished webhook.
+//   - ON DELETE SET NULL on webhooks.created_by mirrors the
+//     choice on users.created_by (migration 008) /
+//     oauth_providers.created_by (migration 009): deleting the
+//     admin must not silently re-parent or drop every webhook
+//     they configured.
+//   - The two indexes from plan §4 are present:
+//     idx_webhook_deliveries_webhook_started   backs the
+//     per-webhook deliveries page sort
+//     (webhook_id, started_at DESC).
+//     idx_webhook_deliveries_status_next_retry backs the
+//     retry sweeper's WHERE status='FAILED' AND
+//     next_retry_at <= ? hot path.
+//   - The CHECK constraint on webhook_deliveries.status
+//     rejects unknown values so a buggy dispatcher can't
+//     silently write 'pending' vs 'PENDING'.
+//   - The down migration drops both indexes and both tables
+//     in dependency order. Use m.Migrate(11) (the version
+//     strictly before 012) rather than m.Steps(-1) so the
+//     test stays correct when later migrations (013+)
+//     extend the tip.
+//
+// Mirrors the round-trip pattern used by 008 / 009 / 010 / 011
+// so a future regression in any of the constraints above fails
+// before the webhook CRUD handler tests (s-1143) do.
+func TestSQLiteMigrationsWebhookCenter(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	// Enable FK enforcement on every connection in this pool.
+	// The migrate driver does this for its own connection, but
+	// the db.QueryRow / db.Exec calls below run on whatever
+	// connection the pool hands us, and SQLite's
+	// `PRAGMA foreign_keys = ON` is per-connection. Without
+	// this the ON DELETE CASCADE / SET NULL checks below would
+	// silently no-op.
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatalf("enable foreign keys: %v", err)
+	}
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	// 1. webhooks columns match the plan §4 contract.
+	wantWebhookCols := map[string]string{
+		"id":              "TEXT",
+		"name":            "TEXT",
+		"url":             "TEXT",
+		"secret":          "BLOB",
+		"enabled":         "INTEGER",
+		"event_types":     "TEXT",
+		"filters":         "TEXT",
+		"headers":         "TEXT",
+		"timeout_sec":     "INTEGER",
+		"max_retries":     "INTEGER",
+		"created_by":      "TEXT",
+		"created_at":      "DATETIME",
+		"updated_at":      "DATETIME",
+		"last_success_at": "DATETIME",
+		"last_failure_at": "DATETIME",
+	}
+	rows, err := db.Query("SELECT name, type FROM pragma_table_info('webhooks')")
+	if err != nil {
+		t.Fatalf("inspect webhooks columns: %v", err)
+	}
+	gotWebhookCols := map[string]string{}
+	for rows.Next() {
+		var name, typ string
+		if err := rows.Scan(&name, &typ); err != nil {
+			_ = rows.Close()
+			t.Fatalf("scan webhooks column: %v", err)
+		}
+		gotWebhookCols[name] = typ
+	}
+	_ = rows.Close()
+	for name, typ := range wantWebhookCols {
+		got, ok := gotWebhookCols[name]
+		if !ok {
+			t.Errorf("expected webhooks.%s column after migration 012, missing", name)
+			continue
+		}
+		if !strings.EqualFold(got, typ) {
+			t.Errorf("webhooks.%s type: want %s, got %s", name, typ, got)
+		}
+	}
+
+	// 2. webhook_deliveries columns match the plan §4 contract.
+	wantDeliveryCols := map[string]string{
+		"id":            "TEXT",
+		"webhook_id":    "TEXT",
+		"event_id":      "TEXT",
+		"event_type":    "TEXT",
+		"status":        "TEXT",
+		"attempt":       "INTEGER",
+		"request_body":  "TEXT",
+		"response_code": "INTEGER",
+		"response_body": "TEXT",
+		"error":         "TEXT",
+		"started_at":    "DATETIME",
+		"finished_at":   "DATETIME",
+		"next_retry_at": "DATETIME",
+	}
+	rows, err = db.Query("SELECT name, type FROM pragma_table_info('webhook_deliveries')")
+	if err != nil {
+		t.Fatalf("inspect webhook_deliveries columns: %v", err)
+	}
+	gotDeliveryCols := map[string]string{}
+	for rows.Next() {
+		var name, typ string
+		if err := rows.Scan(&name, &typ); err != nil {
+			_ = rows.Close()
+			t.Fatalf("scan webhook_deliveries column: %v", err)
+		}
+		gotDeliveryCols[name] = typ
+	}
+	_ = rows.Close()
+	for name, typ := range wantDeliveryCols {
+		got, ok := gotDeliveryCols[name]
+		if !ok {
+			t.Errorf("expected webhook_deliveries.%s column after migration 012, missing", name)
+			continue
+		}
+		if !strings.EqualFold(got, typ) {
+			t.Errorf("webhook_deliveries.%s type: want %s, got %s", name, typ, got)
+		}
+	}
+
+	// 3. created_by is nullable so the env-var back-fill path in
+	//    plan §9.3 can insert a webhook without a creator.
+	var createdByNotNull int
+	if err := db.QueryRow(
+		`SELECT "notnull" FROM pragma_table_info('webhooks') WHERE name='created_by'`,
+	).Scan(&createdByNotNull); err != nil {
+		t.Fatalf("inspect created_by nullability: %v", err)
+	}
+	if createdByNotNull != 0 {
+		t.Errorf("webhooks.created_by should be nullable, got notnull=%d", createdByNotNull)
+	}
+
+	// 4. Happy path: seed a creator, insert a fully-populated
+	//    webhook, and verify defaults + JSON / BLOB round-trip.
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('admin1', 'admin', 'Admin', 'HUMAN', 'ADMIN', 1)
+	`); err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	// 32-byte HMAC signing secret (§5.2). Stored as a BLOB so
+	// the plaintext doesn't show up in naive `SELECT *` dumps.
+	secret := []byte("0123456789abcdef0123456789abcdef")
+	if _, err := db.Exec(`
+		INSERT INTO webhooks (
+			id, name, url, secret, enabled, event_types, filters, headers,
+			timeout_sec, max_retries, created_by
+		) VALUES (
+			'wh-1', 'staging', 'https://hooks.example.com/inbound',
+			?, 1, '["task.created","task.moved"]',
+			'{"boardIds":["b-1"]}', '{"X-Token":"abc"}',
+			15, 5, 'admin1'
+		)
+	`, secret); err != nil {
+		t.Fatalf("insert webhook: %v", err)
+	}
+
+	var (
+		gotName       string
+		gotURL        string
+		gotSecret     []byte
+		gotEnabled    int
+		gotEventTypes string
+		gotFilters    string
+		gotHeaders    string
+		gotTimeout    int
+		gotMaxRetries int
+		gotCreatedBy  sql.NullString
+		gotCreatedAt  sql.NullString
+	)
+	if err := db.QueryRow(`
+		SELECT name, url, secret, enabled, event_types, filters, headers,
+		       timeout_sec, max_retries, created_by, created_at
+		FROM webhooks WHERE id = 'wh-1'
+	`).Scan(&gotName, &gotURL, &gotSecret, &gotEnabled, &gotEventTypes, &gotFilters,
+		&gotHeaders, &gotTimeout, &gotMaxRetries, &gotCreatedBy, &gotCreatedAt); err != nil {
+		t.Fatalf("scan webhook row: %v", err)
+	}
+	if gotName != "staging" {
+		t.Errorf("name round-trip: got %q", gotName)
+	}
+	if gotURL != "https://hooks.example.com/inbound" {
+		t.Errorf("url round-trip: got %q", gotURL)
+	}
+	if !bytes.Equal(gotSecret, secret) {
+		t.Errorf("secret round-trip mismatch: want %x, got %x", secret, gotSecret)
+	}
+	if gotEnabled != 1 {
+		t.Errorf("enabled default: want 1, got %d", gotEnabled)
+	}
+	if gotEventTypes != `["task.created","task.moved"]` {
+		t.Errorf("event_types round-trip: got %q", gotEventTypes)
+	}
+	if gotFilters != `{"boardIds":["b-1"]}` {
+		t.Errorf("filters round-trip: got %q", gotFilters)
+	}
+	if gotHeaders != `{"X-Token":"abc"}` {
+		t.Errorf("headers round-trip: got %q", gotHeaders)
+	}
+	if gotTimeout != 15 {
+		t.Errorf("timeout_sec round-trip: want 15, got %d", gotTimeout)
+	}
+	if gotMaxRetries != 5 {
+		t.Errorf("max_retries round-trip: want 5, got %d", gotMaxRetries)
+	}
+	if !gotCreatedBy.Valid || gotCreatedBy.String != "admin1" {
+		t.Errorf("created_by round-trip: want admin1, got %v", gotCreatedBy)
+	}
+	if !gotCreatedAt.Valid || gotCreatedAt.String == "" {
+		t.Errorf("expected created_at populated by default, got %v", gotCreatedAt)
+	}
+
+	// 5. Happy path: insert a PENDING delivery row and verify
+	//    status / attempt defaults + round-trip of every column.
+	if _, err := db.Exec(`
+		INSERT INTO webhook_deliveries (
+			id, webhook_id, event_id, event_type, status, attempt,
+			request_body, response_code, response_body, error,
+			started_at, finished_at, next_retry_at
+		) VALUES (
+			'wd-1', 'wh-1', 'evt-1', 'task.created', 'PENDING', 1,
+			'{"id":"evt-1","type":"task.created"}', 0, '', '',
+			'2026-09-13 15:52:26', NULL, NULL
+		)
+	`); err != nil {
+		t.Fatalf("insert webhook_delivery: %v", err)
+	}
+	var (
+		gotDStatus       string
+		gotDAttempt      int
+		gotDRequestBody  string
+		gotDResponseCode int
+		gotDResponseBody string
+		gotDError        string
+		gotDStartedAt    sql.NullString
+		gotDFinishedAt   sql.NullString
+		gotDNextRetry    sql.NullString
+	)
+	if err := db.QueryRow(`
+		SELECT status, attempt, request_body, response_code, response_body,
+		       error, started_at, finished_at, next_retry_at
+		FROM webhook_deliveries WHERE id = 'wd-1'
+	`).Scan(&gotDStatus, &gotDAttempt, &gotDRequestBody, &gotDResponseCode,
+		&gotDResponseBody, &gotDError, &gotDStartedAt, &gotDFinishedAt,
+		&gotDNextRetry); err != nil {
+		t.Fatalf("scan webhook_delivery row: %v", err)
+	}
+	if gotDStatus != "PENDING" {
+		t.Errorf("status round-trip: want PENDING, got %q", gotDStatus)
+	}
+	if gotDAttempt != 1 {
+		t.Errorf("attempt round-trip: want 1, got %d", gotDAttempt)
+	}
+	if gotDRequestBody != `{"id":"evt-1","type":"task.created"}` {
+		t.Errorf("request_body round-trip: got %q", gotDRequestBody)
+	}
+	if gotDResponseCode != 0 {
+		t.Errorf("response_code default: want 0, got %d", gotDResponseCode)
+	}
+	if gotDResponseBody != "" {
+		t.Errorf("response_body default: want empty, got %q", gotDResponseBody)
+	}
+	if gotDError != "" {
+		t.Errorf("error default: want empty, got %q", gotDError)
+	}
+	if !gotDStartedAt.Valid || gotDStartedAt.String == "" {
+		t.Errorf("started_at should be populated, got %v", gotDStartedAt)
+	}
+	if gotDFinishedAt.Valid {
+		t.Errorf("finished_at should be NULL while PENDING, got %q", gotDFinishedAt.String)
+	}
+	if gotDNextRetry.Valid {
+		t.Errorf("next_retry_at should be NULL while PENDING, got %q", gotDNextRetry.String)
+	}
+
+	// 6. Insert a second delivery and verify the index-1 happy
+	//    path's row is still there alongside it — i.e. that the
+	//    unique-id PK isn't accidentally wider than TEXT and
+	//    rejecting siblings.
+	if _, err := db.Exec(`
+		INSERT INTO webhook_deliveries (
+			id, webhook_id, event_id, event_type, status, attempt,
+			request_body, response_code, response_body, error,
+			started_at, finished_at, next_retry_at
+		) VALUES (
+			'wd-2', 'wh-1', 'evt-2', 'task.moved', 'SUCCESS', 1,
+			'{"id":"evt-2","type":"task.moved"}', 200,
+			'{"ok":true}', '',
+			'2026-09-13 15:52:27', '2026-09-13 15:52:28', NULL
+		)
+	`); err != nil {
+		t.Fatalf("insert second delivery: %v", err)
+	}
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = 'wh-1'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("count deliveries: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("expected 2 deliveries bound to wh-1, got %d", n)
+	}
+
+	// 7. CHECK constraint on delivery.status rejects unknown
+	//    values so a buggy dispatcher can't smuggle 'pending'
+	//    (lowercase) through and confuse the sweeper.
+	if _, err := db.Exec(`
+		INSERT INTO webhook_deliveries (
+			id, webhook_id, event_id, event_type, status, attempt,
+			request_body, response_code, response_body, error
+		) VALUES (
+			'wd-bad', 'wh-1', 'evt-bad', 'task.created', 'pending', 1,
+			'', 0, '', ''
+		)
+	`); err == nil {
+		t.Errorf("expected CHECK constraint to reject status='pending', got nil error")
+	}
+
+	// 8. ON DELETE CASCADE on webhook_deliveries.webhook_id wipes
+	//    every delivery row when the webhook is removed — the
+	//    management UI's delete action depends on this so we
+	//    never have a delivery row pointing at a vanished
+	//    webhook. Re-create the webhook + deliveries first
+	//    because step 7 doesn't roll back the prior inserts.
+	if _, err := db.Exec(`
+		INSERT INTO webhooks (
+			id, name, url, secret, event_types, filters, headers
+		) VALUES (
+			'wh-cascade', 'cascade-test', 'https://example.com/cascade',
+			?, '[]', '{}', '{}'
+		)
+	`, []byte("0123456789abcdef0123456789abcdef")); err != nil {
+		t.Fatalf("re-seed webhook for cascade test: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := db.Exec(`
+			INSERT INTO webhook_deliveries (
+				id, webhook_id, event_id, event_type, status, attempt,
+				request_body, response_code, response_body, error
+			) VALUES (?, 'wh-cascade', ?, 'task.created', 'PENDING', 1,
+			          '', 0, '', '')
+		`, fmt.Sprintf("wd-cascade-%d", i), fmt.Sprintf("evt-cascade-%d", i)); err != nil {
+			t.Fatalf("seed cascade delivery %d: %v", i, err)
+		}
+	}
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = 'wh-cascade'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("count pre-delete: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("expected 3 deliveries before cascade delete, got %d", n)
+	}
+	if _, err := db.Exec(`DELETE FROM webhooks WHERE id = 'wh-cascade'`); err != nil {
+		t.Fatalf("delete webhook for cascade test: %v", err)
+	}
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = 'wh-cascade'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("count post-cascade: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("expected CASCADE to wipe deliveries for deleted webhook, got %d", n)
+	}
+
+	// 9. ON DELETE SET NULL on webhooks.created_by mirrors the
+	//    choice on users.created_by (migration 008) and
+	//    oauth_providers.created_by (migration 009): deleting
+	//    the admin must not silently re-parent or drop every
+	//    webhook they configured. The webhook row from step 4
+	//    ('wh-1', created_by='admin1') is still alive at this
+	//    point because nothing in this test has removed it.
+	if _, err := db.Exec(`DELETE FROM users WHERE id = 'admin1'`); err != nil {
+		t.Fatalf("delete creator: %v", err)
+	}
+	var remaining sql.NullString
+	if err := db.QueryRow(
+		`SELECT created_by FROM webhooks WHERE id = 'wh-1'`,
+	).Scan(&remaining); err != nil {
+		t.Fatalf("read created_by after admin delete: %v", err)
+	}
+	if remaining.Valid {
+		t.Errorf("expected created_by NULL after admin deletion, got %q", remaining.String)
+	}
+	var webhookAlive int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM webhooks WHERE id = 'wh-1'`,
+	).Scan(&webhookAlive); err != nil {
+		t.Fatalf("count webhook wh-1 after admin delete: %v", err)
+	}
+	if webhookAlive != 1 {
+		t.Errorf("webhook should survive admin deletion (SET NULL), got count=%d", webhookAlive)
+	}
+
+	// 10. Both indexes from plan §4 are in place.
+	for _, idx := range []string{
+		"idx_webhook_deliveries_webhook_started",
+		"idx_webhook_deliveries_status_next_retry",
+	} {
+		var c int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, idx,
+		).Scan(&c); err != nil {
+			t.Errorf("check webhook index %s: %v", idx, err)
+			continue
+		}
+		if c != 1 {
+			t.Errorf("expected %s after migration 012, got count=%d", idx, c)
+		}
+	}
+
+	// 11. The down migration drops both indexes and both tables
+	//     in dependency order. Use m.Migrate(11) (the version
+	//     strictly before 012) rather than m.Steps(-1) so the
+	//     test stays correct when later migrations (013+)
+	//     extend the tip.
+	if err := m.Migrate(11); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("rollback 012: %v", err)
+	}
+	for _, table := range []string{"webhook_deliveries", "webhooks"} {
+		var c int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table,
+		).Scan(&c); err != nil {
+			t.Errorf("check %s after rollback: %v", table, err)
+			continue
+		}
+		if c != 0 {
+			t.Errorf("expected %s to be dropped after rollback 012, got count=%d", table, c)
+		}
+	}
+	for _, idx := range []string{
+		"idx_webhook_deliveries_webhook_started",
+		"idx_webhook_deliveries_status_next_retry",
+	} {
+		var c int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, idx,
+		).Scan(&c); err != nil {
+			t.Errorf("check %s after rollback: %v", idx, err)
+			continue
+		}
+		if c != 0 {
+			t.Errorf("expected %s to be dropped after rollback 012, got count=%d", idx, c)
+		}
 	}
 
 	// Re-apply so the shared in-memory db stays usable for
