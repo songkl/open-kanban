@@ -243,7 +243,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: new Date().toISOString(),
         status: 'pending',
-        agents: [
+        available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha', username: 'alpha-bot', role: 'agent' },
           { id: 'agent-beta', nickname: 'Beta', username: 'beta-bot', role: 'agent' }
         ]
@@ -272,7 +272,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: '',
         status: 'pending',
-        agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+        available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
       })
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -300,7 +300,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read',
             expiresAt: '',
             status: 'pending',
-            agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+            available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
           })
         });
       }
@@ -359,7 +359,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read',
             expiresAt: '',
             status: 'pending',
-            agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+            available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
           })
         });
       }
@@ -404,7 +404,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: '',
         status: 'pending',
-        agents: []
+        available_agents: []
       })
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -453,7 +453,7 @@ describe('OAuthDevicePage', () => {
         expiresAt: '',
         status: 'pending',
         defaultAgentId: 'agent-beta',
-        agents: [
+        available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha' },
           { id: 'agent-beta', nickname: 'Beta' }
         ]
@@ -486,7 +486,7 @@ describe('OAuthDevicePage', () => {
         expiresAt: '',
         status: 'pending',
         defaultAgentId: 'ghost-agent',
-        agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+        available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
       })
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -514,7 +514,7 @@ describe('OAuthDevicePage', () => {
         expiresAt: '',
         status: 'pending',
         defaultAgentId: 'agent-beta',
-        agents: [
+        available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha' },
           { id: 'agent-beta', nickname: 'Beta' }
         ]
@@ -545,7 +545,7 @@ describe('OAuthDevicePage', () => {
         expiresAt: '',
         status: 'pending',
         defaultAgentId: 'ghost-agent',
-        agents: [
+        available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha' },
           { id: 'agent-beta', nickname: 'Beta' }
         ]
@@ -573,8 +573,8 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: '',
         status: 'pending',
-        agentSelectionRequired: true,
-        agents: []
+        agent_selection_required: true,
+        available_agents: []
       })
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -602,7 +602,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: '',
         status: 'pending',
-        agents: []
+        available_agents: []
       })
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -629,7 +629,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read tasks:write',
             expiresAt: new Date().toISOString(),
             status: 'pending',
-            agents: [{ id: 'agent-alpha', nickname: 'Alpha', role: 'AGENT' }]
+            available_agents: [{ id: 'agent-alpha', nickname: 'Alpha', role: 'AGENT' }]
           })
         });
       }
@@ -676,7 +676,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read',
             expiresAt: '',
             status: 'pending',
-            agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+            available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
           })
         });
       }
@@ -717,7 +717,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read tasks:write',
         expiresAt: new Date().toISOString(),
         status: 'pending',
-        agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+        available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
       })
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -733,5 +733,74 @@ describe('OAuthDevicePage', () => {
     expect(screen.getByText('Authorise as an Agent?')).toBeInTheDocument();
     // Approve-cta copy flips to the Agent-specific variant.
     expect(screen.getByTestId('identity-confirm-approve')).toHaveTextContent(/Agent/);
+  });
+
+  // s-1135: /oauth/device/lookup returns `available_agents` (not
+  // `agents`). The page must read that field for the Agent-identity
+  // picker to render in production. Regression test for the bug
+  // where the page read `agents`, the picker never appeared, and
+  // the existing suite still passed because every mock happened to
+  // use the wrong key.
+  it('renders the identity picker when the lookup returns available_agents (real backend shape)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-cli',
+        clientName: 'open-kanban-cli',
+        scope: 'kanban:read tasks:write',
+        expiresAt: new Date().toISOString(),
+        status: 'pending',
+        agent_selection_required: true,
+        available_agents: [
+          { id: 'agent-alpha', nickname: 'Alpha', username: 'alpha-bot', role: 'agent' },
+          { id: 'agent-beta', nickname: 'Beta', username: 'beta-bot', role: 'agent' }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'REAL-REAL' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('identity-self')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-agent-agent-alpha')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-agent-agent-beta')).toBeInTheDocument();
+  });
+
+  // s-1135: the legacy `agents` key was renamed to `available_agents`
+  // in s-1112.3. The page must NOT pick up the old key — that would
+  // be silent drift from the server contract.
+  it('ignores the legacy agents field and falls back to the authorize-as-myself path', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        // Legacy field — must be ignored now that the backend
+        // renames it to `available_agents`. We keep the key in the
+        // payload so the test pins the "page does not fall back to
+        // it" behaviour.
+        agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'LEGC-LEGC' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('identity-self')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('identity-empty')).not.toBeInTheDocument();
   });
 });

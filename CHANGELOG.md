@@ -22,6 +22,28 @@ All notable changes to this project will be documented in this file.
   release. 1 new helper (`isDevGitBuild`) + 4 unit tests cover the
   detection rule, the dev-build migration path, idempotent re-runs,
   and the legacy fallback when no tag is present.
+- s-1135: fix `/oauth/device` showing no Agent-identity picker on
+  production builds. `GET /oauth/device/lookup` (s-1112.3) emits the
+  selectable Agents as `available_agents` / `agent_selection_required`
+  (snake_case, matching the rest of the OAuth wire contract), but
+  `OAuthDevicePage` was still reading them as `agents` /
+  `agentSelectionRequired` (camelCase). The field names never matched
+  in production, so `hasAgents` was always false, the picker was
+  always hidden, and the "Authorize as Agent" / server-default /
+  empty-state UX shipped by s-1120 / s-1121 / s-1131 silently
+  disappeared from real deployments — every existing test happened to
+  mock the wrong key, so the suite still passed. The page now reads
+  `available_agents` and `agent_selection_required` (with the old
+  camelCase aliases kept as a defensive fallback so any leftover
+  mocks / older payloads still resolve), the existing
+  `OAuthDevicePage.test.tsx` suite is rewritten to use the real
+  snake_case payload, and two new cases pin the regression: one
+  asserts the picker actually renders when the lookup returns
+  `available_agents`, the other asserts the legacy `agents` key is
+  ignored so the page never silently falls back to it. `npm test`
+  + `npm run build` both stay green (464/464 + `tsc && vite build`
+  succeed); no backend / CLI / docs changes are needed because the
+  server contract was already correct.
 
 ### Features
 

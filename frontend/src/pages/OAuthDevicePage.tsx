@@ -16,12 +16,22 @@ interface DeviceLookup {
   scope: string;
   expiresAt: string;
   status: string;
-  // AgentSelectionRequired is true when the device flow must bind to an
-  // Agent identity (CLI/MCP client or admin-enforced policy). When true
-  // the page renders the identity selector; when false (or absent) the
-  // legacy "authorize as the logged-in user" path is used.
+  // agentSelectionRequired mirrors the `agent_selection_required`
+  // field returned by GET /oauth/device/lookup (s-1112.3 / plan
+  // §4.1.2). The backend emits snake_case here so the page stays in
+  // lockstep with the wire format; we keep the camelCase alias below
+  // so any older / mocked payload still resolves.
   agentSelectionRequired?: boolean;
-  agents?: DeviceLookupAgent[];
+  agent_selection_required?: boolean;
+  // availableAgents mirrors the `available_agents` field returned by
+  // GET /oauth/device/lookup (s-1112.3 / plan §4.1.2). It is the
+  // role-filtered list of Agent identities the caller is allowed to
+  // delegate the device code to — ADMIN sees every enabled Agent,
+  // MEMBER / VIEWER see only non-ADMIN Agents, anonymous sees [].
+  // The backend emits snake_case; the camelCase alias is kept so
+  // older / mocked payloads still resolve without crashing.
+  availableAgents?: DeviceLookupAgent[];
+  available_agents?: DeviceLookupAgent[];
   defaultAgentId?: string;
 }
 
@@ -129,8 +139,11 @@ export function OAuthDevicePage() {
           setLookup(data);
           // Pre-select the configured default when the admin has pinned
           // a global Agent id. Empty string falls through to "myself".
-          if (data.defaultAgentId && Array.isArray(data.agents) &&
-              data.agents.some((a) => a.id === data.defaultAgentId)) {
+          // Read both the snake_case field the backend emits and the
+          // camelCase alias so older / mocked payloads still resolve.
+          const availableAgents = data.availableAgents ?? data.available_agents;
+          if (data.defaultAgentId && Array.isArray(availableAgents) &&
+              availableAgents.some((a) => a.id === data.defaultAgentId)) {
             setSelectedAgentId(data.defaultAgentId);
           }
         }
@@ -263,17 +276,21 @@ export function OAuthDevicePage() {
   }
 
   // agents is the array of selectable Agent identities returned by the
-  // lookup. It is undefined when the lookup did not include the agents
-  // field (legacy / non-admin lookups) and an empty array when the
-  // server requires the picker but the deployment has no Agents yet.
-  const agents = lookup?.agents;
+  // lookup. It is undefined when the lookup did not include the
+  // available_agents field (legacy / anonymous lookups) and an empty
+  // array when the server requires the picker but the deployment has
+  // no Agents yet. Read both the snake_case wire field and the
+  // camelCase alias so older / mocked payloads still resolve.
+  const agents = lookup?.availableAgents ?? lookup?.available_agents;
   const hasAgents = Array.isArray(agents) && agents.length > 0;
-  const pickerRequired = lookup?.agentSelectionRequired === true;
+  const pickerRequired =
+    lookup?.agentSelectionRequired === true ||
+    lookup?.agent_selection_required === true;
   // Render the picker whenever the server returned at least one Agent
   // — the empty-state path below covers the picker-required-but-no-agents
-  // case. When the lookup omits the agents field (or returns it with
-  // length 0 and does not require a selection) the legacy behaviour
-  // applies and no identity chrome is shown.
+  // case. When the lookup omits the available_agents field (or returns
+  // it with length 0 and does not require a selection) the legacy
+  // behaviour applies and no identity chrome is shown.
   const showIdentityPicker = hasAgents;
   const showIdentityEmptyState = pickerRequired && !hasAgents;
   // A valid selection exists whenever the picker is shown (the
