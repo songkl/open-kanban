@@ -11,6 +11,7 @@ import chalk from "chalk";
 import { OAuthClient } from "./client.js";
 import type { StoredCredentials } from "./token-store.js";
 import { HttpClient, AuthError, NetworkError, ApiError } from "../http/client.js";
+import { DeviceFlowError } from "./device-flow.js";
 
 export interface CommandIO {
   // stdout/stderr are the streams the command writes to. Defaults to the
@@ -112,45 +113,7 @@ export async function runLogin(
       apiUrl,
       clientName,
       appName,
-      onPrompt: async (poll) => {
-        const expiresIn = Math.max(0, Math.round((poll.expiresAt - Date.now()) / 1000));
-        // Prefer the deep link that already encodes the user_code
-        // (verification_uri_complete) so users can paste / click it
-        // into their browser without retyping the code. Falls back
-        // to the plain URL + manual-code path if the server didn't
-        // supply one — keeps the CLI working against older servers
-        // that only emit the bare verification URI.
-        const visitLine = poll.verificationUriComplete
-          ? `  Visit:  ${chalk.cyan(poll.verificationUriComplete)}`
-          : `  Visit:  ${chalk.cyan(poll.verificationUri)}  (code ${poll.userCode})`;
-        const isCliClient = isCliLikeClientName(clientName);
-        const lines: (string | null)[] = [
-          "",
-          chalk.bold("Open Kanban authorization required"),
-          visitLine,
-          poll.verificationUriComplete
-            ? `  Or enter code ${chalk.cyan(poll.userCode)} at ${chalk.cyan(poll.verificationUri)}`
-            : null,
-          `  Scope:  ${poll.scope}`,
-        ];
-        if (isCliClient) {
-          // The server's CLI-detection heuristic flags our client
-          // registration as a CLI / MCP consumer; the approval page
-          // will render the identity picker, so warn the operator
-          // up-front. Without this hint, unattended operators often
-          // miss the picker and accidentally approve as their
-          // personal account.
-          lines.push(
-            "",
-            chalk.yellow(
-              "  Identity selection: this client looks like a CLI runner. The approval page will ask you to authorise as either your account or an Agent — pick the Agent if this CLI is for unattended automation."
-            )
-          );
-        }
-        lines.push("", `  Waiting for approval (expires in ${expiresIn}s)...`, "");
-        stderr.write(lines.filter((l): l is string => l !== null).join("\n") + "\n");
-        return "approve";
-      },
+      onPrompt: buildOnPrompt(stderr, clientName),
     });
     const stored = deps.oauth.loadCredentials();
     stdout.write(
@@ -160,6 +123,47 @@ export async function runLogin(
     );
     return { credentials: stored };
   } catch (err) {
+    // s-1133: when the OAuth server rejects the cached client_id
+    // (e.g. the operator wiped oauth_clients between sessions, or
+    // restored a backup that pre-dates this registration) the device
+    // authorization endpoint returns `invalid_client` / "unknown
+    // client_id". The cached credentials are now useless, so clear
+    // them and retry the device flow once with a freshly registered
+    // client. We only retry this specific class of failure — anything
+    // else is surfaced verbatim.
+    if (isUnknownClientIdError(err)) {
+      const oldClientId = deps.oauth.loadCredentials()?.clientId;
+      try {
+        deps.oauth.secretProvider.clear();
+      } catch {
+        // best-effort: even if the clear fails the retry will
+        // overwrite the file via ensureRegistered.
+      }
+      stderr.write(
+        chalk.yellow(
+          `Stored client id ${oldClientId ? `(${oldClientId}) ` : ""}was rejected by the server (unknown client_id); re-registering and retrying once.\n`
+        )
+      );
+      try {
+        const tok = await deps.oauth.authorizeInteractive({
+          apiUrl,
+          clientName,
+          appName,
+          onPrompt: buildOnPrompt(stderr, clientName),
+        });
+        const stored = deps.oauth.loadCredentials();
+        stdout.write(
+          chalk.green(
+            `Logged in to ${apiUrl} as ${stored?.clientId ?? "unknown client"} (scope: ${tok.scope ?? stored?.scope ?? "default"})\n`
+          )
+        );
+        return { credentials: stored };
+      } catch (retryErr) {
+        const retryReason = (retryErr as Error).message ?? String(retryErr);
+        stderr.write(chalk.red(`Login failed: ${retryReason}\n`));
+        throw retryErr;
+      }
+    }
     const reason = (err as Error).message ?? String(err);
     if (/denied/i.test(reason)) {
       stderr.write(chalk.red(`Authorization denied: ${reason}\n`));
@@ -176,6 +180,79 @@ export async function runLogin(
     stderr.write(chalk.red(`Login failed: ${reason}\n`));
     throw err;
   }
+}
+
+// isUnknownClientIdError returns true when the device authorization or
+// token endpoint rejected our cached client_id. The server surfaces
+// this as `invalid_client` (RFC 6749 §5.2) with the human-readable
+// description `unknown client_id`; we match both the error code and
+// the description so this works regardless of which endpoint in the
+// device flow surfaced the rejection.
+//
+// Exported so tests can drive the recovery branch without scraping
+// error message strings.
+export function isUnknownClientIdError(err: unknown): boolean {
+  if (!err) return false;
+  if (err instanceof DeviceFlowError) {
+    if (err.code === "invalid_client") return true;
+    return /unknown client_id|invalid client/i.test(err.message);
+  }
+  const msg = (err as Error).message ?? "";
+  return /unknown client_id|invalid_client.*client_id/i.test(msg);
+}
+
+// buildOnPrompt returns the onPrompt handler passed to authorizeInteractive.
+// It prints the verification URL (preferring the deep-link variant with the
+// user_code pre-filled), the scope, an optional CLI/Agent identity-selection
+// hint, and the device-code expiry countdown. The handler always returns
+// "approve" because the CLI cannot click a browser button on the user's
+// behalf; the human has already seen the prompt in the browser.
+function buildOnPrompt(stderr: NodeJS.WritableStream, clientName: string) {
+  return async (poll: {
+    verificationUri: string;
+    verificationUriComplete?: string;
+    userCode: string;
+    scope: string;
+    expiresAt: number;
+  }): Promise<"approve"> => {
+    const expiresIn = Math.max(0, Math.round((poll.expiresAt - Date.now()) / 1000));
+    // Prefer the deep link that already encodes the user_code
+    // (verification_uri_complete) so users can paste / click it
+    // into their browser without retyping the code. Falls back
+    // to the plain URL + manual-code path if the server didn't
+    // supply one — keeps the CLI working against older servers
+    // that only emit the bare verification URI.
+    const visitLine = poll.verificationUriComplete
+      ? `  Visit:  ${chalk.cyan(poll.verificationUriComplete)}`
+      : `  Visit:  ${chalk.cyan(poll.verificationUri)}  (code ${poll.userCode})`;
+    const isCliClient = isCliLikeClientName(clientName);
+    const lines: (string | null)[] = [
+      "",
+      chalk.bold("Open Kanban authorization required"),
+      visitLine,
+      poll.verificationUriComplete
+        ? `  Or enter code ${chalk.cyan(poll.userCode)} at ${chalk.cyan(poll.verificationUri)}`
+        : null,
+      `  Scope:  ${poll.scope}`,
+    ];
+    if (isCliClient) {
+      // The server's CLI-detection heuristic flags our client
+      // registration as a CLI / MCP consumer; the approval page
+      // will render the identity picker, so warn the operator
+      // up-front. Without this hint, unattended operators often
+      // miss the picker and accidentally approve as their
+      // personal account.
+      lines.push(
+        "",
+        chalk.yellow(
+          "  Identity selection: this client looks like a CLI runner. The approval page will ask you to authorise as either your account or an Agent — pick the Agent if this CLI is for unattended automation."
+        )
+      );
+    }
+    lines.push("", `  Waiting for approval (expires in ${expiresIn}s)...`, "");
+    stderr.write(lines.filter((l): l is string => l !== null).join("\n") + "\n");
+    return "approve";
+  };
 }
 
 // isCliLikeClientName mirrors the server's CLI-detection heuristic

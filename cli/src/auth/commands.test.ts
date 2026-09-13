@@ -18,12 +18,14 @@ import {
   DeniedAuthorizationError,
   NotLoggedInError,
   authExitCodeForError,
+  isUnknownClientIdError,
   runLogin,
   runLogout,
   runStatus,
   runWhoami,
 } from "./commands.js";
 import { AuthError, NetworkError } from "../http/client.js";
+import { DeviceFlowError } from "./device-flow.js";
 
 const metadata: OAuthMetadata = {
   issuer: "http://localhost:8080",
@@ -264,6 +266,82 @@ describe("runLogin", () => {
       runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io })
     ).rejects.toBeInstanceOf(NetworkError);
     expect(authExitCodeForError(new NetworkError("boom"))).toBe(6);
+  });
+
+  it("retries once after invalid_client / unknown client_id and clears stale credentials", async () => {
+    // Simulates the s-1133 recovery path: the cached clientId was
+    // wiped on the server (DB restore, oauth_clients pruned, ...).
+    // First authorizeInteractive fails with the canonical error, the
+    // second succeeds with a freshly issued clientId.
+    const authorize = vi
+      .fn<Parameters<OAuthClient["authorizeInteractive"]>, Promise<TokenResponse>>()
+      .mockRejectedValueOnce(new DeviceFlowError("invalid_client", "unknown client_id"))
+      .mockResolvedValueOnce({
+        access_token: "at-recovered",
+        token_type: "Bearer",
+        expires_in: 3600,
+        refresh_token: "rt-recovered",
+        scope: "kanban:read tasks:write",
+      });
+    const oauth = makeFakeOAuth({ authorize });
+    // Pre-seed a stale clientId so we can verify it gets cleared
+    // before the retry.
+    oauth.secretProvider.write({
+      apiUrl: "http://localhost:8080",
+      clientId: "stale-cid",
+      clientName: "open-kanban-cli",
+    });
+    const cap = makeCapture();
+    const result = await runLogin(
+      { apiUrl: "http://localhost:8080" },
+      { oauth, io: cap.io }
+    );
+    expect(authorize).toHaveBeenCalledTimes(2);
+    expect(result.credentials?.accessToken).toBe("at-recovered");
+    const { stdout, stderr } = cap.read();
+    // The retry path prints a yellow re-registering hint before the
+    // second prompt, and the normal "Logged in to ..." line on success.
+    expect(stderr).toMatch(/re-registering/i);
+    expect(stderr).toContain("stale-cid");
+    expect(stdout).toMatch(/Logged in to/);
+  });
+
+  it("surfaces the second failure when the retry also fails", async () => {
+    const authorize = vi
+      .fn<Parameters<OAuthClient["authorizeInteractive"]>, Promise<TokenResponse>>()
+      .mockRejectedValueOnce(new DeviceFlowError("invalid_client", "unknown client_id"))
+      .mockRejectedValueOnce(new Error("server unavailable"));
+    const oauth = makeFakeOAuth({ authorize });
+    oauth.secretProvider.write({
+      apiUrl: "http://localhost:8080",
+      clientId: "stale-cid",
+      clientName: "open-kanban-cli",
+    });
+    const cap = makeCapture();
+    await expect(
+      runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io })
+    ).rejects.toThrow(/server unavailable/);
+    expect(authorize).toHaveBeenCalledTimes(2);
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Login failed/);
+  });
+});
+
+describe("isUnknownClientIdError", () => {
+  it("matches DeviceFlowError with code invalid_client", () => {
+    expect(isUnknownClientIdError(new DeviceFlowError("invalid_client", "unknown client_id"))).toBe(true);
+  });
+
+  it("matches DeviceFlowError whose message describes an unknown client_id", () => {
+    expect(isUnknownClientIdError(new DeviceFlowError("server_error", "invalid_client: unknown client_id stale-cid"))).toBe(true);
+  });
+
+  it("rejects unrelated errors", () => {
+    expect(isUnknownClientIdError(new Error("user denied authorization"))).toBe(false);
+    expect(isUnknownClientIdError(new Error("network error: ECONNREFUSED"))).toBe(false);
+    expect(isUnknownClientIdError(new DeviceFlowError("authorization_pending", "still waiting"))).toBe(false);
+    expect(isUnknownClientIdError(null)).toBe(false);
+    expect(isUnknownClientIdError(undefined)).toBe(false);
   });
 });
 

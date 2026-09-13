@@ -229,6 +229,23 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- s-1133: recover `kanban auth login` from a stale cached
+  `client_id` instead of failing with `Login failed: unknown
+  client_id`. When the OAuth server returns `invalid_client` /
+  `unknown client_id` on the device authorization or token endpoint
+  (because the operator restored a backup that pre-dates this
+  registration, the `oauth_clients` row was pruned, or the DB was
+  wiped between sessions), `runLogin` now clears the stored
+  credentials and retries the device flow once with a freshly
+  registered client. The retry path prints a yellow "re-registering"
+  hint naming the rejected client_id before re-issuing the device
+  code, so operators understand why a second browser prompt
+  appeared. The new `isUnknownClientIdError` helper matches the
+  canonical error from both the device authorization and token
+  endpoints, and is exported for reuse. If the retry also fails the
+  second error is surfaced verbatim. 3 new vitest cases cover the
+  recovery branch, the failure-on-retry branch, and the helper's
+  matching rules.
 - s-1100: validate the OAuth 2.1 JWT access token in `GetMe` and the
   WebSocket auth handshake. The device flow completed and the CLI
   stored a JWT, but `auth whoami` (and every other `/api/v1/users/me`
