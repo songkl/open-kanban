@@ -58,6 +58,14 @@ var VersionMigrationMap = []VersionMigration{
 	// created via POST /api/v1/auth/agents (CLI `kanban auth agent
 	// create`) are guaranteed to carry a value.
 	{Version: "0.8.0", From: 1, To: 8},
+	// 0.9.0 added migration 009 to introduce the oauth_providers
+	// table (s-1140, plan §3.2 in
+	// docs/OAUTH_EXTERNAL_PLAN_s-1139.md). The admin CRUD surface
+	// and the encryption helper ship in sibling sub-tasks (s-1141
+	// / s-1142); this tag is schema-only so dev builds that pull
+	// a fresh DB pick up the table at startup without dragging in
+	// the yet-to-be-merged handler layer.
+	{Version: "0.9.0", From: 1, To: 9},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

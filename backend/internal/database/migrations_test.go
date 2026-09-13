@@ -1,7 +1,9 @@
 package database_test
 
 import (
+	"bytes"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -44,6 +46,7 @@ func TestSQLiteMigrations(t *testing.T) {
 		"app_config", "column_permissions",
 		"oauth_clients", "oauth_authorization_codes",
 		"oauth_device_codes", "oauth_refresh_tokens", "oauth_consents",
+		"oauth_providers",
 		"task_runs",
 	}
 
@@ -99,6 +102,7 @@ func TestSQLiteMigrations(t *testing.T) {
 		"idx_oauth_refresh_client",
 		"idx_oauth_refresh_expires",
 		"idx_oauth_consents_user",
+		"idx_oauth_providers_enabled",
 	}
 	for _, idx := range oauthIndexes {
 		var c int
@@ -295,7 +299,11 @@ func TestSQLiteMigrationsAgentCreatedBy(t *testing.T) {
 	}
 
 	// 5. The down migration drops the index and the column.
-	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+	//    Use m.Migrate(7) (the version strictly before 008) rather
+	//    than m.Steps(-1) so the test stays correct when later
+	//    migrations (009+) extend the tip — m.Steps(-1) would
+	//    roll back whatever happens to be at the end, not 008.
+	if err := m.Migrate(7); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("rollback 008: %v", err)
 	}
 	if err := db.QueryRow(
@@ -309,6 +317,300 @@ func TestSQLiteMigrationsAgentCreatedBy(t *testing.T) {
 
 	// Bring migrations back up so the shared in-memory db stays
 	// usable for the rest of the test suite.
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("re-up: %v", err)
+	}
+}
+
+// TestSQLiteMigrationsOAuthProviders exercises migration 009
+// (s-1140) end-to-end on SQLite. It verifies:
+//
+//   - oauth_providers comes up with the columns documented in
+//     plan §3.2 of docs/OAUTH_EXTERNAL_PLAN_s-1139.md (id PK,
+//     provider_id UNIQUE, name, type with the documented CHECK
+//     allow-list, enabled/position defaults, client_id NOT NULL,
+//     client_secret as BLOB and nullable, endpoint + scopes
+//     defaults, created_by FK SET NULL to users, created_at /
+//     updated_at).
+//   - The CHECK constraint rejects an unknown `type` so the admin
+//     API can't smuggle typos through to the dispatch table.
+//   - UNIQUE(provider_id) prevents two providers from sharing a
+//     URL handle.
+//   - The ON DELETE SET NULL on created_by keeps the provider row
+//     alive when its creator is removed.
+//   - The enabled-default lookup index idx_oauth_providers_enabled
+//     is present.
+//   - The down migration drops both the index and the table.
+//
+// Mirrors the round-trip pattern used for migration 008 so a
+// future regression in any of the constraints above fails before
+// the admin CRUD handler tests do.
+func TestSQLiteMigrationsOAuthProviders(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	// Enable FK enforcement on every connection in this pool.
+	// The migrate driver does this for its own connection, but
+	// the db.QueryRow / db.Exec calls below run on whatever
+	// connection the pool hands us, and SQLite's
+	// `PRAGMA foreign_keys = ON` is per-connection. Without this
+	// the ON DELETE SET NULL check below would silently no-op.
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatalf("enable foreign keys: %v", err)
+	}
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	// 1. Table exists with the expected columns. Spot-check the
+	//    ones whose shape matters most for the API contract:
+	//    provider_id UNIQUE, type CHECK, client_secret as BLOB,
+	//    created_by FK to users.
+	wantCols := map[string]string{
+		"id":                "TEXT",
+		"provider_id":       "TEXT",
+		"name":              "TEXT",
+		"type":              "TEXT",
+		"enabled":           "INTEGER",
+		"position":          "INTEGER",
+		"client_id":         "TEXT",
+		"client_secret":     "BLOB",
+		"scopes":            "TEXT",
+		"auth_endpoint":     "TEXT",
+		"token_endpoint":    "TEXT",
+		"userinfo_endpoint": "TEXT",
+		"issuer":            "TEXT",
+		"extra_config":      "TEXT",
+		"created_by":        "TEXT",
+		"created_at":        "DATETIME",
+		"updated_at":        "DATETIME",
+	}
+	rows, err := db.Query("SELECT name, type FROM pragma_table_info('oauth_providers')")
+	if err != nil {
+		t.Fatalf("inspect oauth_providers columns: %v", err)
+	}
+	gotCols := map[string]string{}
+	for rows.Next() {
+		var name, typ string
+		if err := rows.Scan(&name, &typ); err != nil {
+			_ = rows.Close()
+			t.Fatalf("scan column: %v", err)
+		}
+		gotCols[name] = typ
+	}
+	_ = rows.Close()
+	for name, typ := range wantCols {
+		got, ok := gotCols[name]
+		if !ok {
+			t.Errorf("expected oauth_providers.%s column after migration 009, missing", name)
+			continue
+		}
+		if !strings.EqualFold(got, typ) {
+			t.Errorf("oauth_providers.%s type: want %s, got %s", name, typ, got)
+		}
+	}
+
+	// 2. created_by is nullable so providers seeded from the
+	//    OAUTH_EXTERNAL_PROVIDERS env var (no human creator) and
+	//    legacy rows from before an admin accounts-for-everyone
+	//    policy can be inserted without a FK target.
+	var notNull int
+	if err := db.QueryRow(
+		"SELECT \"notnull\" FROM pragma_table_info('oauth_providers') WHERE name='created_by'",
+	).Scan(&notNull); err != nil {
+		t.Fatalf("inspect created_by nullability: %v", err)
+	}
+	if notNull != 0 {
+		t.Errorf("oauth_providers.created_by should be nullable, got notnull=%d", notNull)
+	}
+
+	// 3. Seed an admin creator and insert a fully-populated
+	//    provider. The client_secret is a stand-in for AES-256-GCM
+	//    ciphertext (12-byte nonce || tag || body, 60 bytes total
+	//    for the AES helper that ships with s-1141).
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('admin1', 'admin', 'Admin', 'HUMAN', 'ADMIN', 1)
+	`); err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	ciphertext := []byte("0123456789ab0123456789ab0123456789ab0123456789ab0123456789ababcd")
+	if _, err := db.Exec(`
+		INSERT INTO oauth_providers (
+			id, provider_id, name, type, enabled, position,
+			client_id, client_secret, scopes,
+			auth_endpoint, token_endpoint, userinfo_endpoint,
+			issuer, extra_config, created_by
+		) VALUES (
+			'prov-1', 'google', 'Google', 'google', 1, 0,
+			'google-client', ?, 'openid email profile',
+			'https://accounts.google.com/o/oauth2/v2/auth',
+			'https://oauth2.googleapis.com/token',
+			'https://openidconnect.googleapis.com/v1/userinfo',
+			'https://accounts.google.com',
+			'{"default_role":"USER"}', 'admin1'
+		)
+	`, ciphertext); err != nil {
+		t.Fatalf("insert oauth_provider: %v", err)
+	}
+
+	// 4. Defaults land the way the API expects: enabled=1,
+	//    position=0, scopes='', all endpoint columns empty when
+	//    not overridden, created_at populated.
+	var (
+		enabled         int
+		position        int
+		scopes          string
+		authEndpoint    string
+		tokenEndpoint   string
+		userinfoEndpoint string
+		issuer          string
+		extraConfig     string
+		varCreatedAt    sql.NullString
+	)
+	if err := db.QueryRow(`
+		SELECT enabled, position, scopes, auth_endpoint, token_endpoint,
+		       userinfo_endpoint, issuer, extra_config, created_at
+		FROM oauth_providers WHERE id = 'prov-1'
+	`).Scan(&enabled, &position, &scopes, &authEndpoint, &tokenEndpoint,
+		&userinfoEndpoint, &issuer, &extraConfig, &varCreatedAt); err != nil {
+		t.Fatalf("scan provider defaults: %v", err)
+	}
+	if enabled != 1 {
+		t.Errorf("expected enabled=1 default, got %d", enabled)
+	}
+	if position != 0 {
+		t.Errorf("expected position=0 default, got %d", position)
+	}
+	if scopes != "openid email profile" {
+		t.Errorf("scopes round-trip: got %q", scopes)
+	}
+	if authEndpoint == "" || tokenEndpoint == "" || issuer == "" {
+		t.Errorf("expected explicit endpoints + issuer round-trip, got auth=%q token=%q issuer=%q",
+			authEndpoint, tokenEndpoint, issuer)
+	}
+	if extraConfig != `{"default_role":"USER"}` {
+		t.Errorf("extra_config round-trip: got %q", extraConfig)
+	}
+	if !varCreatedAt.Valid || varCreatedAt.String == "" {
+		t.Errorf("expected created_at to be populated by default, got %v", varCreatedAt)
+	}
+
+	// 5. BLOB ciphertext round-trips byte-for-byte — a future
+	//    ALTER COLUMN to TEXT would silently re-encode the bytes
+	//    as UTF-8 and break AES-GCM verification at read time.
+	var gotCipher []byte
+	if err := db.QueryRow(
+		"SELECT client_secret FROM oauth_providers WHERE id = 'prov-1'",
+	).Scan(&gotCipher); err != nil {
+		t.Fatalf("read client_secret: %v", err)
+	}
+	if !bytes.Equal(gotCipher, ciphertext) {
+		t.Errorf("client_secret ciphertext round-trip mismatch: want %x, got %x",
+			ciphertext, gotCipher)
+	}
+
+	// 6. CHECK constraint on `type` rejects unknown values so the
+	//    admin API can't smuggle typos through to the runtime
+	//    dispatch table.
+	if _, err := db.Exec(`
+		INSERT INTO oauth_providers (
+			id, provider_id, name, type, client_id
+		) VALUES (
+			'prov-bad', 'bad', 'Bad', 'openid-connect-generic', 'cid'
+		)
+	`); err == nil {
+		t.Errorf("expected CHECK constraint to reject unknown type, got nil error")
+	}
+
+	// 7. UNIQUE on provider_id — the public route
+	//    /oauth/external/<provider_id>/... resolves by this
+	//    handle and must not be ambiguous.
+	if _, err := db.Exec(`
+		INSERT INTO oauth_providers (
+			id, provider_id, name, type, client_id
+		) VALUES (
+			'prov-dup', 'google', 'Google Dup', 'google', 'cid2'
+		)
+	`); err == nil {
+		t.Errorf("expected UNIQUE(provider_id) to reject duplicate 'google', got nil error")
+	}
+
+	// 8. ON DELETE SET NULL on created_by mirrors the choice on
+	//    users.created_by: removing the admin must not silently
+	//    delete every provider they configured.
+	if _, err := db.Exec(`DELETE FROM users WHERE id = 'admin1'`); err != nil {
+		t.Fatalf("delete creator: %v", err)
+	}
+	var creator sql.NullString
+	if err := db.QueryRow(
+		"SELECT created_by FROM oauth_providers WHERE id = 'prov-1'",
+	).Scan(&creator); err != nil {
+		t.Fatalf("read created_by after admin delete: %v", err)
+	}
+	if creator.Valid {
+		t.Errorf("expected created_by NULL after admin deletion, got %q", creator.String)
+	}
+
+	// 9. The lookup index is in place — without it the public
+	//    "list enabled providers" query degrades to a table scan
+	//    once an admin configures a few dozen disabled rows.
+	var idxCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_oauth_providers_enabled'",
+	).Scan(&idxCount); err != nil {
+		t.Errorf("check idx_oauth_providers_enabled: %v", err)
+	}
+	if idxCount != 1 {
+		t.Errorf("expected idx_oauth_providers_enabled after migration 009, got count=%d", idxCount)
+	}
+
+	// 10. The down migration drops the index then the table.
+	//     Use m.Migrate(8) (the version strictly before 009) rather
+	//     than m.Steps(-1) so the test stays correct when later
+	//     migrations (010+) extend the tip — m.Steps(-1) would
+	//     roll back whatever happens to be at the end, not 009.
+	if err := m.Migrate(8); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("rollback 009: %v", err)
+	}
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_oauth_providers_enabled'",
+	).Scan(&idxCount); err != nil {
+		t.Errorf("check idx_oauth_providers_enabled after rollback: %v", err)
+	}
+	if idxCount != 0 {
+		t.Errorf("expected idx_oauth_providers_enabled to be dropped after rollback 009, got count=%d", idxCount)
+	}
+	var tableCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='oauth_providers'",
+	).Scan(&tableCount); err != nil {
+		t.Errorf("check oauth_providers after rollback: %v", err)
+	}
+	if tableCount != 0 {
+		t.Errorf("expected oauth_providers to be dropped after rollback 009, got count=%d", tableCount)
+	}
+
+	// Re-apply so the shared in-memory db stays usable for
+	// the rest of the test suite.
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("re-up: %v", err)
 	}
@@ -395,12 +697,17 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 	//    individually so a regression in any of the three
 	//    migrations surfaces with its own failing assertion:
 	//
-	//      step -1: 006 (history indexes) — task_runs untouched
-	//      step -2: 005 (FK relaxation)   — task_runs untouched
-	//      step -3: 004 (table creation)  — task_runs dropped
+	//      migrate(5): before 006 (history indexes) — task_runs untouched
+	//      migrate(4): before 005 (FK relaxation)   — task_runs untouched
+	//      migrate(3): before 004 (table creation)  — task_runs dropped
+	//
+	//    Use explicit m.Migrate(target) rather than m.Steps(-1)
+	//    so the test stays correct when later migrations
+	//    (009+) extend the tip — m.Steps(-1) would roll back
+	//    whatever happens to be at the end, not 006/005/004.
 	seedTaskRun(t, db)
 
-	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+	if err := m.Migrate(5); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("down to 005: %v", err)
 	}
 	// After rolling back 006, task_runs must still exist and
@@ -427,7 +734,7 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 		}
 	}
 
-	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+	if err := m.Migrate(4); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("down to 004: %v", err)
 	}
 	// After rolling back 005, task_runs must still exist (its
@@ -442,7 +749,7 @@ func TestSQLiteMigrationsTaskRunsUpDown(t *testing.T) {
 		t.Fatalf("expected task_runs table after rolling back 005, got count=%d", taskRunsFound)
 	}
 
-	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
+	if err := m.Migrate(3); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("down to 003: %v", err)
 	}
 
