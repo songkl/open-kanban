@@ -287,6 +287,9 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	if err := oauth.EnsureDefaults(db); err != nil {
 		log.Fatalf("failed to seed OAuth defaults: %v", err)
 	}
+	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
+		log.Fatalf("failed to seed OAuth providers from %s: %v", oauth.EnvProviderSeedKey, err)
+	}
 
 	// OAuth 2.1 discovery + JWKS
 	r.GET("/.well-known/oauth-authorization-server", oauth.DiscoveryHandlerWithDB(db, "/oauth/device/code"))

@@ -72,6 +72,15 @@ Used for MCP server authentication.
 | `SIGNATURE_ENABLED` | not set | Enable signature verification (`0` to disable, `1` to enable) |
 | `SIGNATURE_SECRETS` | - | Comma-separated secrets (`key:secret` pairs) |
 
+## OAuth External Providers
+
+Used for logging in via Google / GitHub / WeCom / Feishu / DingTalk / generic OIDC.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OAUTH_PROVIDER_ENCRYPTION_KEY` | - | 32-byte hex key used to AES-256-GCM-encrypt `client_secret` values stored in `oauth_providers.client_secret`. **Required**: the server refuses to start (and admin CRUD returns 503) when this is missing. Generate with `openssl rand -hex 32`. |
+| `OAUTH_EXTERNAL_PROVIDERS` | - | JSON array of OAuth provider configs seeded into the `oauth_providers` table on every startup. Each entry accepts the same fields as `POST /api/v1/auth/oauth/providers` (`providerId`, `name`, `type`, `clientId`, `clientSecret`, `scopes`, `enabled`, `position`, `authEndpoint`, `tokenEndpoint`, `userinfoEndpoint`, `issuer`, `extraConfig`). Slugs already in the DB are left untouched — UI edits always win. Invalid JSON fails fast at boot so a typo in the container config is caught immediately. |
+
 ## Example .env File
 
 ```bash
@@ -107,4 +116,8 @@ GLOBAL_RATE_LIMIT_WINDOW_SECONDS=60
 # Signature (for MCP)
 # SIGNATURE_ENABLED=1
 # SIGNATURE_SECRETS=key1:secret1,key2:secret2
+
+# OAuth external providers (required for Google/GitHub/etc. login)
+# OAUTH_PROVIDER_ENCRYPTION_KEY=$(openssl rand -hex 32)
+# OAUTH_EXTERNAL_PROVIDERS='[{"providerId":"google","name":"Google","type":"google","clientId":"...","clientSecret":"...","scopes":"openid email profile","enabled":true}]'
 ```
