@@ -22,9 +22,9 @@ type DeviceApproveRequest struct {
 	// from the device authorization page's identity selector. Empty
 	// string keeps the legacy "approve as the logged-in user" path. The
 	// server validates that the value (when supplied) references an
-	// enabled AGENT row; unknown ids are silently dropped and the
-	// approval still binds to the human approver so a stale UI cannot
-	// brick a device flow.
+	// enabled AGENT row (plan §4.1.1): unknown / disabled / non-AGENT
+	// ids surface as 400 invalid_request, and MEMBER approvers pointing
+	// at ADMIN-role Agents surface as 403 forbidden.
 	AgentID string `json:"agentId" form:"agentId"`
 }
 
@@ -63,6 +63,18 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 
 		switch req.Decision {
 		case "approve":
+			// Phase 1 of the device-flow agent-selection plan treats
+			// the explicit agent_id as privileged: it must resolve to
+			// an enabled AGENT row, and ADMIN-role Agents are reserved
+			// for ADMIN approvers. Plan §4.1.1 wants 400 for unknown /
+			// disabled / non-AGENT ids and 403 for MEMBER-approver +
+			// ADMIN-role Agent.
+			if req.AgentID != "" {
+				if _, lookupErr := LookupAgent(db, req.AgentID, user.Role); lookupErr != nil {
+					respondDeviceApproveAgentError(c, lookupErr)
+					return
+				}
+			}
 			dc, err := ApproveDeviceCode(db, req.UserCode, user.ID, req.AgentID)
 			if err != nil {
 				respondDeviceApproveError(c, err)
@@ -92,6 +104,15 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 				"boundTo":   boundID,
 			})
 		case "deny":
+			// Mirror the approve path's agent_id validation so a deny
+			// attempt with a structurally invalid id surfaces the same
+			// 400/403 contract the device page expects (plan §4.1.1).
+			if req.AgentID != "" {
+				if _, lookupErr := LookupAgent(db, req.AgentID, user.Role); lookupErr != nil {
+					respondDeviceApproveAgentError(c, lookupErr)
+					return
+				}
+			}
 			if err := DenyDeviceCode(db, req.UserCode, user.ID, req.AgentID); err != nil {
 				respondDeviceApproveError(c, err)
 				return
@@ -240,6 +261,36 @@ func logDeviceApproveActivity(db *sql.DB, approverID, agentID, clientID, ipAddre
 			"client_id", clientID,
 		)
 	}
+}
+
+// respondDeviceApproveAgentError maps an *AgentLookupError to the
+// OAuth-style response contract documented in plan §4.1.1: 400
+// invalid_request for structurally unusable ids and 403 forbidden for
+// role-gated delegations. Non-AgentLookupError inputs fall through to
+// the generic 500 server_error so unexpected DB failures don't get
+// mis-categorised as user errors.
+func respondDeviceApproveAgentError(c *gin.Context, err error) {
+	var lookupErr *AgentLookupError
+	if errors.As(err, &lookupErr) {
+		switch lookupErr.Reason {
+		case AgentLookupForbidden:
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":             "forbidden",
+				"error_description": lookupErr.Error(),
+			})
+			return
+		default:
+			c.JSON(http.StatusBadRequest, models.OAuthErrorResponse{
+				Error:            "invalid_request",
+				ErrorDescription: lookupErr.Error(),
+			})
+			return
+		}
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{
+		"error":             "server_error",
+		"error_description": err.Error(),
+	})
 }
 
 // respondDeviceApproveError maps internal errors to OAuth-style JSON.

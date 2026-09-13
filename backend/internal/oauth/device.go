@@ -239,6 +239,111 @@ type AgentSummary struct {
 	Enabled  bool
 }
 
+// Reason codes returned by LookupAgent so the device-flow approve
+// handler can pick the right HTTP status without re-parsing error
+// strings. See plan §4.1.1.
+const (
+	// AgentLookupInvalidRequest maps to 400 invalid_request — the
+	// supplied agent_id is structurally unusable (empty, unknown,
+	// disabled, or pointing at a non-AGENT user).
+	AgentLookupInvalidRequest = "invalid_request"
+	// AgentLookupForbidden maps to 403 forbidden — the row is a valid
+	// enabled AGENT, but the caller is not allowed to delegate to it
+	// (Phase 1: only ADMIN approvers may bind to ADMIN-role Agents).
+	AgentLookupForbidden = "forbidden"
+)
+
+// AgentLookupError reports why an agent_id lookup failed. The Reason
+// is one of the AgentLookup* constants and is the only field the
+// handler should branch on; Detail is a human-readable description
+// safe to surface in the OAuth-style error_description field.
+type AgentLookupError struct {
+	Reason  string
+	AgentID string
+	Detail  string
+}
+
+// Error implements the error interface so AgentLookupError can flow
+// through gin.HandlerFunc error returns and the respondDeviceApproveError
+// switch.
+func (e *AgentLookupError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Detail != "" {
+		return "agent_id " + e.AgentID + ": " + e.Detail
+	}
+	return "agent_id " + e.AgentID + ": " + e.Reason
+}
+
+// LookupAgent resolves an agent_id to its AgentSummary, returning an
+// *AgentLookupError when the id is structurally unusable or the
+// caller is not allowed to delegate to it (plan §4.1.1).
+//
+// The callerRole argument drives the role-gating check: empty string
+// skips the gate entirely (used for read-only lookups that don't
+// carry per-request caller context), non-empty strings must equal
+// "ADMIN" when the resolved Agent has role="ADMIN". Phase 1 of the
+// device-flow agent-selection plan only restricts ADMIN-role Agents
+// to ADMIN approvers; MEMBER/VIEWER-role Agents remain bindable by
+// any authenticated approver.
+//
+// The returned AgentSummary is the trimmed row used by the device
+// authorization page; the handler can reuse it for the consent /
+// activity-log write paths.
+func LookupAgent(db *sql.DB, id, callerRole string) (AgentSummary, error) {
+	if id == "" {
+		return AgentSummary{}, &AgentLookupError{
+			Reason:  AgentLookupInvalidRequest,
+			AgentID: id,
+			Detail:  "agent_id is required",
+		}
+	}
+	var (
+		a        AgentSummary
+		enabled  bool
+		userType string
+	)
+	err := db.QueryRow(
+		`SELECT id, nickname, username, role, enabled, COALESCE(type, '')
+		 FROM users WHERE id = ?`,
+		id,
+	).Scan(&a.ID, &a.Nickname, &a.Username, &a.Role, &enabled, &userType)
+	if errors.Is(err, sql.ErrNoRows) {
+		return AgentSummary{}, &AgentLookupError{
+			Reason:  AgentLookupInvalidRequest,
+			AgentID: id,
+			Detail:  "unknown agent_id",
+		}
+	}
+	if err != nil {
+		return AgentSummary{}, err
+	}
+	a.Enabled = enabled
+	if userType != "AGENT" {
+		return AgentSummary{}, &AgentLookupError{
+			Reason:  AgentLookupInvalidRequest,
+			AgentID: id,
+			Detail:  "agent_id must reference a user of type AGENT",
+		}
+	}
+	if !a.Enabled {
+		return AgentSummary{}, &AgentLookupError{
+			Reason:  AgentLookupInvalidRequest,
+			AgentID: id,
+			Detail:  "agent_id is disabled",
+		}
+	}
+	if a.Role == "ADMIN" && callerRole != "" && callerRole != "ADMIN" {
+		return AgentSummary{}, &AgentLookupError{
+			Reason:  AgentLookupForbidden,
+			AgentID: id,
+			Detail:  "only ADMIN approvers may delegate to an ADMIN-role Agent",
+		}
+	}
+	return a, nil
+}
+
 // ListSelectableAgents returns every enabled AGENT user. The lookup
 // endpoint exposes the list to the device authorization page so the
 // approver can choose which identity the device flow should bind to.

@@ -20,14 +20,14 @@ import (
 // device-flow agent-binding approval flow that lets a human approver
 // delegate a device code to a specific Agent identity.
 //
-// Where the current implementation still relies on the legacy
-// "silent fallback" semantics (e.g. unknown / disabled / HUMAN ids,
-// MEMBER trying to bind to an ADMIN-role Agent, the
-// `oauth_device_require_agent_selection` opt-in) the assertions
-// describe the *current* behaviour so the suite stays green while the
-// remaining validation tasks (s-1112.2, s-1112.5) are implemented.
-// A "// plan §4.1.6 #N" comment marks each scenario so the eventual
-// tightening is easy to find.
+// Scenarios #4 / #5 / #6 / #7 assert the explicit-agent_id rejection
+// paths that s-1112.2 wired into DeviceApproveHandler via the
+// LookupAgent helper (plan §4.1.1). Scenarios #1 / #2 / #3 / #8 /
+// #14 / #15 stay green by exercising only enabled AGENT rows with
+// ADMIN approvers. Scenarios #9 / #11 / #12 / #13 still cover the
+// not-yet-wired `oauth_device_require_agent_selection` flag and the
+// lookup-side agent-selection affordances that s-1112.3 / s-1112.5
+// will tighten.
 
 func setupAgentApprovalDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -177,11 +177,10 @@ func TestApproveAgentScenario3_EmptyAgentGlobalSetBindsToConfiguredAgent(t *test
 }
 
 // 4. Approve with unknown agent_id. The plan §4.1.1 mandates a 400
-// invalid_request; the current (s-1112.1) implementation silently falls
-// back to the human approver to keep stale UIs from bricking the flow.
-// This test pins the current fallback so the suite stays green while
-// s-1112.2 lands the rejection path. (plan §4.1.6 #4)
-func TestApproveAgentScenario4_UnknownAgentFallsBackToApprover(t *testing.T) {
+// invalid_request; LookupAgent now rejects unknown ids at the handler
+// boundary, leaving the device_code row untouched so the approver can
+// resubmit without an explicit agent_id. (plan §4.1.6 #4)
+func TestApproveAgentScenario4_UnknownAgentReturns400(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
@@ -191,23 +190,31 @@ func TestApproveAgentScenario4_UnknownAgentFallsBackToApprover(t *testing.T) {
 
 	w := postApproveAs(t, r, db, "user-1",
 		`{"user_code":"SCEN-0004","decision":"approve","agentId":"ghost-agent"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 (fallback), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 invalid_request, got %d: %s", w.Code, w.Body.String())
 	}
-	var bound string
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["error"] != "invalid_request" {
+		t.Errorf("expected error=invalid_request, got %v", resp["error"])
+	}
+	var status string
 	if err := db.QueryRow(
-		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'SCEN-0004'`,
-	).Scan(&bound); err != nil {
+		`SELECT status FROM oauth_device_codes WHERE user_code_display = 'SCEN-0004'`,
+	).Scan(&status); err != nil {
 		t.Fatalf("query: %v", err)
 	}
-	if bound != "user-1" {
-		t.Errorf("expected fallback to user-1, got %q", bound)
+	if status != "pending" {
+		t.Errorf("expected device code still pending, got %q", status)
 	}
 }
 
-// 5. Approve with agent_id pointing at a disabled Agent. Same
-// fallback-vs-400 split as scenario #4. (plan §4.1.6 #5)
-func TestApproveAgentScenario5_DisabledAgentFallsBackToApprover(t *testing.T) {
+// 5. Approve with agent_id pointing at a disabled Agent. Plan §4.1.1
+// wants 400 invalid_request; LookupAgent rejects disabled rows. (plan
+// §4.1.6 #5)
+func TestApproveAgentScenario5_DisabledAgentReturns400(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
@@ -218,23 +225,20 @@ func TestApproveAgentScenario5_DisabledAgentFallsBackToApprover(t *testing.T) {
 
 	w := postApproveAs(t, r, db, "user-1",
 		`{"user_code":"SCEN-0005","decision":"approve","agentId":"agent-disabled"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 (fallback), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 invalid_request, got %d: %s", w.Code, w.Body.String())
 	}
-	var bound string
-	if err := db.QueryRow(
-		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'SCEN-0005'`,
-	).Scan(&bound); err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if bound != "user-1" {
-		t.Errorf("expected fallback to user-1, got %q", bound)
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "invalid_request" {
+		t.Errorf("expected error=invalid_request, got %v", resp["error"])
 	}
 }
 
-// 6. Approve with agent_id pointing at a HUMAN user — same
-// fallback-vs-400 split as scenario #4. (plan §4.1.6 #6)
-func TestApproveAgentScenario6_HumanIDFallsBackToApprover(t *testing.T) {
+// 6. Approve with agent_id pointing at a HUMAN user. Plan §4.1.1
+// wants 400 invalid_request; LookupAgent rejects rows whose type is
+// not AGENT. (plan §4.1.6 #6)
+func TestApproveAgentScenario6_NonAgentIDReturns400(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
@@ -245,27 +249,20 @@ func TestApproveAgentScenario6_HumanIDFallsBackToApprover(t *testing.T) {
 
 	w := postApproveAs(t, r, db, "user-1",
 		`{"user_code":"SCEN-0006","decision":"approve","agentId":"user-other"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 (fallback), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 invalid_request, got %d: %s", w.Code, w.Body.String())
 	}
-	var bound string
-	if err := db.QueryRow(
-		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'SCEN-0006'`,
-	).Scan(&bound); err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if bound != "user-1" {
-		t.Errorf("expected fallback to user-1 (HUMAN override ignored), got %q", bound)
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "invalid_request" {
+		t.Errorf("expected error=invalid_request, got %v", resp["error"])
 	}
 }
 
-// 7. Approve as MEMBER with agent_id of an ADMIN-role Agent. The plan
-// §4.1.1 wants 403; today's `hasAgent` only checks type=AGENT and
-// enabled=1, with no role gating — so a MEMBER approver can in fact
-// bind to an ADMIN-role Agent today. Once s-1112.2 ships the
-// permission check this test will need to flip to expect 403.
-// (plan §4.1.6 #7)
-func TestApproveAgentScenario7_MemberCanBindToAnyEnabledAgentToday(t *testing.T) {
+// 7. Approve as MEMBER with agent_id of an ADMIN-role Agent. Plan
+// §4.1.1 wants 403 forbidden; LookupAgent gates ADMIN-role Agents to
+// ADMIN approvers in Phase 1. (plan §4.1.6 #7)
+func TestApproveAgentScenario7_MemberBindingToAdminAgentReturns403(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
@@ -280,17 +277,22 @@ func TestApproveAgentScenario7_MemberCanBindToAnyEnabledAgentToday(t *testing.T)
 	setApproveUserRole(req, db, "member-1", "MEMBER")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 forbidden, got %d: %s", w.Code, w.Body.String())
 	}
-	var bound string
-	if err := db.QueryRow(
-		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'SCEN-0007'`,
-	).Scan(&bound); err != nil {
-		t.Fatalf("query: %v", err)
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-	if bound != "agent-admin" {
-		t.Errorf("expected bound agent-admin (current: no role gate), got %q", bound)
+	if resp["error"] != "forbidden" {
+		t.Errorf("expected error=forbidden, got %v", resp["error"])
+	}
+	var status string
+	_ = db.QueryRow(
+		`SELECT status FROM oauth_device_codes WHERE user_code_display = 'SCEN-0007'`,
+	).Scan(&status)
+	if status != "pending" {
+		t.Errorf("expected device code still pending, got %q", status)
 	}
 }
 
