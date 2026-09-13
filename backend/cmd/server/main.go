@@ -501,6 +501,16 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		webhook.POST("/notify", handlers.WebhookNotify(db))
 	}
 
+	// /api/v1/webhooks/* — event centre catalogue (plan §8 last
+	// row). The picker source of truth; mounted here so the
+	// frontend §7.2 multi-select renders straight from this
+	// endpoint.
+	webhooks := r.Group("/api/v1/webhooks")
+	webhooks.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		webhooks.GET("/events", handlers.WebhookEventCatalogue(db))
+	}
+
 	r.POST("/api/v1/upload", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.UploadFile(db))
 	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
 	r.DELETE("/api/v1/attachments/:id", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))

@@ -1183,6 +1183,55 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /webhooks/events:
+    get:
+      summary: Get webhook event catalogue
+      description: |
+        Returns the fixed, versioned list of webhook events the
+        Event Center can emit. The frontend §7.2 event picker
+        renders its multi-select from this endpoint so adding a
+        new event is a backend-only change. Each entry carries
+        the dot-namespaced event name, a displayName for the
+        operator UI, a one-line trigger description, a
+        simplified JSON Schema subset (type / required /
+        properties) describing the payload, and the list of §3.2
+        filter categories that meaningfully apply to the event.
+      operationId: webhookEventCatalogue
+      tags:
+        - Webhooks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      responses:
+        '200':
+          description: Event catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event:
+                          type: string
+                        displayName:
+                          type: string
+                        description:
+                          type: string
+                        payloadSchema:
+                          type: object
+                        filters:
+                          type: array
+                          items:
+                            type: string
+                  count:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /mcp/my-tasks:
     get:
       summary: Get agent's tasks

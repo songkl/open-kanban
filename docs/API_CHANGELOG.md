@@ -129,6 +129,15 @@ This document tracks changes to the Open-Kanban API specification.
 
 ### Added
 
+- **Webhook event catalogue (s-1154)** — `GET /api/v1/webhooks/events`
+  returns the fixed, versioned list of 12 webhook events the Event
+  Center can emit, including event name, displayName, trigger
+  description, simplified JSON Schema subset for the payload
+  (type / required / properties), and the §3.2 filter categories
+  that apply. The frontend §7.2 event picker renders directly
+  from this endpoint so adding a new event is a backend-only
+  change. Requires authentication (Bearer or signature).
+
 - **External OAuth login (s-1144)** — the `/login` page now renders
   the enabled external identity providers as buttons and exchanges
   the post-callback `?code` for a kanban session. The full
