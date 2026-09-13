@@ -3,12 +3,27 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
 
+interface DeviceLookupAgent {
+  id: string;
+  nickname?: string;
+  username?: string;
+  role?: string;
+}
+
 interface DeviceLookup {
   clientId: string;
   clientName: string;
   scope: string;
   expiresAt: string;
   status: string;
+  agents?: DeviceLookupAgent[];
+  defaultAgentId?: string;
+}
+
+interface ApproveResponse {
+  approved?: boolean;
+  denied?: boolean;
+  boundTo?: string;
 }
 
 export function OAuthDevicePage() {
@@ -31,6 +46,12 @@ export function OAuthDevicePage() {
   const [decided, setDecided] = useState<'approved' | 'denied' | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [disabled, setDisabled] = useState(false);
+  // selectedAgentId is the empty string when the human approver picks
+  // "Authorize as myself" and an Agent id otherwise. Defaults to the
+  // server-suggested defaultAgentId (set by oauth_device_agent_id) so
+  // a pre-pinned kiosk deployment does not need extra clicks.
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [approvedAs, setApprovedAs] = useState<string>('');
 
   useEffect(() => {
     authApi
@@ -58,7 +79,11 @@ export function OAuthDevicePage() {
     setError('');
     setLookup(null);
     setDisabled(false);
-    fetch(`/oauth/device/lookup?code=${encodeURIComponent(code)}`)
+    setSelectedAgentId('');
+    setApprovedAs('');
+    fetch(`/oauth/device/lookup?code=${encodeURIComponent(code)}`, {
+      credentials: 'include',
+    })
       .then(async (res) => {
         if (cancelled) return;
         if (res.status === 404) {
@@ -88,7 +113,15 @@ export function OAuthDevicePage() {
           return;
         }
         const data = (await res.json()) as DeviceLookup;
-        if (!cancelled) setLookup(data);
+        if (!cancelled) {
+          setLookup(data);
+          // Pre-select the configured default when the admin has pinned
+          // a global Agent id. Empty string falls through to "myself".
+          if (data.defaultAgentId && Array.isArray(data.agents) &&
+              data.agents.some((a) => a.id === data.defaultAgentId)) {
+            setSelectedAgentId(data.defaultAgentId);
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) setError(t('oauth.device.lookupFailed'));
@@ -96,27 +129,49 @@ export function OAuthDevicePage() {
     return () => {
       cancelled = true;
     };
-  }, [code, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  // approverLabel is the nickname shown next to the "Myself" radio so
+  // the human approver can confirm which account they are about to
+  // delegate. Falls back to "you" when the API does not return a name
+  // (e.g. legacy payloads). Resolving the nickname is planned for a
+  // follow-up; today we intentionally render an empty value so the
+  // i18n fallback copy is used.
+  const approverLabel = '';
 
   const decide = async (decision: 'approve' | 'deny') => {
     if (!code) return;
     setSubmitting(true);
     setError('');
     try {
+      const body: Record<string, string> = {
+        user_code: code,
+        decision,
+      };
+      // Only attach agentId when a real Agent is selected — the empty
+      // string keeps the legacy "approve as myself" path.
+      if (selectedAgentId) {
+        body.agentId = selectedAgentId;
+      }
       const res = await fetch('/oauth/device/approve', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_code: code, decision }),
+        body: JSON.stringify(body),
       });
       if (res.status === 401) {
         setNeedsLogin(true);
         return;
       }
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error_description || t('oauth.device.failed'));
+        const errBody = await res.json().catch(() => ({}));
+        setError(errBody.error_description || t('oauth.device.failed'));
         return;
+      }
+      const okBody = (await res.json().catch(() => ({}))) as ApproveResponse;
+      if (decision === 'approve' && okBody.boundTo) {
+        setApprovedAs(okBody.boundTo);
       }
       setDecided(decision === 'approve' ? 'approved' : 'denied');
     } catch {
@@ -166,6 +221,9 @@ export function OAuthDevicePage() {
     );
   }
 
+  const agents = lookup?.agents ?? [];
+  const showIdentityPicker = agents.length > 0;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">
       <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
@@ -210,6 +268,51 @@ export function OAuthDevicePage() {
           </div>
         )}
 
+        {lookup && !decided && showIdentityPicker && (
+          <div className="mt-3 rounded-md border border-zinc-200 dark:border-zinc-700 p-3" data-testid="identity-picker">
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              {t('oauth.device.identitySectionTitle')}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+              {t('oauth.device.identityHelper')}
+            </p>
+            <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700">
+              <input
+                type="radio"
+                name="identity"
+                value=""
+                checked={selectedAgentId === ''}
+                onChange={() => setSelectedAgentId('')}
+                className="mt-0.5"
+                data-testid="identity-self"
+              />
+              <span>{t('oauth.device.identitySelf', { name: approverLabel || t('oauth.device.identityYouFallback') })}</span>
+            </label>
+            {agents.map((a) => (
+              <label
+                key={a.id}
+                className="mt-1 flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                <input
+                  type="radio"
+                  name="identity"
+                  value={a.id}
+                  checked={selectedAgentId === a.id}
+                  onChange={() => setSelectedAgentId(a.id)}
+                  className="mt-0.5"
+                  data-testid={`identity-agent-${a.id}`}
+                />
+                <span>
+                  {t('oauth.device.identityAgent', { name: a.nickname || a.username || a.id })}
+                  {a.role ? (
+                    <span className="ml-1 text-xs text-zinc-500">({a.role})</span>
+                  ) : null}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
         {decided && (
           <div
             className={`mt-5 rounded-md p-3 text-sm ${
@@ -219,9 +322,11 @@ export function OAuthDevicePage() {
             }`}
             data-testid="decision-banner"
           >
-            {decided === 'approved'
-              ? t('oauth.device.approvedBanner')
-              : t('oauth.device.deniedBanner')}
+            {decided === 'approved' && approvedAs
+              ? t('oauth.device.approvedAsBanner', { name: approvedAs })
+              : decided === 'approved'
+                ? t('oauth.device.approvedBanner')
+                : t('oauth.device.deniedBanner')}
           </div>
         )}
 

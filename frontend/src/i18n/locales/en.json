@@ -775,9 +775,14 @@
       "loginRequired": "Please sign in to authorize this request.",
       "goLogin": "Sign in",
       "approvedBanner": "Approved. You can return to your device.",
+      "approvedAsBanner": "Approved as {{name}}. You can return to your device.",
       "deniedBanner": "Denied. The device will not receive access.",
       "disabledTitle": "Device authorization is disabled",
-      "disabledBody": "An administrator has turned off the OAuth device flow. Please contact your administrator or use another sign-in method."
+      "disabledBody": "An administrator has turned off the OAuth device flow. Please contact your administrator or use another sign-in method.",
+      "identitySectionTitle": "Authorize as",
+      "identitySelf": "Myself ({{name}})",
+      "identityAgent": "Agent: {{name}}",
+      "identityHelper": "Pick the identity the device should receive access for. Pick an Agent if this CLI is for unattended automation."
     },
     "admin": {
       "title": "OAuth 2.1",

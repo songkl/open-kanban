@@ -204,4 +204,259 @@ describe('OAuthDevicePage', () => {
     });
     expect(screen.getByText('Device authorization is disabled')).toBeInTheDocument();
   });
+
+  it('renders the identity picker when the lookup returns one or more agents', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-client-1',
+        clientName: 'open-kanban-mcp',
+        scope: 'kanban:read',
+        expiresAt: new Date().toISOString(),
+        status: 'pending',
+        agents: [
+          { id: 'agent-alpha', nickname: 'Alpha', username: 'alpha-bot', role: 'agent' },
+          { id: 'agent-beta', nickname: 'Beta', username: 'beta-bot', role: 'agent' }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'AGNT-AGNT' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('identity-self')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-agent-agent-alpha')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-agent-agent-beta')).toBeInTheDocument();
+  });
+
+  it('keeps Approve disabled until a client is resolved and enables it once agents are listed', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    expect(screen.getByTestId('approve-btn')).toBeDisabled();
+
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'WAIT-WAIT' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
+  });
+
+  it('submits the selected agentId when the user authorises an Agent', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            clientId: 'c',
+            clientName: 'C',
+            scope: 'kanban:read',
+            expiresAt: '',
+            status: 'pending',
+            agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+          })
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ approved: true, boundTo: 'agent-alpha' })
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'PICK-PICK' } });
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-alpha')).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByTestId('identity-agent-agent-alpha'));
+    await waitFor(() => expect(screen.getByTestId('approve-btn')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('approve-btn'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/oauth/device/approve',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          body: JSON.stringify({
+            user_code: 'PICK-PICK',
+            decision: 'approve',
+            agentId: 'agent-alpha'
+          })
+        })
+      );
+    });
+  });
+
+  it('submits an empty agentId when the user authorises as themselves', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            clientId: 'c',
+            clientName: 'C',
+            scope: 'kanban:read',
+            expiresAt: '',
+            status: 'pending',
+            agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+          })
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ approved: true })
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'SELF-SELF' } });
+    await waitFor(() => expect(screen.getByTestId('identity-self')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('approve-btn')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('approve-btn'));
+
+    await waitFor(() => {
+      const approveCall = fetchMock.mock.calls.find(([u]) =>
+        typeof u === 'string' && u.startsWith('/oauth/device/approve')
+      );
+      expect(approveCall).toBeDefined();
+      const body = JSON.parse((approveCall as [string, RequestInit])[1].body as string);
+      expect(body.user_code).toBe('SELF-SELF');
+      expect(body.decision).toBe('approve');
+      expect(body).not.toHaveProperty('agentId');
+    });
+  });
+
+  it('hides the identity picker when the lookup returns an empty agent list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        agents: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'NONE-NONE' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('identity-self')).not.toBeInTheDocument();
+  });
+
+  it('hides the identity picker when the lookup omits the agents field', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: '',
+        expiresAt: '',
+        status: 'pending'
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'MISS-MISS' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
+  });
+
+  it('pre-selects the server-suggested defaultAgentId when it matches an agent', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        defaultAgentId: 'agent-beta',
+        agents: [
+          { id: 'agent-alpha', nickname: 'Alpha' },
+          { id: 'agent-beta', nickname: 'Beta' }
+        ]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'DFFT-DFFT' } });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-beta')).toBeInTheDocument()
+    );
+    const betaRadio = screen.getByTestId('identity-agent-agent-beta') as HTMLInputElement;
+    const alphaRadio = screen.getByTestId('identity-agent-agent-alpha') as HTMLInputElement;
+    const selfRadio = screen.getByTestId('identity-self') as HTMLInputElement;
+    expect(betaRadio.checked).toBe(true);
+    expect(alphaRadio.checked).toBe(false);
+    expect(selfRadio.checked).toBe(false);
+  });
+
+  it('ignores defaultAgentId when it does not match any agent and falls back to Myself', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: '',
+        expiresAt: '',
+        status: 'pending',
+        defaultAgentId: 'ghost-agent',
+        agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'GHST-GHST' } });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('identity-agent-agent-alpha')).toBeInTheDocument()
+    );
+    const selfRadio = screen.getByTestId('identity-self') as HTMLInputElement;
+    const alphaRadio = screen.getByTestId('identity-agent-agent-alpha') as HTMLInputElement;
+    expect(selfRadio.checked).toBe(true);
+    expect(alphaRadio.checked).toBe(false);
+  });
 });

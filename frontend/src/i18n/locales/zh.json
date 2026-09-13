@@ -775,9 +775,14 @@
       "loginRequired": "请先登录后再授权。",
       "goLogin": "去登录",
       "approvedBanner": "已批准。可以返回设备继续操作。",
+      "approvedAsBanner": "已批准为 {{name}}。可以返回设备继续操作。",
       "deniedBanner": "已拒绝。设备将不会获得访问权限。",
       "disabledTitle": "设备授权已停用",
-      "disabledBody": "管理员已停用 OAuth 设备授权流程。请联系管理员启用，或改用其他登录方式。"
+      "disabledBody": "管理员已停用 OAuth 设备授权流程。请联系管理员启用，或改用其他登录方式。",
+      "identitySectionTitle": "授权身份",
+      "identitySelf": "当前账号（{{name}}）",
+      "identityAgent": "Agent：{{name}}",
+      "identityHelper": "选择设备应获得授权的身份。如果是给无人值守的 CLI / MCP 使用，请选择一个 Agent。"
     },
     "admin": {
       "title": "OAuth 2.1",
