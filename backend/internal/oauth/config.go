@@ -56,6 +56,11 @@ func DefaultConfig() []ConfigKey {
 			Description: "Optional Agent user id (type=AGENT) bound to device flow approvals. Empty = approve as the logged-in user.",
 		},
 		{
+			Key:         "oauth_device_require_agent_selection",
+			DefaultVal:  "0",
+			Description: "When 1, device-flow approvals must bind to an Agent (via agent_id or oauth_device_agent_id) unless the approver is themselves type='AGENT'. Human approvers picking 'Myself' are rejected with 400 invalid_request. See plan §4.1.4.",
+		},
+		{
 			Key:         "oauth_device_code_ttl_seconds",
 			DefaultVal:  "600",
 			Description: "Device code lifetime in seconds (10 minutes default).",
@@ -126,6 +131,22 @@ func DeviceFlowAgentID(db *sql.DB) string {
 		return ""
 	}
 	return strings.TrimSpace(val)
+}
+
+// DeviceFlowRequiresAgentSelection reports whether admins have opted
+// the device-flow approval path into the strict-agent-binding mode
+// described in plan §4.1.4. When true, the device approve endpoint
+// must reject (400 invalid_request) any approval that would bind to
+// a HUMAN row — i.e. neither the request body nor the global
+// oauth_device_agent_id override resolved to an Agent — unless the
+// approver is themselves type='AGENT' (in which case binding the
+// device code to their own Agent row is the desired outcome).
+func DeviceFlowRequiresAgentSelection(db *sql.DB) bool {
+	var val string
+	if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'oauth_device_require_agent_selection'").Scan(&val); err != nil {
+		return false
+	}
+	return strings.TrimSpace(val) == "1"
 }
 
 // DeviceFlowGate returns a gin middleware that blocks /oauth/device/* when the

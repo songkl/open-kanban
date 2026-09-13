@@ -63,6 +63,22 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 
 		switch req.Decision {
 		case "approve":
+			// Plan §4.1.4 (s-1112.5): when admins have flipped
+			// oauth_device_require_agent_selection to "1", approvals
+			// that would bind to a HUMAN row are rejected with
+			// 400 invalid_request unless the approver is themselves
+			// type='AGENT'. This gates the device-flow surface so
+			// `kanban run` / other CLI consumers cannot ride on a
+			// human approver's identity. The check runs before the
+			// LookupAgent gate so the response shape stays consistent
+			// with the rest of the agent-binding contract.
+			if req.AgentID == "" && DeviceFlowAgentID(db) == "" && DeviceFlowRequiresAgentSelection(db) && user.Type != "AGENT" {
+				c.JSON(http.StatusBadRequest, models.OAuthErrorResponse{
+					Error:            "invalid_request",
+					ErrorDescription: "agent_id is required: server requires an Agent identity for device-flow approvals",
+				})
+				return
+			}
 			// Phase 1 of the device-flow agent-selection plan treats
 			// the explicit agent_id as privileged: it must resolve to
 			// an enabled AGENT row, and ADMIN-role Agents are reserved

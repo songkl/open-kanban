@@ -176,3 +176,57 @@ func TestDeviceFlowAgentID(t *testing.T) {
 		t.Errorf("expected agent-7, got %q", got)
 	}
 }
+
+// TestDeviceFlowRequiresAgentSelectionDefault ensures the
+// oauth_device_require_agent_selection key is part of DefaultConfig
+// (plan §4.1.4, s-1112.5) and that its default value disables the
+// strict mode so existing self-service approvers keep working until
+// admins opt in.
+func TestDeviceFlowRequiresAgentSelectionDefault(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	if err := oauth.EnsureDefaults(db); err != nil {
+		t.Fatalf("EnsureDefaults: %v", err)
+	}
+	if oauth.DeviceFlowRequiresAgentSelection(db) {
+		t.Error("expected strict mode disabled by default")
+	}
+	var got string
+	if err := db.QueryRow(`SELECT value FROM app_config WHERE key = 'oauth_device_require_agent_selection'`).Scan(&got); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got != "0" {
+		t.Errorf("expected default value '0', got %q", got)
+	}
+}
+
+// TestDeviceFlowRequiresAgentSelectionToggle covers the only flip the
+// helper exposes — any value other than the literal "1" must keep
+// the helper returning false so a typo ("yes", "true", "01") never
+// accidentally turns the strict mode on.
+func TestDeviceFlowRequiresAgentSelectionToggle(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	if err := oauth.EnsureDefaults(db); err != nil {
+		t.Fatalf("EnsureDefaults: %v", err)
+	}
+	cases := []struct {
+		val      string
+		expected bool
+	}{
+		{"0", false},
+		{"1", true},
+		{"", false},
+		{"true", false},
+		{"yes", false},
+		{" 1 ", true},
+	}
+	for _, tc := range cases {
+		if err := oauth.SetConfig(db, "oauth_device_require_agent_selection", tc.val); err != nil {
+			t.Fatalf("SetConfig(%q): %v", tc.val, err)
+		}
+		if got := oauth.DeviceFlowRequiresAgentSelection(db); got != tc.expected {
+			t.Errorf("value=%q expected %v, got %v", tc.val, tc.expected, got)
+		}
+	}
+}

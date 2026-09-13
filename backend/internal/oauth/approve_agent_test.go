@@ -332,41 +332,52 @@ func TestApproveAgentScenario8_AdminBindsToAnyEnabledAgent(t *testing.T) {
 }
 
 // 9. Approve with oauth_device_require_agent_selection=1, no
-// agent_id, no global. The plan §4.1.4 wants 400; today the flag is
-// not read so the human approver is bound. (plan §4.1.6 #9)
+// agent_id, no global. The plan §4.1.4 + s-1112.5 wiring make the
+// handler reject the request with 400 invalid_request; the device
+// code row stays untouched so the approver can resubmit with an
+// explicit agent_id (or after clearing the flag). (plan §4.1.6 #9)
 func TestApproveAgentScenario9_RequireAgentNoBindingFallsBack(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0009", "kanban:read", time.Hour)
-	// The require_agent_selection key is not yet in DefaultConfig(); we
-	// insert it directly so the test exercises the planned behaviour
-	// without depending on s-1112.5 wiring the canonical default.
-	if _, err := db.Exec(
-		`INSERT INTO app_config (key, value) VALUES ('oauth_device_require_agent_selection', '1')`,
-	); err != nil {
+	// s-1112.5 wired the require_agent_selection key into
+	// DefaultConfig() so SetConfig accepts it; use the helper to stay
+	// in sync with the production schema.
+	if err := oauth.SetConfig(db, "oauth_device_require_agent_selection", "1"); err != nil {
 		t.Fatalf("seed require_agent_selection: %v", err)
 	}
 	r := newApproveServer(t, db)
 
 	w := postApproveAs(t, r, db, "user-1",
 		`{"user_code":"SCEN-0009","decision":"approve"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 (no enforcement yet), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 invalid_request, got %d: %s", w.Code, w.Body.String())
 	}
-	var bound string
-	_ = db.QueryRow(
-		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'SCEN-0009'`,
-	).Scan(&bound)
-	if bound != "user-1" {
-		t.Errorf("expected fallback to user-1, got %q", bound)
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["error"] != "invalid_request" {
+		t.Errorf("expected error=invalid_request, got %v", resp["error"])
+	}
+	var status string
+	if err := db.QueryRow(
+		`SELECT status FROM oauth_device_codes WHERE user_code_display = 'SCEN-0009'`,
+	).Scan(&status); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if status != "pending" {
+		t.Errorf("expected device code still pending, got %q", status)
 	}
 }
 
 // 10. Approve with oauth_device_require_agent_selection=1, approver
-// is themselves type='AGENT' — bound to the approver (the agent).
-// (plan §4.1.6 #10)
+// is themselves type='AGENT' — the strict-mode gate (s-1112.5)
+// bypasses because binding to the approver's own Agent row is the
+// desired outcome, so the device code is bound to the approver (the
+// agent). (plan §4.1.6 #10)
 func TestApproveAgentScenario10_RequireAgentApproverIsAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
@@ -374,9 +385,7 @@ func TestApproveAgentScenario10_RequireAgentApproverIsAgent(t *testing.T) {
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0010", "kanban:read", time.Hour)
 	seedAgentWithRole(t, db, "agent-self", "Self", "ADMIN", true)
-	if _, err := db.Exec(
-		`INSERT INTO app_config (key, value) VALUES ('oauth_device_require_agent_selection', '1')`,
-	); err != nil {
+	if err := oauth.SetConfig(db, "oauth_device_require_agent_selection", "1"); err != nil {
 		t.Fatalf("seed require_agent_selection: %v", err)
 	}
 	r := newApproveServer(t, db)
@@ -628,5 +637,172 @@ func TestApproveAgentScenarioWiring(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 on empty lookup, got %d", w.Code)
+	}
+}
+
+// The tests below exercise the strict-mode behaviour that s-1112.5
+// wired in: when oauth_device_require_agent_selection=1, the
+// /oauth/device/approve endpoint must refuse to bind a device code
+// to a HUMAN row unless the approver is themselves type='AGENT'.
+// They live alongside the §4.1.6 scenarios so the s-1112.5 contract
+// stays co-located with the related agent-binding plumbing.
+
+// TestRequireAgentSelection_DefaultOff_LegacyBinding verifies that
+// when the strict-mode flag is left at its default ("0"), the
+// legacy "approve as the logged-in user" path keeps working for
+// HUMAN approvers. s-1112.5 must be opt-in so existing deployments
+// don't get locked out on rollout.
+func TestRequireAgentSelection_DefaultOff_LegacyBinding(t *testing.T) {
+	db := setupAgentApprovalDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-cli", "", "kanban-cli",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-cli", "REQ-DEFAULT", "kanban:read", time.Hour)
+	r := newApproveServer(t, db)
+
+	w := postApproveAs(t, r, db, "user-1",
+		`{"user_code":"REQ-DEFAULT","decision":"approve"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 (default off), got %d: %s", w.Code, w.Body.String())
+	}
+	var bound string
+	_ = db.QueryRow(
+		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'REQ-DEFAULT'`,
+	).Scan(&bound)
+	if bound != "user-1" {
+		t.Errorf("expected legacy bind to user-1, got %q", bound)
+	}
+}
+
+// TestRequireAgentSelection_HumanApproverNoBindingReturns400 is the
+// canonical s-1112.5 happy path: a HUMAN approver submits an
+// approval with neither agent_id nor the global override while the
+// strict-mode flag is on. The handler must reject with 400
+// invalid_request so `kanban run` / CLI consumers cannot ride on a
+// human approver's identity. The device code row stays pending so
+// the approver can retry with an explicit agent_id.
+func TestRequireAgentSelection_HumanApproverNoBindingReturns400(t *testing.T) {
+	db := setupAgentApprovalDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-cli", "", "kanban-cli",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-cli", "REQ-HUMAN1", "kanban:read", time.Hour)
+	if err := oauth.SetConfig(db, "oauth_device_require_agent_selection", "1"); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+	r := newApproveServer(t, db)
+
+	w := postApproveAs(t, r, db, "user-1",
+		`{"user_code":"REQ-HUMAN1","decision":"approve"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["error"] != "invalid_request" {
+		t.Errorf("expected error=invalid_request, got %v", resp["error"])
+	}
+	if desc, _ := resp["error_description"].(string); desc == "" {
+		t.Error("expected non-empty error_description")
+	}
+	var status string
+	_ = db.QueryRow(
+		`SELECT status FROM oauth_device_codes WHERE user_code_display = 'REQ-HUMAN1'`,
+	).Scan(&status)
+	if status != "pending" {
+		t.Errorf("expected device code still pending, got %q", status)
+	}
+}
+
+// TestRequireAgentSelection_ExplicitAgentIDAllowed confirms that
+// even with the strict-mode flag on, supplying an explicit agent_id
+// keeps the existing §4.1.1 behaviour: the handler validates the id
+// via LookupAgent and binds to the resolved Agent.
+func TestRequireAgentSelection_ExplicitAgentIDAllowed(t *testing.T) {
+	db := setupAgentApprovalDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-cli", "", "kanban-cli",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-cli", "REQ-AGID1", "kanban:read", time.Hour)
+	seedAgentWithRole(t, db, "agent-strict", "Strict", "ADMIN", true)
+	if err := oauth.SetConfig(db, "oauth_device_require_agent_selection", "1"); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+	r := newApproveServer(t, db)
+
+	w := postApproveAs(t, r, db, "user-1",
+		`{"user_code":"REQ-AGID1","decision":"approve","agentId":"agent-strict"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var bound string
+	_ = db.QueryRow(
+		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'REQ-AGID1'`,
+	).Scan(&bound)
+	if bound != "agent-strict" {
+		t.Errorf("expected bound agent-strict, got %q", bound)
+	}
+}
+
+// TestRequireAgentSelection_GlobalBindingAllowed covers the
+// admin-pinned fallback: when oauth_device_agent_id is set
+// globally, the device code binds to that Agent even in strict
+// mode, so kiosk-style deployments don't have to push the per-call
+// agent_id through the device authorization page.
+func TestRequireAgentSelection_GlobalBindingAllowed(t *testing.T) {
+	db := setupAgentApprovalDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-cli", "", "kanban-cli",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-cli", "REQ-GLOB1", "kanban:read", time.Hour)
+	seedAgentWithRole(t, db, "agent-kiosk", "Kiosk", "ADMIN", true)
+	if err := oauth.SetConfig(db, "oauth_device_require_agent_selection", "1"); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+	if err := oauth.SetConfig(db, "oauth_device_agent_id", "agent-kiosk"); err != nil {
+		t.Fatalf("SetConfig global: %v", err)
+	}
+	r := newApproveServer(t, db)
+
+	w := postApproveAs(t, r, db, "user-1",
+		`{"user_code":"REQ-GLOB1","decision":"approve"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var bound string
+	_ = db.QueryRow(
+		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'REQ-GLOB1'`,
+	).Scan(&bound)
+	if bound != "agent-kiosk" {
+		t.Errorf("expected bound agent-kiosk via global override, got %q", bound)
+	}
+}
+
+// TestRequireAgentSelection_DenyAlwaysAllowed pins the contract that
+// the strict-mode gate is bound to the approve branch only — the
+// deny path is a refusal and must not be subject to the agent_id
+// requirement (it carries no binding semantics).
+func TestRequireAgentSelection_DenyAlwaysAllowed(t *testing.T) {
+	db := setupAgentApprovalDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-cli", "", "kanban-cli",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-cli", "REQ-DENY1", "kanban:read", time.Hour)
+	if err := oauth.SetConfig(db, "oauth_device_require_agent_selection", "1"); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+	r := newApproveServer(t, db)
+
+	w := postApproveAs(t, r, db, "user-1",
+		`{"user_code":"REQ-DENY1","decision":"deny"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 on deny, got %d: %s", w.Code, w.Body.String())
+	}
+	var status string
+	_ = db.QueryRow(
+		`SELECT status FROM oauth_device_codes WHERE user_code_display = 'REQ-DENY1'`,
+	).Scan(&status)
+	if status != "denied" {
+		t.Errorf("expected status denied, got %q", status)
 	}
 }
