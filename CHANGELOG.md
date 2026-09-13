@@ -155,6 +155,23 @@ All notable changes to this project will be documented in this file.
   hard requirement at the server boundary — review
   `devDoc/DEVICE_AUTH_AGENT_SELECTION_PLAN_2026-09-13.md`
   (plan §5 row 14) before enabling on production.
+- s-1112.13: ship the device-flow-with-agent-selection CLI e2e
+  test (plan §4.6). `cli/tests/e2e/agent-selection.test.ts` spawns
+  the `kanban-e2e-runner` helper, drives `kanban auth login` end to
+  end, has the helper's `/__test__/auto-approve` bind the pending
+  device code to a seeded MEMBER Agent via the new optional
+  `agent_id` body field, then asserts the JWT's `sub` is the Agent id
+  and that `POST /api/v1/runs/claim` succeeds with the new bearer —
+  covering the full OAuth 2.1 device-flow → identity-picker → JWT
+  → /runs/claim chain. Helper seed extension adds `u-e2e-agent`
+  (MEMBER role, type=AGENT) and `u-e2e-member` (MEMBER human) so
+  the picker has both identities to choose from; the auto-approve
+  endpoint now optionally accepts `agent_id` and validates the
+  referenced user is an enabled AGENT row before binding. Backend
+  `RequireAuth` middleware now resolves the user via
+  `getCurrentUserFromRequest` (JWT first, kanban-token fallback) so
+  device-flow access tokens work on every auth-protected endpoint,
+  not just `/api/v1/users/me` and the WS handshake.
 
 ### Bug Fixes
 

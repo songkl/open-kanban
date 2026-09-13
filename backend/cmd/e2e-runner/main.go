@@ -310,10 +310,15 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 // `/__test__/auto-approve` approves every pending oauth_device_codes
 // row as the admin user and records consent for the matching client.
 // The CLI's poll loop then returns the access token and the auth
-// login completes. We require the suite's bearer token via
-// Authorization (or the static X-Test-Token header for callers that
-// can't easily set Authorization) so a misconfigured helper doesn't
-// silently expose the endpoint on a developer's machine.
+// login completes. When the JSON body supplies an `agent_id` field,
+// the device code is instead bound to that Agent identity (must
+// reference an enabled AGENT row, mirroring the real
+// /oauth/device/approve handler's contract from plan §4.1.1) so the
+// agent-selection e2e can exercise the identity-picker path without a
+// real browser. We require the suite's bearer token via Authorization
+// (or the static X-Test-Token header for callers that can't easily
+// set Authorization) so a misconfigured helper doesn't silently
+// expose the endpoint on a developer's machine.
 func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 	// Auth-gating middleware for test endpoints. Two ways to
 	// authenticate: the admin bearer (real Kanban token) or the
@@ -331,6 +336,21 @@ func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "test endpoint requires admin bearer or X-Test-Token"})
 	}
 	r.POST("/__test__/auto-approve", testAuth, func(c *gin.Context) {
+		// Optional agent_id body parameter: when supplied, every
+		// pending device code is bound to that Agent user instead
+		// of the seeded admin. This mirrors what the real
+		// device-flow authorization page does when the human
+		// approver picks "Authorise as <Agent>" from the identity
+		// selector (plan §4.6). Empty string (the historical
+		// default) keeps the "approve as the admin" behaviour the
+		// existing runner suite relies on.
+		var req struct {
+			AgentID string `json:"agent_id" form:"agent_id"`
+		}
+		// Tolerate both JSON and form bodies so the e2e suite can
+		// pick whichever is easier to script.
+		_ = c.ShouldBind(&req)
+
 		rows, err := db.Query(
 			"SELECT id, client_id, scope FROM oauth_device_codes WHERE status = 'pending'",
 		)
@@ -356,15 +376,33 @@ func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		// Approve each pending device code as the seeded admin user
-		// (u-e2e-admin). The tokens table gives us a stable user_id
-		// that satisfies ApproveDeviceCode's FK requirements.
+		// Pick the binding user. Default to the seeded admin; if
+		// agent_id was supplied, validate it points at an enabled
+		// AGENT row so we mirror the real DeviceApproveHandler's
+		// guard rails. Anything else would bind the device code
+		// to a user the handler would later reject.
 		const adminUserID = "u-e2e-admin"
+		binding := adminUserID
+		if req.AgentID != "" {
+			var one int
+			lookupErr := db.QueryRow(
+				`SELECT 1 FROM users WHERE id = ? AND type = 'AGENT' AND enabled = 1`,
+				req.AgentID,
+			).Scan(&one)
+			if lookupErr != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error":             "invalid_request",
+					"error_description": "agent_id must reference an enabled AGENT user",
+				})
+				return
+			}
+			binding = req.AgentID
+		}
 		approved := 0
 		for _, p := range pendings {
 			if _, err := db.Exec(
 				"UPDATE oauth_device_codes SET status = 'approved', user_id = ? WHERE id = ? AND status = 'pending'",
-				adminUserID, p.ID,
+				binding, p.ID,
 			); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -374,6 +412,7 @@ func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 		c.JSON(http.StatusOK, gin.H{
 			"approved": approved,
 			"pending":  len(pendings),
+			"boundTo":  binding,
 		})
 	})
 	// suppress unused import warnings for the e2e binary when no
@@ -391,7 +430,12 @@ func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 //     and `user_agent` is "opencode" (the runner's default agent type —
 //     matches CLI's resolveAgentType() default and the column_agents
 //     wiring below; changing the default requires updating both)
-//   * one board (--board) with WRITE permission for both users
+//   * one MEMBER Agent (`u-e2e-agent`) and one MEMBER human
+//     (`u-e2e-member`) so the agent-selection e2e can drive a
+//     device flow that the human approver binds to the Agent
+//     identity (plan §4.6). Both have WRITE access on the seed
+//     board so /api/v1/runs/claim succeeds for the resulting JWT.
+//   * one board (--board) with WRITE permission for every user
 //   * four columns: todo, in_progress, review, done
 //   * column_agents wiring "opencode" onto the todo + in_progress
 //     columns so the runner is allowed to claim from either
@@ -402,9 +446,11 @@ func seed(db *sql.DB, boardID, adminToken, agentToken string) error {
 	if _, err := db.Exec(`
 		INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled, created_at, updated_at)
 		VALUES
-			('u-e2e-admin', 'e2e-admin', 'e2e-admin', NULL, '', 'HUMAN', 'ADMIN', 1, ?, ?),
-			('u-e2e-bot',   'e2e-bot',   'e2e-bot',   NULL, '', 'AGENT', 'MEMBER', 1, ?, ?)
-	`, now, now, now, now); err != nil {
+			('u-e2e-admin',  'e2e-admin',  'e2e-admin',  NULL, '', 'HUMAN', 'ADMIN',  1, ?, ?),
+			('u-e2e-bot',    'e2e-bot',    'e2e-bot',    NULL, '', 'AGENT', 'MEMBER', 1, ?, ?),
+			('u-e2e-agent',  'e2e-agent',  'e2e-agent',  NULL, '', 'AGENT', 'MEMBER', 1, ?, ?),
+			('u-e2e-member', 'e2e-member', 'e2e-member', NULL, '', 'HUMAN', 'MEMBER', 1, ?, ?)
+	`, now, now, now, now, now, now, now, now); err != nil {
 		return fmt.Errorf("insert users: %w", err)
 	}
 
@@ -427,9 +473,11 @@ func seed(db *sql.DB, boardID, adminToken, agentToken string) error {
 	if _, err := db.Exec(`
 		INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access, created_at, updated_at)
 		VALUES
-			('bp-admin', 'u-e2e-admin', ?, 'u-e2e-admin', 'ADMIN', ?, ?),
-			('bp-bot',   'u-e2e-bot',   ?, NULL,          'WRITE', ?, ?)
-	`, boardID, now, now, boardID, now, now); err != nil {
+			('bp-admin',  'u-e2e-admin',  ?, 'u-e2e-admin', 'ADMIN', ?, ?),
+			('bp-bot',    'u-e2e-bot',    ?, NULL,          'WRITE', ?, ?),
+			('bp-agent',  'u-e2e-agent',  ?, NULL,          'WRITE', ?, ?),
+			('bp-member', 'u-e2e-member', ?, NULL,          'WRITE', ?, ?)
+	`, boardID, now, now, boardID, now, now, boardID, now, now, boardID, now, now); err != nil {
 		return fmt.Errorf("insert board_permissions: %w", err)
 	}
 

@@ -288,7 +288,7 @@ func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
 func RequireAuth(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if isAuthEnabled(db) {
-			user := getCurrentUser(c, db)
+			user := getCurrentUserFromRequest(c, db)
 			if user == nil {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in or session has expired"})
 				c.Abort()
