@@ -208,6 +208,15 @@ func (s *RetrySweeper) exhaustedSinceLastSweep() int {
 // counter has exceeded the parent webhook's max_retries into
 // the terminal EXHAUSTED state. Run before requeueDue so an
 // over-budget delivery can't be re-enqueued in the same tick.
+//
+// Plan §5 ("After MaxRetries → EXHAUSTED row, alert via slog")
+// also asks for a Warn-level log on every transition so an
+// operator can grep logs for the EXHAUSTED keyword. We pull
+// the just-transitioned rows into a SELECT after the UPDATE
+// (no RETURNING in SQLite) and slog.Warn each one with the
+// webhook id, attempt counter, and last error string —
+// enough context to debug without re-running the failing
+// delivery.
 func (s *RetrySweeper) markExhausted(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE webhook_deliveries
@@ -219,6 +228,35 @@ func (s *RetrySweeper) markExhausted(ctx context.Context) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("retry_sweeper: markExhausted update: %w", err)
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT d.id, d.webhook_id, d.event_id, d.event_type, d.attempt, COALESCE(d.error, '')
+		FROM webhook_deliveries d
+		WHERE d.status = 'EXHAUSTED'
+		  AND d.finished_at >= datetime('now', '-1 second')
+	`)
+	if err != nil {
+		return fmt.Errorf("retry_sweeper: select exhausted: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			id, webhookID, eventID, eventType, errMsg string
+			attempt                                    int
+		)
+		if err := rows.Scan(&id, &webhookID, &eventID, &eventType, &attempt, &errMsg); err != nil {
+			return fmt.Errorf("retry_sweeper: scan exhausted: %w", err)
+		}
+		slog.Warn("retry_sweeper: delivery EXHAUSTED",
+			"delivery_id", id,
+			"webhook_id", webhookID,
+			"event_id", eventID,
+			"event_type", eventType,
+			"attempt", attempt,
+			"last_error", errMsg)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("retry_sweeper: rows iter: %w", err)
 	}
 	return nil
 }
