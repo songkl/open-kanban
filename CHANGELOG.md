@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- s-1140: ship the `oauth_providers` table as the schema foundation
+  for the pluggable external-IdP login flow planned in
+  `docs/OAUTH_EXTERNAL_PLAN_s-1139.md` §3.2. The new
+  `oauth_providers` row carries the admin-facing fields promised in
+  the plan — `id` (internal ULID PK), `provider_id` (URL-safe
+  handle, UNIQUE, used as the path segment under
+  `/oauth/external/<provider_id>/...`), `name` (login-button label),
+  `type` (CHECK-constrained to
+  `google|github|wecom|feishu|dingtalk|oidc` so the runtime dispatch
+  table can't be smuggled typos), `enabled` (soft kill-switch),
+  `position` (login-page render order), `client_id`, `client_secret`
+  as `BLOB` for AES-256-GCM ciphertext (nullable for public-client
+  providers that have no secret), `scopes`, `auth_endpoint` /
+  `token_endpoint` / `userinfo_endpoint` / `issuer` (explicit
+  overrides with empty-means-use-type-default convention),
+  `extra_config` (type-specific JSON), `created_by` (`TEXT REFERENCES
+  users(id) ON DELETE SET NULL` so deleting the admin doesn't
+  delete every provider they configured), and `created_at` /
+  `updated_at`. The `provider_id` UNIQUE backs the public route
+  lookup; `idx_oauth_providers_enabled` backs the public
+  "list enabled providers for the login page" query without a
+  table scan once an admin accumulates disabled rows. Migration
+  ships for both SQLite (006/008 mirror) and MySQL (explicit
+  `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+  to keep FKs to `users.id` from Error 3780'ing). The admin CRUD
+  surface (s-1142), the AES-GCM helper (s-1141), the external IdP
+  flow (s-1143+), `user_identities`, and `admin_audit_log` are
+  intentionally separate sub-tasks per the plan's §8 breakdown —
+  this tag is schema-only. `VersionMigrationMap` gains a `0.9.0`
+  entry mapping to migration 9; the existing migration tests
+  (`TestSQLiteMigrationsAgentCreatedBy`, `TestSQLiteMigrationsTaskRunsUpDown`)
+  are updated from `m.Steps(-1)` to `m.Migrate(targetVersion)` so
+  they stay correct when later migrations extend the tip, and one
+  new test (`TestSQLiteMigrationsOAuthProviders`) round-trips the
+  full up/down cycle and pins the column shape, defaults, UNIQUE
+  on `provider_id`, CHECK on `type`, BLOB ciphertext round-trip,
+  `ON DELETE SET NULL` on `created_by`, and the lookup index.
+
 ### Bug Fixes
 
 - s-1134: fix `POST /api/v1/auth/agents` returning `500 {"error":"Failed to create"}`
