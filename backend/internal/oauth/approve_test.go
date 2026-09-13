@@ -29,6 +29,25 @@ func setupApproveDB(t *testing.T) *sql.DB {
 	)`); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
+	// The device approve handler now writes a DEVICE_APPROVE row to
+	// the activities table whenever it delegates a device code to an
+	// Agent (s-1118). Seed the table here so the agent-binding path
+	// can run without an extra schema setup; the rest of the suite
+	// ignores it.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS activities (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		action TEXT NOT NULL,
+		target_type TEXT NOT NULL,
+		target_id TEXT,
+		target_title TEXT,
+		details TEXT,
+		ip_address TEXT,
+		source TEXT NOT NULL DEFAULT 'web',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatalf("activities schema: %v", err)
+	}
 	return db
 }
 
@@ -93,7 +112,9 @@ func TestApproveDeviceSucceeds(t *testing.T) {
 		t.Errorf("expected status approved, got %s", status)
 	}
 
-	// Consent should be recorded
+	// Consent should be recorded. After s-1118, consent is keyed on
+	// the bound identity — when no agentId is supplied the bound id
+	// is the human approver, so the row still lives under user-1.
 	var consentScope string
 	if err := db.QueryRow(`SELECT scope FROM oauth_consents WHERE user_id = 'user-1' AND client_id = 'kanban-client-1'`).Scan(&consentScope); err != nil {
 		t.Fatalf("consent: %v", err)
@@ -350,5 +371,81 @@ func seedApproveAgent(t *testing.T, db *sql.DB, id, nickname, role string) {
 		id, id, nickname, role,
 	); err != nil {
 		t.Fatalf("seed agent %s: %v", id, err)
+	}
+}
+
+// TestApproveDeviceBindsConsentAndAuditToExplicitAgent covers the
+// combined s-1118 happy path: a human approver delegates a device
+// code to an enabled Agent and the handler
+//   (a) records the device row bound to that Agent (covered by the
+//       s-1112.1 bind plumbing, re-asserted here for completeness);
+//   (b) writes the consent row keyed on the BOUND Agent, not the
+//       human approver (plan §4.1.1, §4.4);
+//   (c) writes a DEVICE_APPROVE activity row with actor=human
+//       approver, target_id=bound Agent, target_type=DEVICE
+//       (plan §4.1.1 + §4.4).
+func TestApproveDeviceBindsConsentAndAuditToExplicitAgent(t *testing.T) {
+	db := setupApproveDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-client-1", "AGNT-AGNT", "kanban:read", time.Hour)
+	seedApproveAgent(t, db, "agent-alpha", "Alpha", "ADMIN")
+	r := newApproveServer(t, db)
+
+	body := `{"user_code":"AGNT-AGNT","decision":"approve","agentId":"agent-alpha"}`
+	req := httptest.NewRequest(http.MethodPost, "/oauth/device/approve", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setApproveUser(req, db, "user-1")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var bound string
+	if err := db.QueryRow(`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'AGNT-AGNT'`).Scan(&bound); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if bound != "agent-alpha" {
+		t.Errorf("expected bound agent-alpha, got %q", bound)
+	}
+
+	// Consent must be keyed on the bound Agent (plan §4.1.1) — not
+	// the human approver. The Agent row is the one that should
+	// pre-populate the next device flow for the same client.
+	var consentUser string
+	if err := db.QueryRow(
+		`SELECT user_id FROM oauth_consents WHERE client_id = 'kanban-client-1'`,
+	).Scan(&consentUser); err != nil {
+		t.Fatalf("consent: %v", err)
+	}
+	if consentUser != "agent-alpha" {
+		t.Errorf("expected consent keyed on bound Agent agent-alpha, got %q", consentUser)
+	}
+
+	// Audit row: actor = human approver, target = bound Agent,
+	// target_type = DEVICE (plan §4.1.1 + §4.4).
+	var (
+		actor, action, targetType, targetID string
+	)
+	if err := db.QueryRow(
+		`SELECT user_id, action, target_type, target_id
+		 FROM activities WHERE action = 'DEVICE_APPROVE'
+		 ORDER BY created_at DESC LIMIT 1`,
+	).Scan(&actor, &action, &targetType, &targetID); err != nil {
+		t.Fatalf("query activities: %v", err)
+	}
+	if action != "DEVICE_APPROVE" {
+		t.Errorf("expected DEVICE_APPROVE activity, got %q", action)
+	}
+	if actor != "user-1" {
+		t.Errorf("expected DEVICE_APPROVE actor=user-1, got %q", actor)
+	}
+	if targetType != "DEVICE" {
+		t.Errorf("expected DEVICE_APPROVE target_type=DEVICE, got %q", targetType)
+	}
+	if targetID != "agent-alpha" {
+		t.Errorf("expected DEVICE_APPROVE target_id=agent-alpha, got %q", targetID)
 	}
 }

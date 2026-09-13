@@ -498,10 +498,11 @@ func TestApproveAgentScenario13_LookupAgentListFilteredByRole(t *testing.T) {
 }
 
 // 14. Consent row records the bound Agent id, not the approver.
-// The plan §4.1.1 wants the consent key on the bound identity; the
-// current handler keys on the human approver so future device flows
-// pre-populate the same admin even when they delegate to a different
-// Agent. (plan §4.1.6 #14)
+// The plan §4.1.1 wants the consent key on the bound identity. The
+// handler (post s-1118) keys consent on the BOUND identity, so a
+// device flow that delegates to an Agent creates / updates the
+// Agent's oauth_consents row rather than the human approver's.
+// (plan §4.1.6 #14)
 func TestApproveAgentScenario14_ConsentBoundToAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
@@ -516,28 +517,45 @@ func TestApproveAgentScenario14_ConsentBoundToAgent(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	// Today the consent is keyed on the human approver. Once s-1112.6
-	// flips the upsert to use the bound identity, this assertion will
-	// need to read "agent-consent" instead.
+	// After s-1118, consent keys on the bound Agent (plan §4.1.1,
+	// §4.4): the row lives under agent-consent, not user-1.
 	var consentUser string
 	if err := db.QueryRow(
 		`SELECT user_id FROM oauth_consents WHERE client_id = 'kanban-cli'`,
 	).Scan(&consentUser); err != nil {
 		t.Fatalf("consent: %v", err)
 	}
-	if consentUser != "user-1" {
-		t.Errorf("expected consent on user-1 (current behaviour), got %q", consentUser)
+	if consentUser != "agent-consent" {
+		t.Errorf("expected consent on bound Agent agent-consent, got %q", consentUser)
 	}
 }
 
 // 15. Activity log records actor=human, target=agent. The plan
-// §4.1.1 + §4.4 want an audit row; today no activity log entry is
-// written by the device approval path. This test asserts the current
-// (silent) behaviour and will need to flip to verify the actor /
-// target pair once s-1112.6 lands. (plan §4.1.6 #15)
+// §4.1.1 + §4.4 want an audit row every time a human approver
+// delegates a device code to an Agent. The handler (post s-1118)
+// inserts a DEVICE_APPROVE row with user_id=approver,
+// target_id=bound Agent, target_type=DEVICE. (plan §4.1.6 #15)
 func TestApproveAgentScenario15_ActivityLogActorAndTarget(t *testing.T) {
 	db := setupAgentApprovalDB(t)
 	defer db.Close()
+	// Activities is part of the production schema but is not seeded
+	// by setupAgentApprovalDB (which only adds the legacy
+	// activity_log table); create the canonical activities table here
+	// so the device approval handler can write the audit row.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS activities (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		action TEXT NOT NULL,
+		target_type TEXT NOT NULL,
+		target_id TEXT,
+		target_title TEXT,
+		details TEXT,
+		ip_address TEXT,
+		source TEXT NOT NULL DEFAULT 'web',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		t.Fatalf("activities schema: %v", err)
+	}
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0015", "kanban:read", time.Hour)
@@ -549,13 +567,27 @@ func TestApproveAgentScenario15_ActivityLogActorAndTarget(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	// No activity log entry is written today. Once s-1112.6 lands the
-	// handler should INSERT (actor=user-1, target=agent-log) — flip
-	// this assertion then.
-	var count int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM activity_log`).Scan(&count)
-	if count != 0 {
-		t.Errorf("expected no activity_log rows today, got %d", count)
+	// The handler should write a DEVICE_APPROVE row pointing at the
+	// bound Agent (plan §4.1.1 + §4.4).
+	var (
+		actor, action, targetType, targetID string
+	)
+	if err := db.QueryRow(
+		`SELECT user_id, action, target_type, target_id FROM activities ORDER BY created_at DESC LIMIT 1`,
+	).Scan(&actor, &action, &targetType, &targetID); err != nil {
+		t.Fatalf("query activities: %v", err)
+	}
+	if action != "DEVICE_APPROVE" {
+		t.Errorf("expected DEVICE_APPROVE activity, got %q", action)
+	}
+	if actor != "user-1" {
+		t.Errorf("expected actor=user-1, got %q", actor)
+	}
+	if targetType != "DEVICE" {
+		t.Errorf("expected target_type=DEVICE, got %q", targetType)
+	}
+	if targetID != "agent-log" {
+		t.Errorf("expected target_id=agent-log, got %q", targetID)
 	}
 }
 

@@ -3,6 +3,7 @@ package oauth
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -67,13 +68,28 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 				respondDeviceApproveError(c, err)
 				return
 			}
-			// Record consent for this client/scope so future requests auto-grant.
-			upsertConsent(db, user.ID, dc.ClientID, dc.Scope)
+			// Record consent for this client/scope so future requests
+			// auto-grant. Consent is keyed on the BOUND identity (the
+			// Agent when one was selected) so the next device flow that
+			// resolves to the same Agent pre-populates automatically —
+			// when an admin delegates to a different Agent, the new
+			// Agent's row is created instead. (plan §4.1.1, §4.4)
+			boundID := bindUserForResponse(dc.UserID, user.ID)
+			upsertConsent(db, boundID, dc.ClientID, dc.Scope)
+			// Audit row when a human approver delegates to an Agent.
+			// Actor (user_id) = the human approver, target (target_id)
+			// = the bound Agent, target_type = DEVICE so the
+			// activities.action CHECK permits the new value. (plan
+			// §4.1.1 + §4.4)
+			if boundID != user.ID {
+				logDeviceApproveActivity(db, user.ID, boundID, dc.ClientID, c.ClientIP())
+			}
 			c.JSON(http.StatusOK, gin.H{
 				"approved":  true,
 				"clientId":  dc.ClientID,
 				"scope":     dc.Scope,
 				"expiresAt": dc.ExpiresAt,
+				"boundTo":   boundID,
 			})
 		case "deny":
 			if err := DenyDeviceCode(db, req.UserCode, user.ID, req.AgentID); err != nil {
@@ -88,6 +104,18 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 			})
 		}
 	}
+}
+
+// bindUserForResponse labels the bound identity for the JSON response so
+// the UI can render "Approved as <nickname>" without an extra roundtrip.
+// We surface the bound user id when it differs from the approver so the
+// page can call attention to the delegation; equal ids fall through to
+// the approver's id, which matches the historical response shape.
+func bindUserForResponse(bound *string, approverID string) string {
+	if bound == nil || *bound == "" {
+		return approverID
+	}
+	return *bound
 }
 
 // DeviceLookupHandler serves GET /oauth/device/lookup?code=XXXX-XXXX (or the
@@ -184,6 +212,34 @@ func upsertConsent(db *sql.DB, userID, clientID, scope string) {
 		 VALUES (?, ?, ?, ?, ?)`,
 		generateOpaqueID(), userID, clientID, scope, time.Now(),
 	)
+}
+
+// logDeviceApproveActivity records the audit trail for a device-flow
+// approval where a human approver delegated the device code to an
+// Agent identity (plan §4.1.1 + §4.4). The row is written directly
+// instead of going through handlers.LogActivity to keep the oauth
+// package dependency-free (handlers imports oauth, not the other way
+// around). Actor=user_id (the human approver), target_id = bound
+// Agent, target_type = DEVICE.
+//
+// A best-effort write — any DB failure is logged via slog and
+// swallowed so the approval response still succeeds.
+func logDeviceApproveActivity(db *sql.DB, approverID, agentID, clientID, ipAddress string) {
+	_, err := db.Exec(
+		`INSERT INTO activities
+		 (id, user_id, action, target_type, target_id, target_title, details, ip_address, source, created_at)
+		 VALUES (?, ?, 'DEVICE_APPROVE', 'DEVICE', ?, ?, ?, ?, 'web', ?)`,
+		generateOpaqueID(), approverID, agentID, clientID,
+		"device_code approved for client="+clientID, ipAddress, time.Now(),
+	)
+	if err != nil {
+		slog.Error("failed to record DEVICE_APPROVE activity",
+			"error", err,
+			"approver_id", approverID,
+			"agent_id", agentID,
+			"client_id", clientID,
+		)
+	}
 }
 
 // respondDeviceApproveError maps internal errors to OAuth-style JSON.

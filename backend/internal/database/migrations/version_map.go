@@ -46,6 +46,12 @@ var VersionMigrationMap = []VersionMigration{
 	// migration file. Operators upgrading from 0.5.x get the new
 	// indexes on `up`; nothing changes for fresh installs.
 	{Version: "0.6.0", From: 1, To: 6},
+	// 0.7.0 added migration 007 to widen the activities.action /
+	// activities.target_type CHECK constraints with DEVICE_APPROVE
+	// and DEVICE (s-1118, plan §4.1.1 + §4.4) so the
+	// /oauth/device/approve handler can write audit rows when a
+	// human approver delegates a device code to an Agent identity.
+	{Version: "0.7.0", From: 1, To: 7},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

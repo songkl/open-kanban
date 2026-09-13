@@ -161,6 +161,52 @@ func TestSQLiteMigrationsAllowNewPermissionActions(t *testing.T) {
 	}
 }
 
+// TestSQLiteMigrationsAllowDeviceApproveActivity exercises migration
+// 007 (s-1118) and verifies the CHECK constraints on activities.action
+// and activities.target_type permit the DEVICE_APPROVE action and
+// DEVICE target_type added by the device-flow agent-selection audit
+// path. If a future migration narrows either constraint by accident
+// this test fails before any handler test does.
+func TestSQLiteMigrationsAllowDeviceApproveActivity(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('u1', 'alice', 'alice', 'HUMAN', 'ADMIN', 1)
+	`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	if _, err := db.Exec(
+		"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, 'DEVICE_APPROVE', 'DEVICE', 'agent-1', 'web')",
+		"a-device-approve", "u1",
+	); err != nil {
+		t.Errorf("DEVICE_APPROVE / DEVICE should be permitted by CHECK constraint after migration 007, got: %v", err)
+	}
+}
+
 // TestSQLiteMigrationsTaskRunsUpDown exercises the task_runs
 // migrations end-to-end on SQLite. It verifies the table + its
 // indexes come up cleanly, that the schema matches the §3.3
