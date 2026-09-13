@@ -83,8 +83,20 @@ All notable changes to this project will be documented in this file.
 
 - **Code map**
   - `backend/internal/services/webhook_delivery.go` — the
-    production `DeliverFunc`: HMAC sign + POST + status
-    update on every attempt.
+    production `DeliverFunc` glue: rate-limit gate → sign →
+    POST → status update. Delegates the heavy lifting to
+    the modules below so the file stays scannable.
+  - `backend/internal/services/signer.go` — `SignWebhookBody`
+    (HMAC-SHA256 over `timestamp + "." + body`) +
+    `VerifyReplayWindow` (receiver-side timestamp guard).
+  - `backend/internal/services/retry.go` — `ComputeBackoff`
+    implementing the §5.1 exponential curve with jitter.
+  - `backend/internal/services/rate_limiter.go` — per-webhook
+    outbound throttle (plan §5.3). Rejected deliveries are
+    rescheduled, never dropped.
+  - `backend/internal/services/timeout.go` — `ResolveTimeout`
+    / `ValidateTimeoutSec` / `NewHTTPClient` so the deliverer
+    doesn't have to know the §5.5 clamp rules.
   - `backend/internal/services/webhook_delivery_test.go` —
     unit tests for the openssl-equivalent HMAC vector and the
     backoff curve.
@@ -93,9 +105,14 @@ All notable changes to this project will be documented in this file.
     callers run `Start` / `Stop` alongside `EventCenter`.
   - `backend/internal/services/retry_sweeper_test.go` —
     requeue / exhaustion / lifecycle coverage.
-  - `backend/internal/services/webhook_e2e_test.go` — the
-    full pipeline test (httptest receiver + signature
-    parity + EXHAUSTED after `max_retries`).
+  - `backend/internal/services/webhook_e2e_test.go` —
+    services-layer pipeline test (httptest receiver +
+    signature parity + EXHAUSTED after `max_retries`).
+  - `backend/e2e/webhook_e2e_test.go` — externally-facing
+    e2e suite (task s-1156): identical coverage using only
+    the public `services.*` API so any drift between the
+    internal implementation and the wire-level contract
+    surfaces here.
 
 ### Features
 

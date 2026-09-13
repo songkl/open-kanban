@@ -57,8 +57,9 @@ This document tracks changes to the Open-Kanban API specification.
   Receivers reject events whose `X-Webhook-Timestamp` is more
   than 5 minutes off (`replay window`) and recompute the HMAC
   over the raw request body. The signed end-to-end test
-  (`backend/internal/services/webhook_e2e_test.go`) asserts
-  byte-for-byte parity with the openssl vector.
+  (`backend/internal/services/webhook_e2e_test.go` plus its
+  externally-facing mirror in `backend/e2e/webhook_e2e_test.go`)
+  asserts byte-for-byte parity with the openssl vector.
 
 - **Retry / exhaustion (s-1156)** — failed deliveries are
   re-attempted with exponential backoff and jitter
@@ -67,9 +68,10 @@ This document tracks changes to the Open-Kanban API specification.
   transitions to `EXHAUSTED` and stops being picked up. The
   retry sweeper polls every 5 s (`RetrySweepInterval`); the
   end-to-end test in
-  `backend/internal/services/webhook_e2e_test.go` exercises
-  the round-trip against an httptest.Server that always
-  returns 500.
+  `backend/internal/services/webhook_e2e_test.go` (mirrored
+  in `backend/e2e/webhook_e2e_test.go`) exercises the
+  round-trip against an httptest.Server that always returns
+  500.
 
 ### Behavior
 
