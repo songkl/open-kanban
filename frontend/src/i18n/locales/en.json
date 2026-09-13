@@ -421,7 +421,14 @@
     "loggingIn": "Logging in...",
     "start": "Get Started",
     "failed": "Login failed, please try again",
-    "usernameRequired": "Username is required"
+    "usernameRequired": "Username is required",
+    "external": {
+      "signInWith": "Sign in with {{provider}}",
+      "or": "or",
+      "loadError": "Could not load sign-in providers.",
+      "callbackError": "The sign-in link is invalid or has expired.",
+      "missingEndpoint": "This provider is not configured correctly. Please contact an administrator."
+    }
   },
   "filter": {
     "searchPlaceholder": "Search tasks...",

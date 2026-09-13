@@ -487,6 +487,31 @@ export const authApi = {
     }),
   getOAuthProviders: () => fetchApi<{ providers: OAuthProvider[] }>('auth/oauth/providers').then(res => res.providers || []),
   getOAuthProvider: (id: string) => fetchApi<OAuthProvider>(`auth/oauth/providers/${id}`),
+  // Public listing of enabled external OAuth providers for the
+  // /login page (s-1144). Distinct from getOAuthProviders — this
+  // path lives under /auth/external/providers and is reachable
+  // without a session. Returns an empty array (never null) when
+  // no providers are configured so the login page can render
+  // without a null check.
+  getEnabledExternalProviders: () =>
+    fetchApi<{ providers: import('@/types/kanban').PublicOAuthProvider[] }>(
+      'auth/external/providers'
+    ).then(res => res.providers || []),
+  // Post-callback exchange used by the /login page when the IdP
+  // redirected back with ?code=xxx&state=yyy. The server mints a
+  // kanban session, sets the cookie, and returns the same
+  // envelope as /auth/login. The slug is the public providerId
+  // (e.g. "google", "corp-okta").
+  completeExternalLogin: (slug: string, body: { code: string; state?: string }) =>
+    fetchApi<{
+      user: User;
+      token: string;
+      binding: { provisioned: boolean; linked: boolean; bound: boolean };
+      provider: { id: string; name: string };
+    }>(`oauth/external/${encodeURIComponent(slug)}/callback`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   createOAuthProvider: (data: OAuthProviderCreate) =>
     fetchApi<OAuthProvider>('auth/oauth/providers', {
       method: 'POST',

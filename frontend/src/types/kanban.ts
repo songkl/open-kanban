@@ -220,3 +220,26 @@ export interface OAuthProviderUpdate {
   issuer?: string;
   extraConfig?: string;
 }
+
+// Wire shape for the public GET /api/v1/auth/external/providers
+// endpoint (s-1144). Deliberately narrower than OAuthProvider —
+// the /login page only needs the fields required to render the
+// external-provider buttons and to build the IdP authorize URL:
+// the public handle (providerId), display name, the type
+// discriminator, render order, the OAuth client_id, the scopes
+// to send to the IdP, and the explicit auth_endpoint override.
+//
+// Crucially the encrypted client_secret, internal ULID, audit
+// fields, and the disabled toggle are NOT surfaced — the public
+// endpoint already filters on enabled=1 so a disabled row never
+// appears, and a leak of the admin-only fields would defeat the
+// point of separating the public shape from the admin shape.
+export interface PublicOAuthProvider {
+  providerId: string;
+  name: string;
+  type: string;
+  position: number;
+  clientId: string;
+  scopes: string;
+  authEndpoint: string;
+}

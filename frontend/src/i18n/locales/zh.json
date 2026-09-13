@@ -421,7 +421,14 @@
     "loggingIn": "登录中...",
     "start": "开始使用",
     "failed": "登录失败，请重试",
-    "usernameRequired": "用户名不能为空"
+    "usernameRequired": "用户名不能为空",
+    "external": {
+      "signInWith": "使用 {{provider}} 登录",
+      "or": "或",
+      "loadError": "无法加载登录方式。",
+      "callbackError": "登录链接无效或已过期。",
+      "missingEndpoint": "该登录方式未正确配置，请联系管理员。"
+    }
   },
   "filter": {
     "searchPlaceholder": "搜索任务...",

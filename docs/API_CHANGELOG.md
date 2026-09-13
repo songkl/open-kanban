@@ -124,3 +124,29 @@ This document tracks changes to the Open-Kanban API specification.
 - **Self enable/disable blocked** — `SetUserEnabled` returns 400 `Cannot enable/disable yourself` when the requester targets their own user ID, to avoid an admin accidentally locking themselves out.
 - **Owner cannot self-revoke** — `DeletePermission` refuses to remove a board's owner row (`owner_agent_id == targetUserID`) with 403 `Cannot revoke the board owner's permission`. The board must always have a manageable owner.
 - **Permission management is a meta-capability** — `SetPermission` / `DeletePermission` require either `users.role == 'ADMIN'` or `IsBoardOwner(db, user.ID, boardID) == true`. A user who has been granted `ADMIN` access to a board by another admin (without being the recorded owner) cannot manage permissions — they can use the board, but cannot change who else can use it. This is intentional: permission management is reserved to the creator and global admins.
+
+## [1.2.0] - 2026-09-14
+
+### Added
+
+- **External OAuth login (s-1144)** — the `/login` page now renders
+  the enabled external identity providers as buttons and exchanges
+  the post-callback `?code` for a kanban session. The full
+  IdP-side dance (state mint, PKCE, /oauth/external/:slug/login
+  redirect, JWKS verification) lands in the sibling s-1145 release;
+  this tag ships the public listing endpoint, the login-page UI,
+  and the callback `?code` exchange so the front-half of the
+  flow can be wired end-to-end without the back-half secrets
+  having to ship in the same change.
+
+- **Authentication**
+  - `GET /api/v1/auth/external/providers` - List enabled
+    external OAuth providers for the /login page. Public
+    endpoint, no session required. Returns `[]` (not null)
+    when no providers are configured. Each row carries the
+    public fields only — `providerId`, `name`, `type`,
+    `position`, `clientId`, `scopes`, `authEndpoint` — so the
+    encrypted `client_secret` and admin-only audit fields
+    cannot leak through the login page render. Ordered by
+    `position ASC, created_at DESC` so the admin's
+    drag-to-reorder intent survives a public re-fetch.

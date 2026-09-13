@@ -333,6 +333,10 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		auth.GET("/avatars", handlers.GetAvatars())
 		auth.GET("/me", handlers.GetMe(db))
 		auth.GET("/config", handlers.GetAppConfig(db))
+		// Public listing of enabled external OAuth providers for the
+		// /login page (s-1144). No RequireAuth so unauthenticated
+		// visitors can render the buttons before they choose a flow.
+		auth.GET("/external/providers", oauth.ListEnabledExternalProvidersHandler(db))
 	}
 
 	// /api/v1/users/me is an alias for /api/v1/auth/me so external callers

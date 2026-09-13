@@ -6,6 +6,55 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- s-1144: wire the `/login` page to the external OAuth
+  provider registry so a visitor can sign in with any enabled
+  IdP without leaving the kanban web UI. The new public
+  `GET /api/v1/auth/external/providers` endpoint (no
+  `RequireAuth`) lists the enabled providers ordered by the
+  admin's `position` knob and projects only the fields the
+  login page needs — `providerId`, `name`, `type`, `position`,
+  `clientId`, `scopes`, `authEndpoint` — so the encrypted
+  `client_secret`, the internal ULID, and the admin-only audit
+  fields cannot leak through the login render. Disabled rows
+  are filtered at the SQL layer per plan §6.5, and the
+  response always returns `providers: []` rather than `null`
+  when nothing is configured so the SPA can skip the null
+  check. The login page (`frontend/src/pages/LoginPage.tsx`)
+  fetches the listing on mount and renders one
+  dark-mode-aware button per provider above the password form;
+  clicking a button builds the standard OAuth 2.0
+  authorization-code URL (with `client_id`, `redirect_uri`,
+  `response_type=code`, `scope`, and a fresh base64url
+  `state` nonce) from the provider's stored
+  `auth_endpoint`/`client_id`/`scopes` and redirects the
+  browser to the IdP. When the IdP redirects back to
+  `/login?code=…&state=…&provider=…`, the page POSTs the
+  code to the existing `POST /oauth/external/:slug/callback`
+  endpoint (s-1142), which mints a kanban session and sets
+  the `kanban-token` cookie; on success the page navigates
+  to the first available board and clears the callback query
+  params so a refresh does not re-submit. Errors surface
+  inline. The login page explicitly serves human identities
+  only — the device-flow `/oauth/device` page remains the
+  AGENT login surface, matching plan §4.4's "refuse to bind
+  external IdP to AGENT users" guard. New i18n keys under
+  `login.external.*` are added to both `en.json` and
+  `zh.json`. Five Go tests cover the public listing
+  (empty-array default, disabled-row filter, position
+  ordering, no-secret-leak projection, public reachability
+  without a session cookie); nine RTL tests cover the
+  login-page render (empty state, sorted-by-position
+  buttons, authorize-URL construction with
+  `redirect_uri=/login?provider=<slug>`, inline error for
+  misconfigured `auth_endpoint`, callback exchange that
+  navigates to a board, callback-error surfacing, and
+  load-error rendering when the public endpoint is down).
+  The CSRF `state` cookie + PKCE mint lands in the sibling
+  s-1145 sub-task — for s-1144 the `state` is a
+  client-side nonce passed through to the existing callback
+  handler unchanged, matching the seam already noted at
+  `backend/internal/oauth/external_callback.go:589-591`.
+
 - s-1142: implement the external-IdP callback handler and the
   user-mapping algorithm promised in
   `docs/OAUTH_EXTERNAL_PLAN_s-1139.md` §3.3 / §4.4 / §5. The new
