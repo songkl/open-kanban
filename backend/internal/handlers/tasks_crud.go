@@ -63,18 +63,7 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 
-		go func() {
-			webhookSvc := services.GetWebhookService()
-			columnName := getColumnName(db, task.ColumnID)
-			webhookSvc.NotifyTaskCreated(services.WebhookTask{
-				ID:         task.ID,
-				Title:      task.Title,
-				ColumnID:   task.ColumnID,
-				ColumnName: columnName,
-				Priority:   task.Priority,
-				Assignee:   derefString(task.Assignee),
-			})
-		}()
+		publishTaskCreated(db, task, user.ID)
 
 		if task.Published && task.AgentID != nil && *task.AgentID != "" {
 			agentPrompt := ""
@@ -144,6 +133,9 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		previousAssignee := taskAssigneeBeforeUpdate(db, id)
+		preTask := taskSnapshotForUpdate(db, id)
+
 		var req UpdateTaskRequest
 		if err := BindAndValidate(c, &req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": formatValidationError(err)})
@@ -178,20 +170,7 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 
-		if req.ColumnID != "" && req.ColumnID != columnID {
-			go func() {
-				webhookSvc := services.GetWebhookService()
-				columnName := getColumnName(db, task.ColumnID)
-				webhookSvc.NotifyTaskMoved(services.WebhookTask{
-					ID:         task.ID,
-					Title:      task.Title,
-					ColumnID:   task.ColumnID,
-					ColumnName: columnName,
-					Priority:   task.Priority,
-					Assignee:   derefString(task.Assignee),
-				})
-			}()
-		}
+		publishTaskUpdates(db, task, columnID, req, previousAssignee, preTask)
 
 		if req.Published != nil && *req.Published {
 			currentAgentID := ""
@@ -271,6 +250,7 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		broadcast()
+		publishTaskDeleted(db, id, columnID, taskTitle)
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	}
 }

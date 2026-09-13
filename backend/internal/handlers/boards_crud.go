@@ -89,6 +89,11 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 
 		LogActivity(db, user.ID, "BOARD_CREATE", "BOARD", boardID, req.Name, "", c.ClientIP(), getRequestSource(c))
 
+		publishBoardCreated(boardID, req.Name, shortAlias, req.Description,
+			sql.NullTime{Time: now, Valid: true},
+			sql.NullTime{Time: now, Valid: true},
+		)
+
 		var board gin.H
 		board = gin.H{
 			"id":          boardID,
@@ -154,6 +159,9 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 		}
 
 		LogActivity(db, user.ID, "BOARD_UPDATE", "BOARD", id, req.Name, details, c.ClientIP(), getRequestSource(c))
+
+		changes := boardChangeEntries(req, oldName, oldDesc)
+		publishBoardUpdated(id, req.Name, "", req.Description, changes, sql.NullTime{Time: now, Valid: true})
 
 		c.JSON(http.StatusOK, gin.H{
 			"id":          id,

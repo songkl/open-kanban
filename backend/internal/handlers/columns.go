@@ -377,6 +377,13 @@ func CreateColumn(db *sql.DB) gin.HandlerFunc {
 
 		LogActivity(db, user.ID, "COLUMN_CREATE", "COLUMN", colID, req.Name, "", c.ClientIP(), getRequestSource(c))
 
+		var statusPtr *string
+		if req.Status != "" {
+			s := req.Status
+			statusPtr = &s
+		}
+		publishColumnCreated(colID, req.Name, req.BoardID, position, color, statusPtr)
+
 		broadcast()
 
 		var responseStatus interface{}
@@ -530,6 +537,31 @@ func UpdateColumn(db *sql.DB) gin.HandlerFunc {
 
 		LogActivity(db, user.ID, "COLUMN_UPDATE", "COLUMN", req.ID, req.Name, details, c.ClientIP(), getRequestSource(c))
 
+		changeEntries := columnChangeEntries(req, oldColumn)
+		var newStatusPtr *string
+		if req.Status != "" {
+			s := req.Status
+			newStatusPtr = &s
+		} else if oldColumn.Status != nil {
+			s := *oldColumn.Status
+			newStatusPtr = &s
+		}
+		var newPosition int
+		if req.Position != nil {
+			newPosition = *req.Position
+		} else {
+			newPosition = oldColumn.Position
+		}
+		newColor := req.Color
+		if newColor == "" {
+			newColor = oldColumn.Color
+		}
+		newName := req.Name
+		if newName == "" {
+			newName = oldColumn.Name
+		}
+		publishColumnUpdated(req.ID, newName, "", newPosition, newColor, newStatusPtr, changeEntries)
+
 		broadcast()
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
@@ -563,13 +595,35 @@ func DeleteColumn(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		_, err := db.Exec("DELETE FROM columns WHERE id = ?", id)
-		if err != nil {
+		// Capture the column snapshot BEFORE the DELETE so the
+		// column.deleted event carries the pre-delete state.
+		var (
+			colName     string
+			boardID     string
+			colPosition int
+			colColor    string
+			colStatus   sql.NullString
+		)
+		if err := db.QueryRow(
+			"SELECT name, board_id, position, color, status FROM columns WHERE id = ?", id,
+		).Scan(&colName, &boardID, &colPosition, &colColor, &colStatus); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load column"})
+			return
+		}
+
+		if _, err := db.Exec("DELETE FROM columns WHERE id = ?", id); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete"})
 			return
 		}
 
 		LogActivity(db, user.ID, "COLUMN_DELETE", "COLUMN", id, "", "", c.ClientIP(), getRequestSource(c))
+
+		var statusPtr *string
+		if colStatus.Valid {
+			s := colStatus.String
+			statusPtr = &s
+		}
+		publishColumnDeleted(id, colName, boardID, colPosition, colColor, statusPtr)
 
 		broadcast()
 

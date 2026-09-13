@@ -155,9 +155,16 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		broadcast()
 		GetTask(db)(c)
 
+		// Single emission point per HTTP request: task.moved
+		// (always, because the completion transitions the task
+		// across a column boundary) and task.completed
+		// (conditional on the new column's status == "done").
+		// The previous webhookSvc.NotifyXxx calls fired both
+		// from one goroutine; the new code splits them into
+		// two publishEvent calls so each call site publishes
+		// exactly once per request (spec "同一 HTTP 请求只
+		// publish 一次").
 		go func() {
-			webhookSvc := services.GetWebhookService()
-			columnName := getColumnName(db, newColumnID)
 			var priority string
 			var assigneePtr *string
 			if err := db.QueryRow("SELECT priority, assignee FROM tasks WHERE id = ?", id).Scan(&priority, &assigneePtr); err != nil {
@@ -165,23 +172,9 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 				assigneePtr = nil
 			}
 			assignee := derefString(assigneePtr)
-			webhookSvc.NotifyTaskMoved(services.WebhookTask{
-				ID:         id,
-				Title:      taskTitle,
-				ColumnID:   newColumnID,
-				ColumnName: columnName,
-				Priority:   priority,
-				Assignee:   assignee,
-			})
+			publishTaskMoved(db, id, taskTitle, newColumnID, columnID, priority, assignee)
 			if newStatusVal == "done" {
-				webhookSvc.NotifyTaskCompleted(services.WebhookTask{
-					ID:         id,
-					Title:      taskTitle,
-					ColumnID:   newColumnID,
-					ColumnName: columnName,
-					Priority:   priority,
-					Assignee:   assignee,
-				})
+				publishTaskCompleted(db, id, taskTitle, newColumnID, priority, assignee)
 			}
 		}()
 	}

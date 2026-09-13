@@ -495,19 +495,30 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		dashboard.GET("/stats", handlers.GetDashboardStats(db))
 	}
 
-	webhook := r.Group("/api/v1/webhook")
-	webhook.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-	{
-		webhook.POST("/notify", handlers.WebhookNotify(db))
-	}
-
-	// /api/v1/webhooks/* — event centre catalogue (plan §8 last
-	// row). The picker source of truth; mounted here so the
-	// frontend §7.2 multi-select renders straight from this
-	// endpoint.
+	// /api/v1/webhooks/* — event centre (plan §8). The catalogue
+	// endpoint (GET /events) is the picker source of truth; the
+	// remaining 8 endpoints are the REST CRUD + delivery-log
+	// surface implemented in internal/handlers/webhooks.go.
+	// Per-endpoint role checks (any auth vs ADMIN) live in the
+	// handlers; the group only mounts RequireAuth so the
+	// unauthorized path is uniform across the 9 endpoints.
+	//
+	// Note: the legacy POST /api/v1/webhook/notify endpoint
+	// (synchronous webhook fire) was removed in s-1153 — the
+	// EventCenter now owns every delivery path and the
+	// /api/v1/webhooks/:id/test endpoint covers the
+	// operator-driven send-test-event flow.
 	webhooks := r.Group("/api/v1/webhooks")
 	webhooks.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 	{
+		webhooks.GET("", handlers.ListWebhooks(db))
+		webhooks.POST("", handlers.CreateWebhook(db))
+		webhooks.GET("/:id", handlers.GetWebhook(db))
+		webhooks.PATCH("/:id", handlers.UpdateWebhook(db))
+		webhooks.DELETE("/:id", handlers.DeleteWebhook(db))
+		webhooks.POST("/:id/rotate", handlers.RotateWebhookSecret(db))
+		webhooks.POST("/:id/test", handlers.TestWebhook(db))
+		webhooks.GET("/:id/deliveries", handlers.ListWebhookDeliveries(db))
 		webhooks.GET("/events", handlers.WebhookEventCatalogue(db))
 	}
 
@@ -757,8 +768,9 @@ func main() {
 		}
 	}
 
-	// Initialize webhook service
-	services.InitWebhookService()
+	// Webhook delivery now flows through the EventCenter
+	// (services.EventBus) — no global webhook service
+	// singleton to bootstrap here.
 
 	// Start the task_runs reaper (§3.5 of CLI_RUNNER_PLAN).
 	// The reaper sweeps expired locks every 30s and restores

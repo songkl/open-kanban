@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"open-kanban/internal/services"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -183,21 +181,7 @@ func CreateComment(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 
-		go func() {
-			webhookSvc := services.GetWebhookService()
-			var taskID, title, columnID, priority string
-			var assignee *string
-			db.QueryRow("SELECT id, title, column_id, priority, assignee FROM tasks WHERE id = ?", req.TaskID).Scan(&taskID, &title, &columnID, &priority, &assignee)
-			columnName := getColumnName(db, columnID)
-			webhookSvc.NotifyTaskCommented(services.WebhookTask{
-				ID:         taskID,
-				Title:      title,
-				ColumnID:   columnID,
-				ColumnName: columnName,
-				Priority:   priority,
-				Assignee:   derefString(assignee),
-			})
-		}()
+		publishTaskCommented(db, req.TaskID, commentID, req.Content, author, user.ID, sql.NullTime{Time: now, Valid: true})
 
 		c.JSON(http.StatusOK, gin.H{
 			"id":        commentID,
