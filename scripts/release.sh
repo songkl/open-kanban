@@ -335,6 +335,46 @@ if [ "$DO_BACKEND" = 1 ]; then
     echo ""
   }
 
+  # cross_cc_hint prints concrete package-install commands that would
+  # unblock the cross-build for the given target. Used by the SKIP
+  # branch below so the user sees an actionable hint for the target
+  # that actually failed (not a generic dump for every target). Output
+  # is prefixed with the same indent the SKIP message uses.
+  cross_cc_hint() {
+    local goos=$1 goarch=$2
+    case "$goos" in
+      linux)
+        case "$goarch" in
+          amd64)
+            echo "            apt:    sudo apt-get install -y gcc-x86-64-linux-gnu" >&2
+            echo "            brew:   brew install x86_64-linux-gnu-gcc" >&2
+            echo "            musl:   sudo apt-get install -y gcc-x86_64-linux-musl" >&2
+            ;;
+          arm64)
+            echo "            apt:    sudo apt-get install -y gcc-aarch64-linux-gnu" >&2
+            echo "            brew:   brew install aarch64-linux-gnu-gcc" >&2
+            echo "            musl:   sudo apt-get install -y gcc-aarch64-linux-musl" >&2
+            ;;
+        esac
+        ;;
+      windows)
+        case "$goarch" in
+          amd64)
+            echo "            apt:    sudo apt-get install -y gcc-mingw-w64-x86-64" >&2
+            echo "            brew:   brew install mingw-w64" >&2
+            ;;
+          arm64)
+            echo "            apt:    sudo apt-get install -y gcc-mingw-w64-aarch64" >&2
+            echo "            brew:   brew install mingw-w64" >&2
+            ;;
+        esac
+        ;;
+      darwin)
+        echo "            darwin cross-builds need osxcross: https://github.com/tpoechtrager/osxcross" >&2
+        ;;
+    esac
+  }
+
   # Track which targets produced a full SQLite build and which only got
   # the MySQL-only fallback, so we can print a clear summary at the end
   # (helps catch the "release only produced -mysql variants" case the
@@ -395,9 +435,7 @@ if [ "$DO_BACKEND" = 1 ]; then
       echo "    SKIP: no CGO cross-compile toolchain for ${GOOS}/${GOARCH}." >&2
       echo "          The default build embeds go-sqlite3 which requires CGO." >&2
       echo "          Install a matching toolchain, e.g.:" >&2
-      echo "            apt:    sudo apt-get install -y gcc-x86-64-linux-gnu gcc-aarch64-linux-gnu gcc-mingw-w64-x86-64" >&2
-      echo "            brew:   brew install x86_64-linux-gnu-gcc aarch64-linux-gnu-gcc mingw-w64" >&2
-      echo "            darwin: osxcross (https://github.com/tpoechtrager/osxcross) for darwin cross-builds" >&2
+      cross_cc_hint "$GOOS" "$GOARCH" >&2
       echo "          Or run this release on a native ${GOOS} host to produce the SQLite build." >&2
       echo "          The MySQL-only variant below is built without CGO." >&2
       SQLITE_SKIPPED+=("${GOOS}/${GOARCH}")
