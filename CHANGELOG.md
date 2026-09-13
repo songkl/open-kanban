@@ -316,6 +316,26 @@ All notable changes to this project will be documented in this file.
     dead components, etc.), adds the new "AI-first positioning"
     analysis for `kanban run` / MCP / device-flow with agent
     selection, and ends with a 12-week roadmap.
+  - s-1136: add the first end-to-end CLI functional-test report at
+    `docs/CLI_TEST_REPORT_s-1136.md`. Decomposes the CLI surface into
+    16 sub-tasks (auth / status / dashboard / boards / columns / tasks
+    / tasks batch / drafts / archived / comments / subtasks / mine /
+    run / runs / workspace / shell+completion+config), captures the
+    vitest run (778 / 778 unit + integration, 54 / 54 commands/run*,
+    3 / 3 e2e agent-selection, 3 / 3 shell spawn, 2 / 6 e2e runner —
+    pre-existing flake), and exercises every public subcommand against
+    the running dev server. The report uncovers two backend bugs:
+    `GET /api/v1/columns/:id` is not registered in
+    `backend/cmd/server/main.go` (so `kanban columns get <id>` 404s
+    even though `kanban columns list` shows the column), and
+    `GET /api/v1/runs/history` is missing from the live build (so
+    `kanban runs list` 404s). Two cosmetic issues are also logged:
+    `kanban tasks get <unknown>` returns `exit 1` instead of the
+    documented `exit 3` for `NotFoundError`, and
+    `kanban columns list --positions abc` silently accepts bogus
+    input. Adds `cli/.test-results/` to `cli/.gitignore` so future
+    test sweeps do not pollute the repo; raw logs stay under
+    `cli/.test-results/` for follow-up debugging.
 
 #### Fixed
   - fix: tone down borders + the VIEWER badge in dark mode
