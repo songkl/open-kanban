@@ -780,9 +780,15 @@
       "disabledTitle": "Device authorization is disabled",
       "disabledBody": "An administrator has turned off the OAuth device flow. Please contact your administrator or use another sign-in method.",
       "identitySectionTitle": "Authorize as",
+      "identityLabel": "Identity",
       "identitySelf": "Myself ({{name}})",
+      "identityAsSelf": "Authorize as myself",
       "identityAgent": "Agent: {{name}}",
-      "identityHelper": "Pick the identity the device should receive access for. Pick an Agent if this CLI is for unattended automation."
+      "identityDefault": "Pick an identity",
+      "identityEmpty": "No Agent accounts are available. Ask an administrator to enable one before approving a device.",
+      "identityHelper": "Pick the identity the device should receive access for. Pick an Agent if this CLI is for unattended automation.",
+      "requireAgentTitle": "Agent selection required",
+      "requireAgentBody": "This server has disabled \"Approve as myself\" for the device flow. The kanban run CLI is intended for Agent use only, so you must pick an Agent identity before approving."
     },
     "admin": {
       "title": "OAuth 2.1",
@@ -802,7 +808,9 @@
       "dynamicRegistration": "Dynamic registration is {{enabled}}.",
       "noAgentBinding": "No binding (authorize as the current user)",
       "deviceEnabled": "Device authorization flow",
-      "deviceAgentBinding": "Device authorization bound agent"
+      "deviceAgentBinding": "Device authorization bound agent",
+      "requireAgentSelection": "Require Agent selection",
+      "requireAgentSelectionDescription": "Reject device-flow approvals made by a human. Approvers must pick an Agent identity unless the approver themselves is already an Agent. Flip this on after every consumer has migrated to the new selector."
     }
   }
 }

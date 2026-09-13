@@ -780,9 +780,15 @@
       "disabledTitle": "设备授权已停用",
       "disabledBody": "管理员已停用 OAuth 设备授权流程。请联系管理员启用，或改用其他登录方式。",
       "identitySectionTitle": "授权身份",
+      "identityLabel": "身份",
       "identitySelf": "当前账号（{{name}}）",
+      "identityAsSelf": "按当前账号授权",
       "identityAgent": "Agent：{{name}}",
-      "identityHelper": "选择设备应获得授权的身份。如果是给无人值守的 CLI / MCP 使用，请选择一个 Agent。"
+      "identityDefault": "请选择授权身份",
+      "identityEmpty": "暂无可用的 Agent 账号，请联系管理员启用后再继续授权。",
+      "identityHelper": "选择设备应获得授权的身份。如果是给无人值守的 CLI / MCP 使用，请选择一个 Agent。",
+      "requireAgentTitle": "必须选择 Agent 身份",
+      "requireAgentBody": "本服务器已关闭“按当前账号授权”。由于 kanban run CLI 仅供 Agent 使用，请在授权前选择一个 Agent 身份。"
     },
     "admin": {
       "title": "OAuth 2.1",
@@ -802,7 +808,9 @@
       "dynamicRegistration": "动态注册当前{{enabled}}。",
       "noAgentBinding": "不绑定（按当前登录用户授权）",
       "deviceEnabled": "设备授权流程",
-      "deviceAgentBinding": "设备授权绑定的 Agent"
+      "deviceAgentBinding": "设备授权绑定的 Agent",
+      "requireAgentSelection": "强制选择 Agent",
+      "requireAgentSelectionDescription": "开启后，以 HUMAN 身份发起的设备授权请求将被服务器拒绝，除非授权人本身已是 Agent。请在所有使用者都熟悉新的选择器后再启用。"
     }
   }
 }
