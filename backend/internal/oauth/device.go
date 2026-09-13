@@ -227,17 +227,60 @@ func readIntConfig(db *sql.DB, key string, def int) int {
 	return n
 }
 
+// AgentSummary is the trimmed-down Agent row surfaced to the device
+// authorization page so the human approver can pick which identity the
+// device flow should bind to. Mirrors the fields used by the Agents
+// settings page; keep them in sync when the schema evolves.
+type AgentSummary struct {
+	ID       string
+	Nickname string
+	Username string
+	Role     string
+	Enabled  bool
+}
+
+// ListSelectableAgents returns every enabled AGENT user. The lookup
+// endpoint exposes the list to the device authorization page so the
+// approver can choose which identity the device flow should bind to.
+// Filtering by permission is the caller's responsibility — the device
+// approval endpoint validates that the supplied agent id is enabled and
+// refuses unknown ids, so this list is just a UI affordance.
+func ListSelectableAgents(db *sql.DB) ([]AgentSummary, error) {
+	rows, err := db.Query(
+		`SELECT id, nickname, username, role, enabled
+		 FROM users
+		 WHERE type = 'AGENT' AND enabled = 1
+		 ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AgentSummary, 0, 8)
+	for rows.Next() {
+		var a AgentSummary
+		if err := rows.Scan(&a.ID, &a.Nickname, &a.Username, &a.Role, &a.Enabled); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // ApproveDeviceCode marks a device code as approved by the given user. Returns
 // the stored device_code_hash (for the approval UI) and the persisted scope.
 //
 // The approval UI submits the user-facing user_code (display) over the
 // browser; this function hashes it to find the row.
 //
-// When oauth_device_agent_id is configured to an existing Agent user id, the
-// approval is bound to that Agent instead of the human approver — useful for
-// unattended kiosk-style setups where the MCP client should always act on
-// behalf of a specific Agent.
-func ApproveDeviceCode(db *sql.DB, userCode string, userID string) (*models.OAuthDeviceCode, error) {
+// Bind order (first match wins):
+//  1. explicitAgentID — set by the verification page when the human approver
+//     picks "Authorize as <Agent>" from the identity selector. Must reference
+//     an enabled AGENT row, otherwise the override is silently ignored.
+//  2. oauth_device_agent_id — admin-set global override that pins every
+//     device flow to a single Agent (kiosk-style deployments).
+//  3. userID — the human approver's own id (the legacy behaviour).
+func ApproveDeviceCode(db *sql.DB, userCode string, userID string, explicitAgentID string) (*models.OAuthDeviceCode, error) {
 	dc, err := findDeviceCodeByUserCode(db, userCode)
 	if err != nil {
 		return nil, err
@@ -250,7 +293,11 @@ func ApproveDeviceCode(db *sql.DB, userCode string, userID string) (*models.OAut
 		return nil, errors.New("device code expired")
 	}
 	bindUser := userID
-	if agentID := DeviceFlowAgentID(db); agentID != "" {
+	if explicitAgentID != "" {
+		if hasAgent(db, explicitAgentID) {
+			bindUser = explicitAgentID
+		}
+	} else if agentID := DeviceFlowAgentID(db); agentID != "" {
 		if hasAgent(db, agentID) {
 			bindUser = agentID
 		}
@@ -265,7 +312,9 @@ func ApproveDeviceCode(db *sql.DB, userCode string, userID string) (*models.OAut
 }
 
 // DenyDeviceCode flips the device code to denied and records the user.
-func DenyDeviceCode(db *sql.DB, userCode string, userID string) error {
+// explicitAgentID follows the same priority as ApproveDeviceCode so the
+// oauth_device_codes row reflects which identity was attempted.
+func DenyDeviceCode(db *sql.DB, userCode string, userID string, explicitAgentID string) error {
 	dc, err := findDeviceCodeByUserCode(db, userCode)
 	if err != nil {
 		return err
@@ -274,7 +323,11 @@ func DenyDeviceCode(db *sql.DB, userCode string, userID string) error {
 		return fmt.Errorf("device code already %s", dc.Status)
 	}
 	bindUser := userID
-	if agentID := DeviceFlowAgentID(db); agentID != "" {
+	if explicitAgentID != "" {
+		if hasAgent(db, explicitAgentID) {
+			bindUser = explicitAgentID
+		}
+	} else if agentID := DeviceFlowAgentID(db); agentID != "" {
 		if hasAgent(db, agentID) {
 			bindUser = agentID
 		}

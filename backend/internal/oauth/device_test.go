@@ -337,7 +337,7 @@ func TestApproveDeviceCodeFlow(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 	uc := resp["user_code"].(string)
-	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1")
+	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1", "")
 	if err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -369,7 +369,7 @@ func TestApproveDeviceCodeExpiredReturnsError(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	if _, err := oauth.ApproveDeviceCode(db, uc, "user-1"); err == nil {
+	if _, err := oauth.ApproveDeviceCode(db, uc, "user-1", ""); err == nil {
 		t.Error("expected error for expired device code")
 	}
 	// status should now be expired
@@ -398,7 +398,7 @@ func TestDenyDeviceCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if err := oauth.DenyDeviceCode(db, uc, "user-1"); err != nil {
+	if err := oauth.DenyDeviceCode(db, uc, "user-1", ""); err != nil {
 		t.Fatalf("deny: %v", err)
 	}
 	var status string
@@ -408,7 +408,7 @@ func TestDenyDeviceCode(t *testing.T) {
 	}
 
 	// Second denial should fail
-	if err := oauth.DenyDeviceCode(db, uc, "user-1"); err == nil {
+	if err := oauth.DenyDeviceCode(db, uc, "user-1", ""); err == nil {
 		t.Error("expected second denial to fail")
 	}
 }
@@ -457,7 +457,7 @@ func TestApproveDeviceCodeBindsToConfiguredAgent(t *testing.T) {
 	}
 
 	// Human user "user-1" tries to approve, but the configured Agent takes over.
-	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1")
+	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1", "")
 	if err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestApproveDeviceCodeFallsBackWhenAgentMissing(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1")
+	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1", "")
 	if err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -525,7 +525,7 @@ func TestApproveDeviceCodeIgnoresNonAgentBinding(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1")
+	dc, err := oauth.ApproveDeviceCode(db, uc, "user-1", "")
 	if err != nil {
 		t.Fatalf("approve: %v", err)
 	}

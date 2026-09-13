@@ -17,6 +17,14 @@ import (
 type DeviceApproveRequest struct {
 	UserCode string `json:"user_code" form:"user_code"`
 	Decision string `json:"decision" form:"decision"` // "approve" | "deny"
+	// AgentID is the optional Agent identity the human approver chose
+	// from the device authorization page's identity selector. Empty
+	// string keeps the legacy "approve as the logged-in user" path. The
+	// server validates that the value (when supplied) references an
+	// enabled AGENT row; unknown ids are silently dropped and the
+	// approval still binds to the human approver so a stale UI cannot
+	// brick a device flow.
+	AgentID string `json:"agentId" form:"agentId"`
 }
 
 // DeviceVerifyPageHandler serves GET /oauth/device and renders the user
@@ -54,7 +62,7 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 
 		switch req.Decision {
 		case "approve":
-			dc, err := ApproveDeviceCode(db, req.UserCode, user.ID)
+			dc, err := ApproveDeviceCode(db, req.UserCode, user.ID, req.AgentID)
 			if err != nil {
 				respondDeviceApproveError(c, err)
 				return
@@ -68,7 +76,7 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 				"expiresAt": dc.ExpiresAt,
 			})
 		case "deny":
-			if err := DenyDeviceCode(db, req.UserCode, user.ID); err != nil {
+			if err := DenyDeviceCode(db, req.UserCode, user.ID, req.AgentID); err != nil {
 				respondDeviceApproveError(c, err)
 				return
 			}
@@ -86,6 +94,12 @@ func DeviceApproveHandler(db *sql.DB) gin.HandlerFunc {
 // legacy ?user_code= alias) and returns the client_name and scope metadata
 // for the verification page. Sensitive fields like the device_code are NOT
 // returned.
+//
+// When the caller is authenticated as an admin, the response also includes
+// the list of enabled Agents so the device authorization page can render
+// the identity selector ("Authorize as <Agent>" / "Authorize as myself").
+// Non-admin callers get the same payload without the agent list — they
+// cannot delegate authority to Agents they do not administer.
 func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Prefer the modern `code` parameter that matches
@@ -119,13 +133,42 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 			clientName = client.Name
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		resp := gin.H{
 			"clientId":   dc.ClientID,
 			"clientName": clientName,
 			"scope":      dc.Scope,
 			"expiresAt":  dc.ExpiresAt,
 			"status":     dc.Status,
-		})
+		}
+
+		// Surface the configured global binding (if any) so the UI can
+		// pre-select it in the identity picker. Empty string is the
+		// documented "no binding" sentinel — the page renders the default
+		// "Authorize as myself" radio in that case.
+		if agentID := DeviceFlowAgentID(db); agentID != "" && hasAgent(db, agentID) {
+			resp["defaultAgentId"] = agentID
+		}
+
+		// Agent picker is admin-only: only admins can act on behalf of
+		// an Agent. Anonymous lookups (the legacy unauthenticated path)
+		// and non-admin sessions get the response without the list so
+		// the UI can hide the selector entirely.
+		if user := currentUserOrUnauthorized(c, db); user != nil && user.Role == "ADMIN" {
+			if agents, err := ListSelectableAgents(db); err == nil {
+				items := make([]gin.H, 0, len(agents))
+				for _, a := range agents {
+					items = append(items, gin.H{
+						"id":       a.ID,
+						"nickname": a.Nickname,
+						"username": a.Username,
+						"role":     a.Role,
+					})
+				}
+				resp["agents"] = items
+			}
+		}
+
+		c.JSON(http.StatusOK, resp)
 	}
 }
 

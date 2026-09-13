@@ -51,7 +51,11 @@ func newApproveServer(t *testing.T, db *sql.DB) *gin.Engine {
 	t.Helper()
 	r := gin.New()
 	r.POST("/oauth/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
-	r.GET("/oauth/device/lookup", oauth.DeviceLookupHandler(db))
+	// Lookup is publicly reachable but also opportunistically surfaces
+	// the caller when an admin session is attached so the identity
+	// picker can be rendered. OptionalAuth populates c.Get("user")
+	// without aborting unauthenticated requests.
+	r.GET("/oauth/device/lookup", handlers.OptionalAuth(db), oauth.DeviceLookupHandler(db))
 	return r
 }
 
@@ -319,4 +323,32 @@ func setApproveUser(req *http.Request, db *sql.DB, userID string) {
 		panic(err)
 	}
 	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: key})
+}
+
+// setApproveUserRole is setApproveUser with an explicit role, used to
+// exercise the admin-only path of the lookup endpoint's agent listing.
+func setApproveUserRole(req *http.Request, db *sql.DB, userID, role string) {
+	if _, err := db.Exec(`INSERT OR IGNORE INTO users (id, username, nickname, avatar, type, role, enabled) VALUES (?, ?, ?, '', 'HUMAN', ?, 1)`,
+		userID, userID, userID, role); err != nil {
+		panic(err)
+	}
+	key := "test-token-" + userID
+	if _, err := db.Exec(`INSERT OR IGNORE INTO tokens (id, name, key, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"tok-"+userID, "test", key, userID, time.Now(), time.Now()); err != nil {
+		panic(err)
+	}
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: key})
+}
+
+// seedApproveAgent inserts a fully-formed AGENT row so the approve /
+// lookup tests can verify the agent selection plumbing end-to-end.
+func seedApproveAgent(t *testing.T, db *sql.DB, id, nickname, role string) {
+	t.Helper()
+	if _, err := db.Exec(
+		`INSERT OR IGNORE INTO users (id, username, nickname, avatar, type, role, enabled)
+		 VALUES (?, ?, ?, '', 'AGENT', ?, 1)`,
+		id, id, nickname, role,
+	); err != nil {
+		t.Fatalf("seed agent %s: %v", id, err)
+	}
 }

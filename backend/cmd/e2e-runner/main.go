@@ -217,7 +217,7 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 	r.POST("/oauth/register", oauthGate, oauth.RegisterClient(db))
 	r.POST("/oauth/device/code", oauthGate, oauth.RequestDeviceCode(db))
 	r.POST("/oauth/token", oauthGate, oauth.TokenEndpoint(db, signer))
-	r.GET("/oauth/device/lookup", oauthGate, oauth.DeviceLookupHandler(db))
+	r.GET("/oauth/device/lookup", oauthGate, handlers.OptionalAuth(db), oauth.DeviceLookupHandler(db))
 	r.POST("/oauth/device/approve", oauthGate, handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
 
 	r.GET("/api/v1/health", handlers.HealthCheck)
