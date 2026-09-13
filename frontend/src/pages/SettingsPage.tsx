@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { authApi } from '../services/api';
+import { authApi, webhooksApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
 import { useSetupGuard } from '../hooks/useSetupGuard';
@@ -12,13 +12,14 @@ import { AgentsSettings } from '../components/settings/AgentsSettings';
 import { UsersSettings } from '../components/settings/UsersSettings';
 import { ShortcutsSettings } from '../components/settings/ShortcutsSettings';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
+import { WebhooksList } from '../components/settings/WebhooksList';
 import { OAuthSettings } from '../components/OAuthSettings';
 import { useUIStore } from '../store/uiStore';
 import type { User } from '../types/kanban';
 
-type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth';
+type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth' | 'webhooks';
 
-const ALL_TABS: Tab[] = ['profile', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth'];
+const ALL_TABS: Tab[] = ['profile', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth', 'webhooks'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (ALL_TABS as string[]).includes(value);
@@ -192,6 +193,13 @@ export function SettingsPage() {
                 {t('oauth.admin.title')}
               </button>
               <button
+                onClick={() => switchToTab('webhooks')}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'webhooks' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
+                data-testid="tab-webhooks"
+              >
+                {t('settings.webhooks')}
+              </button>
+              <button
                 onClick={() => switchToTab('theme')}
                 className={`w-full flex items-center justify-between rounded-md px-3 py-2 text-left text-sm ${activeTab === 'theme' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
               >
@@ -268,6 +276,10 @@ export function SettingsPage() {
 
             {activeTab === 'oauth' && currentUser && (
               <OAuthSettings currentUser={currentUser} />
+            )}
+
+            {activeTab === 'webhooks' && currentUser && (
+              <WebhooksList webhooksApi={webhooksApi} isAdmin={currentUser.role === 'ADMIN'} />
             )}
           </div>
         </div>

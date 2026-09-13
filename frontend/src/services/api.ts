@@ -1,4 +1,4 @@
-import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, OAuthProvider, OAuthProviderCreate, OAuthProviderUpdate, TaskRun } from '@/types/kanban';
+import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, OAuthProvider, OAuthProviderCreate, OAuthProviderUpdate, TaskRun, Webhook, WebhookCreate, WebhookUpdate, WebhookEventCatalogueEntry, WebhookDelivery } from '@/types/kanban';
 import i18n from '@/i18n';
 
 export interface Permission {
@@ -677,4 +677,57 @@ export const attachmentsApi = {
 
   delete: (id: string) =>
     fetchApi<void>(`attachments/${id}`, { method: 'DELETE' }),
+};
+
+// Webhooks API — see docs/EVENT_CENTER_PLAN_s-1138.md §8 and
+// docs/API_CHANGELOG.md ("Event Center multi-stage Webhook").
+// Mirrors backend/internal/handlers/webhooks.go. The wire shapes
+// match WebhookView / WebhookDelivery so the list, form and
+// deliveries components can rely on the same TypeScript types
+// from @/types/kanban.
+export const webhooksApi = {
+  list: () =>
+    fetchApi<{ webhooks: Webhook[]; count: number }>('webhooks').then(
+      (res) => res.webhooks || []
+    ),
+  get: (id: string) =>
+    fetchApi<{ webhook: Webhook }>(`webhooks/${id}`).then((res) => res.webhook),
+  create: (data: WebhookCreate) =>
+    fetchApi<{ webhook: Webhook; plaintextSecret: string }>('webhooks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: WebhookUpdate) =>
+    fetchApi<{ webhook: Webhook }>(`webhooks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    fetchApi<{ success: boolean }>(`webhooks/${id}`, { method: 'DELETE' }),
+  rotateSecret: (id: string) =>
+    fetchApi<{ webhook: Webhook; plaintextSecret: string }>(
+      `webhooks/${id}/rotate`,
+      { method: 'POST' }
+    ),
+  test: (id: string, data: { event: string; data?: unknown }) =>
+    fetchApi<{ success: boolean; event: string; envelopeId: string; webhookId: string }>(
+      `webhooks/${id}/test`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  listEvents: () =>
+    fetchApi<{ events: WebhookEventCatalogueEntry[]; count: number }>(
+      'webhooks/events'
+    ).then((res) => res.events || []),
+  listDeliveries: (id: string, params?: { limit?: number; cursor?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.cursor) query.set('cursor', params.cursor);
+    const qs = query.toString();
+    return fetchApi<{
+      deliveries: WebhookDelivery[];
+      count: number;
+      nextCursor: string;
+      hasMore: boolean;
+    }>(`webhooks/${id}/deliveries${qs ? `?${qs}` : ''}`);
+  },
 };

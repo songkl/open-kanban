@@ -243,3 +243,80 @@ export interface PublicOAuthProvider {
   scopes: string;
   authEndpoint: string;
 }
+
+// Webhook wire shapes — see docs/EVENT_CENTER_PLAN_s-1138.md §7/§8
+// and backend/internal/services/webhook_config_service.go.
+// eventTypes / filters / headers are JSON-encoded strings (the
+// service layer keeps them as TEXT columns so the frontend can
+// round-trip them without losing key order). The form dialog
+// parses eventTypes as a string[] and filters / headers as a
+// Record<string, string> on render, then re-serialises before
+// POST/PUT.
+export interface Webhook {
+  id: string;
+  name: string;
+  url: string;
+  secret: string;
+  enabled: boolean;
+  eventTypes: string;
+  filters: string;
+  headers: string;
+  timeoutSec: number;
+  maxRetries: number;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastSuccessAt?: string | null;
+  lastFailureAt?: string | null;
+}
+
+export interface WebhookCreate {
+  name: string;
+  url: string;
+  eventTypes: string;
+  filters: string;
+  headers: string;
+  enabled?: boolean;
+  timeoutSec?: number;
+  maxRetries?: number;
+}
+
+export interface WebhookUpdate {
+  name?: string;
+  url?: string;
+  eventTypes?: string;
+  filters?: string;
+  headers?: string;
+  enabled?: boolean;
+  timeoutSec?: number;
+  maxRetries?: number;
+}
+
+// Event catalogue entry returned by GET /api/v1/webhooks/events.
+// The picker renders this slice directly so adding a new event
+// upstream is a backend-only change.
+export interface WebhookEventCatalogueEntry {
+  event: string;
+  displayName: string;
+  description: string;
+  payloadSchema: Record<string, unknown>;
+  filters: string[];
+}
+
+// One row of GET /api/v1/webhooks/:id/deliveries. Mirrors the
+// backend webhookDeliveryView (handlers/webhooks.go). The modal
+// renders whatever fields are present so future additions (e.g.
+// rawBody / responseBody) will appear automatically.
+export interface WebhookDelivery {
+  id: string;
+  webhookId: string;
+  eventId: string;
+  eventType: string;
+  status: string;
+  attempt: number;
+  responseCode: number;
+  error?: string;
+  startedAt: string;
+  finishedAt?: string | null;
+  nextRetryAt?: string | null;
+}
