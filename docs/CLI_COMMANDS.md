@@ -44,6 +44,7 @@ built-in default**. Run `kanban config get apiUrl` to inspect the chain.
 - [Global flags](#global-flags)
 - [`auth` — authentication](#auth--authentication)
   - [`auth agent` — bind the CLI to an Agent identity](#auth-agent--bind-the-cli-to-an-agent-identity)
+  - [Device-flow Agent selection](#device-flow-agent-selection)
 - [`status` — API probe](#status--api-probe)
 - [`dashboard` — workspace stats](#dashboard--workspace-stats)
 - [`boards` — board navigation](#boards--board-navigation)
@@ -102,6 +103,50 @@ Flow:
 6. Auto-refresh via `refresh_token` grant on subsequent runs
 
 Exit codes: `0` on success, `3` on user denial / expiry, `6` on network error.
+
+#### Device-flow Agent selection
+
+When the device-flow approval page is opened for a CLI / MCP client
+(heuristic: the OAuth client's name matches `kanban-cli` /
+`open-kanban-cli` / `*-cli`, or its `grant_types` includes
+`urn:ietf:params:oauth:grant-type:device_code`), the human approver is
+asked to **pick which identity the device code will be bound to**:
+
+- **Myself (your account)** — bind the access token to the human
+  approver's own row (`type='HUMAN'`). Useful when the user is testing
+  the CLI interactively and wants to scope writes to their own account.
+- **An enabled Agent** — bind the access token to a row whose
+  `users.type='AGENT'`. Every `kanban run` deployment *must* end up
+  here; see [§ Hard requirement](#hard-requirement) below. The page
+  lists each candidate with its nickname, avatar, and role. ADMIN-role
+  Agents are only visible to ADMIN approvers.
+
+If the server admin has pinned a global fallback via the
+`oauth_device_agent_id` setting, that Agent is pre-selected and the
+page shows a **"(Server default agent)"** badge — change it if needed
+before clicking Approve.
+
+The selection is POSTed to `/oauth/device/approve` as `agent_id` (or
+omitted, to mean "Myself"). The handler then binds
+`oauth_device_codes.user_id`, `oauth_consents.user_id`, and the audit
+log to the chosen row. The JWT the CLI eventually receives therefore
+has `sub=<chosen id>` and the runner's
+`backend/internal/handlers/tasks_run.go:133-141` claim check
+(`tokens.user_agent`) keeps working without further changes.
+
+##### Hard requirement
+
+> **The `kanban run` CLI runner is exclusively for Agent use.**
+
+When the server has the `oauth_device_require_agent_selection=1` flag
+set (see `OAuthSettings` in the Web UI), approving the device flow as
+the human approver (i.e. picking **"Myself"** with a HUMAN row) is
+rejected with `400 invalid_request` unless the approver is themselves
+already an Agent (`type='AGENT'`). This is the boundary enforcement
+that backs the "CLI runner is for Agent use" guarantee — without it,
+`kanban run` would either refuse every claim or, worse, allow a
+human to impersonate an Agent. The flag is opt-in (default `0`); flip
+it on once every consumer has been migrated to the new selector.
 
 ### `auth status`
 

@@ -18,6 +18,7 @@ automation, with runnable examples at every step. 中文段落解释了**为什�
 1. [安装 / Installation](#1-安装--installation)
 2. [第一次登录 / First login](#2-第一次登录--first-login)
    - [2.1 给自动化 / Runner 绑定一个 Agent 身份](#21-给自动化--runner-绑定一个-agent-身份--bind-the-cli-to-an-agent-identity)
+   - [2.2 Device-flow Agent 选择 / Pick which identity the device flow binds to](#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to)
 3. [看懂看板 / Reading the board](#3-看懂看板--reading-the-board)
 4. [创建并流转任务 / Creating and moving tasks](#4-创建并流转任务--creating-and-moving-tasks)
 5. [评论与子任务 / Comments & subtasks](#5-评论与子任务--comments--subtasks)
@@ -158,6 +159,81 @@ kanban auth agent delete ci-runner  # 删除
 `auth agent bind` 会先调用 `GET /api/v1/users/me` 校验 token,
 并拒绝绑定任何 `type='HUMAN'` 的会话 —— 防止误把 admin token 当成
 Agent token 写进凭据文件。
+
+### 2.2 Device-flow Agent 选择 / Pick which identity the device flow binds to
+
+当你 (或你的同事) 在浏览器里打开 device-flow 授权页时,可能
+会看到一个新的 **"Authorise as"** 下拉框 —— 这意味着 server 检测到
+这次请求来自 CLI / MCP client (OAuth 客户端名匹配 `kanban-cli` /
+`open-kanban-cli` / `*-cli`,或者 `grant_types` 包含 device-code)。
+
+> When you (or your teammate) open the device-flow approval page for a
+> CLI / MCP client, you'll see a new **"Authorise as"** selector. The
+> server detected the request came from a CLI / MCP client (the OAuth
+> client name matches `kanban-cli` / `open-kanban-cli` / `*-cli`, or
+> its `grant_types` includes device-code), so it needs to know *which
+> identity* to bind the issued JWT to.
+
+下拉框里有两个选项 / The selector has two groups of options:
+
+- **Myself (your account)** — 把 access token 绑到你自己的用户上 (`type='HUMAN'`)。
+  适合临时手动跑 CLI 看看效果 / bind to your own human account.
+- **An enabled Agent** — 列出的候选 Agent 来自 `GET /oauth/device/agents`,
+  你 (作为授权人) 看到的就是 server 允许你代理的 Agent / every
+  Agent the server lets you act as:
+  - ADMIN 看到所有启用的 Agent。
+  - MEMBER / VIEWER 只看到非 `ADMIN` 角色的 Agent。
+
+如果 admin 在 Web UI 的 Settings → OAuth 里配了全局的
+`oauth_device_agent_id`,那个 Agent 会被预先选中,并打上
+**"(Server default agent)"** 标签 —— 你可以保留默认,也可以换成别的。
+
+```text
+Open Kanban authorization required
+  Client:   open-kanban-cli
+  Scope:    kanban:read tasks:write
+  Authorise as: [ ci-runner (Server default agent) ▾ ]
+      ▾ Myself (your account)
+        ▾ ci-runner (Server default agent)
+          opencode-bot
+          watcher-prod
+  [Deny]                                        [Approve]
+```
+
+选择会被 POST 到 `/oauth/device/approve`,作为 `agent_id`(或省略表示
+"Myself")。server 会把 `oauth_device_codes.user_id`、`oauth_consents.user_id`
+以及审计日志全部绑到你选的行上。最终 CLI 拿到的 JWT `sub` 就是这个 id,
+`kanban run` 在 `/api/v1/runs/claim` 处的 `user_agent` 检查 (见
+[`docs/CLI_COMMANDS.md` § Device-flow Agent selection](./CLI_COMMANDS.md#device-flow-agent-selection))
+自然就过了。
+
+> The chosen `agent_id` (or its absence, meaning "Myself") is POSTed
+> to `/oauth/device/approve`. The server binds
+> `oauth_device_codes.user_id`, `oauth_consents.user_id`, and the
+> audit log to that row. The JWT the CLI eventually receives has
+> `sub=<chosen id>`, so `kanban run`'s `user_agent` claim check at
+> `/api/v1/runs/claim` keeps working unchanged.
+
+#### 什么时候必须选 Agent / When you *must* pick an Agent
+
+Settings → OAuth 里有个 **"Agent-only device flow"** 开关
+(`oauth_device_require_agent_selection=1`)。打开之后:
+
+- 任何用 HUMAN 身份点 Approve 都会被 server 拒绝 (`400 invalid_request`)。
+- 唯一的例外是点 Approve 的人**自己**就是 `type='AGENT'` —— 那种情况下
+  即使没显式选 Agent,server 也会把 token 绑回本人。
+
+This is the boundary enforcement that backs the **"CLI runner is for
+Agent use"** guarantee. Without it, `kanban run` would either refuse
+every claim or, worse, allow a human to impersonate an Agent. Flip it
+on once every consumer of the old flow has been migrated to the new
+selector.
+
+> **实操建议 / Practical advice:** 第一次升级 server 后,先把
+> `oauth_device_require_agent_selection` 留作 `"0"`,让团队成员
+> 跑一两次新的 device flow (页面会自动出现 Agent 选择器);当所有人都
+> 验证过自己选到了正确的 Agent 之后,再把开关打开,从此封死"HUMAN
+> 通过 device flow 跑 runner"的可能。
 
 ---
 

@@ -90,6 +90,11 @@ export KANBAN_API_URL="https://kanban.example.com"
 # 2. Log in via the OAuth 2.1 device flow
 kanban auth login
 #   → follow the printed URL, paste the user code, approve in your browser
+#   → if the server detects a CLI / MCP client it will show an
+#     "Authorise as" selector — pick **Myself** to bind the token to
+#     your own account, or pick an enabled Agent (the default if
+#     `oauth_device_agent_id` is pinned globally). See
+#     [Device-flow Agent selection](../docs/CLI_COMMANDS.md#device-flow-agent-selection).
 
 # 3. Inspect the workspace
 kanban status          # probe the API; prints latency + boards count
@@ -103,6 +108,13 @@ kanban tasks create --title "Ship docs" --priority high
 kanban tasks move <id> --status in_progress
 kanban tasks complete <id>      # advances to the next column
 ```
+
+> **Heads-up for `kanban run` operators:** every `kanban run`
+> deployment *must* end up holding a bearer whose
+> `users.type='AGENT'`. When approving the device flow, pick an Agent
+> from the selector — picking "Myself" would leave you unable to claim
+> tasks at `/api/v1/runs/claim`. The end-to-end walkthrough lives in
+> [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to).
 
 The CLI stores the issued tokens at
 `$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json` (mode `0600`). The

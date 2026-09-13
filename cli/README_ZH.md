@@ -76,6 +76,11 @@ export KANBAN_API_URL="https://kanban.example.com"
 # 2. 通过 OAuth 2.1 device flow 登录
 kanban auth login
 #   → 按提示访问 URL、输入用户码、在浏览器中确认授权
+#   → 如果 server 检测到是 CLI / MCP client，会额外展示一个
+#     "Authorise as" 选择器——选 **Myself** 表示把 token 绑到你
+#     自己的账号，选一个已启用的 Agent（如果 admin 在
+#     `oauth_device_agent_id` 里配了全局默认，就会被预选中）。
+#     详见 [Device-flow Agent 选择](../docs/CLI_COMMANDS.md#device-flow-agent-selection)。
 
 # 3. 检查工作区
 kanban status          # 探测 API，打印延迟与看板数量
@@ -89,6 +94,12 @@ kanban tasks create --title "发布文档" --priority high
 kanban tasks move <id> --status in_progress
 kanban tasks complete <id>      # 推进到下一列
 ```
+
+> **给 `kanban run` 运维者的提示：** 每个 `kanban run` 部署**必须**
+> 持有 `users.type='AGENT'` 的 bearer。在 device flow 授权页请选择
+> 一个 Agent——选 "Myself" 会让 `/api/v1/runs/claim` 抢不到任务。
+> 端到端教程见
+> [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to)。
 
 CLI 将签发的 token 存储于
 `$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json`（权限 `0600`）。
