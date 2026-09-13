@@ -94,6 +94,18 @@ var VersionMigrationMap = []VersionMigration{
 	// sub-tasks (s-1140 / s-1141 / s-1142 / s-1143) ship in
 	// follow-up releases against the same schema.
 	{Version: "0.12.0", From: 1, To: 12},
+	// 0.13.0 added migration 013 to extend the activities.action
+	// CHECK constraint with the OAuth admin-operation actions
+	// (OAUTH_PROVIDER_CREATE / UPDATE / DELETE / ENABLE / DISABLE,
+	// OAUTH_CLIENT_DELETE, OAUTH_CONFIG_UPDATE, OAUTH_CONSENT_REVOKE)
+	// and widen activities.target_type to include OAUTH (s-1147,
+	// plan §6.4). The CRUD / encryption / callback sub-tasks
+	// (s-1140 / s-1141 / s-1142 / s-1143) ship earlier against
+	// the narrower CHECK; this migration closes the audit-log gap
+	// so every admin write to oauth_providers / oauth_clients /
+	// app_config / oauth_consents lands a row in the existing
+	// activities table rather than silently disappearing.
+	{Version: "0.13.0", From: 1, To: 13},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

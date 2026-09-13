@@ -35,12 +35,42 @@ func setupAdminDB(t *testing.T) *sql.DB {
 	)`); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
+	// Seed the users row referenced by AdminUserFixture so the
+	// activities INSERT inside the OAuth audit logger (s-1147)
+	// has a valid FK target.
+	if _, err := db.Exec(`
+		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('user-1', 'u1', 'U1', 'HUMAN', 'ADMIN', 1)
+	`); err != nil {
+		t.Fatalf("seed admin user: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT OR IGNORE INTO app_config ("key", value) VALUES ('oauth_enabled', '1')`,
+	); err != nil {
+		t.Fatalf("seed app_config: %v", err)
+	}
 	return db
+}
+
+// injectAdminAuth is a middleware that puts AdminUserFixture on the
+// context so handlers depending on currentUserOrUnauthorized (the
+// OAuth audit log path) can run without the full auth middleware.
+func injectAdminAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("user", AdminUserFixture)
+		c.Next()
+	}
 }
 
 func newAdminServer(t *testing.T, db *sql.DB) *gin.Engine {
 	t.Helper()
 	r := gin.New()
+	// The production route mount sits behind RequireAuth +
+	// RequireSignatureVerification. Replicate the user-injection
+	// step here so handlers that read c.Get("user") (e.g. the
+	// OAuth audit logger, s-1147) have a non-nil actor to
+	// record against.
+	r.Use(injectAdminAuth())
 	r.GET("/api/v1/auth/oauth/clients", oauth.ListAdminClientsHandler(db))
 	r.DELETE("/api/v1/auth/oauth/clients", oauth.DeleteAdminClientHandler(db))
 	r.GET("/api/v1/auth/oauth/consents", oauth.ListConsentsHandler(db))
@@ -129,7 +159,13 @@ func TestDeleteAdminClientNotFound(t *testing.T) {
 func TestListConsentsRequiresUser(t *testing.T) {
 	db := setupAdminDB(t)
 	defer db.Close()
-	r := newAdminServer(t, db)
+	// This test verifies that an unauthenticated caller is
+	// rejected — so the router must NOT inject a user into
+	// the context. Build a bespoke router here rather than
+	// reusing newAdminServer, which now injects an admin user
+	// for the audit-log path (s-1147).
+	r := gin.New()
+	r.GET("/api/v1/auth/oauth/consents", oauth.ListConsentsHandler(db))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/consents", nil)
 	w := httptest.NewRecorder()

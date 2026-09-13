@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -345,6 +346,17 @@ func CreateAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		// Audit log (s-1147): record the create before returning
+		// so a partial failure between INSERT and the JSON
+		// response still leaves a trail.
+		logOAuthAdminActivity(db, user.ID, AuditActionOAuthProviderCreate,
+			id, req.ProviderID,
+			OAuthAuditDetails{
+				Changed:       []string{"provider_id", "name", "type", "enabled", "position", "client_id", "scopes", "auth_endpoint", "token_endpoint", "userinfo_endpoint", "issuer", "extra_config"},
+				SecretChanged: strings.TrimSpace(req.ClientSecret) != "",
+			},
+			c.ClientIP(),
+		)
 		row, ferr := fetchProviderByID(db, id)
 		if ferr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": ferr.Error()})
@@ -383,7 +395,8 @@ func GetAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 // fields keep their stored value.
 func UpdateAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if _, ok := requireAdmin(c, db); !ok {
+		user, ok := requireAdmin(c, db)
+		if !ok {
 			return
 		}
 		id := strings.TrimSpace(c.Param("id"))
@@ -408,39 +421,109 @@ func UpdateAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 		}
 
 		merged := providerFromAdmin(existing)
+		changedFields := []string{}
+		previousValues := map[string]string{}
 
+		if req.Name != nil && *req.Name != existing.Name {
+			changedFields = append(changedFields, "name")
+			previousValues["name"] = existing.Name
+			merged.Name = strings.TrimSpace(*req.Name)
+		}
 		if req.Name != nil {
 			merged.Name = strings.TrimSpace(*req.Name)
+		}
+		if req.Type != nil && *req.Type != existing.Type {
+			changedFields = append(changedFields, "type")
+			previousValues["type"] = existing.Type
+			merged.Type = strings.TrimSpace(*req.Type)
 		}
 		if req.Type != nil {
 			merged.Type = strings.TrimSpace(*req.Type)
 		}
+		enabledChanged := false
+		if req.Enabled != nil && *req.Enabled != existing.Enabled {
+			enabledChanged = true
+			// Note: we deliberately do NOT add "enabled" to
+			// changedFields here. The boolean flip gets its
+			// own dedicated audit row (OAUTH_PROVIDER_ENABLE /
+			// OAUTH_PROVIDER_DISABLE) below, and a duplicate
+			// entry in the UPDATE row would inflate the audit
+			// log with redundant signals. The `previous` map
+			// keeps the previous value reachable from the
+			// dedicated enable/disable row's details payload
+			// via EnabledBefore instead.
+			merged.Enabled = *req.Enabled
+		}
 		if req.Enabled != nil {
 			merged.Enabled = *req.Enabled
+		}
+		if req.Position != nil && *req.Position != existing.Position {
+			changedFields = append(changedFields, "position")
+			previousValues["position"] = strconv.Itoa(existing.Position)
+			merged.Position = *req.Position
 		}
 		if req.Position != nil {
 			merged.Position = *req.Position
 		}
+		if req.ClientID != nil && *req.ClientID != existing.ClientID {
+			changedFields = append(changedFields, "client_id")
+			previousValues["client_id"] = existing.ClientID
+			merged.ClientID = strings.TrimSpace(*req.ClientID)
+		}
 		if req.ClientID != nil {
 			merged.ClientID = strings.TrimSpace(*req.ClientID)
+		}
+		if req.Scopes != nil && *req.Scopes != existing.Scopes {
+			changedFields = append(changedFields, "scopes")
+			previousValues["scopes"] = existing.Scopes
+			merged.Scopes = strings.TrimSpace(*req.Scopes)
 		}
 		if req.Scopes != nil {
 			merged.Scopes = strings.TrimSpace(*req.Scopes)
 		}
+		if req.AuthEndpoint != nil && *req.AuthEndpoint != existing.AuthEndpoint {
+			changedFields = append(changedFields, "auth_endpoint")
+			previousValues["auth_endpoint"] = existing.AuthEndpoint
+			merged.AuthEndpoint = strings.TrimSpace(*req.AuthEndpoint)
+		}
 		if req.AuthEndpoint != nil {
 			merged.AuthEndpoint = strings.TrimSpace(*req.AuthEndpoint)
+		}
+		if req.TokenEndpoint != nil && *req.TokenEndpoint != existing.TokenEndpoint {
+			changedFields = append(changedFields, "token_endpoint")
+			previousValues["token_endpoint"] = existing.TokenEndpoint
+			merged.TokenEndpoint = strings.TrimSpace(*req.TokenEndpoint)
 		}
 		if req.TokenEndpoint != nil {
 			merged.TokenEndpoint = strings.TrimSpace(*req.TokenEndpoint)
 		}
+		if req.UserinfoEndpoint != nil && *req.UserinfoEndpoint != existing.UserinfoEndpoint {
+			changedFields = append(changedFields, "userinfo_endpoint")
+			previousValues["userinfo_endpoint"] = existing.UserinfoEndpoint
+			merged.UserinfoEndpoint = strings.TrimSpace(*req.UserinfoEndpoint)
+		}
 		if req.UserinfoEndpoint != nil {
 			merged.UserinfoEndpoint = strings.TrimSpace(*req.UserinfoEndpoint)
+		}
+		if req.Issuer != nil && *req.Issuer != existing.Issuer {
+			changedFields = append(changedFields, "issuer")
+			previousValues["issuer"] = existing.Issuer
+			merged.Issuer = strings.TrimSpace(*req.Issuer)
 		}
 		if req.Issuer != nil {
 			merged.Issuer = strings.TrimSpace(*req.Issuer)
 		}
+		if req.ExtraConfig != nil && *req.ExtraConfig != existing.ExtraConfig {
+			changedFields = append(changedFields, "extra_config")
+			previousValues["extra_config"] = existing.ExtraConfig
+			merged.ExtraConfig = strings.TrimSpace(*req.ExtraConfig)
+		}
 		if req.ExtraConfig != nil {
 			merged.ExtraConfig = strings.TrimSpace(*req.ExtraConfig)
+		}
+		secretChanged := req.ClientSecret != nil && strings.TrimSpace(*req.ClientSecret) != ""
+		if secretChanged {
+			changedFields = append(changedFields, "client_secret")
 		}
 		if err := ValidateProviderPayload(
 			existing.ProviderID, merged.Name, merged.Type,
@@ -500,6 +583,41 @@ func UpdateAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Audit log (s-1147): when only the boolean enabled
+		// flag flips, emit OAUTH_PROVIDER_ENABLE /
+		// OAUTH_PROVIDER_DISABLE so the activity-log filter can
+		// surface those transitions separately from a general
+		// config edit. When other fields change as well, emit
+		// OAUTH_PROVIDER_UPDATE first and then the enable /
+		// disable event so each transition is its own row.
+		if enabledChanged {
+			enabledBefore := existing.Enabled
+			enabledAfter := merged.Enabled
+			action := AuditActionOAuthProviderEnable
+			if !enabledAfter {
+				action = AuditActionOAuthProviderDisable
+			}
+			logOAuthAdminActivity(db, user.ID, action,
+				id, existing.ProviderID,
+				OAuthAuditDetails{
+					EnabledBefore: &enabledBefore,
+					EnabledAfter:  &enabledAfter,
+				},
+				c.ClientIP(),
+			)
+		}
+		if len(changedFields) > 0 {
+			logOAuthAdminActivity(db, user.ID, AuditActionOAuthProviderUpdate,
+				id, existing.ProviderID,
+				OAuthAuditDetails{
+					Changed:       changedFields,
+					Previous:      previousValues,
+					SecretChanged: secretChanged,
+				},
+				c.ClientIP(),
+			)
+		}
+
 		row, ferr := fetchProviderByID(db, id)
 		if ferr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": ferr.Error()})
@@ -516,12 +634,22 @@ func UpdateAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 // compatibility with plan §6.1).
 func DeleteAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if _, ok := requireAdmin(c, db); !ok {
+		user, ok := requireAdmin(c, db)
+		if !ok {
 			return
 		}
 		id := strings.TrimSpace(c.Param("id"))
 		if id == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+			return
+		}
+		// Capture the provider_id before delete so the audit
+		// row has a human-readable target_title. The detail
+		// payload also carries the previous state so a forensic
+		// reviewer can reconstruct what was removed.
+		existing, ferr := fetchProviderByID(db, id)
+		if ferr != nil && !errors.Is(ferr, sql.ErrNoRows) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": ferr.Error()})
 			return
 		}
 		res, err := db.Exec(`DELETE FROM oauth_providers WHERE id = ?`, id)
@@ -534,6 +662,16 @@ func DeleteAdminProviderHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
 			return
 		}
+		providerTitle := id
+		if existing != nil {
+			providerTitle = existing.ProviderID
+		}
+		// Audit log (s-1147).
+		logOAuthAdminActivity(db, user.ID, AuditActionOAuthProviderDelete,
+			id, providerTitle,
+			OAuthAuditDetails{Existed: true},
+			c.ClientIP(),
+		)
 		c.JSON(http.StatusOK, gin.H{"deleted": id})
 	}
 }

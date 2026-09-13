@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -65,6 +66,11 @@ func ListAdminClientsHandler(db *sql.DB) gin.HandlerFunc {
 // outstanding refresh tokens (cascade).
 func DeleteAdminClientHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := currentUserOrUnauthorized(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
+			return
+		}
 		clientID := c.Query("client_id")
 		if clientID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "client_id is required"})
@@ -80,6 +86,14 @@ func DeleteAdminClientHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "client not found"})
 			return
 		}
+		// Audit log (s-1147): the route is mounted on the
+		// auth-protected admin surface, so by the time the
+		// DELETE has succeeded we know the caller is signed in.
+		logOAuthAdminActivity(db, user.ID, AuditActionOAuthClientDelete,
+			clientID, clientID,
+			OAuthAuditDetails{Existed: true},
+			c.ClientIP(),
+		)
 		c.JSON(http.StatusOK, gin.H{"deleted": clientID})
 	}
 }
@@ -153,6 +167,17 @@ func RevokeConsentHandler(db *sql.DB) gin.HandlerFunc {
 			`UPDATE oauth_refresh_tokens SET revoked_at = ? WHERE user_id = ? AND client_id = ? AND revoked_at IS NULL`,
 			time.Now(), user.ID, clientID,
 		)
+		// Audit log (s-1147). The actor is the user revoking
+		// their own consent (this endpoint is intentionally
+		// user-scoped, not admin-scoped) and the target is the
+		// (client_id) — paired with the user_id already in
+		// user_id so a forensic reviewer can join them back
+		// together.
+		logOAuthAdminActivity(db, user.ID, AuditActionOAuthConsentRevoke,
+			clientID, clientID,
+			OAuthAuditDetails{Existed: n > 0},
+			c.ClientIP(),
+		)
 		c.JSON(http.StatusOK, gin.H{"revoked": clientID, "existed": n > 0})
 	}
 }
@@ -188,6 +213,11 @@ type UpdateOAuthConfigRequest struct {
 // UpdateOAuthConfigHandler updates OAuth config keys.
 func UpdateOAuthConfigHandler(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := currentUserOrUnauthorized(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthenticated"})
+			return
+		}
 		var req UpdateOAuthConfigRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
@@ -197,12 +227,35 @@ func UpdateOAuthConfigHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no updates provided"})
 			return
 		}
+		// Snapshot the previous values so the audit row carries
+		// what each key was before the admin changed it.
+		prevMap, err := GetConfigMap(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		keys := make([]string, 0, len(req.Updates))
+		for k := range req.Updates {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		for k, v := range req.Updates {
 			if err := SetConfig(db, k, v); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "key": k})
 				return
 			}
 		}
+		// Audit log (s-1147): one row per call, with the full
+		// list of touched keys in the `ConfigKeys` slice.
+		logOAuthAdminActivity(db, user.ID, AuditActionOAuthConfigUpdate,
+			strings.Join(keys, ","), "oauth_config",
+			OAuthAuditDetails{
+				Changed:  keys,
+				Previous: prevMap,
+				ConfigKeys: keys,
+			},
+			c.ClientIP(),
+		)
 		c.JSON(http.StatusOK, gin.H{"updated": len(req.Updates)})
 	}
 }

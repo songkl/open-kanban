@@ -234,6 +234,87 @@ func TestSQLiteMigrationsAllowDeviceApproveActivity(t *testing.T) {
 	}
 }
 
+// TestSQLiteMigrationsAllowOAuthAdminAuditActivity exercises migration
+// 013 (s-1147) and verifies the CHECK constraints on activities.action
+// and activities.target_type permit the OAUTH_* admin-operation
+// actions and the OAUTH target_type added by the OAuth audit-log
+// path. If a future migration narrows either constraint by accident
+// this test fails before any OAuth handler test does.
+func TestSQLiteMigrationsAllowOAuthAdminAuditActivity(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+	defer db.Close()
+
+	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	if err != nil {
+		t.Fatalf("failed to create sqlite instance: %v", err)
+	}
+
+	d, err := iofs.New(migrations.SQLiteFS, "sqlite")
+	if err != nil {
+		t.Fatalf("failed to create migration source: %v", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "sqlite3", driver)
+	if err != nil {
+		t.Fatalf("failed to create migrate instance: %v", err)
+	}
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO users (id, username, nickname, type, role, enabled)
+		VALUES ('u1', 'alice', 'alice', 'HUMAN', 'ADMIN', 1)
+	`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	oauthActions := []string{
+		"OAUTH_PROVIDER_CREATE",
+		"OAUTH_PROVIDER_UPDATE",
+		"OAUTH_PROVIDER_DELETE",
+		"OAUTH_PROVIDER_ENABLE",
+		"OAUTH_PROVIDER_DISABLE",
+		"OAUTH_CLIENT_DELETE",
+		"OAUTH_CONFIG_UPDATE",
+		"OAUTH_CONSENT_REVOKE",
+	}
+	for i, action := range oauthActions {
+		id := "a-oauth-" + action
+		if _, err := db.Exec(
+			"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, ?, 'OAUTH', 'target-1', 'web')",
+			id, "u1", action,
+		); err != nil {
+			t.Errorf("action %s (index=%d) should be permitted by CHECK constraint after migration 013, got: %v", action, i, err)
+		}
+	}
+
+	// Sanity: a row with a non-OAUTH target_type should still be
+	// rejected once we narrow the CHECK accidentally. The test
+	// above is the success path; this catches a regression where
+	// the target_type list gets accidentally widened to a value
+	// outside the documented allow-list.
+	if _, err := db.Exec(
+		"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, 'OAUTH_PROVIDER_CREATE', 'NOT_A_REAL_TYPE', 't', 'web')",
+		"a-oauth-bad",
+	); err == nil {
+		t.Errorf("expected target_type CHECK to reject unknown value, got nil")
+	}
+
+	// Sanity: unknown action should be rejected by the CHECK so a
+	// future refactor that adds a typo surfaces here rather than
+	// in a handler.
+	if _, err := db.Exec(
+		"INSERT INTO activities (id, user_id, action, target_type, target_id, source) VALUES (?, ?, 'OAUTH_PROVIDER_TYPO', 'OAUTH', 't', 'web')",
+		"a-oauth-typo",
+	); err == nil {
+		t.Errorf("expected action CHECK to reject unknown OAUTH_PROVIDER_TYPO, got nil")
+	}
+}
+
 // TestSQLiteMigrationsAgentCreatedBy exercises migration 008 (s-1131)
 // and verifies users.created_by can be INSERTed against a previously
 // inserted creator, that the index is in place, and that the column
