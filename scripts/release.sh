@@ -37,6 +37,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 RELEASE_DIR="$PROJECT_DIR/release"
 
+# Capture PLATFORMS env override at script start, before any PLATFORMS
+# array assignment below. In bash 3.2 (still the default on macOS),
+# assigning `PLATFORMS=("${ALL_PLATFORMS[@]}")` after the variable was
+# inherited as a scalar env var converts it to an array attribute,
+# which would then make `${PLATFORMS:-}` return the first array element
+# ("darwin amd64") instead of the user's env override — the
+# load_platforms_from_env() function would then clobber the freshly-set
+# PLATFORMS array with an empty list, and `set -e` would silently abort
+# the release. Stashing the raw env value into _ENV_PLATFORMS first
+# avoids that whole class of bug.
+_ENV_PLATFORMS="${PLATFORMS:-}"
+unset PLATFORMS
+
 # All supported targets in their canonical (display) order. The full
 # release always walks this list; subcommands filter it.
 ALL_PLATFORMS=(
@@ -124,12 +137,21 @@ parse_backend_args() {
 # Allow PLATFORMS env var to override the matrix regardless of subcommand.
 # This is convenient for CI scripts that already pass PLATFORMS=... and
 # don't want to repeat the args on the command line.
+#
+# Implementation note: the caller has already populated PLATFORMS as a
+# shell array (PLATFORMS=("${ALL_PLATFORMS[@]}")). A naive `${PLATFORMS:-}`
+# check inside this function would always succeed (the array's first
+# element is non-empty), which used to clobber the freshly-built matrix
+# with an empty array and then trip `set -e` on the trailing failed read,
+# silently aborting the whole release. The original env value is captured
+# into _ENV_PLATFORMS at script start (see below) so this function can
+# distinguish "user exported PLATFORMS" from "we just assigned the array".
 load_platforms_from_env() {
-  if [ -n "${PLATFORMS:-}" ]; then
+  if [ -n "${_ENV_PLATFORMS:-}" ]; then
     PLATFORMS=()
     while IFS= read -r line; do
       [ -n "$line" ] && PLATFORMS+=("$line")
-    done <<< "$PLATFORMS"
+    done <<< "$_ENV_PLATFORMS"
   fi
 }
 
@@ -156,7 +178,7 @@ case "$SUBCMD" in
     DO_BACKEND=1
     DO_WEB_TARBALL=0
     DO_SKILL=0
-    if [ -n "${PLATFORMS:-}" ]; then
+    if [ -n "${_ENV_PLATFORMS:-}" ]; then
       load_platforms_from_env
     else
       parse_backend_args "$@"
@@ -245,20 +267,32 @@ if [ "$DO_BACKEND" = 1 ]; then
       echo "native"
       return
     fi
-    local triple=""
+    local triples=()
     case "$goos" in
       linux)
         case "$goarch" in
-          amd64) triple="x86_64-linux-gnu" ;;
-          arm64) triple="aarch64-linux-gnu" ;;
-          *)     triple="" ;;
+          amd64)
+            # Debian/Ubuntu: gcc-x86-64-linux-gnu provides x86_64-linux-gnu-gcc.
+            # Homebrew (Apple Silicon & Linuxbrew): x86_64-linux-gnu-gcc.
+            # Some distros also ship a musl variant for static builds.
+            triples=("x86_64-linux-gnu" "x86_64-linux-musl" "x86_64-elf")
+            ;;
+          arm64)
+            # Debian/Ubuntu: gcc-aarch64-linux-gnu; Homebrew: aarch64-linux-gnu-gcc.
+            triples=("aarch64-linux-gnu" "aarch64-linux-musl" "aarch64-elf")
+            ;;
         esac
         ;;
       windows)
         case "$goarch" in
-          amd64) triple="x86_64-w64-mingw32" ;;
-          arm64) triple="aarch64-w64-mingw32" ;;
-          *)     triple="" ;;
+          amd64)
+            # Debian/Ubuntu: gcc-mingw-w64-x86-64; Homebrew: x86_64-w64-mingw32-gcc.
+            # Some setups only expose the bare mingw-w64-gcc wrapper.
+            triples=("x86_64-w64-mingw32" "mingw-w64" "x86_64-mingw32")
+            ;;
+          arm64)
+            triples=("aarch64-w64-mingw32" "aarch64-mingw32")
+            ;;
         esac
         ;;
       darwin)
@@ -286,12 +320,27 @@ if [ "$DO_BACKEND" = 1 ]; then
         return
         ;;
     esac
-    if [ -n "$triple" ] && command -v "${triple}-gcc" >/dev/null 2>&1; then
-      echo "${triple}-gcc"
-      return
-    fi
+    # Try a list of suffixes per triple: the GNU -gcc form is most
+    # common on Debian/Ubuntu and Homebrew; some toolchains ship clang
+    # under the GNU name instead, so probe that too.
+    local triple suffix
+    for triple in "${triples[@]}"; do
+      for suffix in "-gcc" "-cc" "-clang"; do
+        if command -v "${triple}${suffix}" >/dev/null 2>&1; then
+          echo "${triple}${suffix}"
+          return
+        fi
+      done
+    done
     echo ""
   }
+
+  # Track which targets produced a full SQLite build and which only got
+  # the MySQL-only fallback, so we can print a clear summary at the end
+  # (helps catch the "release only produced -mysql variants" case the
+  # user reported when no cross-toolchain is installed).
+  SQLITE_BUILT=()
+  SQLITE_SKIPPED=()
 
   for PLATFORM in "${PLATFORMS[@]}"; do
     set -- $PLATFORM
@@ -341,15 +390,17 @@ if [ "$DO_BACKEND" = 1 ]; then
       # Show size
       SIZE=$(ls -lh "$RELEASE_DIR/$OUTPUT_NAME" | awk '{print $5}')
       echo "    Size: $SIZE"
+      SQLITE_BUILT+=("${GOOS}/${GOARCH} (cc=${CC_BIN})")
     else
       echo "    SKIP: no CGO cross-compile toolchain for ${GOOS}/${GOARCH}." >&2
       echo "          The default build embeds go-sqlite3 which requires CGO." >&2
-      echo "          Install a matching toolchain (apt: gcc-x86-64-linux-gnu /" >&2
-      echo "          gcc-aarch64-linux-gnu / gcc-mingw-w64-x86-64; brew:" >&2
-      echo "          x86_64-linux-gnu-gcc / aarch64-linux-gnu-gcc / mingw-w64;" >&2
-      echo "          darwin targets additionally need osxcross) or run this" >&2
-      echo "          release on a native ${GOOS} host to produce the SQLite build." >&2
+      echo "          Install a matching toolchain, e.g.:" >&2
+      echo "            apt:    sudo apt-get install -y gcc-x86-64-linux-gnu gcc-aarch64-linux-gnu gcc-mingw-w64-x86-64" >&2
+      echo "            brew:   brew install x86_64-linux-gnu-gcc aarch64-linux-gnu-gcc mingw-w64" >&2
+      echo "            darwin: osxcross (https://github.com/tpoechtrager/osxcross) for darwin cross-builds" >&2
+      echo "          Or run this release on a native ${GOOS} host to produce the SQLite build." >&2
       echo "          The MySQL-only variant below is built without CGO." >&2
+      SQLITE_SKIPPED+=("${GOOS}/${GOARCH}")
     fi
 
     # Build MySQL-only version
@@ -401,6 +452,22 @@ echo "Contents:"
 ls -lh "$RELEASE_DIR/"
 echo ""
 if [ "$DO_BACKEND" = 1 ]; then
+  if [ "${#SQLITE_BUILT[@]}" -gt 0 ]; then
+    echo "SQLite (full) builds produced:"
+    for t in "${SQLITE_BUILT[@]}"; do
+      echo "  - $t"
+    done
+  fi
+  if [ "${#SQLITE_SKIPPED[@]}" -gt 0 ]; then
+    echo ""
+    echo "SQLite builds SKIPPED (no CGO cross-toolchain on this host):"
+    for t in "${SQLITE_SKIPPED[@]}"; do
+      echo "  - $t   (only the -mysql variant was produced)"
+    done
+    echo ""
+    echo "MySQL-only builds (no SQLite) are still produced for the targets above."
+  fi
+  echo ""
   echo "Upload to GitHub Release:"
   echo "  - kanban-server-darwin-amd64"
   echo "  - kanban-server-darwin-arm64"
