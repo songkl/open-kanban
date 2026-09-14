@@ -75,6 +75,16 @@ export interface RunLoopOptions {
   sleepFn?: (ms: number) => Promise<void>;
   /** Abort signal — when fired, the loop resolves with the in-flight state drained. */
   signal?: AbortSignal;
+  /**
+   * Optional controller paired with `signal`. When supplied the
+   * loop calls `controller.abort()` from `requestShutdown()` so
+   * collaborators that listen to the same signal (e.g. the
+   * board watcher, which keeps a WebSocket reconnect timer
+   * alive) tear down alongside the loop. Without this, --once
+   * would leave the watcher retrying the WS handshake forever
+   * and the Node event loop would stay alive past completion.
+   */
+  abortController?: AbortController;
   /** Logger — defaults to a no-op so production callers stay terse. */
   logger?: RunLoopLogger;
   /**
@@ -134,6 +144,7 @@ export class RunLoop {
   private readonly runnerId: string;
   private readonly agentType: string;
   private readonly heartbeat: HeartbeatScheduler;
+  private readonly abortController: AbortController | undefined;
 
   private inFlight: InFlightTask | null = null;
   private processed = 0;
@@ -162,6 +173,7 @@ export class RunLoop {
     this.runnerId = opts.runnerId;
     this.agentType = opts.agentType;
     this.heartbeat = opts.heartbeat;
+    this.abortController = opts.abortController;
     if (opts.signal) {
       const onAbort = (): void => {
         this.shutdown = true;
@@ -177,12 +189,24 @@ export class RunLoop {
   /**
    * Request a graceful shutdown. The current in-flight task (if any)
    * is sent SIGTERM and the loop resolves on the next tick.
+   *
+   * Also aborts the supplied signal so collaborators that listen
+   * to it (e.g. the board watcher in `startBoardWatcherIfPossible`,
+   * which keeps a WebSocket reconnect timer alive) tear down
+   * alongside the loop. Without this, --once would leave the
+   * watcher retrying the WS handshake forever and keep the
+   * Node event loop alive after the task had been processed.
    */
   requestShutdown(): void {
     this.shutdown = true;
     // Wake the loop out of its idle sleep so SIGINT/SIGTERM
     // handlers don't have to wait for the full pollInterval.
     this.interruptSleep(new Error("shutdown requested"));
+    // Cascade the abort so the watcher closes its WS handle and
+    // cancels its reconnect timer. The loop's own abort listener
+    // (which just re-sets shutdown=true) is a no-op here, so this
+    // is safe to call even when shutdown was driven by signal.
+    this.abortController?.abort();
   }
 
   /**

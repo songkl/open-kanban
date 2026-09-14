@@ -110,6 +110,7 @@ export type BuildLoopFn = (deps: {
   agentType: string;
   http: HttpClient;
   signal?: AbortSignal;
+  abortController?: AbortController;
   debug?: boolean;
 }) => RunLoop | Promise<RunLoop>;
 
@@ -339,7 +340,7 @@ export function buildCommentPoster(
  * stream — the poll path is the only mechanism there.
  */
 export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
-  const { config, runnerId, agentType, http, signal, debug } = deps;
+  const { config, runnerId, agentType, http, signal, abortController, debug } = deps;
   const claimClient = RunClaimClient.fromHttpClient(http);
   const heartbeat = new HeartbeatScheduler(claimClient, runnerId, {
     intervalMs: config.runner.heartbeatIntervalMs ?? 30_000,
@@ -360,6 +361,7 @@ export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
       timeoutMs: config.agent.timeoutMs ?? 1_800_000,
     }),
     signal,
+    abortController,
     logger: stderrLoopLogger({ debug: debug === true }),
   });
   startBoardWatcherIfPossible({ loop, config, http, signal, debug });
@@ -598,6 +600,7 @@ export async function runRunCommand(
     agentType: resolveAgentType(),
     http: deps.http,
     signal: abort.signal,
+    abortController: abort,
     debug: parsed.debug,
   });
   installSignalHandlers(abort);

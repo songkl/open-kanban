@@ -465,23 +465,27 @@ describe("CLI runner e2e (`kanban run --once` against a real Go server)", () => 
       const firstTask = afterFirst.body as { columnId: string; columnName: string };
       expect(firstTask.columnId).toBe("c-e2e-review");
 
-      // Assertion 2: task_runs recorded the completion. The
-      // FinishRun handler deletes the row from task_runs once
-      // it's stamped with finished_at, so the GET endpoint
-      // returns 404 — instead we verify the column endpoint
-      // shows the task in review (which is the durable side
-      // effect of completed status) AND that the helper still
-      // has the runner_id recorded somewhere we can inspect.
+      // Assertion 2: task_runs recorded the completion. As of
+      // s-1106 the row is kept (not deleted) so /runs/history can
+      // surface it; the success signal is now `status: "completed"`
+      // with the runnerId we configured. The helper's GetRun
+      // returns 404 only when the row never existed or finish()
+      // rejected with conflict — both of which would be failures.
       const completedRun = await fetchJson(
         `${apiUrl}/api/v1/runs/t-e2e-first`,
         { headers: { Authorization: `Bearer ${helper.adminToken}` } }
       );
-      // 404 means the row was cleaned up after finish(); that's
-      // the success signal. A non-404 would mean finish() never
-      // ran or was rejected with conflict (409 also returns 404
-      // here because FinishRun only sets 404 / 409, and our
-      // helper's GetRun returns 404 on no row).
-      expect(completedRun.status).toBe(404);
+      expect(completedRun.status).toBe(200);
+      const run = completedRun.body as {
+        status?: string;
+        runnerId?: string;
+        exitCode?: number | null;
+        finishedAt?: string;
+      };
+      expect(run.status).toBe("completed");
+      expect(run.runnerId).toBe("e2e-runner-test");
+      expect(run.exitCode).toBe(0);
+      expect(typeof run.finishedAt).toBe("string");
 
       // Assertion 3: the second task was not started. --once
       // must stop the loop after one claim; the second task

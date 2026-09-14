@@ -232,6 +232,7 @@ function makeHarness(opts: {
   scripts?: ScriptedClaim[];
   runnerId?: string;
   signal?: AbortSignal;
+  abortController?: AbortController;
 } = {}): LoopHarness {
   const config = opts.config ?? makeConfig();
   const scripts = opts.scripts ?? [];
@@ -267,6 +268,7 @@ function makeHarness(opts: {
     sleepFn: noopSleep,
     logger,
     signal: opts.signal,
+    abortController: opts.abortController,
   });
   return {
     loop,
@@ -655,6 +657,71 @@ describe("RunLoop — graceful shutdown", () => {
     h.loop.requestShutdown();
     await h.loop.tick();
     expect(h.transport.releaseCalls).toHaveLength(1);
+  });
+
+  it("aborts the configured signal on requestShutdown so collaborators (e.g. board watcher) can tear down", async () => {
+    const controller = new AbortController();
+    const h = makeHarness({
+      scripts: [NOOP_SCRIPTED],
+      signal: controller.signal,
+      abortController: controller,
+    });
+    expect(controller.signal.aborted).toBe(false);
+    h.loop.requestShutdown();
+    expect(controller.signal.aborted).toBe(true);
+    // Calling requestShutdown again is idempotent — the loop
+    // keeps its own shutdown flag, and the abort listener only
+    // fires once because { once: true } is set when the loop
+    // subscribes in its constructor.
+    h.loop.requestShutdown();
+    expect(controller.signal.aborted).toBe(true);
+  });
+
+  it("aborts the signal even when shutdown was driven by --once completion, not by an external signal", async () => {
+    // Reproduces the s-1160 regression: --once mode completes a
+    // task and calls requestShutdown() internally; without the
+    // abort, the board watcher's WS reconnect timer would keep
+    // the Node event loop alive and the CLI would never exit.
+    const controller = new AbortController();
+    const h = makeHarness({
+      signal: controller.signal,
+      abortController: controller,
+      scripts: [
+        {
+          request: {
+            boardId: "sys",
+            status: "todo",
+            agentType: "opencoder",
+            runnerId: "runner-1",
+          },
+          outcome: {
+            status: 200,
+            body: {
+              task: TASK_TEMPLATE,
+              run: { taskId: TASK_TEMPLATE.id, runnerId: "runner-1" },
+            },
+          },
+        },
+      ],
+    });
+    // Claim + spawn.
+    await h.loop.tick();
+    // Resolve the child and let the loop finish the task.
+    h.spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "",
+      reason: "exit",
+    });
+    await h.loop.tick();
+    expect(h.loop.state.processed).toBe(1);
+    // driveLoop calls requestShutdown() the moment processed
+    // reaches 1 in --once mode; that is the path the watcher
+    // teardown relies on. Verify the cascade so any future
+    // refactor that moves the requestShutdown() call doesn't
+    // silently re-introduce the WS-reconnect-leak bug.
+    h.loop.requestShutdown();
+    expect(controller.signal.aborted).toBe(true);
   });
 });
 
