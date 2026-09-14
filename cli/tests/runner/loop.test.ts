@@ -34,8 +34,10 @@ import {
 } from "../../src/runner/spawn.js";
 import {
   type FailureCommentPoster,
+  defaultBuildFailureComment,
   RunLoop,
   type RunLoopLogger,
+  type RunLoopOptions,
   type TaskHydrator,
 } from "../../src/runner/loop.js";
 import type { TaskRecord } from "../../src/commands/tasks.js";
@@ -233,6 +235,7 @@ function makeHarness(opts: {
   runnerId?: string;
   signal?: AbortSignal;
   abortController?: AbortController;
+  buildFailureComment?: RunLoopOptions["buildFailureComment"];
 } = {}): LoopHarness {
   const config = opts.config ?? makeConfig();
   const scripts = opts.scripts ?? [];
@@ -269,6 +272,7 @@ function makeHarness(opts: {
     logger,
     signal: opts.signal,
     abortController: opts.abortController,
+    buildFailureComment: opts.buildFailureComment,
   });
   return {
     loop,
@@ -299,6 +303,45 @@ const NOOP_SCRIPTED: ScriptedClaim = {
 
 afterEach(() => {
   // nothing to clean up
+});
+
+describe("defaultBuildFailureComment (s-1164)", () => {
+  it("always returns a non-empty body so the API never sees empty content", () => {
+    const ctx = { runnerId: "runner-1" };
+    const emptyResult: AgentResult = {
+      exitCode: null,
+      signal: null,
+      stderr: "",
+      reason: "exit",
+    };
+    const body = defaultBuildFailureComment(
+      { id: "t-1", title: "", columnId: "c-1" } as TaskRecord,
+      emptyResult,
+      ctx,
+    );
+    expect(body.trim().length).toBeGreaterThan(0);
+    expect(body).toContain("runner runner-1: task failed");
+    expect(body).toContain("exit code: (none)");
+    expect(body).toContain("reason: exit");
+  });
+
+  it("includes the exit code, signal, stderr, and title when present", () => {
+    const body = defaultBuildFailureComment(
+      { id: "t-1", title: "ship the thing", columnId: "c-1" } as TaskRecord,
+      {
+        exitCode: 1,
+        signal: "SIGTERM",
+        stderr: "  boom\n",
+        reason: "exit",
+      },
+      { runnerId: "runner-7" },
+    );
+    expect(body).toContain("title: ship the thing");
+    expect(body).toContain("exit code: 1");
+    expect(body).toContain("signal: SIGTERM");
+    expect(body).toContain("stderr:");
+    expect(body).toContain("boom");
+  });
 });
 
 describe("RunLoop — happy path", () => {
@@ -563,6 +606,98 @@ describe("RunLoop — failure path", () => {
     expect(finalTick).toBe(false);
     expect(h.loop.state.failed).toBe(1);
     expect(h.loop.state.completed).toBe(0);
+  });
+
+  it("falls back to defaultBuildFailureComment when a custom builder returns empty (s-1164)", async () => {
+    // s-1164: a custom builder that returns "" would otherwise cause
+    // the POST /api/v1/comments call to be rejected with 400 because
+    // the server's CreateComment handler requires non-empty content.
+    const calls: { task: TaskRecord; result: AgentResult; runnerId: string }[] = [];
+    const h = makeHarness({
+      buildFailureComment: (task, result, ctx) => {
+        calls.push({ task, result, runnerId: ctx.runnerId });
+        return "   "; // whitespace-only — must trigger the fallback
+      },
+      scripts: [
+        {
+          request: {
+            boardId: "sys",
+            status: "todo",
+            agentType: "opencoder",
+            runnerId: "runner-1",
+          },
+          outcome: {
+            status: 200,
+            body: {
+              task: TASK_TEMPLATE,
+              run: { taskId: TASK_TEMPLATE.id, runnerId: "runner-1" },
+            },
+          },
+        },
+      ],
+    });
+    let more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.spawner.resolveIndex(0, {
+      exitCode: 1,
+      signal: null,
+      stderr: "",
+      reason: "exit",
+    });
+    more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.loop.requestShutdown();
+    const finalTick = await h.loop.tick();
+    expect(finalTick).toBe(false);
+    // The custom builder was consulted …
+    expect(calls).toHaveLength(1);
+    expect(calls[0].runnerId).toBe("runner-1");
+    // … but the loop fell back to the default body so the API call
+    // never sees an empty `content` field.
+    expect(h.comments).toHaveLength(1);
+    expect(h.comments[0].taskId).toBe(TASK_TEMPLATE.id);
+    expect(h.comments[0].body.trim().length).toBeGreaterThan(0);
+    expect(h.comments[0].body).toContain("runner runner-1: task failed");
+    expect(h.comments[0].body).toContain("exit code: 1");
+    expect(h.comments[0].body).toContain("reason: exit");
+  });
+
+  it("uses the custom builder's body when it returns non-empty content (s-1164)", async () => {
+    const h = makeHarness({
+      buildFailureComment: (_task, _result, ctx) =>
+        `custom failure marker from ${ctx.runnerId}`,
+      scripts: [
+        {
+          request: {
+            boardId: "sys",
+            status: "todo",
+            agentType: "opencoder",
+            runnerId: "runner-1",
+          },
+          outcome: {
+            status: 200,
+            body: {
+              task: TASK_TEMPLATE,
+              run: { taskId: TASK_TEMPLATE.id, runnerId: "runner-1" },
+            },
+          },
+        },
+      ],
+    });
+    let more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.spawner.resolveIndex(0, {
+      exitCode: 1,
+      signal: null,
+      stderr: "boom",
+      reason: "exit",
+    });
+    more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.loop.requestShutdown();
+    await h.loop.tick();
+    expect(h.comments).toHaveLength(1);
+    expect(h.comments[0].body).toBe("custom failure marker from runner-1");
   });
 });
 

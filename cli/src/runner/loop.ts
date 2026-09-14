@@ -547,14 +547,31 @@ export class RunLoop {
   }
 
   private async postFailureComment(task: TaskRecord, result: AgentResult): Promise<void> {
-    const builder =
-      this.opts.buildFailureComment ?? defaultBuildFailureComment;
-    const body = builder(task, result, { runnerId: this.runnerId });
+    const taskId = task.id ?? "";
+    if (!taskId) {
+      this.logger.warn(
+        `cannot post failure comment: task has no id (exitCode=${result.exitCode ?? "(none)"} signal=${result.signal ?? "(none)"} reason=${result.reason})`
+      );
+      return;
+    }
+    const context = { runnerId: this.runnerId };
+    const builder = this.opts.buildFailureComment ?? defaultBuildFailureComment;
+    const raw = builder(task, result, context);
+    // Guard against an empty body — the /api/v1/comments endpoint
+    // requires a non-empty `content` field and would otherwise reject
+    // the POST with a 400. Fall back to the default builder (which
+    // always emits at least the runner id, exit code, and reason)
+    // when the supplied builder returned an empty / whitespace-only
+    // string. Operators overriding the builder for fancy formatting
+    // therefore cannot accidentally drop the comment.
+    const body = raw.trim().length > 0
+      ? raw
+      : defaultBuildFailureComment(task, result, context);
     try {
-      await this.commentPoster.postComment(task.id ?? "", body);
+      await this.commentPoster.postComment(taskId, body);
     } catch (err) {
       this.logger.warn(
-        `failed to post failure comment for ${task.id}: ${(err as Error).message}`
+        `failed to post failure comment for ${taskId}: ${(err as Error).message}`
       );
     }
   }
@@ -634,7 +651,13 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function defaultBuildFailureComment(
+/**
+ * Default failure-comment formatter. Always returns a non-empty
+ * string so the `/api/v1/comments` endpoint never sees a missing or
+ * empty `content` field. Exported for unit tests and for callers that
+ * want to compose their own builder on top of the default.
+ */
+export function defaultBuildFailureComment(
   task: TaskRecord,
   result: AgentResult,
   context: { runnerId: string }
