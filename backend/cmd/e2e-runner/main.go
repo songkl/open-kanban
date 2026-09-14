@@ -275,6 +275,7 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 		tasks.GET("/:id", handlers.GetTask(db))
 		tasks.Use(handlers.RequireAuth(db))
 		tasks.POST("", handlers.CreateTask(db))
+		tasks.PUT("/:id", handlers.UpdateTask(db))
 		tasks.POST("/:id/complete", handlers.CompleteTask(db))
 	}
 
@@ -484,10 +485,10 @@ func seed(db *sql.DB, boardID, adminToken, agentToken string) error {
 	if _, err := db.Exec(`
 		INSERT INTO columns (id, name, status, position, color, description, board_id, created_at, updated_at)
 		VALUES
-			('c-e2e-todo',   'Todo',   'todo',         0, '#94a3b8', '', ?, ?, ?),
-			('c-e2e-doing',  'Doing',  'in_progress',  1, '#3b82f6', '', ?, ?, ?),
-			('c-e2e-review', 'Review', 'review',       2, '#a855f7', '', ?, ?, ?),
-			('c-e2e-done',   'Done',   'done',         3, '#22c55e', '', ?, ?, ?)
+			('c-e2e-todo',   '待办', 'todo',        0, '#94a3b8', '', ?, ?, ?),
+			('c-e2e-doing',  '进行中', 'in_progress', 1, '#3b82f6', '', ?, ?, ?),
+			('c-e2e-review', '待审核', 'review',     2, '#a855f7', '', ?, ?, ?),
+			('c-e2e-done',   '已完成', 'done',       3, '#22c55e', '', ?, ?, ?)
 	`, boardID, now, now, boardID, now, now, boardID, now, now, boardID, now, now); err != nil {
 		return fmt.Errorf("insert columns: %w", err)
 	}
