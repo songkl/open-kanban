@@ -113,4 +113,85 @@ describe('useTaskRun', () => {
     await waitFor(() => expect(result.current.error).toBeNull(), { timeout: 3000, interval: 30 });
     expect(result.current.run).toBeNull();
   });
+
+  describe('terminal run handling', () => {
+    const terminalRow = {
+      taskId: 'task-1',
+      runnerId: 'runner-A',
+      agentId: 'opencode',
+      boardId: 'b-1',
+      columnId: 'c-1',
+      status: 'failed' as const,
+      claimedAt: '2024-01-01T00:00:00Z',
+      lastHeartbeatAt: '2024-01-01T00:00:00Z',
+      expiresAt: '2024-01-01T00:05:00Z',
+      finishedAt: '2024-01-01T00:01:00Z',
+      exitCode: 1,
+      error: 'boom',
+    };
+
+    const liveRow = {
+      taskId: 'task-1',
+      runnerId: 'runner-A',
+      agentId: 'opencode',
+      boardId: 'b-1',
+      columnId: 'c-1',
+      status: 'claimed' as const,
+      claimedAt: '2024-01-01T00:00:00Z',
+      lastHeartbeatAt: '2024-01-01T00:00:00Z',
+      expiresAt: '2024-01-01T00:05:00Z',
+    };
+
+    it.each(['completed', 'failed', 'released'] as const)(
+      'stops polling once the server returns a %s row',
+      async (status) => {
+        mockedGetByTask.mockResolvedValue({ ...terminalRow, status });
+        renderHook(() => useTaskRun('task-1', { intervalMs: 1000 }));
+        // First tick fires immediately.
+        await waitFor(() => expect(mockedGetByTask).toHaveBeenCalledTimes(1));
+        // Wait long enough that several intervals would have fired.
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(mockedGetByTask).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it('surfaces the terminal row so the ui can render the final state', async () => {
+      mockedGetByTask.mockResolvedValue(terminalRow);
+      const { result } = renderHook(() => useTaskRun('task-1', { intervalMs: 1000 }));
+      await waitFor(() => expect(result.current.run).toEqual(terminalRow), { timeout: 2000 });
+      expect(result.current.run?.status).toBe('failed');
+      expect(result.current.run?.error).toBe('boom');
+    });
+
+    it('keeps polling while the row is still claimed', async () => {
+      mockedGetByTask.mockResolvedValue(liveRow);
+      renderHook(() => useTaskRun('task-1', { intervalMs: 50 }));
+      await waitFor(() => expect(mockedGetByTask).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockedGetByTask.mock.calls.length).toBeGreaterThan(2), {
+        timeout: 2000,
+      });
+    });
+
+    it('keeps polling while the row is in the running state', async () => {
+      mockedGetByTask.mockResolvedValue({ ...liveRow, status: 'running' as const });
+      renderHook(() => useTaskRun('task-1', { intervalMs: 50 }));
+      await waitFor(() => expect(mockedGetByTask).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockedGetByTask.mock.calls.length).toBeGreaterThan(2), {
+        timeout: 2000,
+      });
+    });
+
+    it('stops polling once the row transitions from live to terminal', async () => {
+      mockedGetByTask
+        .mockResolvedValueOnce(liveRow)
+        .mockResolvedValueOnce(terminalRow)
+        .mockResolvedValue(null);
+      renderHook(() => useTaskRun('task-1', { intervalMs: 50 }));
+      // Wait until the terminal tick lands.
+      await waitFor(() => expect(mockedGetByTask).toHaveBeenCalledTimes(2), { timeout: 2000 });
+      // Give the next interval plenty of room to fire — it must not.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(mockedGetByTask).toHaveBeenCalledTimes(2);
+    });
+  });
 });
