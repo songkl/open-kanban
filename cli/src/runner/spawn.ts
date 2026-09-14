@@ -40,10 +40,23 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import type { AgentConfig, AgentPromptMode } from "./types.js";
+import type {
+  AgentConfig,
+  AgentPromptMode,
+  AgentPromptPosition,
+} from "./types.js";
 
 /** Hard cap on the stderr payload the loop forwards to `/finish`. */
 export const STDERR_TRUNCATE_BYTES = 64 * 1024;
+
+/**
+ * Literal token operators embed in `agent.args` when
+ * `promptPosition: "replace"`. The runner substitutes the prompt
+ * flag + path for this single occurrence; missing or duplicate
+ * occurrences fail at config-validation time so the operator never
+ * sees a half-formed spawn.
+ */
+export const PROMPT_PLACEHOLDER = "{prompt}";
 
 /**
  * Result the loop needs from a finished agent. We deliberately do
@@ -319,6 +332,7 @@ export interface PrepareSpawnOptions {
 export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
   const cfg = opts.cfg;
   const mode: AgentPromptMode = cfg.promptMode ?? "arg";
+  const position: AgentPromptPosition = cfg.promptPosition ?? "append";
   const baseCwd = opts.cwd ?? cfg.cwd ?? process.cwd();
   const cwd = isAbsolute(baseCwd) ? baseCwd : resolve(process.cwd(), baseCwd);
   const env: NodeJS.ProcessEnv = {
@@ -338,14 +352,14 @@ export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
     writeFileSync(file, opts.prompt, "utf8");
     createdFiles.push(file);
     promptArg = `${promptArg}-file`;
-    baseArgs.push(promptArg, file);
+    insertPrompt(baseArgs, [promptArg, file], position);
   } else {
     const dir = mkdtempSync(join(opts.tmpDir ?? tmpdir(), "kanban-runner-"));
     const file = join(dir, `prompt-${randomUUID()}.md`);
     writeFileSync(file, opts.prompt, "utf8");
     createdFiles.push(file);
     createdFiles.push(dir);
-    baseArgs.push(promptArg, file);
+    insertPrompt(baseArgs, [promptArg, file], position);
   }
   const cleanup = (): void => {
     for (const f of createdFiles) {
@@ -366,6 +380,45 @@ export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
     cleanup,
     promptFile: createdFiles[0],
   };
+}
+
+/**
+ * Splice `[promptArg, promptPath]` into `baseArgs` according to
+ * `position`. Three outcomes:
+ *
+ *   * `"append"`  — push the pair to the end (default, backward
+ *                   compatible with the original argv layout).
+ *   * `"prepend"` — unshift the pair to the start.
+ *   * `"replace"` — find the unique `{prompt}` token in `baseArgs`
+ *                   and replace it in place with the pair. We do the
+ *                   splice here even though `config.validate` already
+ *                   enforces uniqueness; doing the work in a single
+ *                   place keeps the runtime path free of throw
+ *                   branches.
+ */
+function insertPrompt(
+  baseArgs: string[],
+  promptPair: [string, string],
+  position: AgentPromptPosition
+): void {
+  if (position === "prepend") {
+    baseArgs.unshift(promptPair[1]);
+    baseArgs.unshift(promptPair[0]);
+    return;
+  }
+  if (position === "replace") {
+    const idx = baseArgs.indexOf(PROMPT_PLACEHOLDER);
+    if (idx < 0) {
+      // validate() rejects the missing-placeholder case; this is a
+      // defensive fallback so a malformed runtime call never silently
+      // drops the prompt.
+      baseArgs.push(promptPair[0], promptPair[1]);
+      return;
+    }
+    baseArgs.splice(idx, 1, promptPair[0], promptPair[1]);
+    return;
+  }
+  baseArgs.push(promptPair[0], promptPair[1]);
 }
 
 /**

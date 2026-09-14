@@ -87,6 +87,7 @@ agent:
   binPath: /usr/local/bin/opencode     # optional absolute path; overrides PATH lookup
   promptMode: arg                      # arg | stdin | file (how to deliver the prompt)
   promptArg: --prompt                  # used when promptMode=arg
+  promptPosition: append               # append | prepend | replace (s-1167)
   cwd: .                               # working dir when spawning the agent
   args:                                # extra args appended after the prompt
     - --non-interactive
@@ -328,6 +329,23 @@ Delivery to the agent:
 - `promptMode=stdin`: prompt is piped to the child's stdin.
 - `promptMode=file`: prompt is written to `<cwd>/.kanban-runner-<taskId>.md`
   and the path is passed via `--prompt-file`.
+
+Position of the `--prompt <path>` (or `--prompt-file <path>`) pair is
+controlled by `agent.promptPosition` (s-1167):
+
+- `append`  (default) — pair sits at the end of argv, after every entry
+  of `agent.args`. Mirrors the original behaviour so existing configs
+  keep working without edits.
+- `prepend` — pair sits at the start of argv, before every entry of
+  `agent.args`. Useful when the agent treats later flags as overriding
+  earlier ones.
+- `replace` — operator embeds the literal token `{prompt}` somewhere in
+  `agent.args`; the runner splices `--prompt <path>` (or
+  `--prompt-file <path>`) in place of that single token. Lets an
+  operator position the prompt anywhere in argv, e.g.
+  `args: [--auto, true, run, "{prompt}"]` for the `opencode` CLI's
+  `run` subcommand. Validation requires the token to appear exactly
+  once; missing or duplicate occurrences fail at config-load time.
 
 ### 4.5 Failure reporting
 

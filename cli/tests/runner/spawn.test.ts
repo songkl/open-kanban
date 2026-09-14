@@ -21,6 +21,7 @@ import { join } from "node:path";
 import {
   AgentSpawner,
   ChildProcessSpawner,
+  PROMPT_PLACEHOLDER,
   type PrepareSpawnOptions,
   type ProcessSpawner,
   STDERR_TRUNCATE_BYTES,
@@ -153,6 +154,117 @@ describe("prepareSpawn", () => {
       "x",
       "--prompt",
     ]);
+  });
+
+  it("defaults promptPosition to append (backward compatible)", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      args: ["--non-interactive"],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "X",
+      taskId: "s-default-pos",
+      tmpDir: tmpRoot,
+    });
+    // When promptPosition is omitted the prompt pair sits at the end,
+    // preserving the original argv layout.
+    expect(out.args.slice(-2)).toEqual(["--prompt", out.args[out.args.length - 1]]);
+    expect(out.args.indexOf("--prompt")).toBe(out.args.length - 2);
+  });
+
+  it("prepends the prompt pair when promptPosition=prepend", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptPosition: "prepend",
+      args: ["--non-interactive", "--model", "x"],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "X",
+      taskId: "s-prepend",
+      tmpDir: tmpRoot,
+    });
+    expect(out.args.slice(0, 2)).toEqual(["--prompt", out.args[1]]);
+    expect(out.args[2]).toBe("--non-interactive");
+    expect(out.args[3]).toBe("--model");
+    expect(out.args[4]).toBe("x");
+    // The prompt file written for "prepend" still exists and is
+    // cleaned up by the returned cleanup callback.
+    const promptPath = out.args[1];
+    expect(readFileSync(promptPath, "utf8")).toBe("X");
+    out.cleanup();
+    expect(existsSync(promptPath)).toBe(false);
+  });
+
+  it("replaces the {prompt} placeholder when promptPosition=replace", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptPosition: "replace",
+      args: ["--auto", "true", "run", PROMPT_PLACEHOLDER],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "OPENCODE",
+      taskId: "s-replace",
+      tmpDir: tmpRoot,
+    });
+    // The placeholder is gone; the prompt pair takes its slot. The
+    // example from the issue (s-1167) was exactly this argv shape for
+    // the `opencode` CLI's `run` subcommand.
+    expect(out.args).toEqual([
+      "--auto",
+      "true",
+      "run",
+      "--prompt",
+      out.args[4],
+    ]);
+    expect(readFileSync(out.args[4], "utf8")).toBe("OPENCODE");
+    out.cleanup();
+  });
+
+  it("replaces the {prompt} placeholder for promptMode=file", () => {
+    const cwd = join(tmpRoot, "project-replace");
+    mkdirSync(cwd, { recursive: true });
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptMode: "file",
+      promptPosition: "replace",
+      args: ["run", PROMPT_PLACEHOLDER],
+      cwd,
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "FILE REPLACE",
+      taskId: "s-replace-file",
+      cwd,
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual([
+      "run",
+      "--prompt-file",
+      join(cwd, ".kanban-runner-s-replace-file.md"),
+    ]);
+    out.cleanup();
+  });
+
+  it("falls back to append when promptPosition=replace is missing the placeholder", () => {
+    // The strict validation in config.ts rejects this combo at load
+    // time, but the spawn path itself must not throw — runtime safety
+    // net for a misconfigured runtime caller.
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptPosition: "replace",
+      args: ["--non-interactive"],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "FALLBACK",
+      taskId: "s-replace-missing",
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual(["--non-interactive", "--prompt", out.args[2]]);
+    out.cleanup();
   });
 });
 

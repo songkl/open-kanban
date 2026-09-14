@@ -302,6 +302,51 @@ describe("parseConfig — deep-merge", () => {
     expect(merged.agent.env).toEqual({ ONLY: "this" });
   });
 
+  it("parses agent.promptPosition and defaults to append", () => {
+    const defaulted = parseConfig(
+      "<test>",
+      {
+        version: 1,
+        boardId: "sys",
+        status: "todo",
+        agent: { bin: "opencode" },
+        runner: {},
+      }
+    );
+    expect(defaulted.agent.promptPosition).toBe("append");
+
+    const replaced = parseConfig(
+      "<test>",
+      {
+        version: 1,
+        boardId: "sys",
+        status: "todo",
+        agent: {
+          bin: "opencode",
+          promptPosition: "replace",
+          args: ["run", "{prompt}"],
+        },
+        runner: {},
+      }
+    );
+    expect(replaced.agent.promptPosition).toBe("replace");
+  });
+
+  it("rejects unknown promptPosition values", () => {
+    expect(() =>
+      parseConfig("<test>", {
+        version: 1,
+        boardId: "sys",
+        status: "todo",
+        agent: {
+          bin: "opencode",
+          promptPosition: "middle" as unknown as "append",
+        },
+        runner: {},
+      })
+    ).toThrow(RunnerConfigError);
+  });
+
   it("deep-merges the runner block", () => {
     const merged = parseConfig(
       "<test>",
@@ -522,6 +567,66 @@ describe("validate — §4.6 strict checks", () => {
       expect(err).toBeInstanceOf(RunnerConfigError);
       expect((err as RunnerConfigError).field).toBe("mode");
       expect((err as Error).message).toContain("logged in");
+    }
+  });
+
+  it("accepts promptPosition=append with no args (default layout)", () => {
+    const cfg = baseConfig({
+      agent: { promptPosition: "append" },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("accepts promptPosition=prepend with extra args", () => {
+    const cfg = baseConfig({
+      agent: { promptPosition: "prepend", args: ["--non-interactive"] },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("accepts promptPosition=replace when {prompt} appears exactly once", () => {
+    const cfg = baseConfig({
+      agent: {
+        promptPosition: "replace",
+        args: ["--auto", "true", "run", "{prompt}"],
+      },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("rejects promptPosition=replace when {prompt} is missing", () => {
+    const cfg = baseConfig({
+      agent: {
+        promptPosition: "replace",
+        args: ["--auto", "true", "run"],
+      },
+    });
+    try {
+      validate(cfg);
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(RunnerConfigError);
+      expect((err as RunnerConfigError).field).toBe("agent.promptPosition");
+      expect((err as Error).message).toContain("exactly once");
+      expect((err as Error).message).toContain("got 0");
+    }
+  });
+
+  it("rejects promptPosition=replace when {prompt} appears more than once", () => {
+    const cfg = baseConfig({
+      agent: {
+        promptPosition: "replace",
+        args: ["run", "{prompt}", "--then", "{prompt}"],
+      },
+    });
+    try {
+      validate(cfg);
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(RunnerConfigError);
+      expect((err as RunnerConfigError).field).toBe("agent.promptPosition");
+      expect((err as Error).message).toContain("exactly once");
+      expect((err as Error).message).toContain("got 2");
     }
   });
 });

@@ -29,12 +29,14 @@ import {
   RUNNER_DEFAULTS,
   type AgentConfig,
   type AgentPromptMode,
+  type AgentPromptPosition,
   type RunnerClaimMode,
   type RunnerConfig,
   type RunnerSettings,
   type RunnerStatus,
   type RunnerTopMode,
 } from "./types.js";
+import { PROMPT_PLACEHOLDER } from "./spawn.js";
 
 /**
  * Filename priority for the walk-up discovery step. The first hit
@@ -54,6 +56,11 @@ const ALLOWED_STATUSES: readonly RunnerStatus[] = [
 ];
 
 const ALLOWED_PROMPT_MODES: readonly AgentPromptMode[] = ["arg", "stdin", "file"];
+const ALLOWED_PROMPT_POSITIONS: readonly AgentPromptPosition[] = [
+  "append",
+  "prepend",
+  "replace",
+];
 const ALLOWED_CLAIM_MODES: readonly RunnerClaimMode[] = ["claim", "move"];
 const ALLOWED_TOP_MODES: readonly RunnerTopMode[] = ["mine"];
 
@@ -106,6 +113,7 @@ interface RawAgent {
   binPath?: unknown;
   promptMode?: unknown;
   promptArg?: unknown;
+  promptPosition?: unknown;
   cwd?: unknown;
   args?: unknown;
   env?: unknown;
@@ -324,6 +332,13 @@ function normaliseConfig(raw: RawConfig, path: string): RunnerConfig {
     promptArg:
       optionalString(agentRaw.promptArg, "agent.promptArg", path) ??
       RUNNER_DEFAULTS.agent.promptArg,
+    promptPosition:
+      optionalEnum(
+        agentRaw.promptPosition,
+        "agent.promptPosition",
+        ALLOWED_PROMPT_POSITIONS,
+        path
+      ) ?? RUNNER_DEFAULTS.agent.promptPosition,
     cwd:
       optionalString(agentRaw.cwd, "agent.cwd", path) ??
       RUNNER_DEFAULTS.agent.cwd,
@@ -564,6 +579,22 @@ export function validate(cfg: RunnerConfig, opts: ValidateOptions = {}): RunnerC
       throw new RunnerConfigError(
         `mode 'mine' requires CLI profile '${cfg.profile ?? "<default>"}' to be logged in; run \`kanban login\` first`,
         "mode"
+      );
+    }
+  }
+  if (cfg.agent.promptPosition === "replace") {
+    const args = cfg.agent.args ?? RUNNER_DEFAULTS.agent.args;
+    const occurrences = args.filter((a) => a === PROMPT_PLACEHOLDER).length;
+    if (occurrences === 0) {
+      throw new RunnerConfigError(
+        `agent.promptPosition='replace' requires agent.args to contain the literal '${PROMPT_PLACEHOLDER}' placeholder exactly once (got 0)`,
+        "agent.promptPosition"
+      );
+    }
+    if (occurrences > 1) {
+      throw new RunnerConfigError(
+        `agent.promptPosition='replace' requires agent.args to contain the literal '${PROMPT_PLACEHOLDER}' placeholder exactly once (got ${occurrences})`,
+        "agent.promptPosition"
       );
     }
   }

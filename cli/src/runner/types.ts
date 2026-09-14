@@ -21,6 +21,28 @@ export type RunnerClaimMode = "claim" | "move";
 export type AgentPromptMode = "arg" | "stdin" | "file";
 
 /**
+ * Where the `--prompt <path>` (or `--prompt-file <path>`) pair is
+ * spliced into the agent's argv. Three values cover the common cases:
+ *
+ *   * `"append"`  — default. Sits at the end of argv, after every
+ *                   entry of `agent.args`. Mirrors the original
+ *                   behaviour so existing configs keep working.
+ *   * `"prepend"` — Sits at the start of argv, before every entry of
+ *                   `agent.args`. Useful when the agent treats
+ *                   later flags as overriding earlier ones.
+ *   * `"replace"` — The user embeds the literal token `"{prompt}"`
+ *                   somewhere in `agent.args`; the runner splices
+ *                   `--prompt <path>` (or `--prompt-file <path>` for
+ *                   `promptMode: file`) in place of that token. Lets
+ *                   an operator position the prompt anywhere in argv,
+ *                   e.g. `opencode --auto true run {prompt}` for the
+ *                   agent's `run` subcommand. The token must appear
+ *                   exactly once; missing or duplicate tokens are
+ *                   surfaced as a config error at validation time.
+ */
+export type AgentPromptPosition = "append" | "prepend" | "replace";
+
+/**
  * Subset of `TaskStatus` we accept as the column filter in
  * `.kanban-runner.yaml`. We type this as a string union so the strict
  * mode check catches typos early; the runtime also rejects anything
@@ -38,6 +60,11 @@ export interface AgentConfig {
   promptMode?: AgentPromptMode;
   /** Flag passed alongside the prompt when `promptMode === "arg"`. */
   promptArg?: string;
+  /**
+   * Where the prompt is spliced into argv. Defaults to `"append"`.
+   * See `AgentPromptPosition` for the three supported modes.
+   */
+  promptPosition?: AgentPromptPosition;
   /** Working directory when spawning the agent. */
   cwd?: string;
   /** Extra arguments appended after the prompt. Replaced wholesale on merge. */
@@ -93,6 +120,7 @@ export const RUNNER_DEFAULTS = Object.freeze({
   agent: {
     promptMode: "arg" as AgentPromptMode,
     promptArg: "--prompt",
+    promptPosition: "append" as AgentPromptPosition,
     cwd: ".",
     args: [] as string[],
     env: {} as Record<string, string>,
