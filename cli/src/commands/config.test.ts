@@ -295,6 +295,103 @@ describe("resolveValue priority chain", () => {
   });
 });
 
+describe("resolveValue / resolveConfig graceful fallback (s-1166)", () => {
+  // The CLI must keep running even when an environment variable or
+  // config file contains a value that `coerceConfigValue` would normally
+  // reject — e.g. `KANBAN_CLI_TIMEOUT=abc` or `KANBAN_CLI_OUTPUT=csv`.
+  // The resolver catches the error, logs a warning, and falls back to
+  // the built-in default so a stray variable never crashes the
+  // bootstrap layer.
+
+  it("falls back to the default for an invalid env timeout and warns", () => {
+    const warnings: string[] = [];
+    const v = resolveValue(
+      "timeout",
+      undefined,
+      {},
+      { ...EMPTY_ENV, KANBAN_CLI_TIMEOUT: "abc" },
+      (msg) => warnings.push(msg)
+    );
+    expect(v).toBe(BUILTIN_DEFAULTS.timeout);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("KANBAN_CLI_TIMEOUT");
+    expect(warnings[0]).toContain("'abc'");
+  });
+
+  it("falls back to the default for an invalid env output and warns", () => {
+    const warnings: string[] = [];
+    const v = resolveValue(
+      "output",
+      undefined,
+      {},
+      { ...EMPTY_ENV, KANBAN_CLI_OUTPUT: "csv" },
+      (msg) => warnings.push(msg)
+    );
+    expect(v).toBe(BUILTIN_DEFAULTS.output);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("KANBAN_CLI_OUTPUT");
+  });
+
+  it("falls back to the default for a negative env timeout and warns", () => {
+    const warnings: string[] = [];
+    const v = resolveValue(
+      "timeout",
+      undefined,
+      {},
+      { ...EMPTY_ENV, KANBAN_CLI_TIMEOUT: "-1" },
+      (msg) => warnings.push(msg)
+    );
+    expect(v).toBe(BUILTIN_DEFAULTS.timeout);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("still throws when an explicit CLI flag is invalid", () => {
+    // CLI flags are user-typed values supplied via the command line; we
+    // deliberately let `coerceConfigValue` reject them so the failure
+    // surfaces with a clean message instead of being silently dropped.
+    expect(() =>
+      resolveValue("timeout", "abc", {}, EMPTY_ENV)
+    ).toThrow(InvalidConfigValueError);
+  });
+
+  it("emits one warning per offending key without aborting resolution", () => {
+    const warnings: string[] = [];
+    const config = resolveConfig(
+      {},
+      {},
+      {
+        ...EMPTY_ENV,
+        KANBAN_CLI_TIMEOUT: "abc",
+        KANBAN_CLI_OUTPUT: "csv",
+      },
+      (msg) => warnings.push(msg)
+    );
+    expect(config.timeout).toBe(BUILTIN_DEFAULTS.timeout);
+    expect(config.output).toBe(BUILTIN_DEFAULTS.output);
+    expect(warnings).toHaveLength(2);
+  });
+
+  it("does not warn when no env vars are malformed", () => {
+    const warnings: string[] = [];
+    resolveConfig(
+      {},
+      {},
+      { ...EMPTY_ENV, KANBAN_API_URL: "https://env.example.com" },
+      (msg) => warnings.push(msg)
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("survives an unparseable env timeout with the default timeout", () => {
+    const config = resolveConfig(
+      {},
+      {},
+      { ...EMPTY_ENV, KANBAN_CLI_TIMEOUT: "1.5" }
+    );
+    expect(config.timeout).toBe(BUILTIN_DEFAULTS.timeout);
+  });
+});
+
 describe("resolveConfig", () => {
   it("returns every key with sensible defaults", () => {
     const config = resolveConfig({}, {}, EMPTY_ENV);

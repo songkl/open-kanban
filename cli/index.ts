@@ -50,10 +50,37 @@ const early = extractEarlyFlags(process.argv);
 // Resolve through the shared priority chain so the bootstrap honours the
 // same rules (`config set apiUrl …`, KANBAN_API_URL, etc.) that the
 // `kanban config get` command prints.
-const resolved = resolveRootConfig({
-  apiUrl: early.apiUrl,
-  profile: early.profile,
-});
+//
+// Bad env / config-file entries never crash the CLI: `resolveRootConfig`
+// logs a warning and falls back to the built-in default so a stray
+// `KANBAN_CLI_TIMEOUT=abc` cannot take down the whole binary. The outer
+// try/catch is a defensive backstop for any future config layer that
+// throws synchronously — we still want a usable CLI even when the
+// bootstrap step itself misbehaves.
+let resolved: ReturnType<typeof resolveRootConfig>;
+try {
+  resolved = resolveRootConfig(
+    {
+      apiUrl: early.apiUrl,
+      profile: early.profile,
+    },
+    undefined,
+    process.env,
+    (msg: string) => {
+      process.stderr.write(`[kanban] warning: ${msg}\n`);
+    }
+  );
+} catch (err) {
+  process.stderr.write(
+    `[kanban] warning: failed to resolve config (${
+      (err as Error).message
+    }); falling back to built-in defaults\n`
+  );
+  resolved = resolveRootConfig({
+    apiUrl: early.apiUrl,
+    profile: early.profile,
+  });
+}
 const apiUrl = resolved.apiUrl;
 const profile = resolved.profile;
 

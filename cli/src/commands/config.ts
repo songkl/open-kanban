@@ -272,6 +272,17 @@ export function parseKey(input: string): SupportedKey {
 }
 
 /**
+ * Pluggable warning sink used by the resolver to surface bad env /
+ * config-file entries without crashing the CLI. The default is a no-op
+ * so pure unit tests stay quiet; the production entry point in
+ * `cli/index.ts` installs a stderr-backed logger so operators see
+ * "ignored $KANBAN_CLI_TIMEOUT=abc" instead of an uncaught exception.
+ */
+export type ResolveWarningSink = (message: string) => void;
+
+const noopWarning: ResolveWarningSink = () => {};
+
+/**
  * Apply the full priority chain for a single key:
  *
  *   cliValue  →  envValue  →  fileValue  →  builtinDefault
@@ -279,12 +290,18 @@ export function parseKey(input: string): SupportedKey {
  * Each layer is optional; the first one that returns a defined value
  * wins. The function is exported so individual layers can be unit-tested
  * without having to construct a fake filesystem.
+ *
+ * `onWarn` is consulted when an env / file value is present but fails
+ * validation (e.g. `KANBAN_CLI_TIMEOUT=abc`). The CLI uses this hook to
+ * log a friendly warning and fall through to the built-in default so a
+ * stray environment variable never crashes the bootstrap layer.
  */
 export function resolveValue<K extends SupportedKey>(
   key: K,
   cliValue: string | undefined,
   file: CliConfigFile,
-  env: Record<string, string | undefined>
+  env: Record<string, string | undefined>,
+  onWarn: ResolveWarningSink = noopWarning
 ): ResolvedConfig[K] {
   if (cliValue !== undefined) {
     return coerceConfigValue(key, cliValue) as ResolvedConfig[K];
@@ -293,7 +310,19 @@ export function resolveValue<K extends SupportedKey>(
   if (envName) {
     const envValue = env[envName];
     if (envValue !== undefined && envValue !== "") {
-      return coerceConfigValue(key, envValue) as ResolvedConfig[K];
+      try {
+        return coerceConfigValue(key, envValue) as ResolvedConfig[K];
+      } catch (err) {
+        // Bad env value: never crash the bootstrap layer over a stray
+        // environment variable. Surface the issue via `onWarn` so
+        // operators can still see *why* their value was ignored.
+        onWarn(
+          `ignored invalid ${envName}='${envValue}': ${
+            (err as Error).message
+          }; falling back to default`
+        );
+        return BUILTIN_DEFAULTS[key] as ResolvedConfig[K];
+      }
     }
   }
   const fileValue = file[key];
@@ -331,17 +360,22 @@ export function resolveValue<K extends SupportedKey>(
  * wrapper around `resolveValue` so callers that need the full picture
  * (the `kanban config get` command, the bootstrap layer) can hit one
  * function instead of looping manually.
+ *
+ * `onWarn` is forwarded to each `resolveValue` call so a bad env var
+ * produces one warning per offending key without aborting resolution
+ * of the remaining keys.
  */
 export function resolveConfig(
   cliFlags: Partial<Record<SupportedKey, string | undefined>>,
   file: CliConfigFile = readConfigFile(),
-  env: Record<string, string | undefined> = process.env
+  env: Record<string, string | undefined> = process.env,
+  onWarn: ResolveWarningSink = noopWarning
 ): ResolvedConfig {
   return {
-    apiUrl: resolveValue("apiUrl", cliFlags.apiUrl, file, env),
-    output: resolveValue("output", cliFlags.output, file, env),
-    profile: resolveValue("profile", cliFlags.profile, file, env),
-    timeout: resolveValue("timeout", cliFlags.timeout, file, env),
+    apiUrl: resolveValue("apiUrl", cliFlags.apiUrl, file, env, onWarn),
+    output: resolveValue("output", cliFlags.output, file, env, onWarn),
+    profile: resolveValue("profile", cliFlags.profile, file, env, onWarn),
+    timeout: resolveValue("timeout", cliFlags.timeout, file, env, onWarn),
   };
 }
 

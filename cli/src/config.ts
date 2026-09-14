@@ -56,13 +56,18 @@ export interface RootConfig {
  * helper pulls them out of `process.argv` when called without an
  * argument so the entry-point can call `getRootConfig()` without having
  * to thread the parsed flags through every layer.
+ *
+ * `onWarn` is forwarded to `resolveConfig` so callers (typically the
+ * bootstrap layer in `cli/index.ts`) can surface bad env / file values
+ * instead of crashing over a stray `KANBAN_CLI_TIMEOUT=abc`.
  */
 export function resolveRootConfig(
   cliFlags: Partial<Record<SupportedKey, string | undefined>> = {},
   file: CliConfigFile | undefined = undefined,
-  env: Record<string, string | undefined> = process.env
+  env: Record<string, string | undefined> = process.env,
+  onWarn?: import("./commands/config.js").ResolveWarningSink
 ): ResolvedConfig {
-  return resolveConfig(cliFlags, file, env);
+  return resolveConfig(cliFlags, file, env, onWarn);
 }
 
 /**
