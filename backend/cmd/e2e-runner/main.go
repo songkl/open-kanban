@@ -305,6 +305,21 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 		comments.POST("", handlers.CreateComment(db))
 	}
 
+	// Subtasks — mirrors the production layout in cmd/server/main.go so
+	// the CLI `kanban subtasks create / list` commands can be exercised
+	// end-to-end against the helper. The whole group sits behind
+	// RequireAuth because every subtask endpoint in production is
+	// gated the same way (the handler itself also checks board WRITE
+	// access for create / update / delete and READ for list).
+	subtasks := r.Group("/api/v1/subtasks")
+	subtasks.Use(handlers.RequireAuth(db))
+	{
+		subtasks.GET("", handlers.GetSubtasks(db))
+		subtasks.POST("", handlers.CreateSubtask(db))
+		subtasks.PUT("/:id", handlers.UpdateSubtask(db))
+		subtasks.DELETE("/:id", handlers.DeleteSubtask(db))
+	}
+
 	// Test-only auto-approval endpoint. The CLI's `kanban auth login`
 	// walks the device flow on behalf of a human; the real approval
 	// step (POST /oauth/device/approve) lives behind a user login
