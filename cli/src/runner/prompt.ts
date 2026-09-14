@@ -130,12 +130,29 @@ function safe(text: string | null | undefined, fallback: string): string {
  *                                    workflow conventions).
  *   2. `# Column: <name>`          — narrows to the column-level
  *                                    rules / acceptance criteria.
- *   3. `# Task <id>`               — the unit of work.
- *   4. `## Description`            — only when present.
- *   5. `## Agent Prompt`           — task-defined instructions.
- *   6. `## Meta`                   — structured metadata.
- *   7. `## Comments`               — discussion thread.
- *   8. `## Subtasks`               — checklist.
+ *   3. `# Task <id>`               — the unit of work (metadata:
+ *                                    title / priority / assignee).
+ *   4. `## Agent Prompt`           — task-defined instructions.
+ *   5. `## Meta`                   — structured metadata.
+ *   6. `## Comments`               — discussion thread.
+ *   7. `## Subtasks`               — checklist.
+ *   8. `## Task Content`           — the task's own description,
+ *                                    always rendered last so the
+ *                                    agent's final-viewed block is
+ *                                    the actionable instruction
+ *                                    itself (per s-1165). The
+ *                                    section is always present even
+ *                                    when the description is empty —
+ *                                    the placeholder "(no content)"
+ *                                    is a signal the agent can rely
+ *                                    on rather than the absence of a
+ *                                    header.
+ *
+ * Earlier drafts inlined the description inside `# Task <id>`; the
+ * rearrangement puts context (board / column / meta / comments /
+ * subtasks) up front and reserves the bottom of the prompt for the
+ * task's own content. Agents that scroll-to-end or quote the last
+ * markdown section therefore see the description verbatim.
  */
 export function renderPrompt(ctx: PromptContext): string {
   const sections: string[] = [];
@@ -149,11 +166,6 @@ export function renderPrompt(ctx: PromptContext): string {
   sections.push(`Title: ${safe(ctx.task.title, "(untitled)")}`);
   sections.push(`Priority: ${safe(ctx.task.priority as string | null | undefined, "unspecified")}`);
   sections.push(`Assignee: ${safe(ctx.task.assignee as string | null | undefined, "unassigned")}`);
-  if (typeof ctx.task.description === "string" && ctx.task.description.length > 0) {
-    sections.push("");
-    sections.push("## Description");
-    sections.push(ctx.task.description);
-  }
   const agentPrompt = ctx.agentPrompt !== undefined ? ctx.agentPrompt : ctx.task.agentPrompt;
   sections.push("");
   sections.push("## Agent Prompt");
@@ -181,6 +193,20 @@ export function renderPrompt(ctx: PromptContext): string {
       const mark = s.completed ? "x" : " ";
       sections.push(`- [${mark}] ${safe(s.title, "(untitled)")}`);
     }
+  }
+  // Task content is intentionally the final section (s-1165). The
+  // agent's last-read block is the description itself, so a model
+  // that summarises / quotes only the closing section still
+  // receives the actionable instruction.
+  sections.push("");
+  sections.push("## Task Content");
+  if (
+    typeof ctx.task.description === "string" &&
+    ctx.task.description.length > 0
+  ) {
+    sections.push(ctx.task.description);
+  } else {
+    sections.push("(no content)");
   }
   sections.push("");
   return sections.join("\n");

@@ -314,6 +314,17 @@ All notable changes to this project will be documented in this file.
   cases. i18n keys added to both `en.json` and `zh.json` for
   title, fields, validation errors, and per-type labels
   (`google` / `github` / `wecom` / `feishu` / `dingtalk` / `oidc`).
+- s-1165: render the task's own description as the **closing**
+  section of the `kanban run` agent prompt. The markdown payload
+  now emits the board / column / task metadata + agent prompt +
+  meta + comments + subtasks in order, then appends a
+  `## Task Content` block at the very end with the task
+  description (falling back to `(no content)` when empty). This
+  way the agent's last-read block is the actionable instruction
+  itself — the previous layout embedded the description inside
+  the `# Task <id>` block. The inline snapshot in
+  `cli/tests/runner/prompt.test.ts` and the `kanban-run(1)`
+  man page were updated to reflect the new ordering.
 
 ### Bug Fixes
 

@@ -30,7 +30,10 @@ to atomically acquire the next eligible task whose column advertises
 the runner's agent type.
 .IP \(bu 4
 Spawns the configured agent binary, passing it a rendered markdown
-prompt that includes the board / column / task context.
+prompt that includes the board / column / task context, with the
+task's own description appended as a closing \fB## Task Content\fR
+section so the agent's last-read block is the actionable
+instruction itself.
 .IP \(bu 4
 Calls
 .B POST /api/v1/runs/:taskId/heartbeat

@@ -5,9 +5,10 @@
 //   1. Snapshot — the full prompt body for a representative task. Any
 //      change here is a deliberate breaking change for downstream
 //      agents; the snapshot pins every line.
-//   2. Section omission — optional sections (description, comments,
-//      subtasks) must be absent, not blank, so the agent can rely on
-//      absence as a signal.
+//   2. Section omission — optional sections (comments, subtasks)
+//      must be present-but-(none), so the agent can rely on a stable
+//      block layout regardless of which fields the task filled in.
+//      The `## Task Content` section follows the same rule (s-1165).
 //   3. `hydrateContext` — best-effort fallback when an auxiliary
 //      fetch fails; the loop must never drop a task because of a
 //      comments-endpoint hiccup.
@@ -90,9 +91,6 @@ describe("renderPrompt — happy path snapshot", () => {
       Priority: high
       Assignee: claude-bot
 
-      ## Description
-      Wire the long-lived loop that picks up tasks and runs the agent binary.
-
       ## Agent Prompt
       Follow the §4.2 algorithm verbatim; do not skip the heartbeat step.
 
@@ -113,21 +111,46 @@ describe("renderPrompt — happy path snapshot", () => {
       - [x] Implement claim/finish/release helpers
       - [ ] Wire the heartbeat scheduler
       - [ ] Cover SIGTERM drain with a test
+
+      ## Task Content
+      Wire the long-lived loop that picks up tasks and runs the agent binary.
       "
     `);
   });
 });
 
-describe("renderPrompt — optional sections", () => {
-  it("omits the description section when the task has none", () => {
+describe("renderPrompt — task content lives at the end (s-1165)", () => {
+  it("renders the task description as the closing section", () => {
+    const out = renderPrompt(sampleContext());
+    const sections = out.trimEnd().split(/\n\n(?=##? )/);
+    const last = sections[sections.length - 1];
+    expect(last.startsWith("## Task Content\n")).toBe(true);
+    expect(last).toContain("Wire the long-lived loop that picks up tasks and runs the agent binary.");
+    expect(out.indexOf("## Task Content")).toBeGreaterThan(out.indexOf("## Subtasks"));
+  });
+
+  it("falls back to '(no content)' when the description is empty", () => {
     const ctx: PromptContext = {
       ...sampleContext(),
       task: { ...SAMPLE_TASK, description: "" },
     };
     const out = renderPrompt(ctx);
-    expect(out).not.toContain("## Description");
+    // The section is still present so the agent always sees an explicit
+    // marker rather than a silently-missing block.
+    expect(out).toContain("## Task Content\n(no content)");
   });
 
+  it("falls back to '(no content)' when the description is null", () => {
+    const ctx: PromptContext = {
+      ...sampleContext(),
+      task: { ...SAMPLE_TASK, description: null },
+    };
+    const out = renderPrompt(ctx);
+    expect(out).toContain("## Task Content\n(no content)");
+  });
+});
+
+describe("renderPrompt — optional sections", () => {
   it("shows the comments section as '(none)' when the thread is empty", () => {
     const ctx: PromptContext = { ...sampleContext(), comments: [] };
     const out = renderPrompt(ctx);
@@ -155,6 +178,9 @@ describe("renderPrompt — optional sections", () => {
     expect(out).toContain("Title: (untitled)");
     expect(out).toContain("Assignee: unassigned");
     expect(out).toContain("(no description)");
+    // The Task Content section is still present at the end even with
+    // an empty task record.
+    expect(out.trimEnd().endsWith("## Task Content\n(no content)")).toBe(true);
   });
 
   it("honours ctx.agentPrompt overrides over task.agentPrompt", () => {
