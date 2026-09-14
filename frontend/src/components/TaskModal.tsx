@@ -44,15 +44,20 @@ function formatCommentDate(t: ReturnType<typeof useTranslation>[0], dateStr: str
  * Format the elapsed time since `claimedAt` into a short human label.
  * Kept short to fit the run info section header — see TaskCard for the
  * badge variant.
+ *
+ * When `finishedAt` is supplied (i.e. the run has reached a terminal
+ * status) the elapsed label is frozen at `finishedAt - claimedAt` so
+ * the modal does not keep ticking once the runner has settled.
  */
 function formatRunElapsed(
   claimedAt: string,
   t: (key: string, opts?: Record<string, unknown>) => string,
-  now: number = Date.now()
+  finishedAt?: string | null
 ): string {
   const startMs = new Date(claimedAt).getTime();
   if (Number.isNaN(startMs)) return t('taskCard.runnerElapsedSeconds', { count: 0 });
-  const elapsedSec = Math.max(0, Math.floor((now - startMs) / 1000));
+  const endMs = finishedAt ? new Date(finishedAt).getTime() : Date.now();
+  const elapsedSec = Math.max(0, Math.floor((endMs - startMs) / 1000));
   if (elapsedSec < 60) return t('taskCard.runnerElapsedSeconds', { count: elapsedSec });
   if (elapsedSec < 3600) {
     return t('taskCard.runnerElapsedMinutes', { count: Math.floor(elapsedSec / 60) });
@@ -79,11 +84,18 @@ function RunInfoSection({ run }: { run: TaskRun }) {
     minute: '2-digit',
     second: '2-digit',
   });
+  // Only tick once a second while the runner is live — once the run
+  // settles into a terminal status (`completed` / `failed` /
+  // `released`) the elapsed label is frozen at `finishedAt` so the
+  // modal stops re-rendering for a runner that has already gone
+  // away (s-1168).
+  const isLive = run.status === 'claimed' || run.status === 'running';
   const [, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
+    if (!isLive) return undefined;
     const handle = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(handle);
-  }, []);
+  }, [isLive]);
 
   const statusColor: Record<TaskRun['status'], string> = {
     claimed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700/50',
@@ -110,7 +122,7 @@ function RunInfoSection({ run }: { run: TaskRun }) {
           {t(`taskModal.runStatus.${run.status}`)}
         </span>
         <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
-          {t('taskModal.runElapsed', { elapsed: formatRunElapsed(run.claimedAt, t) })}
+          {t('taskModal.runElapsed', { elapsed: formatRunElapsed(run.claimedAt, t, run.finishedAt ?? null) })}
         </span>
       </div>
       <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5 text-xs">

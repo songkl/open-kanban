@@ -548,5 +548,65 @@ describe('TaskModal', () => {
       expect(dd).not.toBeNull();
       expect(dd?.textContent).toContain(longRunnerId);
     });
+
+    it('does not tick the elapsed label when the run is in a terminal status (s-1168)', () => {
+      vi.useFakeTimers();
+      try {
+        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+        mockedUseTaskRun.mockReturnValue({
+          run: {
+            taskId: 'task-1',
+            runnerId: 'runner-failed',
+            agentId: 'opencode',
+            boardId: 'b-1',
+            columnId: 'c-1',
+            status: 'failed',
+            claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
+            lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
+            expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
+            finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
+            exitCode: 1,
+            error: 'boom',
+          },
+          loading: false,
+          error: null,
+        });
+        render(<TaskModal {...defaultProps} />);
+        // For terminal runs the modal must not arm a 1-second interval
+        // — useTaskRun already stopped the API poll and the UI should
+        // not keep re-rendering the modal banner either.
+        expect(setIntervalSpy).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps ticking the elapsed label while the run is still live', () => {
+      vi.useFakeTimers();
+      try {
+        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+        mockedUseTaskRun.mockReturnValue({
+          run: {
+            taskId: 'task-1',
+            runnerId: 'runner-live',
+            agentId: 'opencode',
+            boardId: 'b-1',
+            columnId: 'c-1',
+            status: 'running',
+            claimedAt: new Date(Date.now() - 5_000).toISOString(),
+            lastHeartbeatAt: new Date(Date.now() - 1_000).toISOString(),
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          },
+          loading: false,
+          error: null,
+        });
+        render(<TaskModal {...defaultProps} />);
+        // Live runs must arm the 1-second tick — positive control for
+        // the terminal-run assertion above.
+        expect(setIntervalSpy).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

@@ -47,11 +47,20 @@ function highlightText(text: string, query: string): React.ReactNode {
  * Format the elapsed time since `claimedAt` into a short human label
  * (e.g. "12s", "3m", "1h"). Stays short on purpose — the badge has
  * limited horizontal space on a task card.
+ *
+ * When `finishedAt` is supplied (i.e. the run has reached a terminal
+ * status) the elapsed label is frozen at `finishedAt - claimedAt` so
+ * the badge does not keep ticking once the runner has settled.
  */
-function formatRunElapsed(claimedAt: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
+function formatRunElapsed(
+  claimedAt: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  finishedAt?: string | null
+): string {
   const startMs = new Date(claimedAt).getTime();
   if (Number.isNaN(startMs)) return t('taskCard.runnerElapsedSeconds', { count: 0 });
-  const elapsedSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+  const endMs = finishedAt ? new Date(finishedAt).getTime() : Date.now();
+  const elapsedSec = Math.max(0, Math.floor((endMs - startMs) / 1000));
   if (elapsedSec < 60) return t('taskCard.runnerElapsedSeconds', { count: elapsedSec });
   if (elapsedSec < 3600) {
     return t('taskCard.runnerElapsedMinutes', { count: Math.floor(elapsedSec / 60) });
@@ -62,20 +71,34 @@ function formatRunElapsed(claimedAt: string, t: (key: string, opts?: Record<stri
 /**
  * RunnerBadge — small pill rendered on a task card while a CLI runner
  * is processing it (see `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5).
- * Refreshes the elapsed label every second so the running timer is
- * accurate without re-querying the API on every tick.
+ * Refreshes the elapsed label every second while the run is live
+ * (`claimed` / `running`) so the running timer stays accurate without
+ * re-querying the API on every tick. Once the run settles into a
+ * terminal state (`completed` / `failed` / `released`) the interval
+ * is skipped and the label is frozen at the `finishedAt` time so the
+ * card stops re-rendering for a runner that has already gone away.
  */
-function RunnerBadge({ runnerId, label }: { runnerId: string; label: string }) {
+function RunnerBadge({
+  runnerId,
+  label,
+  live,
+}: {
+  runnerId: string;
+  label: string;
+  live: boolean;
+}) {
   const { t } = useTranslation();
   // Re-render every second so the elapsed label stays accurate. The
   // 1s cadence is intentional — finer granularity wastes CPU on every
   // task card on the board; coarser granularity makes the badge feel
-  // stale.
+  // stale. Skip the interval entirely for terminal runs (s-1168) so a
+  // settled task does not keep ticking on the board.
   const [, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
+    if (!live) return undefined;
     const handle = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(handle);
-  }, []);
+  }, [live]);
   return (
     <span
       className="inline-flex max-w-[10rem] items-center gap-1 overflow-hidden rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700/50"
@@ -394,7 +417,8 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           {run && (
             <RunnerBadge
               runnerId={run.runnerId}
-              label={formatRunElapsed(run.claimedAt, t)}
+              label={formatRunElapsed(run.claimedAt, t, run.finishedAt ?? null)}
+              live={run.status === 'claimed' || run.status === 'running'}
             />
           )}
           {task.subtasks && task.subtasks.length > 0 && (

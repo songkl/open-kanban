@@ -290,5 +290,72 @@ describe('TaskCard', () => {
       expect(badge).toHaveAttribute('title');
       expect(badge.getAttribute('title')).toContain(longRunnerId);
     });
+
+    it('does not tick the elapsed label when the run is in a terminal status (s-1168)', () => {
+      vi.useFakeTimers();
+      try {
+        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+        // Run finished 30 seconds after it claimed — badge should
+        // freeze the elapsed label at 30s, not keep counting from
+        // Date.now().
+        const claimedAt = new Date(Date.now() - 60_000).toISOString();
+        const finishedAt = new Date(Date.now() - 30_000).toISOString();
+        mockedUseTaskRun.mockReturnValue({
+          run: {
+            taskId: 'task-1',
+            runnerId: 'runner-failed',
+            agentId: 'opencode',
+            boardId: 'b-1',
+            columnId: 'c-1',
+            status: 'failed',
+            claimedAt,
+            lastHeartbeatAt: finishedAt,
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            finishedAt,
+            exitCode: 1,
+            error: 'boom',
+          },
+          loading: false,
+          error: null,
+        });
+        render(<TaskCard {...defaultProps} />);
+        // For terminal runs the badge must not arm a 1-second interval
+        // — useTaskRun already stopped the API poll and the UI should
+        // not keep re-rendering the card either.
+        expect(setIntervalSpy).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps ticking the elapsed label when the run is still live', () => {
+      vi.useFakeTimers();
+      try {
+        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+        const claimedAt = new Date(Date.now() - 5_000).toISOString();
+        mockedUseTaskRun.mockReturnValue({
+          run: {
+            taskId: 'task-1',
+            runnerId: 'runner-live',
+            agentId: 'opencode',
+            boardId: 'b-1',
+            columnId: 'c-1',
+            status: 'running',
+            claimedAt,
+            lastHeartbeatAt: claimedAt,
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          },
+          loading: false,
+          error: null,
+        });
+        render(<TaskCard {...defaultProps} />);
+        // The 1-second tick is required for live runs so the elapsed
+        // label stays accurate — this is the positive control for the
+        // terminal-run assertion above.
+        expect(setIntervalSpy).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
