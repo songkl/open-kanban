@@ -370,26 +370,69 @@ func TestClaimRun_NoEligibleTaskReturns204(t *testing.T) {
 	}
 }
 
-func TestClaimRun_AgentTypeMismatchRejected(t *testing.T) {
+// TestClaimRun_NoAgentTypeFallbackToken covers the
+// "token has a user_agent, body omits agentType" branch: the
+// handler should fall back to the token's user_agent and write
+// that into task_runs.agent_id. Pre-s-1161 the request would
+// have been rejected with 400 because agentType was a required
+// body field.
+func TestClaimRun_NoAgentTypeFallbackToken(t *testing.T) {
 	db := setupRunsDB(t)
 	defer db.Close()
 
-	// Mint a token whose user_agent is 'gpt', then ask for
-	// agentType 'opencoder'. The handler must reject so a
-	// stolen token can't claim work for an unrelated agent.
-	if _, err := db.Exec(`INSERT INTO tokens (id, name, user_id, key, user_agent) VALUES ('t-gpt', 'gpt', 'u-admin', 'gpt-token', 'gpt')`); err != nil {
-		t.Fatalf("seed mismatched token: %v", err)
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
+		"boardId":  "b1",
+		"status":   "todo",
+		"runnerId": "runner-A",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var agentID string
+	if err := db.QueryRow("SELECT agent_id FROM task_runs WHERE task_id = 't-1'").Scan(&agentID); err != nil {
+		t.Fatalf("query agent_id: %v", err)
+	}
+	// admin-token in the seed has user_agent = 'opencoder'.
+	if agentID != "opencoder" {
+		t.Errorf("expected agent_id=opencoder (from token fallback), got %q", agentID)
+	}
+}
+
+// TestClaimRun_NoAgentTypeAndNoTokenUserAgent covers the
+// "neither body nor token has an agentType" branch: the
+// handler should still succeed and write an empty agent_id.
+// This is the path an unconfigured CLI hits when it doesn't
+// know which agent class to advertise — the claim still
+// succeeds so the runner can pick up work.
+func TestClaimRun_NoAgentTypeAndNoTokenUserAgent(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	// Mint a token with no user_agent at all so the
+	// fallback path also resolves to empty.
+	if _, err := db.Exec(`INSERT INTO tokens (id, name, user_id, key, user_agent) VALUES ('t-empty', 'empty', 'u-admin', 'empty-token', NULL)`); err != nil {
+		t.Fatalf("seed empty token: %v", err)
 	}
 
 	router := runsRouter(db)
-	w := doRequest(router, "POST", "/api/v1/runs/claim", "gpt-token", map[string]interface{}{
-		"boardId":   "b1",
-		"status":    "todo",
-		"agentType": "opencoder",
-		"runnerId":  "runner-A",
+	w := doRequest(router, "POST", "/api/v1/runs/claim", "empty-token", map[string]interface{}{
+		"boardId":  "b1",
+		"status":   "todo",
+		"runnerId": "runner-A",
+		// agentType intentionally omitted; token also empty.
 	})
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var agentID string
+	if err := db.QueryRow("SELECT agent_id FROM task_runs WHERE task_id = 't-1'").Scan(&agentID); err != nil {
+		t.Fatalf("query agent_id: %v", err)
+	}
+	if agentID != "" {
+		t.Errorf("expected empty agent_id, got %q", agentID)
 	}
 }
 
@@ -432,10 +475,40 @@ func TestClaimRun_MissingFieldsReturns400(t *testing.T) {
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
 		"boardId": "b1",
-		// status / agentType / runnerId omitted
+		// status / runnerId omitted; agentType is intentionally
+		// left out too — s-1161 made it optional.
 	})
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestClaimRun_AgentTypeMismatchStillAccepted covers s-1161's
+// permissive direction: the body may carry an agentType that
+// differs from the calling token's user_agent. The server
+// honours the body's value verbatim — there's no defence-in-depth
+// 403 anymore — so an admin running multiple agents can claim
+// for whichever class the runner is configured for in the YAML
+// without re-issuing tokens.
+func TestClaimRun_AgentTypeMismatchStillAccepted(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	// Mint a token whose user_agent is 'opencoder' (the seed
+	// already has admin-token='opencoder') and pass agentType
+	// 'gpt' in the body. The handler must accept — the
+	// gpt-only column_agents row means no task is eligible,
+	// so the response is 204 rather than 200, but neither
+	// should be a 403.
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
+		"boardId":   "b1",
+		"status":    "todo",
+		"agentType": "gpt",
+		"runnerId":  "runner-A",
+	})
+	if w.Code != http.StatusNoContent && w.Code != http.StatusOK {
+		t.Fatalf("expected 200 or 204, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -1061,6 +1134,62 @@ func TestRepository_FindEligibleTaskSkipsArchivedAndUnpublished(t *testing.T) {
 	}
 	if got2 != "t-2" {
 		t.Errorf("expected next eligible task to be t-2, got %s", got2)
+	}
+}
+
+// TestRepository_FindEligibleTaskEmptyAgentType covers the
+// s-1161 "no need to restrict agentType" branch: an empty
+// agentType bypasses the column_agents.agent_types filter
+// entirely and returns the next eligible task regardless of
+// which agent class the column advertises.
+func TestRepository_FindEligibleTaskEmptyAgentType(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	repo := repositories.NewRunRepository(db)
+
+	// c-todo is seeded with agent_types=["opencoder"], so a
+	// non-empty agentType like "gpt" would yield ErrNoRunRow;
+	// passing an empty agentType must drop the filter and
+	// return the first available task.
+	got, _, err := repo.FindEligibleTask("b1", "todo", "")
+	if err != nil {
+		t.Fatalf("FindEligibleTask with empty agentType: %v", err)
+	}
+	if got != "t-1" {
+		t.Errorf("expected t-1 with empty agentType, got %s", got)
+	}
+}
+
+// TestRepository_FindEligibleTaskColumnWithoutColumnAgentsRow
+// covers the case where a column has no row in column_agents at
+// all (no agent_type restriction configured). Even when a
+// specific agentType is passed, the row should still be
+// considered eligible — the absence of a column_agents row is
+// the "no agent-type restriction" sentinel.
+func TestRepository_FindEligibleTaskColumnWithoutColumnAgentsRow(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	// Seed an extra column with no column_agents row, then a
+	// task in it. The agent_type filter must not exclude the
+	// task just because the column lacks a column_agents entry.
+	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
+		('c-free', 'Free Lane', 'free', 4, 'b1')`); err != nil {
+		t.Fatalf("seed column: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, created_by) VALUES
+		('t-free', 'free lane task', 'c-free', 1000, 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	repo := repositories.NewRunRepository(db)
+	got, columnID, err := repo.FindEligibleTask("b1", "free", "opencoder")
+	if err != nil {
+		t.Fatalf("FindEligibleTask: %v", err)
+	}
+	if got != "t-free" || columnID != "c-free" {
+		t.Errorf("expected (t-free, c-free) without column_agents row, got (%s, %s)", got, columnID)
 	}
 }
 

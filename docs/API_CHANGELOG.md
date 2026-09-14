@@ -88,6 +88,32 @@ This document tracks changes to the Open-Kanban API specification.
   `plaintextSecret` field is on Create + RotateSecret responses
   only; every other read redacts to `"********"`.
 
+### Behavior — `POST /api/v1/runs/claim` agentType relaxation (s-1161)
+
+- **`agentType` is now optional.** Previously a 400 was
+  returned when the body omitted `agentType`. The new behaviour:
+  1. Use `agentType` from the body when provided.
+  2. Fall back to the calling token's `user_agent` when the
+     body omits the field.
+  3. If both are empty, write an empty `agent_id` to
+     `task_runs` and continue with the claim.
+
+  Clients that already send `agentType` continue to work
+  unchanged.
+- **The "token `user_agent` must match body `agentType`" 403
+  has been removed.** The body value is now honoured verbatim
+  so an admin running multiple agent classes can claim on
+  behalf of whichever the runner configures without having to
+  re-issue tokens. The `user_agent` is still the authoritative
+  identity for callers that omit the body field.
+- **`FindEligibleTask` skips the `column_agents.agent_types`
+  filter entirely when `agentType` is empty**, so a runner
+  without an agent class can pick up any eligible task on the
+  board. When a column has no `column_agents` row at all the
+  query also treats it as "no agent-type restriction" so
+  newly added columns still accept claims from existing
+  runners.
+
 ## [1.0.0] - 2026-03-31
 
 ### Added

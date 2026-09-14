@@ -558,11 +558,13 @@ the loop down. Common causes:
   the runner's user / token doesn't have WRITE on the column
   (or its board fallback). Add a `board_permissions` grant or
   use a token whose user has the right role.
-* `403 Forbidden: token user_agent does not match agentType` —
-  the token was issued for a different agent type than the
-  config's `runner.mode` / the server's `column_agents` allow.
-  Re-issue the token with the correct `user_agent`, or change
-  the column's `column_agents` to include the runner's type.
+* The token's `user_agent` no longer has to match the body's
+  `agentType` since s-1161 — the CLI's default of `opencode` is
+  used as a routing hint, but the server falls back to the
+  token's `user_agent` when the body omits the field, and
+  honours the body verbatim when both are present. To target a
+  specific agent class, set `agentType` on the body or
+  `KANBAN_RUNNER_AGENT_TYPE` in the environment.
 
 **`task ... finish returned 409 (lost)`**
 

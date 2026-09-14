@@ -86,8 +86,8 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parameters"})
 			return
 		}
-		if req.BoardID == "" || req.Status == "" || req.AgentType == "" || req.RunnerID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "boardId, status, agentType and runnerId are required"})
+		if req.BoardID == "" || req.Status == "" || req.RunnerID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "boardId, status and runnerId are required"})
 			return
 		}
 
@@ -98,6 +98,21 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 		if mode != "board" && mode != "mine" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "mode must be 'board' or 'mine'"})
 			return
+		}
+
+		// Resolve the effective agentType. The body field is
+		// optional; when absent we fall back to the calling
+		// token's user_agent (same source-of-truth the
+		// /mcp/my-tasks endpoint reads). This mirrors the
+		// AttachRun semantics introduced in s-1130 and
+		// addresses the "no need to restrict agentType"
+		// feedback from s-1161 — callers no longer have to
+		// thread the agent type through every request, and
+		// the token's user_agent is still the authoritative
+		// identity when the body omits the field.
+		agentType := strings.TrimSpace(req.AgentType)
+		if agentType == "" {
+			agentType = strings.TrimSpace(readTokenUserAgent(db, c))
 		}
 
 		// Authorization: at least one column on the board
@@ -119,7 +134,7 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 			// per-task permission is enforced by the existing
 			// GetMyTasks filter plus a board access check on
 			// the resolved task below.
-			if !userHasAnyClaimableTask(db, user, req.AgentType) {
+			if !userHasAnyClaimableTask(db, user, agentType) {
 				c.JSON(http.StatusForbidden, gin.H{"error": "No claimable tasks for this user"})
 				return
 			}
@@ -130,16 +145,6 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 			lockTimeoutMs = DefaultRunLockTimeoutMs
 		}
 
-		// Snapshot the calling token's user_agent — that is
-		// the agent type the runner is willing to pick up.
-		// We validate it matches what the body claimed so a
-		// stolen token can't claim for an unrelated agent.
-		tokenUserAgent := readTokenUserAgent(db, c)
-		if tokenUserAgent != "" && tokenUserAgent != req.AgentType {
-			c.JSON(http.StatusForbidden, gin.H{"error": "token user_agent does not match agentType"})
-			return
-		}
-
 		repo := repositories.NewRunRepository(db)
 
 		var (
@@ -147,9 +152,9 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 			err              error
 		)
 		if mode == "mine" {
-			taskID, columnID, err = pickMyTaskForClaim(db, user, req.AgentType)
+			taskID, columnID, err = pickMyTaskForClaim(db, user, agentType)
 		} else {
-			taskID, columnID, err = repo.FindEligibleTask(req.BoardID, req.Status, req.AgentType)
+			taskID, columnID, err = repo.FindEligibleTask(req.BoardID, req.Status, agentType)
 		}
 		if err != nil {
 			if err == repositories.ErrNoRunRow {
@@ -199,7 +204,7 @@ func ClaimRun(db *sql.DB) gin.HandlerFunc {
 		// user.ID here would mean the runner's heartbeat is
 		// rejected with 409 the first time its own runnerId string
 		// doesn't happen to match the user record primary key.
-		claim, err := repo.ClaimRun(boardID, taskID, columnID, req.RunnerID, req.AgentType, inProgressColumnID, lockTimeoutMs)
+		claim, err := repo.ClaimRun(boardID, taskID, columnID, req.RunnerID, agentType, inProgressColumnID, lockTimeoutMs)
 		if err != nil {
 			if err == repositories.ErrLockHeld {
 				// Transient — another runner beat us to this
@@ -882,12 +887,38 @@ func userHasBoardStatusWrite(db *sql.DB, user *models.User, boardID, status stri
 // same eligibility filter as pickMyTaskForClaim — keeping
 // them in lockstep is what avoids surprising "204 when the
 // user is forbidden" outcomes.
+//
+// When agentType is empty (s-1161: agentType is now optional on
+// /runs/claim) the column_agents.agent_types predicate is
+// skipped — the user is allowed to pick up any task assigned
+// to them regardless of which column routing guard the
+// board owner has configured.
 func userHasAnyClaimableTask(db *sql.DB, user *models.User, agentType string) bool {
 	if user == nil {
 		return false
 	}
 	if user.Role == "ADMIN" {
 		return true
+	}
+	if agentType == "" {
+		row := db.QueryRow(`
+			SELECT EXISTS (
+				SELECT 1 FROM tasks t
+				WHERE t.archived = 0 AND t.published = 1
+				  AND t.assignee = ?
+				  AND NOT EXISTS (
+				      SELECT 1 FROM task_runs tr
+				      WHERE tr.task_id = t.id
+				        AND tr.status IN ('claimed', 'running')
+				        AND datetime(tr.expires_at) > datetime('now')
+				  )
+			)
+		`, user.Nickname)
+		var exists bool
+		if err := row.Scan(&exists); err != nil {
+			return false
+		}
+		return exists
 	}
 	// Reuse the same per-task eligibility as pickMyTaskForClaim
 	// but render it as a permission check: at least one row
@@ -929,35 +960,43 @@ func userHasAnyClaimableTask(db *sql.DB, user *models.User, agentType string) bo
 // FindEligibleTask: it reuses the existing GetMyTasks logic to
 // surface the first task the user could already see in the
 // "my tasks" feed, then resolves its column.
+//
+// When agentType is empty (s-1161: agentType is now optional on
+// /runs/claim) the column_agents.agent_types filter is dropped —
+// the user can claim any task assigned to them, even if it sits
+// on a column whose agent_types guard does not include their
+// token's user_agent (or whose user_agent is blank entirely).
 func pickMyTaskForClaim(db *sql.DB, user *models.User, agentType string) (string, string, error) {
 	// Pull the user's tokens.user_agent so the same filter that
 	// powers GET /api/v1/mcp/my-tasks applies here too.
 	tokenUserAgent := agentType
 
 	columnIDs := map[string]bool{}
-	rows, err := db.Query(`
-		SELECT c.id, COALESCE(ca.agent_types, '[]') as agent_types
-		FROM columns c
-		LEFT JOIN column_agents ca ON c.id = ca.column_id
-	`)
-	if err != nil {
-		return "", "", err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var colID, agentTypesStr string
-		if err := rows.Scan(&colID, &agentTypesStr); err != nil {
-			continue
+	if tokenUserAgent != "" {
+		rows, err := db.Query(`
+			SELECT c.id, COALESCE(ca.agent_types, '[]') as agent_types
+			FROM columns c
+			LEFT JOIN column_agents ca ON c.id = ca.column_id
+		`)
+		if err != nil {
+			return "", "", err
 		}
-		if tokenUserAgent != "" && agentTypesStr != "" && agentTypesStr != "[]" {
-			var types []string
-			if err := json.Unmarshal([]byte(agentTypesStr), &types); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var colID, agentTypesStr string
+			if err := rows.Scan(&colID, &agentTypesStr); err != nil {
 				continue
 			}
-			for _, t := range types {
-				if t == tokenUserAgent {
-					columnIDs[colID] = true
-					break
+			if agentTypesStr != "" && agentTypesStr != "[]" {
+				var types []string
+				if err := json.Unmarshal([]byte(agentTypesStr), &types); err != nil {
+					continue
+				}
+				for _, t := range types {
+					if t == tokenUserAgent {
+						columnIDs[colID] = true
+						break
+					}
 				}
 			}
 		}

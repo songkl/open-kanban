@@ -126,6 +126,18 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- s-1161: relax the `agentType` contract on `POST /api/v1/runs/claim`.
+  The body field is now optional — when omitted the handler falls
+  back to the calling token's `user_agent`, and when both are
+  empty the claim still succeeds with an empty `agent_id` written
+  to `task_runs`. The previous "token `user_agent` must match
+  body `agentType`" 403 has been removed; the body's value is now
+  honoured verbatim. The repository's `FindEligibleTask` also
+  drops the `column_agents.agent_types` filter entirely when
+  `agentType` is empty, and treats a missing `column_agents` row
+  as "no agent-type restriction" so newly added columns still
+  accept claims. Existing CLI callers (which keep sending
+  `agentType`) continue to work unchanged.
 - s-1144: wire the `/login` page to the external OAuth
   provider registry so a visitor can sign in with any enabled
   IdP without leaving the kanban web UI. The new public

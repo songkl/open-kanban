@@ -58,16 +58,30 @@ type ClaimResult struct {
 
 // FindEligibleTask returns the next task that:
 //   - belongs to a column with status=`status` on board=`boardID`
-//   - whose column's column_agents.agent_types JSON array contains
-//     `agentType`
+//   - when agentType is non-empty, whose column's
+//     column_agents.agent_types JSON array contains `agentType`
+//     (or the column has no agent_types entry, which is treated
+//     as "no agent-type restriction"); when agentType is empty
+//     the column_agents filter is skipped entirely
 //   - is not archived, is published, and is not currently locked
 //     by a non-expired task_runs row
+//
+// When agentType is empty (the caller did not specify one and the
+// token has no user_agent either) the query no longer enforces the
+// column_agents.agent_types check — the user's permission on the
+// board is the only gate. This matches the AttachRun semantics
+// introduced in s-1130 and addresses the "no need to restrict
+// agentType" feedback from s-1161.
 //
 // The query deliberately orders by column.position ASC, task.position
 // ASC so two parallel claimers agree on the same "next" task — the
 // INSERT … ON CONFLICT in ClaimRun still serialises the actual
 // lock acquisition; ordering just makes the loser side deterministic.
 func (r *RunRepository) FindEligibleTask(boardID, status, agentType string) (string, string, error) {
+	if agentType == "" {
+		return r.findEligibleTaskUnrestricted(boardID, status)
+	}
+
 	query := `
 		SELECT t.id, t.column_id
 		FROM tasks t
@@ -84,7 +98,8 @@ func (r *RunRepository) FindEligibleTask(boardID, status, agentType string) (str
 		  AND t.published = 1
 		  AND tr.task_id IS NULL
 		  AND (
-		      ca.agent_types LIKE ? OR ca.agent_types LIKE ? OR ca.agent_types LIKE ?
+		      ca.agent_types IS NULL
+		      OR ca.agent_types LIKE ? OR ca.agent_types LIKE ? OR ca.agent_types LIKE ?
 		  )
 		ORDER BY c.position ASC, t.position ASC
 		LIMIT 1
@@ -97,6 +112,40 @@ func (r *RunRepository) FindEligibleTask(boardID, status, agentType string) (str
 
 	var taskID, columnID string
 	err := r.db.QueryRow(query, boardID, status, exact, head, tail, middle).Scan(&taskID, &columnID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", "", ErrNoRunRow
+		}
+		return "", "", err
+	}
+	return taskID, columnID, nil
+}
+
+// findEligibleTaskUnrestricted mirrors FindEligibleTask but
+// drops the column_agents.agent_types predicate entirely. Used
+// when the caller passed an empty agentType (s-1161: agentType is
+// no longer required on /runs/claim).
+func (r *RunRepository) findEligibleTaskUnrestricted(boardID, status string) (string, string, error) {
+	query := `
+		SELECT t.id, t.column_id
+		FROM tasks t
+		JOIN columns c ON t.column_id = c.id
+		JOIN boards b ON c.board_id = b.id
+		LEFT JOIN task_runs tr ON tr.task_id = t.id
+		    AND (tr.status = 'claimed' OR tr.status = 'running')
+		    AND datetime(tr.expires_at) > datetime('now')
+		WHERE b.id = ?
+		  AND b.deleted = 0
+		  AND c.status = ?
+		  AND t.archived = 0
+		  AND t.published = 1
+		  AND tr.task_id IS NULL
+		ORDER BY c.position ASC, t.position ASC
+		LIMIT 1
+	`
+
+	var taskID, columnID string
+	err := r.db.QueryRow(query, boardID, status).Scan(&taskID, &columnID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return "", "", ErrNoRunRow
