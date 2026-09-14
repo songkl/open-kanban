@@ -624,7 +624,7 @@ describe("buildHttpHydrator / buildCommentPoster", () => {
     });
   });
 
-  it("buildCommentPoster posts to /api/v1/comments with taskId + body", async () => {
+  it("buildCommentPoster posts to /api/v1/comments with taskId + content", async () => {
     const { calls } = scriptFetch([{ status: 201, body: { id: "c-1" } }]);
     const { http } = makeAuthedClient();
     const poster = buildCommentPoster(http);
@@ -633,7 +633,7 @@ describe("buildHttpHydrator / buildCommentPoster", () => {
     expect(calls[0].url).toContain("/api/v1/comments");
     expect(calls[0].init?.method).toBe("POST");
     const body = JSON.parse(String(calls[0].init?.body));
-    expect(body).toEqual({ taskId: "t-1", body: "agent crashed" });
+    expect(body).toEqual({ taskId: "t-1", content: "agent crashed" });
   });
 });
 

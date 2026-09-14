@@ -315,7 +315,7 @@ export function buildCommentPoster(
 ): import("../runner/loop.js").FailureCommentPoster {
   return {
     async postComment(taskId: string, body: string): Promise<void> {
-      await http.apiPost("/api/v1/comments", { taskId, body });
+      await http.apiPost("/api/v1/comments", { taskId, content: body });
     },
   };
 }
