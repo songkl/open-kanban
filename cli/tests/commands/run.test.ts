@@ -21,6 +21,7 @@ import {
   resolveAgentType,
   resolveRunnerConfig,
   runRunCommand,
+  stderrLoopLogger,
 } from "../../src/commands/run.js";
 import { RunnerConfigError } from "../../src/runner/config.js";
 import { RunLoop } from "../../src/runner/loop.js";
@@ -660,5 +661,174 @@ describe("defaultBuildLoop", () => {
       failed: 0,
       shutdown: false,
     });
+  });
+});
+
+describe("stderrLoopLogger — debug mode", () => {
+  function makeCapture(): {
+    stderr: { write: (chunk: string) => boolean };
+    output: string[];
+  } {
+    const output: string[] = [];
+    return {
+      output,
+      stderr: {
+        write: (chunk: string): boolean => {
+          output.push(chunk);
+          return true;
+        },
+      },
+    };
+  }
+
+  it("emits info / warn / error lines without a debug prefix", () => {
+    const { stderr, output } = makeCapture();
+    const logger = stderrLoopLogger({ stderr: stderr as unknown as NodeJS.WritableStream });
+    logger.info("hello");
+    logger.warn("careful");
+    logger.error("boom");
+    expect(output.join("")).toBe(
+      "[kanban-runner] hello\n[kanban-runner] warn: careful\n[kanban-runner] error: boom\n"
+    );
+  });
+
+  it("silences debug() when debug is false / unset", () => {
+    const { stderr, output } = makeCapture();
+    const logger = stderrLoopLogger({ stderr: stderr as unknown as NodeJS.WritableStream });
+    logger.debug("should not appear");
+    expect(output).toEqual([]);
+  });
+
+  it("emits debug lines when debug is true", () => {
+    const { stderr, output } = makeCapture();
+    const logger = stderrLoopLogger({
+      debug: true,
+      stderr: stderr as unknown as NodeJS.WritableStream,
+    });
+    logger.debug("trace: claim attempt");
+    expect(output).toEqual(["[kanban-runner] debug: trace: claim attempt\n"]);
+  });
+
+  it("coexists: info / warn / error still flow when debug is enabled", () => {
+    const { stderr, output } = makeCapture();
+    const logger = stderrLoopLogger({
+      debug: true,
+      stderr: stderr as unknown as NodeJS.WritableStream,
+    });
+    logger.info("info");
+    logger.debug("trace");
+    logger.warn("warn");
+    logger.error("err");
+    expect(output.join("")).toBe(
+      "[kanban-runner] info\n" +
+        "[kanban-runner] debug: trace\n" +
+        "[kanban-runner] warn: warn\n" +
+        "[kanban-runner] error: err\n"
+    );
+  });
+});
+
+describe("parseRunFlags — --debug", () => {
+  it("defaults to false when --debug is omitted", () => {
+    const p = parseRunFlags({ board: "sys", status: "todo" });
+    expect(p.debug).toBe(false);
+  });
+
+  it("returns true when --debug is set", () => {
+    const p = parseRunFlags({ board: "sys", status: "todo", debug: true });
+    expect(p.debug).toBe(true);
+  });
+
+  it("treats a truthy non-boolean as false", () => {
+    // Commander passes `true | undefined`; anything else means the flag
+    // was not provided.
+    const p = parseRunFlags({ board: "sys", status: "todo", debug: "yes" as unknown as boolean });
+    expect(p.debug).toBe(false);
+  });
+});
+
+describe("runRunCommand — --debug plumbing", () => {
+  it("forwards debug=true to buildLoop", async () => {
+    const dir = freshDir("kanban-runner-debug-");
+    const cfgPath = join(dir, "runner.yaml");
+    writeFileSync(
+      cfgPath,
+      [
+        "version: 1",
+        "boardId: sys",
+        "status: todo",
+        "agent:",
+        "  bin: opencode",
+        "runner:",
+        "  runnerId: debug-runner",
+        "  pollIntervalMs: 100",
+        "  heartbeatIntervalMs: 200",
+        "  lockTimeoutMs: 500",
+        "",
+      ].join("\n"),
+      "utf8"
+    );
+    const { http, oauth } = makeAuthedClient();
+    const fakeLoop = Object.create(RunLoop.prototype) as RunLoop;
+    (fakeLoop as unknown as { run: () => Promise<unknown> }).run = async () => ({
+      processed: 0,
+      completed: 0,
+      failed: 0,
+      shutdown: true,
+    });
+    (fakeLoop as unknown as { tick: () => Promise<boolean> }).tick = async () => false;
+    (fakeLoop as unknown as { requestShutdown: () => void }).requestShutdown = () => undefined;
+    const buildLoop = vi.fn(async () => fakeLoop);
+    await runRunCommand(
+      {
+        apiUrl: "http://kanban.example.com",
+        configPath: cfgPath,
+        once: true,
+        debug: true,
+      },
+      { http, oauth, cwd: dir, buildLoop }
+    );
+    expect(buildLoop).toHaveBeenCalledOnce();
+    const call = buildLoop.mock.calls[0][0] as { debug?: boolean };
+    expect(call.debug).toBe(true);
+  });
+
+  it("defaults debug to false on buildLoop when not supplied", async () => {
+    const dir = freshDir("kanban-runner-nodebug-");
+    const cfgPath = join(dir, "runner.yaml");
+    writeFileSync(
+      cfgPath,
+      [
+        "version: 1",
+        "boardId: sys",
+        "status: todo",
+        "agent:",
+        "  bin: opencode",
+        "runner:",
+        "  runnerId: nodebug-runner",
+        "  pollIntervalMs: 100",
+        "  heartbeatIntervalMs: 200",
+        "  lockTimeoutMs: 500",
+        "",
+      ].join("\n"),
+      "utf8"
+    );
+    const { http, oauth } = makeAuthedClient();
+    const fakeLoop = Object.create(RunLoop.prototype) as RunLoop;
+    (fakeLoop as unknown as { run: () => Promise<unknown> }).run = async () => ({
+      processed: 0,
+      completed: 0,
+      failed: 0,
+      shutdown: true,
+    });
+    (fakeLoop as unknown as { tick: () => Promise<boolean> }).tick = async () => false;
+    (fakeLoop as unknown as { requestShutdown: () => void }).requestShutdown = () => undefined;
+    const buildLoop = vi.fn(async () => fakeLoop);
+    await runRunCommand(
+      { apiUrl: "http://kanban.example.com", configPath: cfgPath, once: true },
+      { http, oauth, cwd: dir, buildLoop }
+    );
+    const call = buildLoop.mock.calls[0][0] as { debug?: boolean };
+    expect(call.debug).toBe(false);
   });
 });

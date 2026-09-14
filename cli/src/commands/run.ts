@@ -80,6 +80,13 @@ export interface RunCommandOptions {
   mine?: boolean;
   /** Process one task and exit (no idle polling). */
   once?: boolean;
+  /**
+   * Enable verbose trace logging (`--debug`). When true the runner
+   * loop emits additional `[kanban-runner] debug: …` lines to stderr
+   * so operators can correlate in-flight tasks with claim /
+   * heartbeat / spawn events.
+   */
+  debug?: boolean;
   /** API URL passed through to the HttpClient. */
   apiUrl: string;
   /** Credential profile passed through to the HttpClient + OAuth. */
@@ -103,6 +110,7 @@ export type BuildLoopFn = (deps: {
   agentType: string;
   http: HttpClient;
   signal?: AbortSignal;
+  debug?: boolean;
 }) => RunLoop | Promise<RunLoop>;
 
 export interface RunCommandResult {
@@ -117,6 +125,7 @@ export interface ParsedRunFlags {
   status?: RunnerStatus;
   mine: boolean;
   once: boolean;
+  debug: boolean;
 }
 
 /**
@@ -137,12 +146,14 @@ export function parseRunFlags(flags: {
   status?: string;
   mine?: boolean;
   once?: boolean;
+  debug?: boolean;
 }): ParsedRunFlags {
   const configPath = flags.config?.trim() ? flags.config.trim() : undefined;
   const boardId = flags.board?.trim() ? flags.board.trim() : undefined;
   const statusRaw = flags.status?.trim() ? flags.status.trim() : undefined;
   const mine = flags.mine === true;
   const once = flags.once === true;
+  const debug = flags.debug === true;
   const status: RunnerStatus | undefined = statusRaw
     ? assertStatus(statusRaw)
     : undefined;
@@ -156,7 +167,7 @@ export function parseRunFlags(flags: {
       "--board and --status must be supplied together (mode-1) or both omitted (mode-2)"
     );
   }
-  return { configPath, boardId, status, mine, once };
+  return { configPath, boardId, status, mine, once, debug };
 }
 
 function assertStatus(value: string): RunnerStatus {
@@ -328,7 +339,7 @@ export function buildCommentPoster(
  * stream — the poll path is the only mechanism there.
  */
 export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
-  const { config, runnerId, agentType, http, signal } = deps;
+  const { config, runnerId, agentType, http, signal, debug } = deps;
   const claimClient = RunClaimClient.fromHttpClient(http);
   const heartbeat = new HeartbeatScheduler(claimClient, runnerId, {
     intervalMs: config.runner.heartbeatIntervalMs ?? 30_000,
@@ -349,9 +360,9 @@ export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
       timeoutMs: config.agent.timeoutMs ?? 1_800_000,
     }),
     signal,
-    logger: stderrLoopLogger(),
+    logger: stderrLoopLogger({ debug: debug === true }),
   });
-  startBoardWatcherIfPossible({ loop, config, http, signal });
+  startBoardWatcherIfPossible({ loop, config, http, signal, debug });
   return loop;
 }
 
@@ -360,6 +371,7 @@ interface BoardWatcherDeps {
   config: RunnerConfig;
   http: HttpClient;
   signal?: AbortSignal;
+  debug?: boolean;
 }
 
 /**
@@ -377,12 +389,14 @@ interface BoardWatcherDeps {
  * don't leak the WS goroutine past graceful shutdown.
  */
 function startBoardWatcherIfPossible(deps: BoardWatcherDeps): void {
-  const { loop, config, http, signal } = deps;
+  const { loop, config, http, signal, debug } = deps;
   const boardId = config.boardId;
   if (!boardId) {
     // mode=mine: no boardId to filter on; skip.
     return;
   }
+  const log = stderrLoopLogger({ debug: debug === true });
+  log.debug(`board watcher: subscribing to notifications for board=${boardId}`);
   let handle: RunWatchHandle | null = null;
   let cancelled = false;
   void (async () => {
@@ -392,7 +406,10 @@ function startBoardWatcherIfPossible(deps: BoardWatcherDeps): void {
     } catch {
       token = "";
     }
-    if (cancelled || !token) return;
+    if (cancelled || !token) {
+      log.debug("board watcher: cancelled before WS upgrade");
+      return;
+    }
     handle = watchBoardNotifications({
       apiUrl: http.apiUrl,
       boardId,
@@ -402,18 +419,22 @@ function startBoardWatcherIfPossible(deps: BoardWatcherDeps): void {
         // already knows about update_status from the
         // heartbeat / claim cycle, so anything else would
         // just thrash the wake-up path.
+        log.debug("board watcher: notification received; waking loop");
         loop.wake();
       },
       onDisconnect: () => {
         // The underlying poll loop covers disconnects; the
         // watcher just shaves latency off the happy path.
+        log.debug("board watcher: disconnected; poll loop will resume");
       },
       signal,
     });
+    log.debug(`board watcher: connected (board=${boardId})`);
   })();
   if (signal) {
     const close = (): void => {
       cancelled = true;
+      log.debug("board watcher: abort signal received; closing");
       handle?.close();
     };
     if (signal.aborted) {
@@ -431,17 +452,35 @@ function startBoardWatcherIfPossible(deps: BoardWatcherDeps): void {
  * matches the convention of every other kanban subcommand. Lines are
  * prefixed with `[kanban-runner]` so the operator can grep them out
  * of a mixed log stream.
+ *
+ * When `debug` is true the logger also emits verbose trace lines
+ * (prefixed with `debug:`) covering claim attempts, polling delays,
+ * spawn details, hydration results, and result handling. The default
+ * logger is silent on `debug()` so operators who don't pass `--debug`
+ * see no change in log volume.
+ *
+ * The `stderr` stream is injectable so tests can capture output
+ * without polluting the real process stderr; production callers omit
+ * it and get `process.stderr`.
  */
-export function stderrLoopLogger(): import("../runner/loop.js").RunLoopLogger {
+export function stderrLoopLogger(
+  opts: { debug?: boolean; stderr?: NodeJS.WritableStream } = {}
+): import("../runner/loop.js").RunLoopLogger {
+  const debug = opts.debug === true;
+  const err = opts.stderr ?? process.stderr;
   return {
     info(msg: string): void {
-      process.stderr.write(`[kanban-runner] ${msg}\n`);
+      err.write(`[kanban-runner] ${msg}\n`);
     },
     warn(msg: string): void {
-      process.stderr.write(`[kanban-runner] warn: ${msg}\n`);
+      err.write(`[kanban-runner] warn: ${msg}\n`);
     },
     error(msg: string): void {
-      process.stderr.write(`[kanban-runner] error: ${msg}\n`);
+      err.write(`[kanban-runner] error: ${msg}\n`);
+    },
+    debug(msg: string): void {
+      if (!debug) return;
+      err.write(`[kanban-runner] debug: ${msg}\n`);
     },
   };
 }
@@ -524,6 +563,7 @@ export async function runRunCommand(
     status: options.status,
     mine: options.mine,
     once: options.once,
+    debug: options.debug,
   });
   let config: RunnerConfig;
   try {
@@ -558,6 +598,7 @@ export async function runRunCommand(
     agentType: resolveAgentType(),
     http: deps.http,
     signal: abort.signal,
+    debug: parsed.debug,
   });
   installSignalHandlers(abort);
   const summary = await driveLoop(loop, parsed.once, abort);

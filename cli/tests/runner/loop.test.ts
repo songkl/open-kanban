@@ -155,7 +155,7 @@ function makeFakeSpawner(): FakeSpawner {
 }
 
 interface CapturedLog {
-  level: "info" | "warn" | "error";
+  level: "info" | "warn" | "error" | "debug";
   message: string;
 }
 
@@ -167,6 +167,7 @@ function makeLogger(): { logger: RunLoopLogger; logs: CapturedLog[] } {
       info: (m) => logs.push({ level: "info", message: m }),
       warn: (m) => logs.push({ level: "warn", message: m }),
       error: (m) => logs.push({ level: "error", message: m }),
+      debug: (m) => logs.push({ level: "debug", message: m }),
     },
   };
 }
@@ -840,6 +841,7 @@ describe("RunLoop — wake() short-circuits the idle sleep", () => {
         info: () => undefined,
         warn: () => undefined,
         error: () => undefined,
+        debug: () => undefined,
       },
     });
 
@@ -870,5 +872,139 @@ describe("RunLoop — wake() short-circuits the idle sleep", () => {
     });
     loop.requestShutdown();
     await loop.tick();
+  });
+});
+
+describe("RunLoop — debug logging", () => {
+  it("emits debug traces for start config, claim attempts, hydration, spawn, and result", async () => {
+    const claimTask = (id: string): ScriptedClaim => ({
+      request: {
+        boardId: "sys",
+        status: "todo",
+        agentType: "opencoder",
+        runnerId: "runner-1",
+      },
+      outcome: {
+        status: 200,
+        body: {
+          task: { ...TASK_TEMPLATE, id },
+          run: { taskId: id, runnerId: "runner-1", status: "claimed" },
+        },
+      },
+    });
+    const h = makeHarness({
+      scripts: [claimTask("s-debug-1")],
+    });
+    // Use run() so the start-of-loop debug line (`loop config:`) fires;
+    // tick() short-circuits that branch.
+    const runPromise = h.loop.run();
+    // Give the run loop a chance to claim + spawn.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    // Drain the agent to trigger the result handler.
+    h.spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "",
+      reason: "exit",
+    });
+    // Allow the loop to observe the result + finish + post-release.
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    h.loop.requestShutdown();
+    await runPromise;
+
+    const debugLogs = h.logs.filter((l) => l.level === "debug");
+    const joined = debugLogs.map((l) => l.message).join("\n");
+    expect(joined).toMatch(/loop config:/);
+    expect(joined).toMatch(/claim attempt:/);
+    expect(joined).toMatch(/claim succeeded: taskId=s-debug-1/);
+    expect(joined).toMatch(/hydrated task s-debug-1:/);
+    expect(joined).toMatch(/spawning agent for task s-debug-1:/);
+    expect(joined).toMatch(/agent spawned for task s-debug-1 pid=/);
+    expect(joined).toMatch(/agent finished for task s-debug-1:/);
+  });
+
+  it("emits debug trace for idle claim (no task)", async () => {
+    const h = makeHarness({
+      scripts: [
+        {
+          request: {
+            boardId: "sys",
+            status: "todo",
+            agentType: "opencoder",
+            runnerId: "runner-1",
+          },
+          outcome: { status: 204 },
+        },
+      ],
+    });
+    const runPromise = h.loop.run();
+    // Allow the first claim to fire and the loop to enter idle sleep.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    h.loop.requestShutdown();
+    await runPromise;
+
+    const debugLogs = h.logs.filter((l) => l.level === "debug");
+    const joined = debugLogs.map((l) => l.message).join("\n");
+    expect(joined).toMatch(/claim returned 204\/no-content \(idle\)/);
+    expect(joined).toMatch(/no task claimed; sleeping \d+ms|undefinedms/);
+  });
+
+  it("emits debug trace for claim errors including backoff", async () => {
+    // Use a transport that throws to simulate a retryable HTTP error.
+    const transport: RunTransport = {
+      async postJson<T>(): Promise<{ status: number; body: T | null }> {
+        const err = new Error("boom") as Error & { retryable: boolean };
+        err.retryable = true;
+        throw err;
+      },
+    };
+    const claimClient = new RunClaimClient(transport);
+    const heartbeat = new HeartbeatScheduler(claimClient, "runner-1", {
+      intervalMs: 1_000,
+      setIntervalFn: ((cb) => ({ unref: () => undefined, _cb: cb })) as unknown as (
+        cb: () => void,
+        ms: number
+      ) => unknown,
+      clearIntervalFn: () => undefined,
+      nowFn: () => 1_000_000,
+    });
+    const { logger, logs } = makeLogger();
+    const config = makeConfig({
+      runner: { pollIntervalMs: 100, heartbeatIntervalMs: 1_000 },
+    });
+    const loop = new RunLoop({
+      config,
+      runnerId: "runner-1",
+      agentType: "opencoder",
+      claimClient,
+      spawner: makeFakeSpawner(),
+      heartbeat,
+      hydrator: makeHydrator(),
+      commentPoster: { async postComment() { return; } },
+      sleepFn: async () => undefined,
+      logger,
+    });
+    await loop.tick();
+    loop.requestShutdown();
+    await loop.tick();
+
+    const debugLogs = logs.filter((l) => l.level === "debug");
+    const joined = debugLogs.map((l) => l.message).join("\n");
+    expect(joined).toMatch(/claim attempt:/);
+    expect(joined).toMatch(/backing off \d+ms before next claim/);
+    const errorLogs = logs.filter((l) => l.level === "error");
+    expect(errorLogs.map((l) => l.message).join("\n")).toMatch(
+      /claim failed:.*boom \(retryable=true\)/
+    );
+  });
+
+  it("emits a debug trace when wake() is called", async () => {
+    const h = makeHarness({ scripts: [] });
+    h.loop.wake();
+    expect(h.logs.some((l) => l.level === "debug" && l.message.includes("wake() called"))).toBe(true);
   });
 });

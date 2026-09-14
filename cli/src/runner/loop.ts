@@ -89,12 +89,19 @@ export interface RunLoopLogger {
   info(msg: string): void;
   warn(msg: string): void;
   error(msg: string): void;
+  /**
+   * Verbose trace for operators running with `--debug`. Production
+   * implementations can no-op this when debug mode is off so the
+   * default log volume is unchanged for regular operators.
+   */
+  debug(msg: string): void;
 }
 
 const NULL_LOGGER: RunLoopLogger = {
   info: () => undefined,
   warn: () => undefined,
   error: () => undefined,
+  debug: () => undefined,
 };
 
 /**
@@ -188,6 +195,7 @@ export class RunLoop {
    */
   wake(): void {
     this.wakePending = true;
+    this.logger.debug("wake() called; pending fast-poll on next tick");
     this.interruptSleep(new Error("wake"));
   }
 
@@ -227,6 +235,9 @@ export class RunLoop {
    */
   async run(): Promise<RunLoopSummary> {
     this.logger.info(`runner ${this.runnerId} starting`);
+    this.logger.debug(
+      `loop config: mode=${this.config.mode ?? "board"} boardId=${this.config.boardId ?? "(none)"} status=${this.config.status ?? "(none)"} agentType=${this.agentType} pollIntervalMs=${this.config.runner.pollIntervalMs} heartbeatIntervalMs=${this.config.runner.heartbeatIntervalMs ?? 30_000}`
+    );
     while (!this.shutdown) {
       if (this.inFlight) {
         await this.watchInFlight();
@@ -237,6 +248,7 @@ export class RunLoop {
       if (this.shutdown) break;
       if (!this.inFlight) {
         const delay = this.computeNextDelay();
+        this.logger.debug(`no task claimed; sleeping ${delay}ms`);
         await this.sleepInterruptible(delay);
       }
     }
@@ -336,6 +348,9 @@ export class RunLoop {
   }
 
   private async tryClaim(): Promise<void> {
+    this.logger.debug(
+      `claim attempt: boardId=${this.config.boardId ?? "(none)"} status=${this.config.status ?? "(none)"} mode=${this.config.mode === "mine" ? "mine" : "board"}`
+    );
     let outcome: ClaimOutcome;
     try {
       outcome = await this.claimClient.claim({
@@ -350,14 +365,19 @@ export class RunLoop {
       this.logger.error(
         `claim failed: ${(err as Error).message} (retryable=${retryable})`
       );
+      this.logger.debug(
+        `claim error stack: ${(err as Error).stack ?? "(no stack)"}`
+      );
       if (!retryable) {
         this.requestShutdown();
         return;
       }
       this.nextClaimDelay = backoff(this.config.runner.pollIntervalMs);
+      this.logger.debug(`backing off ${this.nextClaimDelay}ms before next claim`);
       return;
     }
     if (outcome.kind === "none") {
+      this.logger.debug("claim returned 204/no-content (idle)");
       return;
     }
     const { task } = outcome;
@@ -365,6 +385,9 @@ export class RunLoop {
       this.logger.warn("server returned a claim with no task id; skipping");
       return;
     }
+    this.logger.debug(
+      `claim succeeded: taskId=${task.id} title=${task.title ?? "(untitled)"} columnId=${task.columnId ?? "(unknown)"} priority=${task.priority ?? "(unset)"}`
+    );
     await this.startTask(task);
   }
 
@@ -376,6 +399,9 @@ export class RunLoop {
         boardId: this.config.boardId,
         columnId: task.columnId,
       });
+      this.logger.debug(
+        `hydrated task ${task.id}: board=${ctx.board.name} column=${ctx.column.name} comments=${ctx.comments.length} subtasks=${ctx.subtasks.length}`
+      );
     } catch (err) {
       this.logger.error(
         `failed to hydrate task ${task.id}: ${(err as Error).message}`
@@ -389,11 +415,15 @@ export class RunLoop {
       };
     }
     const prompt = renderPrompt(ctx);
+    this.logger.debug(
+      `spawning agent for task ${task.id}: bin=${this.config.agent.bin} timeoutMs=${this.config.agent.timeoutMs ?? 1_800_000} promptBytes=${prompt.length}`
+    );
     const { process: child, cleanup } = this.agentSpawner.spawn({
       cfg: this.config.agent,
       prompt,
       taskId: task.id,
     });
+    this.logger.debug(`agent spawned for task ${task.id} pid=${child.pid ?? "(unknown)"}`);
     this.inFlight = {
       taskId: task.id,
       task,
@@ -465,6 +495,9 @@ export class RunLoop {
   }
 
   private async handleResult(task: TaskRecord, result: AgentResult): Promise<void> {
+    this.logger.debug(
+      `agent finished for task ${task.id}: exitCode=${result.exitCode ?? "(none)"} signal=${result.signal ?? "(none)"} reason=${result.reason}`
+    );
     const ok = result.exitCode === 0 && result.reason === "exit";
     if (ok) {
       const finish = await this.finishTask(task, "completed", result);

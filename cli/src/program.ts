@@ -1395,6 +1395,10 @@ export function createProgram(
     .option(
       "--once",
       "process a single task and exit; useful for cron / smoke tests"
+    )
+    .option(
+      "--debug",
+      "emit verbose trace logs to stderr (claim attempts, polling delays, spawn details, hydration, results)"
     );
 
   const runStartAction = async (cmdOpts: {
@@ -1403,6 +1407,7 @@ export function createProgram(
     status?: string;
     mine?: boolean;
     once?: boolean;
+    debug?: boolean;
   }): Promise<void> => {
     try {
       await runRunCommand(
@@ -1414,6 +1419,7 @@ export function createProgram(
           status: cmdOpts.status,
           mine: cmdOpts.mine === true,
           once: cmdOpts.once === true,
+          debug: cmdOpts.debug === true,
         },
         {
           http,
@@ -1459,6 +1465,10 @@ export function createProgram(
     .option(
       "--once",
       "process a single task and exit; useful for cron / smoke tests"
+    )
+    .option(
+      "--debug",
+      "emit verbose trace logs to stderr (claim attempts, polling delays, spawn details, hydration, results)"
     )
     .action(runStartAction);
 
