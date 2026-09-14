@@ -291,6 +291,20 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 		runs.GET("/:taskId", handlers.GetRun(db))
 	}
 
+	// Comments — mirrors the production layout in cmd/server/main.go so
+	// the CLI `kanban comments add / list` commands can be exercised
+	// end-to-end against the helper. RequireAuth gates POST + DELETE so
+	// only an authenticated user (e.g. the seeded e2e-bot agent) can
+	// append comments; GET stays open to match the public read contract
+	// the CLI's `comments list` relies on.
+	comments := r.Group("/api/v1/comments")
+	{
+		comments.GET("", handlers.GetComments(db))
+		comments.GET("/:id", handlers.GetComment(db))
+		comments.Use(handlers.RequireAuth(db))
+		comments.POST("", handlers.CreateComment(db))
+	}
+
 	// Test-only auto-approval endpoint. The CLI's `kanban auth login`
 	// walks the device flow on behalf of a human; the real approval
 	// step (POST /oauth/device/approve) lives behind a user login
