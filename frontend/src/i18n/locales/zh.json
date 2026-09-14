@@ -704,7 +704,24 @@
     "agentPrompt": "Agent Prompt",
     "agentPromptPlaceholder": "给 Agent 的指令...",
     "publishedAt": "发布日期",
-    "updatedAt": "更新日期"
+    "updatedAt": "更新日期",
+    "runInfo": "运行中",
+    "runRunner": "运行器",
+    "runAgent": "Agent",
+    "runClaimedAt": "开始时间",
+    "runLastHeartbeat": "心跳时间",
+    "runExpiresAt": "过期时间",
+    "runFinishedAt": "结束时间",
+    "runExitCode": "退出码",
+    "runError": "错误信息",
+    "runElapsed": "已运行: {{elapsed}}",
+    "runStatus": {
+      "claimed": "已认领",
+      "running": "运行中",
+      "completed": "已完成",
+      "failed": "失败",
+      "released": "已释放"
+    }
   },
   "skeleton": {
     "loading": "加载中..."

@@ -78,15 +78,15 @@ function RunnerBadge({ runnerId, label }: { runnerId: string; label: string }) {
   }, []);
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700/50"
+      className="inline-flex max-w-[10rem] items-center gap-1 overflow-hidden rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700/50"
       aria-label={t('taskCard.runnerBadgeAria', { runnerId, elapsed: label })}
-      title={label}
+      title={`${runnerId} · ${label}`}
       data-testid="runner-badge"
     >
-      <span aria-hidden>🤖</span>
-      <span className="font-mono">{runnerId}</span>
-      <span aria-hidden>·</span>
-      <span>{label}</span>
+      <span aria-hidden className="flex-shrink-0">🤖</span>
+      <span className="font-mono truncate" title={runnerId}>{runnerId}</span>
+      <span aria-hidden className="flex-shrink-0">·</span>
+      <span className="flex-shrink-0">{label}</span>
     </span>
   );
 }

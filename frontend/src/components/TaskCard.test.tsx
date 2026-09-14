@@ -248,5 +248,47 @@ describe('TaskCard', () => {
       // key.
       await waitFor(() => expect(badge.textContent).toContain('taskCard.runnerElapsedSeconds'));
     });
+
+    it('truncates an over-long runnerId so it does not push the badge to a new line', () => {
+      const longRunnerId = 'a-very-long-runner-id-that-definitely-overflows-the-card';
+      const claimedAt = new Date(Date.now() - 5_000).toISOString();
+      mockedUseTaskRun.mockReturnValue({
+        run: {
+          taskId: 'task-1',
+          runnerId: longRunnerId,
+          agentId: 'opencode',
+          boardId: 'b-1',
+          columnId: 'c-1',
+          status: 'running',
+          claimedAt,
+          lastHeartbeatAt: claimedAt,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskCard {...defaultProps} />);
+      const badge = screen.getByTestId('runner-badge');
+      // Outer pill must clamp its width so the inner flex children
+      // don't push the footer layout.
+      expect(badge).toHaveClass('max-w-[10rem]');
+      expect(badge).toHaveClass('overflow-hidden');
+      // The runner id span carries `truncate` (Tailwind: overflow:hidden +
+      // text-overflow:ellipsis + white-space:nowrap) so the inner text
+      // never breaks onto a second line. We assert on the class name
+      // rather than the computed style because JSDOM does not honor
+      // layout.
+      const runnerSpan = badge.querySelector('span.font-mono');
+      expect(runnerSpan).not.toBeNull();
+      expect(runnerSpan).toHaveClass('truncate');
+      // The full runner id must still be exposed via the `title`
+      // attribute on the inner span so hover-tooltip shows it.
+      expect(runnerSpan).toHaveAttribute('title', longRunnerId);
+      // And the badge's own title shows the composite "id · elapsed"
+      // label — guards against accidentally regressing this when the
+      // runnerId is no longer surfaced verbatim in `textContent`.
+      expect(badge).toHaveAttribute('title');
+      expect(badge.getAttribute('title')).toContain(longRunnerId);
+    });
   });
 });

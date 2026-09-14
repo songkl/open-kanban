@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { UserAvatar } from './UserAvatar';
+import { useTaskRun } from '../hooks/useTaskRun';
+import type { TaskRun } from '@/types/kanban';
 import type { Task, Attachment, Column, Agent, Subtask, Comment } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
@@ -36,6 +38,118 @@ function formatCommentDate(t: ReturnType<typeof useTranslation>[0], dateStr: str
       minute: '2-digit'
     });
   }
+}
+
+/**
+ * Format the elapsed time since `claimedAt` into a short human label.
+ * Kept short to fit the run info section header — see TaskCard for the
+ * badge variant.
+ */
+function formatRunElapsed(
+  claimedAt: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  now: number = Date.now()
+): string {
+  const startMs = new Date(claimedAt).getTime();
+  if (Number.isNaN(startMs)) return t('taskCard.runnerElapsedSeconds', { count: 0 });
+  const elapsedSec = Math.max(0, Math.floor((now - startMs) / 1000));
+  if (elapsedSec < 60) return t('taskCard.runnerElapsedSeconds', { count: elapsedSec });
+  if (elapsedSec < 3600) {
+    return t('taskCard.runnerElapsedMinutes', { count: Math.floor(elapsedSec / 60) });
+  }
+  return t('taskCard.runnerElapsedHours', { count: Math.floor(elapsedSec / 3600) });
+}
+
+/**
+ * RunInfoSection — banner shown inside the task modal while a CLI
+ * runner holds the task. Mirrors the polling logic in TaskCard (see
+ * `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5) but exposes the full row
+ * — runner id, agent id, status, timestamps — since the modal has
+ * room for it. The elapsed label re-renders once a second so it
+ * doesn't have to round-trip the API on every tick.
+ */
+function RunInfoSection({ run }: { run: TaskRun }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'zh' ? 'zh-CN' : i18n.language;
+  const dateFmt = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const [, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const handle = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(handle);
+  }, []);
+
+  const statusColor: Record<TaskRun['status'], string> = {
+    claimed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700/50',
+    running: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-violet-200 dark:border-violet-700/50',
+    completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700/50',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700/50',
+    released: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-600',
+  };
+
+  return (
+    <div
+      className="mb-6 rounded-lg border border-violet-200 dark:border-violet-700/50 bg-violet-50/50 dark:bg-violet-900/20 p-4"
+      data-testid="task-run-info"
+    >
+      <div className="mb-3 flex items-center gap-2 flex-wrap">
+        <span aria-hidden className="text-base">🤖</span>
+        <h4 className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+          {t('taskModal.runInfo')}
+        </h4>
+        <span
+          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusColor[run.status]}`}
+          data-testid="run-status"
+        >
+          {t(`taskModal.runStatus.${run.status}`)}
+        </span>
+        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
+          {t('taskModal.runElapsed', { elapsed: formatRunElapsed(run.claimedAt, t) })}
+        </span>
+      </div>
+      <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runRunner')}</dt>
+        <dd className="font-mono text-zinc-700 dark:text-zinc-200 break-all" title={run.runnerId}>{run.runnerId}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runAgent')}</dt>
+        <dd className="font-mono text-zinc-700 dark:text-zinc-200 break-all">{run.agentId || '—'}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runClaimedAt')}</dt>
+        <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.claimedAt))}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runLastHeartbeat')}</dt>
+        <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.lastHeartbeatAt))}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runExpiresAt')}</dt>
+        <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.expiresAt))}</dd>
+
+        {run.finishedAt && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runFinishedAt')}</dt>
+            <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.finishedAt))}</dd>
+          </>
+        )}
+        {run.exitCode !== undefined && run.exitCode !== null && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runExitCode')}</dt>
+            <dd className="font-mono text-zinc-700 dark:text-zinc-200">{run.exitCode}</dd>
+          </>
+        )}
+        {run.error && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runError')}</dt>
+            <dd className="text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{run.error}</dd>
+          </>
+        )}
+      </dl>
+    </div>
+  );
 }
 
 interface Board {
@@ -244,6 +358,11 @@ export function TaskModal({
   useEffect(() => {
     authApi.getAgents().then(setAgents).catch(console.error);
   }, []);
+
+  // Poll for the live CLI runner on this task. The run section only
+  // renders when the server returns a row — same semantics as the
+  // card badge in TaskCard, just with more detail.
+  const { run } = useTaskRun(task.id, { intervalMs: 5000 });
 
   const handleAuthorChange = (value: string) => {
     setCommentAuthor(value);
@@ -490,6 +609,11 @@ export function TaskModal({
                 </div>
               )}
             </div>
+
+            {/* Run Info — only rendered while a CLI runner holds the task.
+                Surfaced near the top of the modal so operators can see
+                who is working on the task without scrolling. */}
+            {run && <RunInfoSection run={run} />}
 
             {/* Grid Layout for Edit Mode */}
             {isEditing && (

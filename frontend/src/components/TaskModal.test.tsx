@@ -4,6 +4,17 @@ import userEvent from '@testing-library/user-event';
 import { TaskModal } from './TaskModal';
 import type { Task } from '@/types/kanban';
 
+// Mock the polling hook so the run info section tests can drive `run`
+// directly without faking timers. The hook is exercised end-to-end in
+// `useTaskRun.test.ts`; here we only care that the modal renders the
+// expected fields (runner, agent, status, timestamps) when a run is
+// present and stays hidden when it isn't.
+vi.mock('../hooks/useTaskRun', () => ({
+  useTaskRun: vi.fn(),
+}));
+import { useTaskRun } from '../hooks/useTaskRun';
+const mockedUseTaskRun = useTaskRun as unknown as ReturnType<typeof vi.fn>;
+
 const mockTask: Task = {
   id: 'task-1',
   title: 'Test Task',
@@ -108,6 +119,9 @@ describe('TaskModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // Default: no active run, so unrelated assertions aren't affected
+    // by the run info section.
+    mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
   });
 
   afterEach(() => {
@@ -428,6 +442,111 @@ describe('TaskModal', () => {
       const taskNoComments = { ...mockTask, comments: [] };
       render(<TaskModal {...defaultProps} task={taskNoComments} />);
       expect(screen.queryByText('Jane')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('run info section', () => {
+    beforeEach(() => {
+      mockedUseTaskRun.mockReset();
+    });
+
+    it('does not render the section when no run is active', () => {
+      mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
+      render(<TaskModal {...defaultProps} />);
+      expect(screen.queryByTestId('task-run-info')).not.toBeInTheDocument();
+    });
+
+    it('renders runner id, agent id, status and timestamps when a run is active', () => {
+      const claimedAt = new Date('2026-09-15T10:30:00Z').toISOString();
+      const lastHeartbeatAt = new Date('2026-09-15T10:32:00Z').toISOString();
+      const expiresAt = new Date('2026-09-15T10:35:00Z').toISOString();
+      mockedUseTaskRun.mockReturnValue({
+        run: {
+          taskId: 'task-1',
+          runnerId: 'runner-bar',
+          agentId: 'opencode',
+          boardId: 'b-1',
+          columnId: 'c-1',
+          status: 'running',
+          claimedAt,
+          lastHeartbeatAt,
+          expiresAt,
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      const section = screen.getByTestId('task-run-info');
+      expect(section).toBeInTheDocument();
+      // Section title is translated.
+      expect(section.textContent).toContain('taskModal.runInfo');
+      // Runner id and agent id surfaces verbatim.
+      expect(section.textContent).toContain('runner-bar');
+      expect(section.textContent).toContain('opencode');
+      // Status badge.
+      const statusBadge = screen.getByTestId('run-status');
+      expect(statusBadge.textContent).toBe('taskModal.runStatus.running');
+      // Labels for the timestamp rows.
+      expect(section.textContent).toContain('taskModal.runRunner');
+      expect(section.textContent).toContain('taskModal.runAgent');
+      expect(section.textContent).toContain('taskModal.runClaimedAt');
+      expect(section.textContent).toContain('taskModal.runLastHeartbeat');
+      expect(section.textContent).toContain('taskModal.runExpiresAt');
+      // Elapsed label is present.
+      expect(section.textContent).toContain('taskModal.runElapsed');
+    });
+
+    it('renders the finished at / exit code / error fields when present', () => {
+      mockedUseTaskRun.mockReturnValue({
+        run: {
+          taskId: 'task-1',
+          runnerId: 'runner-failed',
+          agentId: 'opencode',
+          boardId: 'b-1',
+          columnId: 'c-1',
+          status: 'failed',
+          claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
+          lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
+          expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
+          finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
+          exitCode: 1,
+          error: 'boom: agent crashed',
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      const section = screen.getByTestId('task-run-info');
+      expect(section.textContent).toContain('taskModal.runFinishedAt');
+      expect(section.textContent).toContain('taskModal.runExitCode');
+      expect(section.textContent).toContain('taskModal.runError');
+      expect(section.textContent).toContain('boom: agent crashed');
+    });
+
+    it('survives a long runnerId without breaking layout', () => {
+      const longRunnerId = 'a-very-long-runner-id-that-definitely-overflows-the-card';
+      mockedUseTaskRun.mockReturnValue({
+        run: {
+          taskId: 'task-1',
+          runnerId: longRunnerId,
+          agentId: 'opencode',
+          boardId: 'b-1',
+          columnId: 'c-1',
+          status: 'claimed',
+          claimedAt: new Date(Date.now() - 5_000).toISOString(),
+          lastHeartbeatAt: new Date(Date.now() - 1_000).toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      const section = screen.getByTestId('task-run-info');
+      // The dd for runner id carries `break-all` so the long id wraps
+      // rather than pushing sibling columns.
+      const dd = section.querySelector('dd.break-all');
+      expect(dd).not.toBeNull();
+      expect(dd?.textContent).toContain(longRunnerId);
     });
   });
 });
