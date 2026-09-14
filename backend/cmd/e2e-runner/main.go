@@ -277,6 +277,7 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 		tasks.POST("", handlers.CreateTask(db))
 		tasks.PUT("/:id", handlers.UpdateTask(db))
 		tasks.POST("/:id/complete", handlers.CompleteTask(db))
+		tasks.DELETE("/:id", handlers.DeleteTask(db))
 	}
 
 	// The /runs/* surface the runner actually talks to.
