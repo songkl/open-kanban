@@ -768,16 +768,47 @@ func main() {
 		}
 	}
 
-	// Webhook delivery now flows through the EventCenter
-	// (services.EventBus) — no global webhook service
-	// singleton to bootstrap here.
-
-	// Start the task_runs reaper (§3.5 of CLI_RUNNER_PLAN).
-	// The reaper sweeps expired locks every 30s and restores
-	// the affected tasks to their snapshot column. It runs for
-	// the entire server lifetime and stops on graceful shutdown.
-	var runReaper *services.RunReaper
+	// Webhook delivery (plan §5) now flows through the
+	// EventCenter + worker pool + retry sweeper. Wiring:
+	//
+	//   - A process-wide EventBus is constructed and
+	//     installed as the default (handlers in
+	//     task_events.go call services.GetDefaultEventBus()
+	//     to publish events).
+	//   - The per-webhook RateLimiter (§5.3) is shared
+	//     between the deliverer and any code that asks the
+	//     limiter about its current state.
+	//   - The EventCenter drains the bus, dispatches matches
+	//     into webhook_deliveries, and the worker pool
+	//     hands each job to NewDefaultDeliverFunc — that
+	//     function in turn runs the §5.1 backoff stamping,
+	//     §5.2 HMAC-SHA256 signing, §5.3 rate-limit gate,
+	//     and §5.5 per-request timeout in one place
+	//     (services/webhook_delivery.go).
+	//   - The RetrySweeper (§5.1 + §5) wakes every 5 s,
+	//     re-enqueues FAILED rows whose next_retry_at has
+	//     elapsed, and transitions over-budget rows to
+	//     EXHAUSTED with slog.Warn.
+	var (
+		eventBus   services.EventBus
+		eventCtr   *services.EventCenter
+		retrySwp   *services.RetrySweeper
+		limiter    *services.RateLimiter
+		runReaper  *services.RunReaper
+	)
 	if db != nil {
+		eventBus = services.NewChannelEventBus(256)
+		services.SetDefaultEventBus(eventBus)
+		limiter = services.NewRateLimiter(services.RateLimitPerMinute)
+		eventCtr = services.NewEventCenter(db, eventBus, 0)
+		eventCtr.SetDeliverFunc(services.NewDefaultDeliverFuncWithDeps(services.DefaultDeliverDeps{
+			DB:          db,
+			RateLimiter: limiter,
+		}))
+		eventCtr.Start()
+		retrySwp = services.NewRetrySweeper(db, eventBus, eventCtr, services.RetrySweepInterval)
+		retrySwp.Start()
+
 		runReaper = services.NewRunReaper(db)
 		runReaper.Start(context.Background())
 	}
@@ -873,6 +904,21 @@ func main() {
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			log.Printf("HTTP server shutdown error: %v", err)
+		}
+		// Stop the webhook delivery pipeline first: the
+		// retry sweeper may be holding delivery rows in
+		// FAILED + next_retry_at that the EventCenter would
+		// pick up if we stopped them in the other order.
+		// Stopping the sweeper first keeps the order:
+		// sweeper → eventcenter → bus.
+		if retrySwp != nil {
+			retrySwp.Stop()
+		}
+		if eventCtr != nil {
+			eventCtr.Stop()
+		}
+		if eventBus != nil {
+			_ = eventBus.Close()
 		}
 		if runReaper != nil {
 			runReaper.Stop()

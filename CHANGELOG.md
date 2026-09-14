@@ -113,6 +113,16 @@ All notable changes to this project will be documented in this file.
     the public `services.*` API so any drift between the
     internal implementation and the wire-level contract
     surfaces here.
+  - `backend/cmd/server/main.go` — boot-time wiring: a
+    process-wide `EventBus` (installed as
+    `services.SetDefaultEventBus`), the per-webhook
+    `RateLimiter`, the `EventCenter` (with the production
+    `NewDefaultDeliverFuncWithDeps`), and the
+    `RetrySweeper` (5 s cadence) are now started together
+    so the §5.1 / §5.2 / §5.3 / §5.5 pipeline runs end-to-end
+    at process boot. Shutdown stops the sweeper first, then
+    the EventCenter, then closes the bus so the ordering
+    avoids a late re-enqueue on a draining worker pool.
 
 ### Features
 
