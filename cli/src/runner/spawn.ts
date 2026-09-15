@@ -6,10 +6,10 @@
 //
 //   * `AgentSpawner` — the public façade the loop calls. Returns an
 //     `AgentProcess` that exposes the same surface Node's
-//     `ChildProcess` does (kill, wait, stdout/stderr), but with two
-//     additional guarantees: stderr is **always truncated to 64 KiB**,
-//     and a `timeoutMs` ceiling always kills the child (SIGTERM, then
-//     SIGKILL after a grace period).
+//     `ChildProcess` does (kill, wait, stdout/stderr), but with three
+//     additional guarantees: stdout and stderr are each **always
+//     truncated to 64 KiB**, and a `timeoutMs` ceiling always kills
+//     the child (SIGTERM, then SIGKILL after a grace period).
 //
 //   * `ProcessSpawner` — the low-level primitive (default:
 //     `child_process.spawn`). Tests inject a fake that returns a
@@ -50,6 +50,17 @@ import type {
 export const STDERR_TRUNCATE_BYTES = 64 * 1024;
 
 /**
+ * Hard cap on the stdout payload the loop forwards to `/finish`.
+ * Mirrors `STDERR_TRUNCATE_BYTES` so a runaway agent cannot OOM the
+ * CLI on either stream. The cap also matches the
+ * `task_runs.output` column cap documented in
+ * devDoc/CLI_RUNNER_OPENAPI_2026-09-12.yaml (s-1185: previously the
+ * runner silently discarded stdout entirely, which made opencode's
+ * banner-on-stderr look like a failure on the task detail page).
+ */
+export const STDOUT_TRUNCATE_BYTES = 64 * 1024;
+
+/**
  * Literal token operators embed in `agent.args` when
  * `promptPosition: "replace"`. The runner substitutes the prompt
  * flag + path for this single occurrence; missing or duplicate
@@ -61,14 +72,28 @@ export const PROMPT_PLACEHOLDER = "{prompt}";
 /**
  * Result the loop needs from a finished agent. We deliberately do
  * **not** expose Node's `ChildProcess`; the loop only cares about the
- * exit code, captured stderr (truncated), and an exit reason that
- * distinguishes "killed by runner" from "exited non-zero on its own".
+ * exit code, captured stdout + stderr (both truncated to 64 KiB),
+ * and an exit reason that distinguishes "killed by runner" from
+ * "exited non-zero on its own".
+ *
+ * `stdout` carries the agent's actual reply and lands in the
+ * `task_runs.output` column (s-1185). `stderr` is reserved for true
+ * failure context and lands in `task_runs.error`. Conflating the
+ * two was the original bug — opencode paints its startup banner to
+ * stderr, so a successful run used to look like a failure on the
+ * task detail page's "错误信息" / "Error" field.
  */
 export interface AgentResult {
   exitCode: number | null;
   signal: NodeJS.Signals | null;
   /** Captured stderr, truncated to `STDERR_TRUNCATE_BYTES`. */
   stderr: string;
+  /**
+   * Captured stdout, truncated to `STDOUT_TRUNCATE_BYTES`. Empty
+   * string when the agent wrote nothing to stdout (e.g. mock agents
+   * used in the e2e suite).
+   */
+  stdout: string;
   /**
    * Why the process ended:
    *   * `exit`        — process called `process.exit` / returned naturally
@@ -139,6 +164,7 @@ export class ChildProcessSpawner implements ProcessSpawner {
         exitCode: null,
         signal: null,
         stderr: `spawn failed: ${(err as Error).message}`,
+        stdout: "",
         reason: "spawn_error",
       };
       return {
@@ -151,6 +177,7 @@ export class ChildProcessSpawner implements ProcessSpawner {
         exitCode: null,
         signal: null,
         stderr: "spawn returned a process without a pid",
+        stdout: "",
         reason: "spawn_error",
       };
       return {
@@ -161,6 +188,9 @@ export class ChildProcessSpawner implements ProcessSpawner {
     let stderrBytes = 0;
     let stderrChunks: Buffer[] = [];
     let stderrTruncated = false;
+    let stdoutBytes = 0;
+    let stdoutChunks: Buffer[] = [];
+    let stdoutTruncated = false;
     let deadline: NodeJS.Timeout | null = null;
     let graceTimer: NodeJS.Timeout | null = null;
     let resolveWait: ((r: AgentResult) => void) | null = null;
@@ -187,15 +217,35 @@ export class ChildProcessSpawner implements ProcessSpawner {
         stderrTruncated = true;
       });
     }
-    // Drain stdout so the child's pipe buffer never fills up. The
-    // mock agents used in the e2e suite write nothing to stdout,
-    // but real-world agents (opencode, claude, cursor) do — and a
-    // full pipe would block the child until SIGTERM, hiding the
-    // actual exit reason from the loop. We discard the bytes
-    // because the plan's prompt rendering is via temp file / arg,
-    // never via stdout capture.
+    // Drain stdout so the child's pipe buffer never fills up, AND
+    // capture the bytes so the loop can surface the agent's actual
+    // reply through /api/v1/runs/:taskId/finish. Pre-s-1185 the
+    // bytes were discarded (`on("data", () => undefined)`) which
+    // meant opencode's stdout — and every other agent's — was
+    // invisible to the task detail page. Real-world agents write
+    // substantial text to stdout; a full pipe would block the
+    // child until SIGTERM and hide the actual exit reason, so the
+    // capture is bounded at `STDOUT_TRUNCATE_BYTES` (64 KiB, the
+    // same shape as stderr).
     if (child.stdout) {
-      child.stdout.on("data", () => undefined);
+      child.stdout.on("data", (chunk: Buffer | string) => {
+        if (stdoutTruncated) return;
+        const buf =
+          typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+        const remaining = STDOUT_TRUNCATE_BYTES - stdoutBytes;
+        if (buf.length <= remaining) {
+          stdoutChunks.push(buf);
+          stdoutBytes += buf.length;
+          return;
+        }
+        if (remaining > 0) {
+          stdoutChunks.push(buf.subarray(0, remaining));
+          stdoutBytes = STDOUT_TRUNCATE_BYTES;
+        } else {
+          stdoutBytes = STDOUT_TRUNCATE_BYTES;
+        }
+        stdoutTruncated = true;
+      });
       child.stdout.resume();
     }
     if (opts.pipeStdin && child.stdin) {
@@ -230,6 +280,7 @@ export class ChildProcessSpawner implements ProcessSpawner {
           ? Buffer.concat(stderrChunks).toString("utf8") +
             (stderrTruncated ? "\n[truncated]" : "")
           : `spawn error: ${err.message}`,
+        stdout: drainStream(stdoutChunks, stdoutTruncated),
         reason: "spawn_error",
       });
     });
@@ -249,6 +300,7 @@ export class ChildProcessSpawner implements ProcessSpawner {
         exitCode: code,
         signal: signal as NodeJS.Signals | null,
         stderr: stderrText,
+        stdout: drainStream(stdoutChunks, stdoutTruncated),
         reason,
       });
     });
@@ -462,6 +514,19 @@ export class AgentSpawner {
 
 function sanitiseTaskId(taskId: string): string {
   return taskId.replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
+/**
+ * Concatenate the captured stdout chunks into a single string and
+ * append a truncation marker when the 64 KiB cap kicked in. The
+ * shape mirrors the stderr helper above so the UI can render the
+ * two streams with the same truncation signal.
+ */
+function drainStream(chunks: Buffer[], truncated: boolean): string {
+  if (chunks.length === 0) {
+    return truncated ? "[truncated]" : "";
+  }
+  return Buffer.concat(chunks).toString("utf8") + (truncated ? "\n[truncated]" : "");
 }
 
 function createResolvedProcess(result: AgentResult): AgentProcess {

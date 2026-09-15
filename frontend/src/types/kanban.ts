@@ -65,7 +65,15 @@ export interface Task {
  * (`GET /api/v1/runs/history`) instead lists terminal
  * (`completed` / `failed` / `released`) rows that *do* persist,
  * and those rows carry the optional `finishedAt` / `exitCode` /
- * `error` fields below.
+ * `error` / `output` fields below.
+ *
+ * `error` is reserved for true failure context (the agent's
+ * stderr, ≤ 64 KiB). `output` carries the agent's stdout reply
+ * (≤ 64 KiB) and is the field the task detail page renders as
+ * the actual agent reply. Pre-s-1185 the runner wrote stderr
+ * into the same column the UI labelled "Error" / "错误信息" —
+ * opencode's startup banner is painted to stderr, so every
+ * successful run looked like a failure on the task detail page.
  */
 export interface TaskRun {
   taskId: string;
@@ -80,6 +88,7 @@ export interface TaskRun {
   finishedAt?: string | null;
   exitCode?: number | null;
   error?: string | null;
+  output?: string | null;
 }
 
 export interface Column {

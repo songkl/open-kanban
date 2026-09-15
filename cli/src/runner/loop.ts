@@ -37,6 +37,7 @@ import {
   AgentSpawner,
   ChildProcessSpawner,
   STDERR_TRUNCATE_BYTES,
+  STDOUT_TRUNCATE_BYTES,
 } from "./spawn.js";
 import {
   type BoardContext,
@@ -131,6 +132,13 @@ export interface RunLoopSummary {
  * cannot OOM the CLI.
  */
 const MAX_STDERR_FORWARD = STDERR_TRUNCATE_BYTES;
+
+/**
+ * Maximum stdout payload we forward to the server. Mirrors
+ * `MAX_STDERR_FORWARD`; the server's `task_runs.output` column
+ * was added in s-1185 with the same 64 KiB cap.
+ */
+const MAX_STDOUT_FORWARD = STDOUT_TRUNCATE_BYTES;
 
 export class RunLoop {
   private readonly opts: RunLoopOptions;
@@ -586,7 +594,12 @@ export class RunLoop {
         runnerId: this.runnerId,
         status,
         exitCode: result.exitCode,
+        // s-1185: send the agent's stdout under `output` so the
+        // task detail page can show what the agent actually
+        // produced. The `error` field is reserved for true
+        // failure context (non-zero exit, signal, spawn error).
         error: truncateForForward(result.stderr, MAX_STDERR_FORWARD),
+        output: truncateForForward(result.stdout, MAX_STDOUT_FORWARD),
       });
     } catch (err) {
       this.logger.error(
@@ -615,6 +628,7 @@ export class RunLoop {
             exitCode: null,
             signal: "SIGTERM",
             stderr: "",
+            stdout: "",
             reason: "signal",
           }
         : drain;

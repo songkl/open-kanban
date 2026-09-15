@@ -172,6 +172,7 @@ describe("RunClaimClient.finish", () => {
       status: "completed",
       exitCode: 0,
       error: null,
+      output: null,
     });
   });
 

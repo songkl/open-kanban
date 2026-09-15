@@ -679,7 +679,20 @@ components:
           nullable: true
           description: |
             Captured stderr (≤ 64 KiB). Only meaningful when
-            `status = failed`.
+            `status = failed`; since s-1185 this column is
+            reserved for true failure context and is no longer
+            populated with the agent's stdout. The companion
+            `output` field carries the agent's reply.
+        output:
+          type: string
+          nullable: true
+          description: |
+            Captured stdout (≤ 64 KiB) — the agent's actual
+            reply. Populated for both `completed` and `failed`
+            runs so the comment stream, task detail page, and
+            run history can all surface what the agent
+            produced. Added in s-1185 alongside the
+            `task_runs.output` schema column.
 
     FinishRunResponse:
       type: object
@@ -752,6 +765,19 @@ components:
         error:
           type: string
           nullable: true
+          description: |
+            Captured stderr (≤ 64 KiB) — failure context. Pre-s-1185
+            this column also carried stdout, which made the
+            "opencode build · …" banner look like a task failure on
+            the detail page. Since s-1185 stdout lives in `output`.
+        output:
+          type: string
+          nullable: true
+          description: |
+            Captured stdout (≤ 64 KiB) — the agent's actual reply.
+            Added in s-1185 alongside the `task_runs.output`
+            column so the comment stream, task detail page, and
+            run history can all surface what the agent produced.
 
     Task:
       type: object

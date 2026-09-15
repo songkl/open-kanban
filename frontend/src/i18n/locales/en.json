@@ -242,7 +242,7 @@
       "runner": "Runner",
       "status": "Status",
       "duration": "Duration",
-      "error": "Error"
+      "error": "Stderr"
     }
   },
   "completed": {
@@ -713,7 +713,8 @@
     "runExpiresAt": "Expires at",
     "runFinishedAt": "Finished at",
     "runExitCode": "Exit code",
-    "runError": "Error",
+    "runOutput": "Agent output",
+    "runError": "Stderr",
     "runElapsed": "Elapsed: {{elapsed}}",
     "runStatus": {
       "claimed": "claimed",

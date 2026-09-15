@@ -242,7 +242,7 @@
       "runner": "Runner",
       "status": "状态",
       "duration": "耗时",
-      "error": "错误信息"
+      "error": "标准错误 (stderr)"
     }
   },
   "completed": {
@@ -713,7 +713,8 @@
     "runExpiresAt": "过期时间",
     "runFinishedAt": "结束时间",
     "runExitCode": "退出码",
-    "runError": "错误信息",
+    "runOutput": "Agent 输出",
+    "runError": "标准错误 (stderr)",
     "runElapsed": "已运行: {{elapsed}}",
     "runStatus": {
       "claimed": "已认领",

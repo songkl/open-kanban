@@ -120,6 +120,17 @@ var VersionMigrationMap = []VersionMigration{
 	// a row in the existing activities table rather than
 	// silently disappearing at the SQL CHECK constraint.
 	{Version: "0.14.0", From: 1, To: 14},
+	// 0.15.0 added migration 015 to add task_runs.output (s-1185)
+	// so the CLI runner can persist the agent's stdout payload
+	// (truncated to 64 KiB) separately from the existing
+	// `error` column. Pre-s-1185 the runner wrote stderr into
+	// the `error` field, which the UI labels as the
+	// "错误信息" / "Error" string on the task detail page —
+	// opencode's banner on stderr made every successful run
+	// look like a failure. The CLI / handler / UI changes ship
+	// in the same release so the new column is never read with
+	// the old meaning.
+	{Version: "0.15.0", From: 1, To: 15},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

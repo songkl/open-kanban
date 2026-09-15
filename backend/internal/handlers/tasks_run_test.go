@@ -167,6 +167,7 @@ func setupRunsDB(t *testing.T) *sql.DB {
 		finished_at DATETIME,
 		exit_code INTEGER,
 		error TEXT,
+		output TEXT,
 		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
 		FOREIGN KEY (runner_id) REFERENCES users(id) ON DELETE SET NULL
 	);
@@ -912,6 +913,205 @@ func TestFinishRun_ReadOnlyUserRejected(t *testing.T) {
 	}
 }
 
+// TestFinishRun_StoresAgentOutput is the s-1185 happy path: the
+// finish request carries the agent's stdout payload under
+// `output`, and the handler must round-trip it into the
+// task_runs.output column. Pre-s-1185 the same payload landed
+// in `error`, which the UI then labelled "错误信息" — opencode's
+// banner made every successful run look like a failure.
+func TestFinishRun_StoresAgentOutput(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
+		('c-next', 'Next', 'review', 3, 'b1')`); err != nil {
+		t.Fatalf("seed next column: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-out', 'out me', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-out", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-out/finish", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "completed",
+		"exitCode": 0,
+		"output":   "hello world\n",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var output, errMsg sql.NullString
+	if err := db.QueryRow("SELECT output, error FROM task_runs WHERE task_id='t-out'").Scan(&output, &errMsg); err != nil {
+		t.Fatalf("query task_runs: %v", err)
+	}
+	if !output.Valid {
+		t.Fatalf("expected output to be set, got NULL")
+	}
+	if output.String != "hello world\n" {
+		t.Errorf("expected output %q, got %q", "hello world\n", output.String)
+	}
+	// A successful run must NOT leave a non-null `error` —
+	// the bug we're fixing is that the old code wrote stderr
+	// (or even a "successful" stderr banner) into `error`.
+	if errMsg.Valid {
+		t.Errorf("expected error to be NULL on successful run, got %q", errMsg.String)
+	}
+}
+
+// TestFinishRun_OutputDistinctFromError covers the regression
+// scenario explicitly: the agent's stdout ("here is the fix")
+// and a non-empty stderr banner ("opencode build · …") are
+// captured separately, the stdout lands in `output`, the
+// stderr lands in `error`, and the task still completes. The
+// UI must therefore be able to render the actual reply without
+// conflating it with the stderr noise.
+func TestFinishRun_OutputDistinctFromError(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
+		('c-next', 'Next', 'review', 3, 'b1')`); err != nil {
+		t.Fatalf("seed next column: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-distinct', 'distinct', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-distinct", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	router := runsRouter(db)
+	// stdout = "Patched file X" (the real reply), stderr =
+	// "opencode build · v1.2.3" (the banner that previously
+	// surfaced as "Error"). With s-1185 the two stay in their
+	// own columns and the task is still completed successfully.
+	w := doRequest(router, "POST", "/api/v1/runs/t-distinct/finish", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "completed",
+		"exitCode": 0,
+		"output":   "Patched file X",
+		"error":    "opencode build · v1.2.3",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var output, errMsg sql.NullString
+	var status string
+	if err := db.QueryRow("SELECT output, error, status FROM task_runs WHERE task_id='t-distinct'").Scan(&output, &errMsg, &status); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if status != "completed" {
+		t.Errorf("expected status=completed, got %q", status)
+	}
+	if !output.Valid || output.String != "Patched file X" {
+		t.Errorf("expected output %q, got %v", "Patched file X", output)
+	}
+	if !errMsg.Valid || errMsg.String != "opencode build · v1.2.3" {
+		t.Errorf("expected error preserved verbatim, got %v", errMsg)
+	}
+}
+
+// TestFinishRun_FailedStillRecordsOutput covers the failure
+// path: a non-zero exit leaves the row in `failed` but the
+// stdout payload (whatever the agent printed before it died)
+// must still be persisted so the operator can see it on the
+// task detail page.
+func TestFinishRun_FailedStillRecordsOutput(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-fail-out', 'fail out', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-fail-out", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	router := runsRouter(db)
+	exitCode := 1
+	w := doRequest(router, "POST", "/api/v1/runs/t-fail-out/finish", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "failed",
+		"exitCode": exitCode,
+		"error":    "fatal: tool call returned 500",
+		"output":   "starting tool call…\nretrying…\n",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var output, errMsg sql.NullString
+	var status string
+	if err := db.QueryRow("SELECT output, error, status FROM task_runs WHERE task_id='t-fail-out'").Scan(&output, &errMsg, &status); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if status != "failed" {
+		t.Errorf("expected status=failed, got %q", status)
+	}
+	if !output.Valid || output.String != "starting tool call…\nretrying…\n" {
+		t.Errorf("expected output preserved on failure, got %v", output)
+	}
+	if !errMsg.Valid || errMsg.String != "fatal: tool call returned 500" {
+		t.Errorf("expected error preserved on failure, got %v", errMsg)
+	}
+}
+
+// TestGetRun_ReturnsOutputField exercises the read path: a
+// terminal task_runs row carrying a non-null `output` is
+// surfaced verbatim through GET /api/v1/runs/:taskId so the
+// task detail page can render the agent's actual reply.
+func TestGetRun_ReturnsOutputField(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-out-get', 'out get', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-out-get", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-out-get/finish", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "completed",
+		"exitCode": 0,
+		"output":   "delivered: the file is patched",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("finish: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = doRequest(router, "GET", "/api/v1/runs/t-out-get", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("get: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var run models.TaskRun
+	if err := json.Unmarshal(w.Body.Bytes(), &run); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if run.Output == nil {
+		t.Fatalf("expected output to be present in JSON response, got %s", w.Body.String())
+	}
+	if *run.Output != "delivered: the file is patched" {
+		t.Errorf("expected output %q, got %q", "delivered: the file is patched", *run.Output)
+	}
+	if run.Error != nil {
+		t.Errorf("expected error to be omitted from JSON for clean run, got %q", *run.Error)
+	}
+}
+
 func TestReleaseRuns_BulkRestore(t *testing.T) {
 	db := setupRunsDB(t)
 	defer db.Close()
@@ -1078,11 +1278,11 @@ func TestRepository_ErrNoRunRowDistinctFromErrLockHeld(t *testing.T) {
 	if _, err := repo.Heartbeat("t-lock", "u-bot", 60000); !errors.Is(err, repositories.ErrLockHeld) {
 		t.Errorf("expected ErrLockHeld on wrong runner heartbeat, got %v", err)
 	}
-	if err := repo.FinishRun("t-lock", "u-bot", models.RunStatusCompleted, nil, nil, nil); !errors.Is(err, repositories.ErrLockHeld) {
+	if err := repo.FinishRun("t-lock", "u-bot", models.RunStatusCompleted, nil, nil, nil, nil); !errors.Is(err, repositories.ErrLockHeld) {
 		t.Errorf("expected ErrLockHeld on wrong runner finish, got %v", err)
 	}
 
-	if err := repo.FinishRun("t-lock", "u-admin", models.RunStatusCompleted, nil, nil, nil); err != nil {
+	if err := repo.FinishRun("t-lock", "u-admin", models.RunStatusCompleted, nil, nil, nil, nil); err != nil {
 		t.Errorf("expected nil error on right runner finish, got %v", err)
 	}
 	// s-1106: FinishRun stamps the row to status='completed'

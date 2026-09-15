@@ -25,6 +25,7 @@ import {
   type PrepareSpawnOptions,
   type ProcessSpawner,
   STDERR_TRUNCATE_BYTES,
+  STDOUT_TRUNCATE_BYTES,
   prepareSpawn,
   readPromptFile,
   type AgentProcess,
@@ -328,6 +329,44 @@ describe("ChildProcessSpawner — real subprocess paths", () => {
     );
     expect(result.stderr).toContain("[truncated]");
   });
+
+  // s-1185: pre-fix, the runner silently discarded stdout (`on("data", () => undefined)`).
+  // opencode's banner was painted to stderr and the agent's actual
+  // reply on stdout was lost, so the task detail page showed the
+  // banner as the user-facing "Error" field. Capture stdout in the
+  // same shape as stderr and the two streams stay independent.
+  it("captures stdout separately from stderr when both are written", async () => {
+    const { result } = await runInlineScript(
+      `process.stdout.write("hello world\\n");process.stderr.write("opencode build · v1\\n");process.exit(0);`
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.reason).toBe("exit");
+    expect(result.stdout).toBe("hello world\n");
+    expect(result.stderr).toBe("opencode build · v1\n");
+  });
+
+  it("defaults stdout to an empty string when the child writes nothing", async () => {
+    const { result } = await runInlineScript("process.exit(0);");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toBe("");
+  });
+
+  it("truncates stdout to 64 KiB when the child writes more", async () => {
+    // Same shape as the stderr truncation test: a delay between
+    // write and exit lets the OS pipe drain so the parent sees
+    // the full 80 KiB request before the close event fires.
+    const { result } = await runInlineScript(
+      `process.stdout.write("B".repeat(80 * 1024));await new Promise(r=>setTimeout(r,100));process.exit(0);`
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.reason).toBe("exit");
+    expect(result.stdout.length).toBeGreaterThan(0);
+    expect(result.stdout.length).toBeLessThanOrEqual(
+      STDOUT_TRUNCATE_BYTES + "[truncated]".length + 5
+    );
+    expect(result.stdout).toContain("[truncated]");
+  });
 });
 
 describe("AgentSpawner façade", () => {
@@ -380,6 +419,7 @@ describe("AgentSpawner façade", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     const result = await child.wait();

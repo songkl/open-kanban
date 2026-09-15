@@ -92,7 +92,21 @@ export interface FinishRequest {
   runnerId: string;
   status: FinishStatus;
   exitCode?: number | null;
+  /**
+   * Captured stderr (≤ 64 KiB). Reserved for true failure
+   * context — non-zero exit, signal, spawn error. Since s-1185
+   * the runner keeps the agent's stdout in a separate
+   * `output` field so a successful run is no longer
+   * mis-labelled as "Error" on the task detail page just
+   * because the agent wrote a banner to stderr.
+   */
   error?: string | null;
+  /**
+   * Captured stdout (≤ 64 KiB). Populated for both completed
+   * and failed runs so the comment stream, task detail page,
+   * and run history can all surface the agent's actual reply.
+   */
+  output?: string | null;
 }
 
 export interface FinishSuccess {
@@ -321,6 +335,7 @@ export class RunClaimClient {
           status: req.status,
           exitCode: req.exitCode ?? null,
           error: req.error ?? null,
+          output: req.output ?? null,
         }
       );
       if (status === 409) return { kind: "conflict" };

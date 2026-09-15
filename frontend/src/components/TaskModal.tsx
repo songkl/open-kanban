@@ -153,10 +153,20 @@ function RunInfoSection({ run }: { run: TaskRun }) {
             <dd className="font-mono text-zinc-700 dark:text-zinc-200">{run.exitCode}</dd>
           </>
         )}
+        {run.output && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runOutput')}</dt>
+            <dd className="whitespace-pre-wrap break-words font-mono text-zinc-700 dark:text-zinc-200 max-h-60 overflow-auto rounded bg-zinc-100/60 dark:bg-zinc-900/40 p-2">
+              {run.output}
+            </dd>
+          </>
+        )}
         {run.error && (
           <>
             <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runError')}</dt>
-            <dd className="text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{run.error}</dd>
+            <dd className="whitespace-pre-wrap break-words font-mono text-red-600 dark:text-red-400 max-h-60 overflow-auto rounded bg-red-50/60 dark:bg-red-950/30 p-2">
+              {run.error}
+            </dd>
           </>
         )}
       </dl>

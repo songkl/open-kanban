@@ -223,7 +223,8 @@ func (r *RunRepository) ClaimRun(
 			expires_at = excluded.expires_at,
 			finished_at = NULL,
 			exit_code = NULL,
-			error = NULL
+			error = NULL,
+			output = NULL
 		WHERE task_runs.status NOT IN ('claimed', 'running')
 		   OR datetime(task_runs.expires_at) <= datetime('now')
 	`, taskID, runnerID, agentID, boardID, columnID, now, now, expiresAt)
@@ -358,10 +359,21 @@ func (r *RunRepository) Heartbeat(taskID, runnerID string, lockTimeoutMs int) (t
 // transitions claimed → released is just another terminal row
 // for the history view.
 //
+// As of s-1185, the agent's stdout is captured separately from
+// the failure reason: stdout lands in the new `output` column
+// (truncated to 64 KiB by the CLI) so the task detail page can
+// show what the agent actually produced, while `error` is reserved
+// for true failures (non-zero exit, signal, spawn error). A
+// successful run therefore leaves `error` NULL even if the agent
+// printed a non-empty banner to stderr — opencode in particular
+// paints its `> build · …` line to stderr on startup, and the
+// pre-s-1185 wiring surfaced that as the user-facing "Error"
+// field on the task detail page.
+//
 // Returns ErrNoRunRow when no row exists for the task, and
 // ErrLockHeld when the row exists but is owned by a different
 // runner or already in a terminal state.
-func (r *RunRepository) FinishRun(taskID, runnerID string, status models.RunStatus, exitCode *int, errMsg *string, onCompleted func(taskID string) error) error {
+func (r *RunRepository) FinishRun(taskID, runnerID string, status models.RunStatus, exitCode *int, errMsg *string, output *string, onCompleted func(taskID string) error) error {
 	if status != models.RunStatusCompleted && status != models.RunStatusFailed {
 		return fmt.Errorf("invalid finish status %q (must be completed or failed)", status)
 	}
@@ -395,11 +407,15 @@ func (r *RunRepository) FinishRun(taskID, runnerID string, status models.RunStat
 	// The expires_at / last_heartbeat_at columns are left as they
 	// were at the last heartbeat (or claim) so the history view
 	// can show "lock expired at" without recomputing.
+	//
+	// `output` is the agent's stdout payload, kept in its own
+	// column so a successful run no longer conflates "the agent
+	// wrote to stderr" with "the agent failed" (s-1185).
 	if _, err := tx.Exec(`
 		UPDATE task_runs
-		SET status = ?, finished_at = ?, exit_code = ?, error = ?
+		SET status = ?, finished_at = ?, exit_code = ?, error = ?, output = ?
 		WHERE task_id = ? AND runner_id = ?
-	`, string(status), now, exitCode, errMsg, taskID, runnerID); err != nil {
+	`, string(status), now, exitCode, errMsg, output, taskID, runnerID); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {

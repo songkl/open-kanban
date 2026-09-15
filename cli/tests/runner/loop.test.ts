@@ -312,6 +312,7 @@ describe("defaultBuildFailureComment (s-1164)", () => {
       exitCode: null,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     };
     const body = defaultBuildFailureComment(
@@ -332,6 +333,7 @@ describe("defaultBuildFailureComment (s-1164)", () => {
         exitCode: 1,
         signal: "SIGTERM",
         stderr: "  boom\n",
+        stdout: "",
         reason: "exit",
       },
       { runnerId: "runner-7" },
@@ -378,6 +380,7 @@ describe("RunLoop — happy path", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     more = await h.loop.tick();
@@ -392,6 +395,7 @@ describe("RunLoop — happy path", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     await h.loop.tick(); // drain finish s-2
@@ -403,6 +407,7 @@ describe("RunLoop — happy path", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     await h.loop.tick(); // drain finish s-3
@@ -453,6 +458,7 @@ describe("RunLoop — happy path", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     // Tick again to flush finish(completed); the loop then tries
@@ -469,6 +475,113 @@ describe("RunLoop — happy path", () => {
       exitCode: 0,
       runnerId: "runner-1",
     });
+  });
+
+  // s-1185: the runner previously discarded stdout entirely, so the
+  // task detail page showed the agent's stderr banner as the
+  // "Error" field. Verify the agent's actual reply now reaches
+  // the server as `output` on the finish request.
+  it("forwards the agent's stdout to the server under `output`", async () => {
+    const h = makeHarness({
+      scripts: [
+        {
+          request: {
+            boardId: "sys",
+            status: "todo",
+            agentType: "opencoder",
+            runnerId: "runner-1",
+          },
+          outcome: {
+            status: 200,
+            body: {
+              task: TASK_TEMPLATE,
+              run: { taskId: TASK_TEMPLATE.id, runnerId: "runner-1" },
+            },
+          },
+        },
+        NOOP_SCRIPTED,
+      ],
+    });
+    let more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "opencode build · v1.2.3\n",
+      stdout: "Patched file X\nDone.\n",
+      reason: "exit",
+    });
+    more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.loop.requestShutdown();
+    await h.loop.tick();
+    expect(h.transport.finishCalls).toHaveLength(1);
+    const body = h.transport.finishCalls[0].body as {
+      status: string;
+      output?: string;
+      error?: string;
+    };
+    expect(body.status).toBe("completed");
+    expect(body.output).toBe("Patched file X\nDone.\n");
+    // The stderr banner stays in `error` so the UI can still
+    // surface it; it just no longer masquerades as the agent's
+    // actual reply (s-1185 separation).
+    expect(body.error).toBe("opencode build · v1.2.3\n");
+  });
+
+  // s-1185: a successful run with non-empty stderr must NOT
+  // populate `error` on the server — the UI used to display
+  // that as "Error" / "错误信息" and confuse operators.
+  // With the new shape `error` is the forwarded stderr verbatim
+  // and `output` is the agent's stdout, and the success path
+  // is the only thing that determines whether the row is
+  // stamped `completed` vs `failed`.
+  it("does not collapse stdout and stderr into the same field on success", async () => {
+    const h = makeHarness({
+      scripts: [
+        {
+          request: {
+            boardId: "sys",
+            status: "todo",
+            agentType: "opencoder",
+            runnerId: "runner-1",
+          },
+          outcome: {
+            status: 200,
+            body: {
+              task: TASK_TEMPLATE,
+              run: { taskId: TASK_TEMPLATE.id, runnerId: "runner-1" },
+            },
+          },
+        },
+        NOOP_SCRIPTED,
+      ],
+    });
+    let more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "opencode build · v1.2.3\n",
+      stdout: "All tests pass.\n",
+      reason: "exit",
+    });
+    more = await h.loop.tick();
+    expect(more).toBe(true);
+    h.loop.requestShutdown();
+    await h.loop.tick();
+    const body = h.transport.finishCalls[0].body as {
+      status: string;
+      output?: string;
+      error?: string;
+    };
+    expect(body.status).toBe("completed");
+    expect(body.output).toBe("All tests pass.\n");
+    expect(body.error).toBe("opencode build · v1.2.3\n");
+    // The two payloads must be distinct strings — the whole
+    // point of s-1185 is that "where did the agent say" is
+    // separate from "what did the agent warn about".
+    expect(body.output).not.toBe(body.error);
   });
 });
 
@@ -501,6 +614,7 @@ describe("RunLoop — failure path", () => {
       exitCode: 2,
       signal: null,
       stderr: "boom",
+      stdout: "",
       reason: "exit",
     });
     more = await h.loop.tick();
@@ -597,6 +711,7 @@ describe("RunLoop — failure path", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     more = await h.loop.tick();
@@ -642,6 +757,7 @@ describe("RunLoop — failure path", () => {
       exitCode: 1,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     more = await h.loop.tick();
@@ -690,6 +806,7 @@ describe("RunLoop — failure path", () => {
       exitCode: 1,
       signal: null,
       stderr: "boom",
+      stdout: "",
       reason: "exit",
     });
     more = await h.loop.tick();
@@ -768,6 +885,7 @@ describe("RunLoop — graceful shutdown", () => {
       exitCode: null,
       signal: "SIGTERM",
       stderr: "",
+      stdout: "",
       reason: "signal",
     });
     h.loop.requestShutdown();
@@ -846,6 +964,7 @@ describe("RunLoop — graceful shutdown", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     await h.loop.tick();
@@ -901,6 +1020,7 @@ describe("RunLoop — tick() single-step driver", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     more = await h.loop.tick();
@@ -947,6 +1067,7 @@ describe("RunLoop — heartbeat integration", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     // Tick drains the in-flight task and finishes.
@@ -1070,6 +1191,7 @@ describe("RunLoop — wake() short-circuits the idle sleep", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     loop.requestShutdown();
@@ -1108,6 +1230,7 @@ describe("RunLoop — debug logging", () => {
       exitCode: 0,
       signal: null,
       stderr: "",
+      stdout: "",
       reason: "exit",
     });
     // Allow the loop to observe the result + finish + post-release.

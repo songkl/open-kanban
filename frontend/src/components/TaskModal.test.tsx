@@ -549,6 +549,72 @@ describe('TaskModal', () => {
       expect(dd?.textContent).toContain(longRunnerId);
     });
 
+    // s-1185: a successful run carrying both stdout (`output`) and
+    // a non-empty stderr banner (`error`) must render them as two
+    // separate labelled rows. Pre-s-1185 only `error` existed and
+    // opencode's stderr banner made the task look like a failure
+    // even on a clean exit.
+    it('renders the agent output separately from stderr on a successful run (s-1185)', () => {
+      mockedUseTaskRun.mockReturnValue({
+        run: {
+          taskId: 'task-1',
+          runnerId: 'runner-bar',
+          agentId: 'opencode',
+          boardId: 'b-1',
+          columnId: 'c-1',
+          status: 'completed',
+          claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
+          lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
+          expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
+          finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
+          exitCode: 0,
+          // stdout — the agent's actual reply
+          output: 'Patched file X\nAll tests pass.\n',
+          // stderr — the opencode banner that used to surface as
+          // the user-facing "Error" field and confuse operators.
+          error: 'opencode build · v1.2.3\n',
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      const section = screen.getByTestId('task-run-info');
+      // The two streams get their own labelled rows so a quick
+      // glance at the modal tells stdout apart from stderr.
+      expect(section.textContent).toContain('taskModal.runOutput');
+      expect(section.textContent).toContain('taskModal.runError');
+      expect(section.textContent).toContain('Patched file X\nAll tests pass.\n');
+      expect(section.textContent).toContain('opencode build · v1.2.3\n');
+    });
+
+    // s-1185: when `output` is absent (e.g. a legacy row from
+    // before the migration, or a mock agent that writes nothing
+    // to stdout) the run section must not render an empty
+    // "Agent output" row. Same for the legacy `error` field.
+    it('omits the output row when the run did not record any stdout (s-1185)', () => {
+      mockedUseTaskRun.mockReturnValue({
+        run: {
+          taskId: 'task-1',
+          runnerId: 'runner-bar',
+          agentId: 'opencode',
+          boardId: 'b-1',
+          columnId: 'c-1',
+          status: 'completed',
+          claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
+          lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
+          expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
+          finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
+          exitCode: 0,
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      const section = screen.getByTestId('task-run-info');
+      expect(section.textContent).not.toContain('taskModal.runOutput');
+      expect(section.textContent).not.toContain('taskModal.runError');
+    });
+
     it('does not tick the elapsed label when the run is in a terminal status (s-1168)', () => {
       vi.useFakeTimers();
       try {

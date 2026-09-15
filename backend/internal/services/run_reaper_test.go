@@ -85,6 +85,7 @@ func setupReaperDB(t *testing.T) *sql.DB {
 		finished_at DATETIME,
 		exit_code INTEGER,
 		error TEXT,
+		output TEXT,
 		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
 		FOREIGN KEY (runner_id) REFERENCES users(id) ON DELETE SET NULL
 	);

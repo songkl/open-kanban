@@ -13,6 +13,7 @@ func TestTaskRunJSON(t *testing.T) {
 	finished := now.Add(time.Minute)
 	code := 0
 	msg := "boom"
+	stdout := "hello world\n"
 
 	run := models.TaskRun{
 		TaskID:          "task-1",
@@ -27,6 +28,7 @@ func TestTaskRunJSON(t *testing.T) {
 		FinishedAt:      &finished,
 		ExitCode:        &code,
 		Error:           &msg,
+		Output:          &stdout,
 	}
 
 	data, err := json.Marshal(run)
@@ -54,13 +56,17 @@ func TestTaskRunJSON(t *testing.T) {
 	if unmarshaled.Error == nil || *unmarshaled.Error != msg {
 		t.Errorf("expected error %s, got %v", msg, unmarshaled.Error)
 	}
+	if unmarshaled.Output == nil || *unmarshaled.Output != stdout {
+		t.Errorf("expected output %q, got %v", stdout, unmarshaled.Output)
+	}
 }
 
 // TestTaskRunJSON_OmitsUnsetOptionalFields locks down the
-// omitempty behaviour of the three nullable columns: a live (not-yet
+// omitempty behaviour of the four nullable columns: a live (not-yet
 // finished) row serialised to JSON must NOT include finishedAt /
-// exitCode / error keys, otherwise the CLI runner's status-poll
-// endpoint would emit empty strings / zeros on every heartbeat.
+// exitCode / error / output keys, otherwise the CLI runner's
+// status-poll endpoint would emit empty strings / zeros on every
+// heartbeat.
 func TestTaskRunJSON_OmitsUnsetOptionalFields(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	run := models.TaskRun{
@@ -85,7 +91,7 @@ func TestTaskRunJSON_OmitsUnsetOptionalFields(t *testing.T) {
 		t.Fatalf("failed to unmarshal task run into map: %v", err)
 	}
 
-	for _, omitted := range []string{"finishedAt", "exitCode", "error"} {
+	for _, omitted := range []string{"finishedAt", "exitCode", "error", "output"} {
 		if _, present := raw[omitted]; present {
 			t.Errorf("expected %q to be omitted from JSON for live row, got %s", omitted, string(data))
 		}
@@ -151,7 +157,7 @@ func TestToTaskRun(t *testing.T) {
 		t.Errorf("timestamps not copied through ToTaskRun: %+v", tr)
 	}
 	// Optional fields should stay nil — the constructor never sets them.
-	if tr.FinishedAt != nil || tr.ExitCode != nil || tr.Error != nil {
+	if tr.FinishedAt != nil || tr.ExitCode != nil || tr.Error != nil || tr.Output != nil {
 		t.Errorf("ToTaskRun should not populate optional fields, got %+v", tr)
 	}
 }

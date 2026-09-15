@@ -61,9 +61,17 @@ func (s RunStatus) IsLive() bool {
 //
 // JSON tags match the TaskRun schema in
 // CLI_RUNNER_OPENAPI_2026-09-12.yaml §TaskRun verbatim, including
-// the optional finishedAt / exitCode / error fields; an empty
-// (zero-value) pointer means "not yet finished" and is omitted from
-// JSON to keep the live rows tidy.
+// the optional finishedAt / exitCode / error / output fields; an
+// empty (zero-value) pointer means "not yet finished" and is omitted
+// from JSON to keep the live rows tidy.
+//
+// `output` carries the agent's stdout (truncated to 64 KiB by the
+// CLI) so the comment stream, the task detail page, and the run
+// history page can all show what the agent actually produced. It is
+// deliberately separate from `error`: pre-s-1185 the runner wrote
+// stderr into `error`, which the UI labels as the user-facing
+// "错误信息" / "Error" string and made every successful opencode run
+// look like a failure (the opencode banner is painted to stderr).
 type TaskRun struct {
 	TaskID          string     `json:"taskId"`
 	RunnerID        string     `json:"runnerId"`
@@ -77,18 +85,23 @@ type TaskRun struct {
 	FinishedAt      *time.Time `json:"finishedAt,omitempty"`
 	ExitCode        *int       `json:"exitCode,omitempty"`
 	Error           *string    `json:"error,omitempty"`
+	Output          *string    `json:"output,omitempty"`
 }
 
 // TaskRunColumns is the canonical SELECT list for task_runs rows,
 // shared between the scan helpers and the repository so we don't
-// drift between read paths.
+// drift between read paths. `output` is appended at the end so
+// existing pre-s-1185 queries (and the v1 /runs/history endpoint)
+// keep working — both the SELECT list and the scan helper grew in
+// lockstep, and the new column is nullable so legacy rows still
+// scan.
 const TaskRunColumns = `task_id, runner_id, agent_id, board_id, column_id, status,
-		claimed_at, last_heartbeat_at, expires_at, finished_at, exit_code, error`
+		claimed_at, last_heartbeat_at, expires_at, finished_at, exit_code, error, output`
 
 // TaskRunFromRow scans a single task_runs row produced by a SELECT
 // using TaskRunColumns into a TaskRun. Nullable columns (finished_at,
-// exit_code, error) are mapped to *time.Time / *int / *string so the
-// zero value faithfully means "not set".
+// exit_code, error, output) are mapped to *time.Time / *int /
+// *string so the zero value faithfully means "not set".
 //
 // Use this in repository code whenever you already have *sql.Row /
 // *sql.Rows in hand. For higher-level "scan N rows" loops prefer
@@ -99,12 +112,13 @@ func TaskRunFromRow(scan func(dest ...any) error) (*TaskRun, error) {
 		finishedAt sql.NullTime
 		exitCode   sql.NullInt64
 		errMsg     sql.NullString
+		output     sql.NullString
 		status     string
 	)
 	if err := scan(
 		&tr.TaskID, &tr.RunnerID, &tr.AgentID, &tr.BoardID, &tr.ColumnID, &status,
 		&tr.ClaimedAt, &tr.LastHeartbeatAt, &tr.ExpiresAt,
-		&finishedAt, &exitCode, &errMsg,
+		&finishedAt, &exitCode, &errMsg, &output,
 	); err != nil {
 		return nil, err
 	}
@@ -120,6 +134,10 @@ func TaskRunFromRow(scan func(dest ...any) error) (*TaskRun, error) {
 	if errMsg.Valid {
 		s := errMsg.String
 		tr.Error = &s
+	}
+	if output.Valid {
+		s := output.String
+		tr.Output = &s
 	}
 	return &tr, nil
 }

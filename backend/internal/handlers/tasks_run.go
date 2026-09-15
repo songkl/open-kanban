@@ -49,7 +49,17 @@ type FinishRunRequest struct {
 	RunnerID      string  `json:"runnerId"`
 	Status        string  `json:"status"`
 	ExitCode      *int    `json:"exitCode,omitempty"`
+	// Error is the agent's stderr (≤ 64 KiB), reserved for
+	// genuine failure context. Since s-1185 the runner keeps
+	// its stdout payload in `output` so a successful run is no
+	// longer mis-labelled as "Error" on the task detail page
+	// just because the agent wrote a banner to stderr.
 	Error         *string `json:"error,omitempty"`
+	// Output is the agent's stdout (≤ 64 KiB). Populated for
+	// both completed and failed runs so the comment stream,
+	// task detail page, and run history can all surface the
+	// actual reply.
+	Output        *string `json:"output,omitempty"`
 }
 
 // ReleaseRunsRequest is the wire shape for POST
@@ -551,7 +561,7 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 		taskSvc := services.NewTaskService(db)
 
 		var advanced bool
-		err = repo.FinishRun(taskID, req.RunnerID, status, req.ExitCode, req.Error,
+		err = repo.FinishRun(taskID, req.RunnerID, status, req.ExitCode, req.Error, req.Output,
 			func(taskID string) error {
 				if _, err := taskSvc.CompleteTask(taskID); err != nil {
 					return err
