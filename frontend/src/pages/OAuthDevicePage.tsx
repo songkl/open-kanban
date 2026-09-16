@@ -279,26 +279,41 @@ export function OAuthDevicePage() {
   // lookup. It is undefined when the lookup did not include the
   // available_agents field (legacy / anonymous lookups) and an empty
   // array when the server requires the picker but the deployment has
-  // no Agents yet. Read both the snake_case wire field and the
-  // camelCase alias so older / mocked payloads still resolve.
+  // no Agents yet (or the caller is anonymous). Read both the
+  // snake_case wire field and the camelCase alias so older / mocked
+  // payloads still resolve.
   const agents = lookup?.availableAgents ?? lookup?.available_agents;
   const hasAgents = Array.isArray(agents) && agents.length > 0;
   const pickerRequired =
     lookup?.agentSelectionRequired === true ||
     lookup?.agent_selection_required === true;
-  // Render the picker whenever the server returned at least one Agent
-  // — the empty-state path below covers the picker-required-but-no-agents
-  // case. When the lookup omits the available_agents field (or returns
-  // it with length 0 and does not require a selection) the legacy
-  // behaviour applies and no identity chrome is shown.
-  const showIdentityPicker = hasAgents;
+  // Render the picker whenever the server asked for one, even if it
+  // returned zero Agents. The "Myself" radio is always valid in that
+  // case, so the human approver can still bind the device code to
+  // their own account. The legacy "skip the picker entirely" path
+  // applies when the lookup didn't ask for an identity at all (the
+  // OAuth client isn't flagged as a CLI / MCP consumer) — that path
+  // binds to the logged-in user by default, matching the pre-s-1120
+  // behaviour.
+  const showIdentityPicker = pickerRequired;
+  // The "no Agent available" hint is a soft warning rather than a
+  // hard gate: s-1186 surfaced a UX dead-end where the Approve button
+  // was disabled in this state, leaving the admin with no way to log
+  // in to the device flow before they had created any Agents. The
+  // server still enforces oauth_device_require_agent_selection at
+  // approval time (see backend/internal/oauth/approve.go), so when an
+  // admin has flipped the strict-mode toggle the empty state surfaces
+  // a 400 from the API and the user is told to ask the operator to
+  // create an Agent. Until then the human approver can pick "Myself"
+  // and proceed.
   const showIdentityEmptyState = pickerRequired && !hasAgents;
   // A valid selection exists whenever the picker is shown (the
   // "Myself" radio is pre-selected, so a non-empty value is present)
   // or the legacy path is in effect (the human approver is implicitly
-  // the bound user). The empty-state path is the only one with no
-  // valid selection, so we block the Approve button there.
-  const hasValidSelection = !showIdentityEmptyState;
+  // the bound user). We previously blocked Approve in the empty state,
+  // but the picker always offers a "Myself" option so the selection
+  // is genuinely valid — see s-1186.
+  const hasValidSelection = showIdentityPicker || !pickerRequired;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">

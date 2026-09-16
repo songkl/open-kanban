@@ -812,7 +812,7 @@
       "identityAgent": "Agent：{{name}}",
       "identityDefault": "请选择授权身份",
       "identityServerDefault": "服务器默认",
-      "identityEmpty": "暂无可用的 Agent 账号，请联系管理员启用后再继续授权。",
+      "identityEmpty": "暂无可用的 Agent 账号。你可以按当前账号授权，或联系管理员启用一个 Agent 以供无人值守的自动化使用。",
       "identityHelper": "选择设备应获得授权的身份。如果是给无人值守的 CLI / MCP 使用，请选择一个 Agent。",
       "identityConfirmSelf": "确认按当前账号授权？",
       "identityConfirmAgent": "确认按 Agent 授权？",

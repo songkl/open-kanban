@@ -328,6 +328,29 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- s-1186: fix the device-flow approval page (`/oauth/device`) disabling
+  the Approve button when the server asked for an Agent identity but
+  the deployment had no Agents yet. The empty state used to leave the
+  admin with no way to log in to the device flow before they had
+  created any Agents — they could only Deny. The page now always
+  renders the picker (with the "Myself" radio at minimum) whenever
+  `agent_selection_required` is set, so the human approver can still
+  bind the device code to their own account. The "no Agent accounts
+  available" hint is kept as a soft warning that suggests creating an
+  Agent for unattended automation. The server still enforces
+  `oauth_device_require_agent_selection` (plan §4.1.4) when an
+  admin has flipped the strict-mode toggle, so the empty-state path
+  surfaces the API's 400 there as before. `frontend/src/pages/OAuthDevicePage.tsx`
+  flips `showIdentityPicker` to be driven by `pickerRequired`
+  instead of `hasAgents`, and `hasValidSelection` no longer blocks
+  Approve in the empty state; `OAuthDevicePage.test.tsx` updates the
+  existing empty-state test (Approve is now enabled, the picker still
+  renders with `identity-self`) and adds a new case that pins the
+  network contract: a "Myself" approval in the empty state submits
+  with no `agentId` so the device code binds to the human approver.
+  Updated i18n copy under `oauth.device.identityEmpty` in
+  `frontend/src/i18n/locales/{en,zh}.json` to make the new "Myself
+  is still available" affordance explicit.
 - s-1134: fix `POST /api/v1/auth/agents` returning `500 {"error":"Failed to create"}`
   on dev builds. The migration runner used the tag-only `git describe`
   output (e.g. `0.2.0`) to look up `VersionMigrationMap`, which mapped

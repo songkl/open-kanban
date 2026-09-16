@@ -243,6 +243,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: new Date().toISOString(),
         status: 'pending',
+        agent_selection_required: true,
         available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha', username: 'alpha-bot', role: 'agent' },
           { id: 'agent-beta', nickname: 'Beta', username: 'beta-bot', role: 'agent' }
@@ -272,6 +273,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: '',
         status: 'pending',
+        agent_selection_required: true,
         available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
       })
     });
@@ -300,6 +302,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read',
             expiresAt: '',
             status: 'pending',
+            agent_selection_required: true,
             available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
           })
         });
@@ -359,6 +362,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read',
             expiresAt: '',
             status: 'pending',
+            agent_selection_required: true,
             available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
           })
         });
@@ -452,6 +456,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: '',
         status: 'pending',
+        agent_selection_required: true,
         defaultAgentId: 'agent-beta',
         available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha' },
@@ -485,6 +490,7 @@ describe('OAuthDevicePage', () => {
         scope: '',
         expiresAt: '',
         status: 'pending',
+        agent_selection_required: true,
         defaultAgentId: 'ghost-agent',
         available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
       })
@@ -513,6 +519,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read',
         expiresAt: '',
         status: 'pending',
+        agent_selection_required: true,
         defaultAgentId: 'agent-beta',
         available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha' },
@@ -544,6 +551,7 @@ describe('OAuthDevicePage', () => {
         scope: '',
         expiresAt: '',
         status: 'pending',
+        agent_selection_required: true,
         defaultAgentId: 'ghost-agent',
         available_agents: [
           { id: 'agent-alpha', nickname: 'Alpha' },
@@ -563,7 +571,17 @@ describe('OAuthDevicePage', () => {
     expect(screen.queryByTestId('identity-agent-agent-beta-default-badge')).not.toBeInTheDocument();
   });
 
-  it('renders the empty-state and disables Approve when agent_selection_required is true and no agents are available', async () => {
+  // s-1186: when the server asks for an Agent identity but the
+  // deployment has no Agents yet, the picker used to disable the
+  // Approve button — leaving the admin with no way to log in to the
+  // device flow before they had created any Agents. The page now
+  // shows the picker with the "Myself" option still selectable, so the
+  // admin can always bind the device code to their own account.
+  // The "no Agent available" hint stays as a soft warning, but
+  // Approve is enabled and the request goes through (the server still
+  // enforces oauth_device_require_agent_selection when an admin has
+  // flipped the strict-mode toggle).
+  it('shows the empty-state hint and keeps Approve enabled when agent_selection_required is true and no agents are available', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -586,10 +604,63 @@ describe('OAuthDevicePage', () => {
       expect(screen.getByTestId('identity-empty')).toBeInTheDocument();
     });
     expect(screen.getByTestId('identity-empty').textContent).toMatch(/No Agent accounts/i);
-    expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('identity-self')).not.toBeInTheDocument();
-    expect(screen.getByTestId('approve-btn')).toBeDisabled();
+    // The picker chrome still renders so the admin can pick "Myself".
+    expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-self')).toBeInTheDocument();
+    // The empty-state used to block Approve (s-1186); it is enabled
+    // now so the admin can authorise as themselves.
+    expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
     expect(screen.getByTestId('deny-btn')).not.toBeDisabled();
+  });
+
+  // s-1186: the empty-state must not just keep Approve enabled — the
+  // "Myself" radio must also submit an empty agentId so the device
+  // code binds to the human approver (mirroring the no-agents case
+  // in the picker happy-path). Without this assertion a future
+  // regression that re-blocks Approve in the empty state would
+  // silently pass the UI check above.
+  it('submits an empty agentId when the admin authorises as themselves in the empty state', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            clientId: 'c',
+            clientName: 'C',
+            scope: 'kanban:read',
+            expiresAt: '',
+            status: 'pending',
+            agent_selection_required: true,
+            available_agents: []
+          })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ approved: true }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'SLF1-SLF1' } });
+    await waitFor(() => expect(screen.getByTestId('identity-empty')).toBeInTheDocument());
+    // "Myself" is the default selection, so the user can just click
+    // Approve straight away.
+    await waitFor(() => expect(screen.getByTestId('approve-btn')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('approve-btn'));
+    expect(screen.getByTestId('identity-confirm-banner')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('identity-confirm-approve'));
+
+    await waitFor(() => {
+      const approveCall = fetchMock.mock.calls.find(([u]) =>
+        typeof u === 'string' && u.startsWith('/oauth/device/approve')
+      );
+      expect(approveCall).toBeDefined();
+      const body = JSON.parse((approveCall as [string, RequestInit])[1].body as string);
+      expect(body.user_code).toBe('SLF1-SLF1');
+      expect(body.decision).toBe('approve');
+      // No agentId in the body → server binds to the human approver.
+      expect(body).not.toHaveProperty('agentId');
+    });
   });
 
   it('hides the empty-state and keeps Approve enabled when agents is empty but agent_selection_required is not set', async () => {
@@ -629,6 +700,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read tasks:write',
             expiresAt: new Date().toISOString(),
             status: 'pending',
+            agent_selection_required: true,
             available_agents: [{ id: 'agent-alpha', nickname: 'Alpha', role: 'AGENT' }]
           })
         });
@@ -676,6 +748,7 @@ describe('OAuthDevicePage', () => {
             scope: 'kanban:read',
             expiresAt: '',
             status: 'pending',
+            agent_selection_required: true,
             available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
           })
         });
@@ -717,6 +790,7 @@ describe('OAuthDevicePage', () => {
         scope: 'kanban:read tasks:write',
         expiresAt: new Date().toISOString(),
         status: 'pending',
+        agent_selection_required: true,
         available_agents: [{ id: 'agent-alpha', nickname: 'Alpha' }]
       })
     });

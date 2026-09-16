@@ -812,7 +812,7 @@
       "identityAgent": "Agent: {{name}}",
       "identityDefault": "Pick an identity",
       "identityServerDefault": "Server default",
-      "identityEmpty": "No Agent accounts are available. Ask an administrator to enable one before approving a device.",
+      "identityEmpty": "No Agent accounts are available. You can still authorise as yourself, or ask an administrator to enable an Agent for unattended automation.",
       "identityHelper": "Pick the identity the device should receive access for. Pick an Agent if this CLI is for unattended automation.",
       "identityConfirmSelf": "Authorise as yourself?",
       "identityConfirmAgent": "Authorise as an Agent?",
