@@ -613,6 +613,42 @@ describe('OAuthDevicePage', () => {
     expect(screen.getByTestId('deny-btn')).not.toBeDisabled();
   });
 
+  // s-1186 (defensive guard): a malformed lookup that asks for an
+  // Agent identity but omits the available_agents field entirely must
+  // not crash the page. The picker is still rendered (because
+  // pickerRequired is true) but with the empty-state hint. Approve
+  // stays enabled so the admin can authorise as themselves without
+  // a runtime exception aborting the render.
+  it('treats an omitted available_agents as an empty list when agent_selection_required is true', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'c',
+        clientName: 'C',
+        scope: 'kanban:read',
+        expiresAt: '',
+        status: 'pending',
+        agent_selection_required: true
+        // available_agents intentionally omitted.
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'OMIT-OMIT' } });
+
+    // The page must render without throwing. Both the picker and the
+    // empty-state hint should be present (mirroring the empty-list
+    // happy path), and the admin must be able to approve.
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-empty')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-self')).toBeInTheDocument();
+    expect(screen.getByTestId('approve-btn')).not.toBeDisabled();
+  });
+
   // s-1186: the empty-state must not just keep Approve enabled — the
   // "Myself" radio must also submit an empty agentId so the device
   // code binds to the human approver (mirroring the no-agents case

@@ -276,14 +276,15 @@ export function OAuthDevicePage() {
   }
 
   // agents is the array of selectable Agent identities returned by the
-  // lookup. It is undefined when the lookup did not include the
-  // available_agents field (legacy / anonymous lookups) and an empty
-  // array when the server requires the picker but the deployment has
-  // no Agents yet (or the caller is anonymous). Read both the
-  // snake_case wire field and the camelCase alias so older / mocked
-  // payloads still resolve.
-  const agents = lookup?.availableAgents ?? lookup?.available_agents;
-  const hasAgents = Array.isArray(agents) && agents.length > 0;
+  // lookup. It defaults to an empty array when the lookup did not
+  // include either wire field (legacy / anonymous lookups, or a
+  // malformed response that sets agent_selection_required=true while
+  // omitting available_agents) so the renderer's `.map` cannot throw.
+  // Read both the snake_case wire field and the camelCase alias so
+  // older / mocked payloads still resolve without crashing.
+  const agents: DeviceLookupAgent[] =
+    lookup?.availableAgents ?? lookup?.available_agents ?? [];
+  const hasAgents = agents.length > 0;
   const pickerRequired =
     lookup?.agentSelectionRequired === true ||
     lookup?.agent_selection_required === true;
@@ -379,7 +380,7 @@ export function OAuthDevicePage() {
               />
               <span>{t('oauth.device.identitySelf', { name: approverLabel || t('oauth.device.identityYouFallback') })}</span>
             </label>
-            {agents!.map((a) => {
+            {agents.map((a) => {
               const isServerDefault = lookup.defaultAgentId === a.id;
               return (
                 <label

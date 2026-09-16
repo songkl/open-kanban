@@ -348,8 +348,12 @@ All notable changes to this project will be documented in this file.
   renders with `identity-self`) and adds a new case that pins the
   network contract: a "Myself" approval in the empty state submits
   with no `agentId` so the device code binds to the human approver.
-  Updated i18n copy under `oauth.device.identityEmpty` in
-  `frontend/src/i18n/locales/{en,zh}.json` to make the new "Myself
+  A follow-up patch defaults `agents` to an empty array so a
+  malformed lookup that sets `agent_selection_required=true` while
+  omitting `available_agents` no longer crashes the picker render,
+  and a regression test pins the empty-picker path against that
+  payload shape. Updated i18n copy under `oauth.device.identityEmpty`
+  in `frontend/src/i18n/locales/{en,zh}.json` to make the new "Myself
   is still available" affordance explicit.
 - s-1134: fix `POST /api/v1/auth/agents` returning `500 {"error":"Failed to create"}`
   on dev builds. The migration runner used the tag-only `git describe`
