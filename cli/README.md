@@ -494,6 +494,32 @@ replaced wholesale). The full schema and validation rules are
 documented in [`cli/man/kanban-run.1.md`](./man/kanban-run.1.md) and
 `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §2.2 / §4.6.
 
+### Variable substitution in `agent.args`
+
+The runner recognises a narrow set of `$name` tokens anywhere in
+`agent.args` (s-1187) and substitutes them with the corresponding
+field of the in-flight task right before spawning the agent binary.
+The supported tokens are `$taskId`, `$title`, `$body`,
+`$priority`, `$assignee`, `$columnId`, and `$boardId`. Example:
+
+```yaml
+agent:
+  bin: opencode
+  args:
+    - --task=$taskId
+    - --title=$title
+    - --body=$body
+    - --assignee=$assignee
+```
+
+Unknown `$name` tokens fail at config-validation time with a
+`RunnerConfigError` pointing at `agent.args`. Missing values render
+as empty strings (`--title=`), so the operator's flag indices stay
+stable across heterogeneous tasks. Only the narrow `$name` form is
+recognised — `${HOME}`, `$1`, `$$`, `$?` pass through unchanged.
+See [`cli/man/kanban-run.1.md`](./man/kanban-run.1.md) §"Variable
+substitution in agent.args" for the full token list and edge cases.
+
 ### Signals
 
 The loop installs `SIGINT` and `SIGTERM` handlers that call

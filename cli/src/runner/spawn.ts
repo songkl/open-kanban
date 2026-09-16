@@ -40,10 +40,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import type {
-  AgentConfig,
-  AgentPromptMode,
-  AgentPromptPosition,
+import {
+  SUPPORTED_ARG_VARIABLES,
+  type AgentConfig,
+  type AgentPromptMode,
+  type AgentPromptPosition,
+  type ArgVariable,
+  type ArgVariableValues,
 } from "./types.js";
 
 /** Hard cap on the stderr payload the loop forwards to `/finish`. */
@@ -68,6 +71,75 @@ export const STDOUT_TRUNCATE_BYTES = 64 * 1024;
  * sees a half-formed spawn.
  */
 export const PROMPT_PLACEHOLDER = "{prompt}";
+
+/**
+ * Pattern that captures the `$name` token inside an arg string. The
+ * shape is intentionally narrow: `$` followed by an ASCII identifier
+ * (`[A-Za-z_][A-Za-z0-9_]*`) so we never accidentally splice in the
+ * middle of a shell-style reference like `${HOME}` and never match
+ * `$1`, `$?`, `$$`, or other POSIX specials. Unknown names are
+ * rejected at config-validation time, so this regex only fires for
+ * the seven strings in `SUPPORTED_ARG_VARIABLES` at runtime.
+ *
+ * We use a non-anchored, non-global match here because `expandArgs`
+ * applies the pattern via `String.prototype.replace` with the `g`
+ * flag — keeping the constant here documents the shape for tests.
+ */
+export const ARG_VARIABLE_PATTERN = /\$([A-Za-z][A-Za-z0-9]*)/g;
+
+/**
+ * Map of `ArgVariable` → literal placeholder name, used by the
+ * validator to enumerate the supported tokens without sprinkling
+ * string literals around the codebase. Kept here (not in
+ * `types.ts`) because it's only meaningful to the spawn layer; the
+ * type module just exports the union.
+ */
+export const ARG_VARIABLE_NAMES: ReadonlySet<string> = new Set(
+  SUPPORTED_ARG_VARIABLES
+);
+
+/**
+ * Substitute every supported `$name` token in `args` with the value
+ * supplied in `variables`. Missing values (or `""` entries) become
+ * literal empty strings so the operator's argv keeps its shape — e.g.
+ * `--title=$title` with an unset title renders as `--title=` rather
+ * than `--title` (which a parser would happily eat) or `--title
+ * $title` (which would shift the array by one and mis-parse every
+ * subsequent flag).
+ *
+ * Returns a fresh array; the input is never mutated so callers can
+ * share a base config across runs. Unknown `$name` tokens are passed
+ * through verbatim so a stale argv shape is easier to debug — the
+ * validator in `config.ts` already rejects them at load time.
+ */
+export function expandArgs(
+  args: readonly string[],
+  variables: Partial<ArgVariableValues>
+): string[] {
+  if (args.length === 0) return [];
+  return args.map((arg) => substituteVariables(arg, variables));
+}
+
+function substituteVariables(
+  arg: string,
+  variables: Partial<ArgVariableValues>
+): string {
+  if (arg.indexOf("$") < 0) return arg;
+  return arg.replace(ARG_VARIABLE_PATTERN, (match, name: string) => {
+    if (!ARG_VARIABLE_NAMES.has(name)) {
+      // Leave unknown tokens alone; the strict check in
+      // config.ts#validate() catches typos at load time. Letting
+      // them through here makes a stale config fail loudly at
+      // spawn (with the literal `$name` still in argv) instead of
+      // silently dropping the flag.
+      return match;
+    }
+    const key = name as ArgVariable;
+    const value = variables[key];
+    if (value === undefined || value === null) return "";
+    return value;
+  });
+}
 
 /**
  * Result the loop needs from a finished agent. We deliberately do
@@ -374,6 +446,13 @@ export interface PrepareSpawnOptions {
   env?: NodeJS.ProcessEnv;
   /** Override the temp dir used for `promptMode=arg`. Tests inject this. */
   tmpDir?: string;
+  /**
+   * Resolved values for every `$name` token the operator may have
+   * embedded in `agent.args`. Missing entries become empty strings;
+   * unknown `$name` tokens pass through unchanged. The loop passes
+   * this in once it has hydrated the task / board / column context.
+   */
+  variables?: Partial<ArgVariableValues>;
 }
 
 /**
@@ -391,7 +470,12 @@ export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
     ...(opts.env ?? process.env),
     ...(cfg.env ?? {}),
   };
-  const baseArgs = (cfg.args ?? []).slice();
+  // Step 1: substitute `$name` tokens in the operator's args. Done
+  // before the prompt splice so the prompt flag (which never carries
+  // a `$name`) is never affected and so an operator who sets
+  // `promptPosition: replace` with a `$name` token alongside
+  // `{prompt}` still sees the prompt pair land in the right slot.
+  const baseArgs = expandArgs(cfg.args ?? [], opts.variables ?? {});
   const createdFiles: string[] = [];
   let pipeStdin = false;
   let stdinPayload: string | undefined;

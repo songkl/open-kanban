@@ -26,13 +26,14 @@ import {
   type ProcessSpawner,
   STDERR_TRUNCATE_BYTES,
   STDOUT_TRUNCATE_BYTES,
+  expandArgs,
   prepareSpawn,
   readPromptFile,
   type AgentProcess,
   type AgentResult,
   type SpawnOptions,
 } from "../../src/runner/spawn.js";
-import type { AgentConfig } from "../../src/runner/types.js";
+import type { AgentConfig, ArgVariableValues } from "../../src/runner/types.js";
 
 const BASE_AGENT: AgentConfig = {
   bin: process.execPath,
@@ -266,6 +267,162 @@ describe("prepareSpawn", () => {
     });
     expect(out.args).toEqual(["--non-interactive", "--prompt", out.args[2]]);
     out.cleanup();
+  });
+
+  // s-1187: per-task variable substitution in agent.args so operators
+  // can build argv shapes like `--task=$taskId --title=$title` from
+  // the hydrated task context.
+  it("substitutes $name tokens in agent.args before the prompt splice", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      args: ["--task=$taskId", "--title=$title", "--body=$body"],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "PROMPT",
+      taskId: "s-1187",
+      tmpDir: tmpRoot,
+      variables: {
+        taskId: "s-1187",
+        title: "wire up $name substitution",
+        body: "support $taskId/$title/$body in args",
+      },
+    });
+    // User-supplied flags land first (expanded), prompt pair appends.
+    expect(out.args.slice(0, 3)).toEqual([
+      "--task=s-1187",
+      "--title=wire up $name substitution",
+      "--body=support $taskId/$title/$body in args",
+    ]);
+    // The prompt flag + path still land at the end (default position).
+    expect(out.args[out.args.length - 2]).toBe("--prompt");
+    out.cleanup();
+  });
+
+  it("renders empty string for missing variables so argv shape is preserved", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      args: ["--task=$taskId", "--title=$title", "--assignee=$assignee"],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "PROMPT",
+      taskId: "s-missing",
+      tmpDir: tmpRoot,
+      // No title, no assignee supplied.
+      variables: { taskId: "s-missing" },
+    });
+    expect(out.args).toContain("--task=s-missing");
+    expect(out.args).toContain("--title=");
+    expect(out.args).toContain("--assignee=");
+    // No shift in indices — the operator's argv layout survives.
+    expect(out.args[0]).toBe("--task=s-missing");
+    expect(out.args[1]).toBe("--title=");
+    expect(out.args[2]).toBe("--assignee=");
+    out.cleanup();
+  });
+
+  it("leaves unknown $name tokens unchanged so a stale config fails loudly", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      // `$bogus` is not in SUPPORTED_ARG_VARIABLES; the validator
+      // already rejects it, but the spawn layer must also be a safe
+      // runtime fallback.
+      args: ["--task=$taskId", "--bad=$bogus"],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "PROMPT",
+      taskId: "s-bogus",
+      tmpDir: tmpRoot,
+      variables: { taskId: "s-bogus" },
+    });
+    expect(out.args).toContain("--task=s-bogus");
+    expect(out.args).toContain("--bad=$bogus");
+    out.cleanup();
+  });
+
+  it("supports every variable in SUPPORTED_ARG_VARIABLES", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      args: [
+        "--task=$taskId",
+        "--title=$title",
+        "--body=$body",
+        "--priority=$priority",
+        "--assignee=$assignee",
+        "--column=$columnId",
+        "--board=$boardId",
+      ],
+    };
+    const vars: Partial<ArgVariableValues> = {
+      taskId: "t-1",
+      title: "T",
+      body: "B",
+      priority: "high",
+      assignee: "alice",
+      columnId: "col-1",
+      boardId: "sys",
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "PROMPT",
+      taskId: "t-1",
+      tmpDir: tmpRoot,
+      variables: vars,
+    });
+    expect(out.args).toEqual([
+      "--task=t-1",
+      "--title=T",
+      "--body=B",
+      "--priority=high",
+      "--assignee=alice",
+      "--column=col-1",
+      "--board=sys",
+      "--prompt",
+      out.args[out.args.length - 1],
+    ]);
+    out.cleanup();
+  });
+});
+
+describe("expandArgs", () => {
+  it("returns an empty array when given an empty input", () => {
+    expect(expandArgs([], { taskId: "x" })).toEqual([]);
+  });
+
+  it("returns the same array contents when there are no $ tokens", () => {
+    expect(expandArgs(["--foo", "bar"], { taskId: "x" })).toEqual([
+      "--foo",
+      "bar",
+    ]);
+  });
+
+  it("does not mutate the input array", () => {
+    const input = ["--task=$taskId", "--literal"];
+    const snapshot = [...input];
+    expandArgs(input, { taskId: "abc" });
+    expect(input).toEqual(snapshot);
+  });
+
+  it("replaces multiple occurrences in the same string", () => {
+    expect(
+      expandArgs(
+        ["$taskId-$taskId"],
+        { taskId: "z" }
+      )
+    ).toEqual(["z-z"]);
+  });
+
+  it("ignores POSIX shell-style references that look like variables", () => {
+    // `${HOME}`, `$1`, `$?`, `$$` must NOT be substituted — only the
+    // narrow `$name` form is recognised.
+    expect(
+      expandArgs(
+        ["${HOME}", "$1", "$?", "$$"],
+        { HOME: "should-not-show" }
+      )
+    ).toEqual(["${HOME}", "$1", "$?", "$$"]);
   });
 });
 

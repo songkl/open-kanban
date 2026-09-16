@@ -27,6 +27,7 @@ import { homedir } from "node:os";
 import { parse as parseYaml } from "yaml";
 import {
   RUNNER_DEFAULTS,
+  SUPPORTED_ARG_VARIABLES,
   type AgentConfig,
   type AgentPromptMode,
   type AgentPromptPosition,
@@ -36,7 +37,7 @@ import {
   type RunnerStatus,
   type RunnerTopMode,
 } from "./types.js";
-import { PROMPT_PLACEHOLDER } from "./spawn.js";
+import { ARG_VARIABLE_PATTERN, PROMPT_PLACEHOLDER } from "./spawn.js";
 
 /**
  * Filename priority for the walk-up discovery step. The first hit
@@ -598,5 +599,41 @@ export function validate(cfg: RunnerConfig, opts: ValidateOptions = {}): RunnerC
       );
     }
   }
+  validateArgVariables(cfg);
   return cfg;
+}
+
+/**
+ * Refuse `$name` tokens that don't map to a known task field. The
+ * spawn layer passes unknown tokens through unchanged so a typo'd
+ * `--task=$taskID` would otherwise render as `--task=$taskID` in the
+ * agent's argv — a confusing failure mode that only surfaces at
+ * spawn time. We surface the bad token up front at config-validation
+ * time so the operator sees the line number + name before the loop
+ * ever starts.
+ *
+ * Known tokens come from `SUPPORTED_ARG_VARIABLES` in `types.ts`;
+ * the regex used to scan the args comes from `spawn.ts` so both
+ * layers agree on the matching shape.
+ */
+function validateArgVariables(cfg: RunnerConfig): void {
+  const args = cfg.agent.args ?? RUNNER_DEFAULTS.agent.args;
+  const supported = new Set<string>(SUPPORTED_ARG_VARIABLES);
+  const seen = new Set<string>();
+  for (const arg of args) {
+    // Reset lastIndex on each call so the /g flag doesn't carry over
+    // between iterations (RegExp objects are stateful when global).
+    ARG_VARIABLE_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = ARG_VARIABLE_PATTERN.exec(arg)) !== null) {
+      const name = match[1];
+      if (!supported.has(name) && !seen.has(name)) {
+        seen.add(name);
+        throw new RunnerConfigError(
+          `agent.args contains unknown '$${name}' token; supported tokens: ${SUPPORTED_ARG_VARIABLES.map((v) => `$${v}`).join(", ")}`,
+          "agent.args"
+        );
+      }
+    }
+  }
 }

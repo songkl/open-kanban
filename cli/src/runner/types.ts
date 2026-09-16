@@ -51,6 +51,51 @@ export type AgentPromptPosition = "append" | "prepend" | "replace";
  */
 export type RunnerStatus = "todo" | "in_progress" | "review" | "done";
 
+/**
+ * Variables the runner recognises inside `agent.args` strings. Any
+ * occurrence of `$name` (where `name` matches one of these strings) is
+ * substituted with the corresponding field of the in-flight task
+ * before the agent binary is spawned. Unknown `$name` tokens are
+ * rejected at config-validation time so a typo never silently leaks
+ * through to the spawned process.
+ *
+ * Naming follows the task description for s-1187: the operator
+ * composes argv with literal pieces and lets the runner fill in the
+ * dynamic ones (`$taskId`, `$title`, `$body`, …). Keeping the set
+ * small + explicit (rather than e.g. mapping every `TaskRecord` field)
+ * makes the on-disk config self-documenting and lets the validator
+ * refuse accidental typos.
+ */
+export const SUPPORTED_ARG_VARIABLES = [
+  "taskId",
+  "title",
+  "body",
+  "priority",
+  "assignee",
+  "columnId",
+  "boardId",
+] as const;
+
+export type ArgVariable = (typeof SUPPORTED_ARG_VARIABLES)[number];
+
+/**
+ * Resolved values for every supported `ArgVariable`. Missing fields
+ * are represented as empty strings — the spawn layer treats a missing
+ * value the same as a known-empty one, so the operator never has to
+ * guard against `undefined` at the call site. Empty fields still
+ * render (e.g. `--title=`), which matches the convention most CLI
+ * agents use to signal "absent".
+ */
+export interface ArgVariableValues {
+  taskId: string;
+  title: string;
+  body: string;
+  priority: string;
+  assignee: string;
+  columnId: string;
+  boardId: string;
+}
+
 export interface AgentConfig {
   /** Binary name resolved via PATH, or — when `binPath` is set — absolute path. */
   bin: string;

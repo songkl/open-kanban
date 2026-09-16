@@ -22,7 +22,7 @@
 // (program.ts wires the real OS signals).
 
 import type { TaskRecord } from "../commands/tasks.js";
-import type { RunnerConfig } from "./types.js";
+import type { ArgVariableValues, RunnerConfig } from "./types.js";
 import {
   type RunClaimClient,
   type ClaimOutcome,
@@ -454,6 +454,7 @@ export class RunLoop {
       cfg: this.config.agent,
       prompt,
       taskId: task.id,
+      variables: buildArgVariables(ctx),
     });
     this.logger.debug(`agent spawned for task ${task.id} pid=${child.pid ?? "(unknown)"}`);
     this.inFlight = {
@@ -659,6 +660,32 @@ interface InFlightTask {
   cleanup: () => void;
   prompt: string;
   waitPromise: Promise<AgentResult>;
+}
+
+/**
+ * Build the `$name` substitution table from the hydrated task
+ * context. Used by `agentSpawner.spawn` so an operator's
+ * `agent.args` (e.g. `["--task=$taskId", "--title=$title"]`) renders
+ * with the actual task data.
+ *
+ * Empty strings are returned for unset fields (no title, no
+ * assignee) rather than `undefined` so the spawn layer can splice
+ * them verbatim — a missing `--title=` flag is the convention most
+ * CLI agents use to signal "absent", whereas dropping the flag
+ * entirely would shift every subsequent flag's index and break the
+ * operator's argv layout.
+ */
+function buildArgVariables(ctx: PromptContext): Partial<ArgVariableValues> {
+  const t = ctx.task;
+  return {
+    taskId: t.id ?? "",
+    title: t.title ?? "",
+    body: t.description ?? "",
+    priority: t.priority == null ? "" : String(t.priority),
+    assignee: t.assignee ?? "",
+    columnId: t.columnId ?? ctx.column.id ?? "",
+    boardId: ctx.board.id ?? "",
+  };
 }
 
 function defaultSleep(ms: number): Promise<void> {

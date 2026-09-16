@@ -629,4 +629,77 @@ describe("validate — §4.6 strict checks", () => {
       expect((err as Error).message).toContain("got 2");
     }
   });
+
+  // s-1187: per-task variable substitution in agent.args.
+  it("accepts args with every supported $name token", () => {
+    const cfg = baseConfig({
+      agent: {
+        args: [
+          "--task=$taskId",
+          "--title=$title",
+          "--body=$body",
+          "--priority=$priority",
+          "--assignee=$assignee",
+          "--column=$columnId",
+          "--board=$boardId",
+        ],
+      },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("rejects unknown $name tokens in args", () => {
+    const cfg = baseConfig({
+      agent: { args: ["--foo=$bogus"] },
+    });
+    try {
+      validate(cfg);
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(RunnerConfigError);
+      expect((err as RunnerConfigError).field).toBe("agent.args");
+      expect((err as Error).message).toContain("$bogus");
+      expect((err as Error).message).toContain("supported tokens");
+    }
+  });
+
+  it("reports the first unknown token only — fails fast on the first typo", () => {
+    // Two bad tokens: $foo, $bar — we should fail on $foo and never
+    // get to $bar in the same run.
+    const cfg = baseConfig({
+      agent: { args: ["--x=$foo", "--y=$bar"] },
+    });
+    try {
+      validate(cfg);
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(RunnerConfigError);
+      expect((err as Error).message).toContain("$foo");
+      expect((err as Error).message).not.toContain("$bar");
+    }
+  });
+
+  it("accepts $tokens that happen to live next to other characters", () => {
+    // The regex must anchor on a word boundary, not the whole string —
+    // `--title=$title` and `--prefix$taskId-suffix` both work.
+    const cfg = baseConfig({
+      agent: {
+        args: [
+          "--title=$title",
+          "id-$taskId-end",
+          "before/$priority/after",
+        ],
+      },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("ignores POSIX shell-style references that look like variables", () => {
+    // The validator must not trip on `${HOME}`, `$1`, `$$` — only the
+    // narrow `$name` form is recognised.
+    const cfg = baseConfig({
+      agent: { args: ["echo ${HOME} $1 $$"] },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
 });

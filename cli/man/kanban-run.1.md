@@ -159,11 +159,51 @@ Both \fBboardId\fR + \fBstatus\fR are missing AND \fBmode\fR is not
 via \fBPATH\fR.
 .IP \(bu 4
 \fBrunner.lockTimeoutMs\fR is not strictly greater than 2× the
-\fBrunner.heartbeatIntervalMs\fR (otherwise an in\-flight task could
+\fBrunner.heartbeatIntervalMs\fR (otherwise an in-flight task could
 be reaped before its next heartbeat).
 .IP \(bu 4
 \fBmode: mine\fR is selected but the active CLI profile is not logged
 in.
+.IP \(bu 4
+\fBagent.args\fR contains a \fB$name\fR token that does not match
+one of the supported variables below.
+
+.SS "Variable substitution in agent.args"
+The runner recognises a narrow set of \fB$name\fR tokens anywhere in
+\fBagent.args\fR (s-1187) and substitutes them with the corresponding
+field of the in-flight task right before spawning the agent binary.
+This lets operators compose argv shapes that depend on per-task data
+without writing a wrapper script.
+
+.RS
+.IP \fB$taskId\fR 4
+The claimed task id, e.g. \fBs-1187\fR.
+.IP \fB$title\fR
+The task's \fBtitle\fR field (empty when unset).
+.IP \fB$body\fR
+The task's description (empty when unset). The runner's internal
+key is \fBbody\fR, matching how operators usually refer to the
+free-form task content.
+.IP \fB$priority\fR
+The task's priority as a string (\fBhigh\fR / \fBmedium\fR / \fBlow\fR,
+empty when unset).
+.IP \fB$assignee\fR
+The task's \fBassignee\fR (empty when unset).
+.IP \fBcolumnId\fR
+The task's current column id.
+.IP \fBboardId\fR
+The board id the runner is bound to (\fBboardId\fR from the config).
+.RE
+
+Unknown tokens (\fB$bogus\fR) fail at config-validation time with a
+\fBRunnerConfigError\fR pointing at \fBagent.args\fR. Missing values
+render as empty strings, so \fB--title=$title\fR becomes
+\fB--title=\fR when the task has no title \-\- the operator's flag
+indices stay stable across heterogeneous tasks.
+
+Only the narrow \fB$name\fR form is recognised. POSIX shell-style
+references (\fB${HOME}\fR, \fB$1\fR, \fB$$\fR, \fB$?\fR) pass through
+unchanged.
 
 .SH "EXIT STATUS"
 .TP

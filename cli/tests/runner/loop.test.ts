@@ -236,6 +236,7 @@ function makeHarness(opts: {
   signal?: AbortSignal;
   abortController?: AbortController;
   buildFailureComment?: RunLoopOptions["buildFailureComment"];
+  hydrator?: TaskHydrator;
 } = {}): LoopHarness {
   const config = opts.config ?? makeConfig();
   const scripts = opts.scripts ?? [];
@@ -266,7 +267,7 @@ function makeHarness(opts: {
     claimClient,
     spawner,
     heartbeat,
-    hydrator: makeHydrator(),
+    hydrator: opts.hydrator ?? makeHydrator(),
     commentPoster,
     sleepFn: noopSleep,
     logger,
@@ -1331,5 +1332,145 @@ describe("RunLoop — debug logging", () => {
     const h = makeHarness({ scripts: [] });
     h.loop.wake();
     expect(h.logs.some((l) => l.level === "debug" && l.message.includes("wake() called"))).toBe(true);
+  });
+});
+
+// s-1187: per-task variable substitution in `agent.args`. The loop
+// passes the hydrated task / board / column context as a
+// `variables` map to `AgentSpawner.spawn`; the spawn layer
+// substitutes every supported `$name` token in `cfg.args` before
+// the child process is launched. The harness's fake
+// `ProcessSpawner` captures the post-substitution `SpawnOptions`,
+// so we assert on what the agent actually saw in argv.
+describe("RunLoop — $name variable substitution in agent.args (s-1187)", () => {
+  function claimScriptFor(task: TaskRecord): ScriptedClaim {
+    return {
+      request: {
+        boardId: "sys",
+        status: "todo",
+        agentType: "opencoder",
+        runnerId: "runner-1",
+      },
+      outcome: {
+        status: 200,
+        body: { task, run: { taskId: task.id, runnerId: "runner-1" } },
+      },
+    };
+  }
+
+  function hydratorFor(task: TaskRecord): TaskHydrator {
+    return {
+      fetchComments: async () => [],
+      fetchSubtasks: async () => [],
+      fetchBoard: async () => ({ id: "sys", name: "Sys" }),
+      fetchColumn: async () => ({
+        id: task.columnId ?? "col-1",
+        name: "进行中",
+      }),
+      fetchTask: async () => task,
+    };
+  }
+
+  it("expands $taskId / $title / $body / $priority / $assignee in argv", async () => {
+    const task: TaskRecord = {
+      ...TASK_TEMPLATE,
+      id: "s-1187",
+      title: "wire up $name substitution",
+      description: "free-form body for the agent",
+      priority: "high",
+      assignee: "alice",
+      columnId: "col-1",
+    };
+    const h = makeHarness({
+      config: makeConfig({
+        agent: {
+          args: [
+            "--task=$taskId",
+            "--title=$title",
+            "--body=$body",
+            "--priority=$priority",
+            "--assignee=$assignee",
+            "--column=$columnId",
+            "--board=$boardId",
+          ],
+        },
+      }),
+      hydrator: hydratorFor(task),
+      scripts: [claimScriptFor(task)],
+    });
+    await h.loop.tick();
+
+    const call = h.spawner.calls[0];
+    expect(call).toBeDefined();
+    // The user-supplied args (with $name substituted) come first; the
+    // `--prompt <path>` pair appends after the default `promptPosition`.
+    expect(call.args.slice(0, 7)).toEqual([
+      "--task=s-1187",
+      "--title=wire up $name substitution",
+      "--body=free-form body for the agent",
+      "--priority=high",
+      "--assignee=alice",
+      "--column=col-1",
+      "--board=sys",
+    ]);
+    expect(call.args).toContain("--prompt");
+    h.spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "",
+      stdout: "",
+      reason: "exit",
+    });
+    h.loop.requestShutdown();
+    await h.loop.tick();
+  });
+
+  it("renders empty string for missing fields so argv shape is preserved", async () => {
+    const task: TaskRecord = {
+      ...TASK_TEMPLATE,
+      id: "s-1187-empty",
+      // No title, no description, no assignee.
+      title: undefined,
+      description: undefined,
+      priority: undefined,
+      assignee: undefined,
+      columnId: "col-2",
+    };
+    const h = makeHarness({
+      config: makeConfig({
+        agent: {
+          args: [
+            "--task=$taskId",
+            "--title=$title",
+            "--body=$body",
+            "--assignee=$assignee",
+          ],
+        },
+      }),
+      hydrator: hydratorFor(task),
+      scripts: [claimScriptFor(task)],
+    });
+    await h.loop.tick();
+
+    const call = h.spawner.calls[0];
+    expect(call).toBeDefined();
+    // Indices must not shift — operator layout survives the missing
+    // fields. The four user flags are at the front; the prompt pair
+    // appends after them.
+    expect(call.args.slice(0, 4)).toEqual([
+      "--task=s-1187-empty",
+      "--title=",
+      "--body=",
+      "--assignee=",
+    ]);
+    h.spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "",
+      stdout: "",
+      reason: "exit",
+    });
+    h.loop.requestShutdown();
+    await h.loop.tick();
   });
 });

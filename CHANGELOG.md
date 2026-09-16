@@ -126,6 +126,28 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- s-1187: per-task variable substitution in `kanban run`'s
+  `agent.args`. Operators can now embed tokens like `$taskId`,
+  `$title`, `$body`, `$priority`, `$assignee`, `$columnId`, and
+  `$boardId` anywhere in `agent.args` and the runner fills them in
+  with the hydrated task / column / board context right before
+  spawning the agent binary. Unknown `$name` tokens are rejected
+  at config-validation time with a targeted `RunnerConfigError`,
+  and missing values render as empty (`--title=`) rather than
+  dropping the flag — so an operator's argv layout (and the
+  `promptPosition: replace` slice) survives a task with no title
+  or no assignee. The substitution happens inside
+  `prepareSpawn` (so the fake `ProcessSpawner` tests still see
+  the post-substitution argv) and is documented in
+  `cli/man/kanban-run.1.md`. New helper
+  `expandArgs(args, variables)` + `ARG_VARIABLE_PATTERN` regex in
+  `cli/src/runner/spawn.ts`; the loop's `startTask` builds the
+  substitution map from the hydrated `PromptContext` and threads
+  it through `AgentSpawner.spawn`. 5 new `spawn.test.ts` cases
+  cover happy / missing / unknown / all-supported / POSIX-style
+  passthrough; 5 new `config.test.ts` cases cover the strict
+  validator; 2 new `loop.test.ts` cases pin the wiring from the
+  loop down to the captured `SpawnOptions`.
 - s-1161: relax the `agentType` contract on `POST /api/v1/runs/claim`.
   The body field is now optional — when omitted the handler falls
   back to the calling token's `user_agent`, and when both are
