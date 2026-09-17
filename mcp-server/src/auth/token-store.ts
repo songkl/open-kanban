@@ -18,6 +18,8 @@ import { hostname } from "node:os";
 export interface StoredCredentials {
   apiUrl: string;
   clientId: string;
+  /** s-1133: clientName persisted so the CLI can show a stable identity across login reruns. */
+  clientName?: string;
   accessToken?: string;
   refreshToken?: string;
   accessExpiresAt?: number;
@@ -97,7 +99,7 @@ function deriveKey(saltB64: string): Buffer {
 
 // DefaultFilePath resolves to $XDG_CONFIG_HOME/kanban-mcp/credentials.json
 // (or ~/.config/kanban-mcp/credentials.json when XDG_CONFIG_HOME is unset).
-export function defaultFilePath(apiUrl: string): string {
+export function defaultFilePath(apiUrl: string, _appName?: string): string {
   const safe = apiUrl.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
   const base = process.env.XDG_CONFIG_HOME || join(process.env.HOME || "~", ".config");
   return join(base, "kanban-mcp", `credentials-${safe}.json`);

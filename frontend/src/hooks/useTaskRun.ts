@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import type { TaskRun } from '@/types/kanban';
 import { runsApi } from '@/services/api';
 
@@ -20,6 +20,12 @@ export interface UseTaskRunResult {
   loading: boolean;
   /** Last fetch error (network/parse), or null. */
   error: Error | null;
+  /**
+   * s-1191: Force the next poll to fire immediately. Used by the
+   * "Retry run" button so the badge reflects the requeued state
+   * without waiting for the next `intervalMs` tick.
+   */
+  refetch: () => void;
 }
 
 const TERMINAL_STATUSES: ReadonlySet<TaskRun['status']> = new Set([
@@ -47,6 +53,17 @@ export function useTaskRun(taskId: string | undefined | null, options: UseTaskRu
   const [loading, setLoading] = useState<boolean>(Boolean(taskId) && enabled);
   const [error, setError] = useState<Error | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // s-1191: bumped by `refetch()` so the next tick fires ASAP rather
+  // than after `intervalMs` ms. Stored in a ref so the tick effect
+  // closure always sees the latest value without having to rebind the
+  // timer.
+  const refetchCounterRef = useRef(0);
+  const refetchTickRef = useRef<(() => void) | null>(null);
+
+  const refetch = useCallback((): void => {
+    refetchCounterRef.current += 1;
+    refetchTickRef.current?.();
+  }, []);
 
   useEffect(() => {
     if (!taskId || !enabled) {
@@ -57,8 +74,14 @@ export function useTaskRun(taskId: string | undefined | null, options: UseTaskRu
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let observedCounter = refetchCounterRef.current;
 
     const tick = async () => {
+      // Re-fire immediately when the consumer bumped the refetch
+      // counter between ticks.
+      if (refetchCounterRef.current !== observedCounter) {
+        observedCounter = refetchCounterRef.current;
+      }
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -86,6 +109,10 @@ export function useTaskRun(taskId: string | undefined | null, options: UseTaskRu
         timer = setTimeout(tick, intervalMs);
       }
     };
+    refetchTickRef.current = () => {
+      if (timer) clearTimeout(timer);
+      void tick();
+    };
 
     tick();
 
@@ -96,5 +123,5 @@ export function useTaskRun(taskId: string | undefined | null, options: UseTaskRu
     };
   }, [taskId, enabled, intervalMs]);
 
-  return { run, loading, error };
+  return { run, loading, error, refetch };
 }

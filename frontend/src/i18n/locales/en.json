@@ -720,7 +720,9 @@
     "runExpiresAt": "Expires at",
     "runFinishedAt": "Finished at",
     "runExitCode": "Exit code",
-    "runError": "Error"
+    "runError": "Error",
+    "retryRun": "Retry run",
+    "retrying": "Retrying…"
   },
   "skeleton": {
     "loading": "Loading..."

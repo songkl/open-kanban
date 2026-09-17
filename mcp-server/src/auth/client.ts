@@ -24,6 +24,8 @@ import type {
 export interface AuthorizeOptions {
   apiUrl: string;
   clientName?: string;
+  /** s-1133: stable app identifier forwarded to the OAuth server so it can show the right UI hint. */
+  appName?: string;
   scope?: string;
   onPrompt?: (poll: TrackedPoll) => Promise<"approve" | "deny">;
   onPoll?: (outcome: PollOutcome) => void;

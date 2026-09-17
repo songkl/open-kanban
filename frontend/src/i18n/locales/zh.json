@@ -720,7 +720,9 @@
     "runExpiresAt": "过期时间",
     "runFinishedAt": "结束时间",
     "runExitCode": "退出码",
-    "runError": "错误"
+    "runError": "错误",
+    "retryRun": "重跑任务",
+    "retrying": "正在重跑…"
   },
   "skeleton": {
     "loading": "加载中..."

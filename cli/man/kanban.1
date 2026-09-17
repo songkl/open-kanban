@@ -1,0 +1,485 @@
+.\" Manpage for kanban (Open Kanban CLI)
+.\" Hand-written; the canonical reference lives in
+.\" docs/CLI_COMMANDS.md and cli/README.md.
+.TH KANBAN 1 "2026-09-12" "0.1.0" "Open Kanban CLI"
+
+.SH NAME
+kanban \- command\-line client for the Open Kanban board
+
+.SH SYNOPSIS
+.B kanban
+[\fI\-\-api\-url\fR \fIURL\fR]
+[\fI\-\-profile\fR \fINAME\fR]
+[\fI\-\-output\fR \fIFORMAT\fR]
+[\fI\-\-color\fR|\fI\-\-no\-color\fR]
+[\fI\-h\fR|\fI\-\-help\fR]
+[\fI\-V\fR|\fI\-\-version\fR]
+\fICOMMAND\fR [\fIARGS\fR]...
+
+.SH DESCRIPTION
+.B kanban
+is the official command\-line client for the Open Kanban
+(https://github.com/songkl/open-kanban) task board. It authenticates
+against the Kanban server using OAuth 2.1 (RFC 7591 dynamic client
+registration + RFC 8628 device authorization grant), then drives every
+read/write surface exposed by the HTTP API.
+
+The CLI is a thin wrapper over the same JSON API used by the React web UI
+and the
+.B open\-kanban\-mcp
+server. The full flag\-level reference for every command lives in
+\fIdocs/CLI_COMMANDS.md\fR; onboarding, configuration, exit codes and
+troubleshooting live in \fIcli/README.md\fR.
+
+.SH OPTIONS
+.TP
+.BR \-V ", " \-\-version
+Print the CLI version and exit.
+
+.TP
+.BR \-h ", " \-\-help
+Print the root help text (command tree) and exit. Pass a command path
+(\fBkanban help tasks create\fR) for per\-command help.
+
+.TP
+.BR \-\-api\-url " " \fIURL\fR
+Kanban API base URL. Overrides
+.B KANBAN_API_URL
+and the value stored in
+\fI~/.config/kanban\-cli/config.json\fR.
+Default:
+.BR http://localhost:8080 .
+
+.TP
+.BR \-\-profile " " \fINAME\fR
+Credential profile name. Use distinct profiles to keep multiple accounts
+(e.g.\&\fBwork\fR and \fBpersonal\fR) side\-by\-side without overwriting
+each other. Overrides
+.BR KANBAN_CLI_PROFILE .
+
+.TP
+.BR \-\-output " " \fIFORMAT\fR
+Output renderer: \fBtable\fR (default, ANSI when stdout is a TTY) or
+\fBjson\fR. The flag also accepts \fByaml\fR but currently renders as
+\fBtable\fR; pipe \fB\-\-output json\fR through
+.BR yq (1)
+or
+.BR jq (1)
+in the meantime.
+
+.TP
+.BR \-\-color " " \fIMODE\fR
+Force ANSI color: \fBon\fR, \fBoff\fR, or \fBauto\fR (default;
+honours \fBNO_COLOR\fR / \fB FORCE_COLOR\fR / TTY detection).
+
+.TP
+.BR \-\-no\-color
+Disable ANSI color in table output. Equivalent to
+.BR \-\-color=off .
+
+.SH COMMANDS
+
+.SS Authentication
+.TP
+.B kanban auth login
+Start the OAuth 2.1 device authorization grant, print the verification
+URL + user code to stderr, and persist the issued tokens at
+\fI$XDG_CONFIG_HOME/kanban\-cli/credentials\-\fI<api>\fI.json\fR
+(mode \fB0600\fR).
+
+.TP
+.B kanban auth status
+Print the active profile, host, scope and access\-token lifetime.
+
+.TP
+.B kanban auth logout
+Delete the stored credentials (idempotent).
+
+.TP
+.B kanban auth whoami [\fB\-\-path\fR \fIPATH\fR]
+Call \fBGET\fR \fIPATH\fR (default
+.BR /api/v1/users/me )
+and print the resolved user.
+
+.SS Read\-only
+.TP
+.B kanban status
+Probe the Kanban API; print latency, boards count, and a per\-board list.
+Public endpoint \-\- does not require authentication.
+
+.TP
+.B kanban dashboard
+Fetch \fBGET /api/v1/dashboard/stats\fR and print totals plus per\-status
+and per\-priority breakdowns. Auth required.
+
+.TP
+.B kanban boards list
+[\fB\-\-fields\fR \fIFIELDS\fR]
+List non\-deleted boards (\fBGET /api/v1/boards\fR). Public.
+
+.TP
+.B kanban boards get \fIID\fR
+[\fB\-\-fields\fR \fIFIELDS\fR]
+Fetch a single board (\fBGET /api/v1/boards/:id\fR). Public.
+
+.TP
+.B kanban columns list
+[\fB\-\-board\fR \fIID\fR]
+[\fB\-\-positions\fR \fIPOS\fR]
+[\fB\-\-fields\fR \fIFIELDS\fR]
+List columns (\fBGET /api/v1/columns\fR), optionally filtered.
+Public.
+
+.TP
+.B kanban columns get \fIID\fR
+[\fB\-\-fields\fR \fIFIELDS\fR]
+Fetch a single column (\fBGET /api/v1/columns/:id\fR). Public.
+
+.TP
+.B kanban tasks list
+[\fB\-\-board\fR \fIID\fR]
+[\fB\-\-column\fR|\fB\-\-status\fR \fIVAL\fR]
+[\fB\-\-agent\-type\fR \fITYPE\fR]
+[\fB\-\-priority\fR \fIP\fR]
+[\fB\-\-assignee\fR \fIUSER\fR]
+[\fB\-\-search\fR \fIQ\fR]
+[\fB\-\-since\fR \fItoday|thisWeek|thisMonth\fR]
+[\fB\-\-tag\fR \fITAG\fR]
+[\fB\-\-lightweight\fR]
+[\fB\-\-fields\fR \fIid|id+updated\fR]
+List tasks (filters applied client\-side over
+.BR /api/v1/columns ).
+\fB\-\-column\fR and \fB\-\-status\fR are mutually exclusive.
+
+.TP
+.B kanban tasks get \fIID\fR
+Fetch a single task (\fBGET /api/v1/tasks/:id\fR). Public.
+
+.SS Tasks (auth required)
+.TP
+.B kanban tasks create
+\fB\-\-title\fR \fITITLE\fR
+[\fB\-\-description\fR \fIDESC\fR]
+[\fB\-\-column\fR|\fB\-\-status\fR \fIVAL\fR]
+[\fB\-\-board\fR \fIID\fR]
+[\fB\-\-priority\fR \fIP\fR]
+[\fB\-\-assignee\fR \fIUSER\fR]
+[\fB\-\-meta\fR \fIKEY=VAL\fR...]
+[\fB\-\-no\-publish\fR]
+Create a task (\fBPOST /api/v1/tasks\fR).
+\fB\-\-column\fR and \fB\-\-status\fR are mutually exclusive; the CLI
+resolves \fB\-\-status\fR to a column by Chinese name within
+\fB\-\-board\fR (or any board).
+
+.TP
+.B kanban tasks update \fIID\fR
+[\fB\-\-title\fR \fIT\fR] [\fB\-\-description\fR \fID\fR]
+[\fB\-\-priority\fR \fIP\fR] [\fB\-\-assignee\fR \fIU\fR]
+[\fB\-\-meta\fR \fIK=V\fR...]
+[\fB\-\-column\fR|\fB\-\-status\fR \fIVAL\fR]
+Update a task (\fBPUT /api/v1/tasks/:id\fR).
+At least one patch flag is required.
+
+.TP
+.B kanban tasks delete \fIID\fR [\fB\-\-yes\fR]
+Delete a task (\fBDELETE /api/v1/tasks/:id\fR). Confirmation is
+always skipped in current handlers.
+
+.TP
+.B kanban tasks complete \fIID\fR
+Advance a task to the next column
+(\fBPOST /api/v1/tasks/:id/complete\fR).
+
+.TP
+.B kanban tasks move \fIID\fR
+\fB\-\-column\fR|\fB\-\-status\fR \fIVAL\fR
+Move a task to a target column or status. Exactly one of
+\fB\-\-column\fR / \fB\-\-status\fR is required.
+
+.SS Batch tasks (auth required)
+.TP
+.B kanban tasks batch create
+[\fB\-\-file\fR \fIPATH\fR]
+[\fB\-\-title\fR \fIT\fR...]
+[\fB\-\-description\fR \fID\fR...]
+[\fB\-\-column\fR \fIC\fR...]
+[\fB\-\-status\fR \fIS\fR...]
+[\fB\-\-priority\fR \fIP\fR...]
+[\fB\-\-assignee\fR \fIU\fR...]
+[\fB\-\-published\fR \fIB\fR...]
+Create multiple tasks (\fBPOST /api/v1/tasks/batch\fR). Either
+\fB\-\-file\fR (JSON or YAML) or repeated flags aligned positionally.
+
+.TP
+.B kanban tasks batch update \fIIDS\fR...
+[\fB\-\-file\fR \fIPATH\fR]
+[\fB\-\-column\fR|\fB\-\-status\fR \fIVAL\fR]
+[\fB\-\-priority\fR \fIP\fR]
+[\fB\-\-assignee\fR \fIU\fR]
+Update many tasks at once (\fBPUT /api/v1/tasks/batch\fR).
+
+.TP
+.B kanban tasks batch delete \fIIDS\fR...
+[\fB\-\-file\fR \fIPATH\fR] [\fB\-\-yes\fR]
+Delete many tasks at once (\fBDELETE /api/v1/tasks/batch\fR).
+
+.SS Drafts and archive (auth required)
+.TP
+.B kanban drafts list [\fB\-\-board\fR \fIID\fR]
+.TP
+.B kanban drafts publish \fIID\fR
+.TP
+.B kanban drafts unpublish \fIID\fR
+.TP
+.B kanban archived list [\fB\-\-board\fR \fIID\fR]
+.TP
+.B kanban archived archive \fIID\fR [\fB\-\-yes\fR]
+.TP
+.B kanban archived restore \fIID\fR
+
+.SS Comments (auth required)
+.TP
+.B kanban comments add \fITASK\fR \fB\-\-body\fR \fITEXT\fR
+[\fB\-\-author\fR \fINAME\fR]
+Add a comment. Pass \fB\-\-body\ \-\fR to read the body from stdin
+(UTF\-8, trimmed; internal newlines preserved).
+
+.TP
+.B kanban comments list \fITASK\fR
+List comments for a task.
+
+.SS Subtasks (auth required)
+.TP
+.B kanban subtasks list \fITASK\fR
+.TP
+.B kanban subtasks create \fITASK\fR \fB\-\-title\fR \fIT\fR
+.TP
+.B kanban subtasks update \fIID\fR
+[\fB\-\-title\fR \fIT\fR]
+[\fB\-\-completed\fR|\fB\-\-no\-completed\fR]
+At least one of \fB\-\-title\fR / \fB\-\-completed\fR is required.
+.TP
+.B kanban subtasks delete \fIID\fR [\fB\-\-yes\fR]
+
+.SS Mine and workspace (auth required)
+.TP
+.B kanban mine [\fB\-\-board\fR \fIID\fR] [\fB\-\-lightweight\fR]
+List tasks assigned to (or routed to) the current agent. The
+\fB\-\-board\fR flag is currently a no\-op (the endpoint does not accept
+it); a warning is written to stderr.
+
+.TP
+.B kanban workspace upload \fIFILE\fR [\fB\-\-path\fR \fIREMOTE\fR]
+.TP
+.B kanban workspace batch\-upload \fIFILES\fR...
+.TP
+.B kanban workspace list [\fB\-\-path\fR \fISUB\fR]
+.TP
+.B kanban workspace read \fIID\fR
+.TP
+.B kanban workspace delete \fIID\fR [\fB\-\-yes\fR]
+.TP
+.B kanban workspace stats
+
+.SS Interactive REPL
+.TP
+.B kanban shell
+Start an interactive REPL with the prompt \fBkanban>\fR. Built\-in
+commands: \fBhelp\fR, \fBexit\fR/\fBquit\fR, \fBclear\fR, \fBwhoami\fR.
+Anything else is dispatched to a fresh \fBparseAsync\fR; history is
+persisted to \fI~/.kanban_shell_history\fR
+(override via \fBKANBAN_SHELL_HISTORY\fR).
+
+.SS Runner loop
+.TP
+.B kanban run [\fB\-\-config\fR \fIFILE\fR]
+[{\fB\-\-board\fR \fIID\fR \fB\-\-status\fR \fIS\fR | \fB\-\-mine\fR}]
+[\fB\-\-once\fR]
+Start the long\-lived runner loop that watches a board/column (mode-1)
+or the authenticated agent's task inbox (mode-2), spawns the agent
+binary, heartbeats every \fBheartbeatIntervalMs\fR, and reports the
+outcome back via \fBPOST /api/v1/runs/:taskId/finish\fR. SIGINT /
+SIGTERM trigger a graceful drain. See
+\fIcli/man/kanban-run.1.md\fR for the full reference and
+\fIdevDoc/CLI_RUNNER_PLAN_2026-09-12.md\fR for the design plan.
+
+.SS Run history
+.TP
+.B kanban runs list
+[\fB\-\-runner\-id\fR \fIID\fR]
+[\fB\-\-since\fR \fIDUR\fR]
+[\fB\-\-status\fR \fIS\fR]
+[\fB\-\-task\fR \fIID\fR]
+[\fB\-\-board\fR \fIID\fR]
+[\fB\-\-limit\fR \fIN\fR]
+[\fB\-\-offset\fR \fIN\fR]
+List terminal task runs (completed / failed / released) by calling
+\fBGET /api/v1/runs/history\fR. \fB\-\-since\fR accepts a relative
+duration (\fB1d\fR, \fB2h\fR, \fB30m\fR, \fB1w\fR, \fB45s\fR) or an
+absolute RFC3339 / YYYY-MM-DD timestamp; relative durations resolve
+to \fB?from=<now \- duration>\fR. \fB\-\-status\fR must be one of
+\fBcompleted\fR, \fBfailed\fR, \fBreleased\fR. Auth required.
+
+.SS Shell completion
+.TP
+.B kanban completion bash | zsh | fish
+Emit a self\-contained completion script to stdout. Install hints are
+printed to stderr. See \fIcli/README.md\fR for the install snippets.
+
+.SS Configuration
+.TP
+.B kanban config get [\fIKEY\fR]
+Print the resolved value of \fIKEY\fR (one of \fBapiUrl\fR, \fBoutput\fR,
+\fBprofile\fR, \fBtimeout\fR) alongside its source (\fBcli\fR /
+\fBenv\fR / \fBfile\fR / \fBdefault\fR). With no key, prints every
+supported key.
+
+.TP
+.B kanban config set \fIKEY\fR \fIVALUE\fR
+Persist \fIKEY\fR=\fIVALUE\fR to
+\fI~/.config/kanban\-cli/config.json\fR (mode \fB0600\fR). Unknown keys
+or invalid values raise an error and exit \fB1\fR.
+
+.SH EXIT STATUS
+The CLI uses stable POSIX\-style exit codes so scripts can branch
+without parsing stderr:
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Invalid usage (missing / conflicting flags) or other unexpected error.
+.TP
+.B 2
+Not logged in (run \fBkanban auth login\fR first).
+.TP
+.B 3
+User denied / device code expired during login, or HTTP 404
+(\fBNotFoundError\fR).
+.TP
+.B 4
+Server error (HTTP 5xx).
+.TP
+.B 5
+Resource not found (e.g.\&board / task / column id missing).
+.TP
+.B 6
+Network error (server unreachable, DNS failure, TLS error, ...).
+
+.SH FILES
+.TP
+.I ~/.config/kanban\-cli/config.json
+Persistent CLI configuration. Mode \fB0600\fR on write. Honours
+\fB$XDG_CONFIG_HOME\fR.
+.TP
+.I ~/.config/kanban\-cli/credentials\-\fI<api>\fI.json
+OAuth 2.1 tokens issued by the Kanban server. Mode \fB0600\fR on
+write. One file per API URL.
+.TP
+.I ~/.kanban_shell_history
+REPL command history (override via \fBKANBAN_SHELL_HISTORY\fR).
+
+.SH ENVIRONMENT
+.TP
+.B KANBAN_API_URL
+Default value for \fBapiUrl\fR (overridden by the flag and by the
+config file).
+.TP
+.B KANBAN_CLI_PROFILE
+Default value for \fBprofile\fR.
+.TP
+.B KANBAN_CLI_OUTPUT
+Default value for \fBoutput\fR.
+.TP
+.B KANBAN_CLI_TIMEOUT
+HTTP timeout in milliseconds (config and env only \-\- not a CLI flag).
+.TP
+.B KANBAN_SHELL_HISTORY
+Override the path to the REPL history file.
+.TP
+.B NO_COLOR
+Disable ANSI color when \fB\-\-color=auto\fR (the default) is in effect.
+.TP
+.B FORCE_COLOR
+Force ANSI color when \fB\-\-color=auto\fR is in effect.
+.TP
+.B XDG_CONFIG_HOME
+Override the base directory for the CLI config and credentials files
+(default \fB~/.config\fR).
+
+.SH EXAMPLES
+.TP
+.B "Log in and probe the API:"
+.PP
+.RS
+.nf
+$ export KANBAN_API_URL=https://kanban.example.com
+$ kanban auth login
+$ kanban status
+.RE
+.fi
+
+.TP
+.B "Create a task and drive it across the board:"
+.PP
+.RS
+.nf
+$ kanban tasks create \-\-title "Ship docs" \-\-priority high
+$ kanban tasks move  t\-123 \-\-status in_progress
+$ kanban tasks complete t\-123
+.RE
+.fi
+
+.TP
+.B "Pipe a multi\-line review into a comment:"
+.PP
+.RS
+.nf
+$ echo "Reviewed the OAuth flow.\enLooks good." \\
+    | kanban comments add t\-123 \-\-body \-
+.RE
+.fi
+
+.TP
+.B "Bulk\-update from a YAML file:"
+.PP
+.RS
+.nf
+$ kanban tasks batch create \-\-file ./tasks.yaml
+.RE
+.fi
+
+.TP
+.B "Resolve which API URL the CLI is talking to:"
+.PP
+.RS
+.nf
+$ kanban config get apiUrl
+http://localhost:8080 (default)
+.RE
+.fi
+
+.SH "SEE ALSO"
+.BR jq (1),
+.BR yq (1),
+.BR help2man (1),
+.BR node (1),
+.BR npm (1)
+
+Project documentation:
+.PP
+.RS
+.nf
+\fIcli/README.md\fR         \- end\-to\-end onboarding & troubleshooting
+\fIdocs/CLI_COMMANDS.md\fR  \- per\-command flag reference & examples
+\fIcli/man/kanban.1\fR      \- this manpage
+.fi
+.RE
+
+GitHub: <https://github.com/songkl/open-kanban>
+
+.SH AUTHORS
+songkl <skl@songkl.com>.
+.br
+This project is AI\-authored end\-to\-end; see
+\fIREADME.md\fR for the full attribution.

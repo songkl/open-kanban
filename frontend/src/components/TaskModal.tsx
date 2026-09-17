@@ -109,6 +109,27 @@ function RunInfoSection({ run }: { run: TaskRun }) {
 
   const finishedMs = run.finishedAt ? new Date(run.finishedAt).getTime() : null;
 
+  // s-1191: PM_REVIEW_2026-09-17 §7 — the "Retry Run" button lives in
+  // the failed-run block so an operator can requeue the task without
+  // hand-editing anything. The visible click target is the badge row
+  // (PM called the lack of a retry affordance a "zero-tolerance" miss).
+  // The actual requeue is wired up by the parent TaskModal — this
+  // component just surfaces the button + emits the click via onRetry.
+  const showRetry = run.status === 'failed';
+  const [retrying, setRetrying] = useState(false);
+  const onRetry = (): void => {
+    if (retrying) return;
+    setRetrying(true);
+    // The retry handler is wired by the parent via a custom event so
+    // the section stays free of the tasksApi dependency. Falling back
+    // to a no-op when no listener is attached keeps the section
+    // re-usable in tests / Storybook.
+    const evt = new CustomEvent('task-run-retry', {
+      detail: { taskId: run.taskId, runId: run.id },
+    });
+    window.dispatchEvent(evt);
+  };
+
   return (
     <div
       className="mb-6 rounded-lg border border-violet-200 dark:border-violet-700/50 bg-violet-50/50 dark:bg-violet-900/20 p-4"
@@ -164,6 +185,20 @@ function RunInfoSection({ run }: { run: TaskRun }) {
           </>
         )}
       </dl>
+      {showRetry && (
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-md border border-violet-300 dark:border-violet-700/60 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            onClick={onRetry}
+            disabled={retrying}
+            data-testid="retry-run-button"
+          >
+            <span aria-hidden>🔁</span>
+            {retrying ? t('taskModal.retrying') : t('taskModal.retryRun')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -383,7 +418,44 @@ export function TaskModal({
   // Poll the live CLI runner on this task. The section is the single
   // source of truth for the run status badge the PM review (s-1190)
   // requires — see RunInfoSection above.
-  const { run } = useTaskRun(task.id, { intervalMs: 5000 });
+  const { run, refetch: refetchRun } = useTaskRun(task.id, { intervalMs: 5000 });
+
+  // s-1191: Retry Run handler (PM_REVIEW_2026-09-17 §7). When the user
+  // clicks the "Retry run" button inside RunInfoSection we requeue the
+  // task by re-saving it. The server-side runner polls every
+  // `pollIntervalMs` (default 5s) and re-claims any task it sees in
+  // the watched column — touching the row via `update` is enough to
+  // wake the next claim cycle. We intentionally avoid mutating
+  // columnId / status so the operator's drag-and-drop layout stays
+  // intact.
+  const [retrying, setRetrying] = useState(false);
+  const handleRetryRun = useCallback(async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      // The no-op PUT keeps the columnId / status untouched while
+      // bumping `updatedAt`, which is the signal the runner claim
+      // query uses to surface the task again.
+      await tasksApi.update(task.id, {});
+      // Immediately re-fetch the run row so the badge reflects the
+      // new claim without waiting for the next poll.
+      void refetchRun();
+    } catch (error) {
+      console.error('Failed to retry run:', error);
+    } finally {
+      setRetrying(false);
+    }
+  }, [retrying, task.id, refetchRun]);
+
+  useEffect(() => {
+    const onRetryEvent = (evt: Event) => {
+      const ce = evt as CustomEvent<{ taskId: string; runId: string }>;
+      if (!ce.detail || ce.detail.taskId !== task.id) return;
+      void handleRetryRun();
+    };
+    window.addEventListener('task-run-retry', onRetryEvent);
+    return () => window.removeEventListener('task-run-retry', onRetryEvent);
+  }, [task.id, handleRetryRun]);
 
   const handleAuthorChange = (value: string) => {
     setCommentAuthor(value);

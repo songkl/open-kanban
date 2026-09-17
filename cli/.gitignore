@@ -1,0 +1,9 @@
+dist/
+node_modules/
+*.log
+.DS_Store
+coverage/
+# Local CLI test scratchpad — keeps `npm test`, `npm run test:e2e`,
+# and manual sweeps out of the repo. Reports that need to ship live in
+# devDoc/ or docs/ instead.
+.test-results/
