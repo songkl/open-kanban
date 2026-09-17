@@ -15,6 +15,7 @@ import type {
   ColumnPermission,
   BoardBulkGrantResult,
   TaskRun,
+  DashboardStats,
 } from '@/types/kanban';
 import i18n from '@/i18n';
 
@@ -641,6 +642,14 @@ export const archivedApi = {
   getByBoard: (boardId: string) =>
     fetchApi<Task[]>(`archived?boardId=${boardId}`),
   getAll: () => fetchApi<Task[]>('archived'),
+};
+
+// Dashboard API (s-1195, PM_REVIEW_2026-09-17 §5.3 ROI #3).
+// Surfaces the four headline tiles the dashboard page renders:
+// active board count, tasks completed in the last 7 days, top
+// 3 agents by recent activity, and the 3 longest-blocked cards.
+export const dashboardApi = {
+  getStats: () => fetchApi<DashboardStats>('dashboard/stats'),
 };
 
 export const draftsApi = {

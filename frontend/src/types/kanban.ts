@@ -207,3 +207,44 @@ export interface TaskRun {
   exitCode: number | null;
   error: string | null;
 }
+
+/**
+ * Wire-shape returned by GET /api/v1/dashboard/stats (s-1195,
+ * PM_REVIEW_2026-09-17 §5.3 ROI #3). All counts default to 0 so
+ * callers can render placeholders before the request resolves.
+ */
+export interface DashboardAgentActivity {
+  userId: string;
+  nickname: string;
+  avatar: string;
+  activityCount: number;
+}
+
+export interface DashboardBlockedTask {
+  taskId: string;
+  title: string;
+  boardId: string;
+  boardName: string;
+  columnId: string;
+  columnName: string;
+  updatedAt: string;
+  daysBlocked: number;
+  assignee: string;
+  priority: string;
+}
+
+export interface DashboardStats {
+  totalTasks: number;
+  tasksByStatus: Record<string, number>;
+  tasksByPriority: Record<string, number>;
+  publishedTasks: number;
+  draftTasks: number;
+  archivedTasks: number;
+  totalBoards: number;
+  activeBoardCount: number;
+  totalColumns: number;
+  totalUsers: number;
+  tasksCompletedLast7Days: number;
+  topAgentsByActivity: DashboardAgentActivity[];
+  longestBlockedCards: DashboardBlockedTask[];
+}

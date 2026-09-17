@@ -387,4 +387,271 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 			t.Errorf("expected in_progress status in tasksByStatus, got nil")
 		}
 	})
+
+	t.Run("activeBoardCount mirrors totalBoards", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/dashboard/stats", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		if int(resp["activeBoardCount"].(float64)) != int(resp["totalBoards"].(float64)) {
+			t.Errorf("expected activeBoardCount == totalBoards (%v), got %v",
+				resp["totalBoards"], resp["activeBoardCount"])
+		}
+	})
+
+	t.Run("activeBoardCount excludes soft-deleted boards", func(t *testing.T) {
+		_, err := db.Exec(`INSERT INTO boards (id, name, task_counter, deleted) VALUES ('b2', 'Deleted Board', 1000, 1)`)
+		if err != nil {
+			t.Fatalf("failed to insert deleted board: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/dashboard/stats", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		if int(resp["activeBoardCount"].(float64)) != 1 {
+			t.Errorf("expected activeBoardCount=1 (excluding deleted board), got %v", resp["activeBoardCount"])
+		}
+		if int(resp["totalBoards"].(float64)) != 1 {
+			t.Errorf("expected totalBoards=1 (excluding deleted board), got %v", resp["totalBoards"])
+		}
+	})
+
+	t.Run("tasksCompletedLast7Days counts COMPLETE_TASK activities in window", func(t *testing.T) {
+		_, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, target_id, target_title, source, created_at) VALUES ('ac1', 'u1', 'COMPLETE_TASK', 'TASK', 't1', 'Task 1', 'web', datetime('now', '-1 day'))`)
+		if err != nil {
+			t.Fatalf("failed to insert recent completion activity: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO activities (id, user_id, action, target_type, target_id, target_title, source, created_at) VALUES ('ac2', 'u1', 'COMPLETE_TASK', 'TASK', 't2', 'Task 2', 'web', datetime('now', '-3 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert 3-day-old completion: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO activities (id, user_id, action, target_type, target_id, target_title, source, created_at) VALUES ('ac3', 'u1', 'COMPLETE_TASK', 'TASK', 't3', 'Task 3', 'web', datetime('now', '-10 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert 10-day-old completion: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO activities (id, user_id, action, target_type, target_id, target_title, source, created_at) VALUES ('ac4', 'u1', 'CREATE_TASK', 'TASK', 't4', 'Task 4', 'web', datetime('now', '-1 day'))`)
+		if err != nil {
+			t.Fatalf("failed to insert non-completion activity: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/dashboard/stats", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		if int(resp["tasksCompletedLast7Days"].(float64)) != 2 {
+			t.Errorf("expected tasksCompletedLast7Days=2, got %v", resp["tasksCompletedLast7Days"])
+		}
+	})
+
+	t.Run("topAgentsByActivity returns at most 3 agents ordered by activity", func(t *testing.T) {
+		_, err := db.Exec(`INSERT INTO users (id, username, nickname, password, type, role, enabled) VALUES ('a1', 'agent1', 'Agent One', 'pass', 'AGENT', 'MEMBER', 1)`)
+		if err != nil {
+			t.Fatalf("failed to insert agent a1: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO users (id, username, nickname, password, type, role, enabled) VALUES ('a2', 'agent2', 'Agent Two', 'pass', 'AGENT', 'MEMBER', 1)`)
+		if err != nil {
+			t.Fatalf("failed to insert agent a2: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO users (id, username, nickname, password, type, role, enabled) VALUES ('a3', 'agent3', 'Agent Three', 'pass', 'AGENT', 'MEMBER', 1)`)
+		if err != nil {
+			t.Fatalf("failed to insert agent a3: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO users (id, username, nickname, password, type, role, enabled) VALUES ('a4', 'agent4', 'Agent Four', 'pass', 'AGENT', 'MEMBER', 1)`)
+		if err != nil {
+			t.Fatalf("failed to insert agent a4: %v", err)
+		}
+
+		// a1: 5 activities, a2: 3, a3: 1, a4: 0
+		for i := 0; i < 5; i++ {
+			_, err = db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source, created_at) VALUES (?, 'a1', 'CREATE_TASK', 'TASK', 'web', datetime('now', '-1 day'))`, `act-a1-`+itoa(i))
+			if err != nil {
+				t.Fatalf("failed to insert a1 activity: %v", err)
+			}
+		}
+		for i := 0; i < 3; i++ {
+			_, err = db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source, created_at) VALUES (?, 'a2', 'CREATE_TASK', 'TASK', 'web', datetime('now', '-2 day'))`, `act-a2-`+itoa(i))
+			if err != nil {
+				t.Fatalf("failed to insert a2 activity: %v", err)
+			}
+		}
+		_, err = db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source, created_at) VALUES ('act-a3-0', 'a3', 'CREATE_TASK', 'TASK', 'web', datetime('now', '-1 day'))`)
+		if err != nil {
+			t.Fatalf("failed to insert a3 activity: %v", err)
+		}
+		// a4 has none.
+		// u1 (HUMAN) with 4 activities should NOT appear (only AGENT type).
+		for i := 0; i < 4; i++ {
+			_, err = db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source, created_at) VALUES (?, 'u1', 'CREATE_TASK', 'TASK', 'web', datetime('now', '-1 day'))`, `act-u1-`+itoa(i))
+			if err != nil {
+				t.Fatalf("failed to insert u1 activity: %v", err)
+			}
+		}
+
+		req, _ := http.NewRequest("GET", "/api/dashboard/stats", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		agentsRaw := resp["topAgentsByActivity"].([]interface{})
+		if len(agentsRaw) != 3 {
+			t.Fatalf("expected 3 top agents, got %d", len(agentsRaw))
+		}
+		first := agentsRaw[0].(map[string]interface{})
+		if first["userId"] != "a1" {
+			t.Errorf("expected first agent to be a1, got %v", first["userId"])
+		}
+		if int(first["activityCount"].(float64)) != 5 {
+			t.Errorf("expected a1 activityCount=5, got %v", first["activityCount"])
+		}
+		second := agentsRaw[1].(map[string]interface{})
+		if second["userId"] != "a2" {
+			t.Errorf("expected second agent to be a2, got %v", second["userId"])
+		}
+		third := agentsRaw[2].(map[string]interface{})
+		if third["userId"] != "a3" {
+			t.Errorf("expected third agent to be a3, got %v", third["userId"])
+		}
+	})
+
+	t.Run("topAgentsByActivity excludes humans and old activities", func(t *testing.T) {
+		// Fresh DB - re-use from previous subtest would be wrong; this subtest
+		// already has the agents inserted; just verify activity > 7 days is excluded.
+		_, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source, created_at) VALUES ('act-old-a1', 'a1', 'CREATE_TASK', 'TASK', 'web', datetime('now', '-30 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert old activity: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/dashboard/stats", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		agentsRaw := resp["topAgentsByActivity"].([]interface{})
+		if len(agentsRaw) != 3 {
+			t.Fatalf("expected 3 agents, got %d", len(agentsRaw))
+		}
+		first := agentsRaw[0].(map[string]interface{})
+		// Old activity (30d) should be excluded, so a1 still has 5.
+		if int(first["activityCount"].(float64)) != 5 {
+			t.Errorf("expected a1 activityCount=5 (excluding 30d-old), got %v", first["activityCount"])
+		}
+	})
+
+	t.Run("longestBlockedCards returns oldest non-done, published, non-archived tasks", func(t *testing.T) {
+		// Insert tasks with controlled updated_at to verify ordering.
+		_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, priority, published, archived, updated_at) VALUES ('bt-old', 'Oldest Stale', 'c1', 'high', 1, 0, datetime('now', '-20 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert oldest blocked task: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, priority, published, archived, updated_at) VALUES ('bt-mid', 'Mid Stale', 'c1', 'medium', 1, 0, datetime('now', '-10 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert mid blocked task: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, priority, published, archived, updated_at) VALUES ('bt-recent', 'Recent Stale', 'c1', 'low', 1, 0, datetime('now', '-2 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert recent stale task: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, priority, published, archived, updated_at) VALUES ('bt-done', 'Done Task', 'c3', 'high', 1, 0, datetime('now', '-30 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert done task: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, priority, published, archived, updated_at) VALUES ('bt-archived', 'Archived Stale', 'c1', 'high', 1, 1, datetime('now', '-50 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert archived task: %v", err)
+		}
+		_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, priority, published, archived, updated_at) VALUES ('bt-draft', 'Draft Stale', 'c1', 'medium', 0, 0, datetime('now', '-100 days'))`)
+		if err != nil {
+			t.Fatalf("failed to insert draft stale task: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/dashboard/stats", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", w.Code)
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+
+		cardsRaw := resp["longestBlockedCards"].([]interface{})
+		if len(cardsRaw) != 3 {
+			t.Fatalf("expected 3 blocked cards, got %d", len(cardsRaw))
+		}
+		first := cardsRaw[0].(map[string]interface{})
+		if first["taskId"] != "bt-old" {
+			t.Errorf("expected first blocked card to be bt-old (oldest), got %v", first["taskId"])
+		}
+		if int(first["daysBlocked"].(float64)) < 19 {
+			t.Errorf("expected daysBlocked >= 19 for bt-old, got %v", first["daysBlocked"])
+		}
+		second := cardsRaw[1].(map[string]interface{})
+		if second["taskId"] != "bt-mid" {
+			t.Errorf("expected second blocked card to be bt-mid, got %v", second["taskId"])
+		}
+		third := cardsRaw[2].(map[string]interface{})
+		if third["taskId"] != "bt-recent" {
+			t.Errorf("expected third blocked card to be bt-recent, got %v", third["taskId"])
+		}
+
+		// Verify excluded IDs aren't present.
+		for _, c := range cardsRaw {
+			id := c.(map[string]interface{})["taskId"]
+			if id == "bt-done" || id == "bt-archived" || id == "bt-draft" {
+				t.Errorf("expected excluded task %v to not appear in blocked cards", id)
+			}
+		}
+	})
+}
+
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	digits := ""
+	for i > 0 {
+		digits = string(rune('0'+i%10)) + digits
+		i /= 10
+	}
+	return digits
 }

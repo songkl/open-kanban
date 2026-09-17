@@ -30,6 +30,11 @@ export function AppShell({ children }: AppShellProps) {
 
   const items: SidebarItem[] = [
     {
+      to: '/dashboard',
+      labelKey: 'nav.sidebarDashboard',
+      iconPath: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
+    },
+    {
       to: '/boards',
       labelKey: 'nav.sidebarBoards',
       iconPath: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',

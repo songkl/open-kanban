@@ -51,7 +51,7 @@ export function Sidebar({ items }: SidebarProps) {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === '/boards'}
+            end={item.to === '/boards' || item.to === '/dashboard'}
             aria-label={label}
             title={label}
             data-testid={`sidebar-item-${item.labelKey.replace(/\./g, '-')}`}

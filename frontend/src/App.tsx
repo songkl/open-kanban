@@ -6,6 +6,7 @@ import { authApi } from './services/api';
 
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const SetupPage = lazy(() => import('./pages/SetupPage').then(m => ({ default: m.SetupPage })));
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const BoardsPage = lazy(() => import('./pages/BoardsPage').then(m => ({ default: m.BoardsPage })));
 const BoardPage = lazy(() => import('./pages/BoardPage').then(m => ({ default: m.BoardPage })));
 const DraftsPage = lazy(() => import('./pages/DraftsPage').then(m => ({ default: m.DraftsPage })));
@@ -34,7 +35,7 @@ function HomeRedirect() {
         if (data.needsSetup) {
           navigate('/setup', { replace: true });
         } else if (data.user) {
-          navigate('/boards', { replace: true });
+          navigate('/dashboard', { replace: true });
         } else {
           navigate('/login', { replace: true });
         }
@@ -71,6 +72,7 @@ function App() {
         <Route path="/setup" element={<SetupPage />} />
         <Route path="/board/:boardId" element={<ShellWrapper><BoardPage /></ShellWrapper>} />
         <Route path="/board/:boardId/column/:columnId" element={<ShellWrapper><ColumnDetailPage /></ShellWrapper>} />
+        <Route path="/dashboard" element={<ShellWrapper><DashboardPage /></ShellWrapper>} />
         <Route path="/boards" element={<ShellWrapper><BoardsPage /></ShellWrapper>} />
         <Route path="/drafts" element={<ShellWrapper><DraftsPage /></ShellWrapper>} />
         <Route path="/history" element={<ShellWrapper><HistoryPage /></ShellWrapper>} />

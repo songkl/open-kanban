@@ -69,7 +69,24 @@
     "sidebarAgents": "Agents",
     "sidebarActivity": "Activity",
     "sidebarRuns": "Runs",
-    "sidebarSettings": "Settings"
+    "sidebarSettings": "Settings",
+    "sidebarDashboard": "Dashboard",
+    "dashboard": "Dashboard"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "At-a-glance overview of your boards",
+    "activeBoards": "Active boards",
+    "completedLast7Days": "Completed (last 7 days)",
+    "topAgents": "Top agents by activity",
+    "longestBlocked": "Longest-blocked cards",
+    "viewAll": "View all",
+    "noAgentActivity": "No agent activity in the last 7 days",
+    "noBlockedCards": "No blocked cards — everything is moving",
+    "activityCount_one": "{{count}} activity",
+    "activityCount_other": "{{count}} activities",
+    "daysBlocked_one": "Blocked {{count}} day",
+    "daysBlocked_other": "Blocked {{count}} days"
   },
   "notifications": {
     "title": "Notifications",

@@ -69,7 +69,24 @@
     "sidebarAgents": "Agents",
     "sidebarActivity": "活动",
     "sidebarRuns": "运行",
-    "sidebarSettings": "设置"
+    "sidebarSettings": "设置",
+    "sidebarDashboard": "仪表盘",
+    "dashboard": "仪表盘"
+  },
+  "dashboard": {
+    "title": "仪表盘",
+    "subtitle": "看板整体状态一览",
+    "activeBoards": "活跃看板",
+    "completedLast7Days": "近 7 天完成数",
+    "topAgents": "Agent 活跃度排行",
+    "longestBlocked": "最久未推进卡片",
+    "viewAll": "查看全部",
+    "noAgentActivity": "近 7 天暂无 Agent 活动",
+    "noBlockedCards": "暂无停滞卡片，一切运转顺畅",
+    "activityCount_one": "{{count}} 次活动",
+    "activityCount_other": "{{count}} 次活动",
+    "daysBlocked_one": "已停滞 {{count}} 天",
+    "daysBlocked_other": "已停滞 {{count}} 天"
   },
   "notifications": {
     "title": "通知",
