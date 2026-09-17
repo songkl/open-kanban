@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"open-kanban/internal/handlers"
@@ -76,6 +77,25 @@ func setupBoardsListDB(t *testing.T) *sql.DB {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+	);
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		description TEXT,
+		priority TEXT DEFAULT 'medium',
+		assignee TEXT,
+		meta TEXT,
+		column_id TEXT NOT NULL,
+		position INTEGER DEFAULT 0,
+		published BOOLEAN DEFAULT 0,
+		archived BOOLEAN DEFAULT 0,
+		archived_at DATETIME,
+		agent_id TEXT,
+		agent_prompt TEXT,
+		created_by TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
 	);
 	`
 
@@ -330,6 +350,25 @@ func setupBoardsAccessMatrixDB(t *testing.T) *sql.DB {
 		owner_agent_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		description TEXT,
+		priority TEXT DEFAULT 'medium',
+		assignee TEXT,
+		meta TEXT,
+		column_id TEXT NOT NULL,
+		position INTEGER DEFAULT 0,
+		published BOOLEAN DEFAULT 0,
+		archived BOOLEAN DEFAULT 0,
+		archived_at DATETIME,
+		agent_id TEXT,
+		agent_prompt TEXT,
+		created_by TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
 	);
 	`
 	if _, err := db.Exec(schema); err != nil {
@@ -656,4 +695,291 @@ func stringSlicesEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// setupBoardsActivityDB returns a fresh SQLite seeded for the
+// taskCount / lastActiveAt / ownerNickname tests.
+//
+//	board1 (public) — owner1
+//	  c1-board1, c2-board1
+//	    t1 (updated 2024-06-10), t2 (updated 2024-06-20)
+//	    -> 2 tasks, lastActiveAt = 2024-06-20
+//	board2 (public) — admin1
+//	  c1-board2
+//	    t3 (updated 2024-06-15)
+//	    -> 1 task, lastActiveAt = 2024-06-15
+//	board3 (public) — no tasks, no owner
+//	  c1-board3
+//	    -> 0 tasks, lastActiveAt falls back to board.updated_at
+func setupBoardsActivityDB(t *testing.T) *sql.DB {
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetPermissionCacheForTest()
+	t.Cleanup(func() {
+		handlers.ResetTokenCacheForTest()
+		handlers.ResetPermissionCacheForTest()
+	})
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open test db: %v", err)
+	}
+
+	schema := `
+	CREATE TABLE users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE NOT NULL,
+		nickname TEXT NOT NULL,
+		password TEXT,
+		avatar TEXT,
+		type TEXT DEFAULT 'HUMAN',
+		role TEXT DEFAULT 'MEMBER',
+		enabled BOOLEAN DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_active_at DATETIME
+	);
+	CREATE TABLE tokens (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		key TEXT UNIQUE NOT NULL,
+		expires_at DATETIME,
+		user_agent TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE boards (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		short_alias TEXT UNIQUE,
+		task_counter INTEGER DEFAULT 1000,
+		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		description TEXT DEFAULT ''
+	);
+	CREATE TABLE board_permissions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		board_id TEXT NOT NULL,
+		owner_agent_id TEXT,
+		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, board_id),
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
+	);
+	CREATE TABLE columns (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		status TEXT,
+		position INTEGER DEFAULT 0,
+		color TEXT DEFAULT '#6b7280',
+		description TEXT DEFAULT '',
+		board_id TEXT NOT NULL,
+		owner_agent_id TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		description TEXT,
+		priority TEXT DEFAULT 'medium',
+		assignee TEXT,
+		meta TEXT,
+		column_id TEXT NOT NULL,
+		position INTEGER DEFAULT 0,
+		published BOOLEAN DEFAULT 0,
+		archived BOOLEAN DEFAULT 0,
+		archived_at DATETIME,
+		agent_id TEXT,
+		agent_prompt TEXT,
+		created_by TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
+	);
+	`
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("failed to create schema: %v", err)
+	}
+
+	users := []struct{ id, nick, role string }{
+		{"admin1", "admin-one", "ADMIN"},
+		{"owner1", "owner-one", "MEMBER"},
+	}
+	for _, u := range users {
+		if _, err := db.Exec(
+			`INSERT INTO users (id, username, nickname, password, role, enabled, avatar, type) VALUES (?, ?, ?, 'pass', ?, 1, '', 'HUMAN')`,
+			u.id, u.id, u.nick, u.role,
+		); err != nil {
+			t.Fatalf("seed user %s: %v", u.id, err)
+		}
+	}
+	tokens := []struct{ id, user, key string }{
+		{"tok-admin1", "admin1", "admin1-token"},
+		{"tok-owner1", "owner1", "owner1-token"},
+	}
+	for _, tok := range tokens {
+		if _, err := db.Exec(
+			`INSERT INTO tokens (id, name, key, user_id) VALUES (?, 'default', ?, ?)`,
+			tok.id, tok.key, tok.user,
+		); err != nil {
+			t.Fatalf("seed token %s: %v", tok.key, err)
+		}
+	}
+
+	boards := []struct {
+		id, name, created, updated string
+		isPublic                   bool
+	}{
+		{"board1", "Board One", "2024-01-01 00:00:00", "2024-01-01 00:00:00", true},
+		{"board2", "Board Two", "2024-01-02 00:00:00", "2024-01-02 00:00:00", true},
+		{"board3", "Board Three (no tasks)", "2024-01-03 00:00:00", "2024-01-03 12:00:00", true},
+	}
+	for _, b := range boards {
+		if _, err := db.Exec(
+			`INSERT INTO boards (id, name, description, deleted, is_public, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?, ?)`,
+			b.id, b.name, b.name, b.isPublic, b.created, b.updated,
+		); err != nil {
+			t.Fatalf("seed board %s: %v", b.id, err)
+		}
+	}
+
+	perms := []struct{ id, user, board, owner, access string }{
+		{"bp-owner1-board1", "owner1", "board1", "owner1", "READ"},
+		{"bp-admin1-board2", "admin1", "board2", "admin1", "ADMIN"},
+	}
+	for _, r := range perms {
+		if _, err := db.Exec(
+			`INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES (?, ?, ?, ?, ?)`,
+			r.id, r.user, r.board, r.owner, r.access,
+		); err != nil {
+			t.Fatalf("seed perm %s: %v", r.id, err)
+		}
+	}
+
+	cols := []struct{ id, name, board string }{
+		{"c1-board1", "Todo", "board1"},
+		{"c2-board1", "Doing", "board1"},
+		{"c1-board2", "Todo", "board2"},
+		{"c1-board3", "Todo", "board3"},
+	}
+	for _, c := range cols {
+		if _, err := db.Exec(
+			`INSERT INTO columns (id, name, board_id, position) VALUES (?, ?, ?, 0)`,
+			c.id, c.name, c.board,
+		); err != nil {
+			t.Fatalf("seed column %s: %v", c.id, err)
+		}
+	}
+
+	tasks := []struct{ id, title, column, updated string }{
+		{"t1", "T1", "c1-board1", "2024-06-10 10:00:00"},
+		{"t2", "T2", "c2-board1", "2024-06-20 10:00:00"},
+		{"t3", "T3", "c1-board2", "2024-06-15 10:00:00"},
+	}
+	for _, t0 := range tasks {
+		if _, err := db.Exec(
+			`INSERT INTO tasks (id, title, column_id, updated_at, created_at) VALUES (?, ?, ?, ?, ?)`,
+			t0.id, t0.title, t0.column, t0.updated, t0.updated,
+		); err != nil {
+			t.Fatalf("seed task %s: %v", t0.id, err)
+		}
+	}
+
+	return db
+}
+
+// TestGetBoards_ActivityHelpers pins the new helper fields
+// (taskCount, lastActiveAt, ownerNickname) for both the
+// anonymous and authenticated paths. The fixture is small
+// but covers all three branches: tasks present with
+// lastActiveAt = max(tasks.updated_at), tasks present on a
+// board with a recorded owner (ownerNickname resolved via the
+// users join), and an empty board (lastActiveAt falls back to
+// board.updated_at).
+func TestGetBoards_ActivityHelpers(t *testing.T) {
+	db := setupBoardsActivityDB(t)
+	defer db.Close()
+
+	handlers.ResetTokenCacheForTest()
+	handlers.ResetPermissionCacheForTest()
+
+	t.Run("anonymous path returns taskCount, lastActiveAt, ownerNickname", func(t *testing.T) {
+		resp := fetchBoards(t, db, "")
+		if len(resp) != 3 {
+			t.Fatalf("expected 3 public boards, got %d", len(resp))
+		}
+
+		b1 := boardByID(t, resp, "board1")
+		if c, ok := b1["taskCount"].(float64); !ok || c != 2 {
+			t.Errorf("expected board1 taskCount=2, got %v (%T)", b1["taskCount"], b1["taskCount"])
+		}
+		// lastActiveAt on board1 should be 2024-06-20 (max of t1/t2).
+		gotActive, _ := b1["lastActiveAt"].(string)
+		if !strings.HasPrefix(gotActive, "2024-06-20") {
+			t.Errorf("expected board1 lastActiveAt to start with 2024-06-20, got %q", gotActive)
+		}
+		if nick, _ := b1["ownerNickname"].(string); nick != "owner-one" {
+			t.Errorf("expected board1 ownerNickname=owner-one, got %q", nick)
+		}
+
+		b2 := boardByID(t, resp, "board2")
+		if c, ok := b2["taskCount"].(float64); !ok || c != 1 {
+			t.Errorf("expected board2 taskCount=1, got %v (%T)", b2["taskCount"], b2["taskCount"])
+		}
+		gotActive, _ = b2["lastActiveAt"].(string)
+		if !strings.HasPrefix(gotActive, "2024-06-15") {
+			t.Errorf("expected board2 lastActiveAt to start with 2024-06-15, got %q", gotActive)
+		}
+		if nick, _ := b2["ownerNickname"].(string); nick != "admin-one" {
+			t.Errorf("expected board2 ownerNickname=admin-one, got %q", nick)
+		}
+
+		// board3 has no tasks and no recorded owner — lastActiveAt
+		// must fall back to the board's own updated_at, not be null
+		// or absent.
+		b3 := boardByID(t, resp, "board3")
+		if c, ok := b3["taskCount"].(float64); !ok || c != 0 {
+			t.Errorf("expected board3 taskCount=0, got %v (%T)", b3["taskCount"], b3["taskCount"])
+		}
+		gotActive, _ = b3["lastActiveAt"].(string)
+		if !strings.HasPrefix(gotActive, "2024-01-03") {
+			t.Errorf("expected board3 lastActiveAt to fall back to board.updated_at, got %q", gotActive)
+		}
+		if nick, _ := b3["ownerNickname"].(string); nick != "" {
+			t.Errorf("expected board3 ownerNickname to be empty, got %q", nick)
+		}
+	})
+
+	t.Run("authenticated path returns taskCount, lastActiveAt, ownerNickname", func(t *testing.T) {
+		resp := fetchBoards(t, db, "admin1-token")
+		if len(resp) != 3 {
+			t.Fatalf("expected 3 boards for admin1, got %d", len(resp))
+		}
+
+		b1 := boardByID(t, resp, "board1")
+		if c, ok := b1["taskCount"].(float64); !ok || c != 2 {
+			t.Errorf("expected board1 taskCount=2, got %v (%T)", b1["taskCount"], b1["taskCount"])
+		}
+		if nick, _ := b1["ownerNickname"].(string); nick != "owner-one" {
+			t.Errorf("expected board1 ownerNickname=owner-one, got %q", nick)
+		}
+
+		b3 := boardByID(t, resp, "board3")
+		if c, ok := b3["taskCount"].(float64); !ok || c != 0 {
+			t.Errorf("expected board3 taskCount=0, got %v (%T)", b3["taskCount"], b3["taskCount"])
+		}
+		gotActive, _ := b3["lastActiveAt"].(string)
+		if !strings.HasPrefix(gotActive, "2024-01-03") {
+			t.Errorf("expected board3 lastActiveAt to fall back to board.updated_at, got %q", gotActive)
+		}
+		if nick, _ := b3["ownerNickname"].(string); nick != "" {
+			t.Errorf("expected board3 ownerNickname to be empty, got %q", nick)
+		}
+	})
 }

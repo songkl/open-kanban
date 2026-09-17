@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { boardsApi, templatesApi, authApi, presetTemplatesApi } from '../services/api';
@@ -22,6 +22,8 @@ interface Template {
   includeTasks: boolean;
   createdAt: string;
 }
+
+type BoardSortKey = 'lastActive' | 'createdAt' | 'taskCount' | 'owner' | 'name';
 
 export function BoardsPage() {
   const { t } = useTranslation();
@@ -52,6 +54,10 @@ export function BoardsPage() {
     boardId: string;
     boardName: string;
   }>({ isOpen: false, boardId: '', boardName: '' });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<BoardSortKey>('lastActive');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -245,6 +251,57 @@ export function BoardsPage() {
   );
   const canCreateBoard = currentUser?.role !== 'VIEWER';
 
+  const filteredSortedBoards = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const matched = query
+      ? accessibleBoards.filter((b) => {
+          const haystack = [b.name, b.id, b.description ?? '', b.ownerNickname ?? '']
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(query);
+        })
+      : accessibleBoards;
+
+    const getTime = (b: Board, key: 'lastActive' | 'createdAt'): number => {
+      const raw = key === 'lastActive' ? b.lastActiveAt : b.createdAt;
+      const t = raw ? new Date(raw).getTime() : 0;
+      return Number.isNaN(t) ? 0 : t;
+    };
+
+    const ownerKey = (b: Board): string => {
+      if (b.ownerNickname && b.ownerNickname.trim()) return b.ownerNickname.trim().toLowerCase();
+      if (b.isOwner) return '\x00';
+      return '\xff';
+    };
+
+    return [...matched].sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case 'lastActive':
+          cmp = getTime(a, 'lastActive') - getTime(b, 'lastActive');
+          break;
+        case 'createdAt':
+          cmp = getTime(a, 'createdAt') - getTime(b, 'createdAt');
+          break;
+        case 'taskCount':
+          cmp = (a.taskCount ?? 0) - (b.taskCount ?? 0);
+          break;
+        case 'owner':
+          cmp = ownerKey(a).localeCompare(ownerKey(b));
+          break;
+        case 'name':
+          cmp = (a.name || '').localeCompare(b.name || '');
+          break;
+      }
+      if (cmp === 0) {
+        cmp = getTime(a, 'createdAt') - getTime(b, 'createdAt');
+      }
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [accessibleBoards, searchQuery, sortBy, sortOrder]);
+
+  const isFiltering = searchQuery.trim().length > 0;
+
   const closeImportModal = () => {
     setShowImportModal(false);
     setShowImportConflictConfirm(false);
@@ -325,7 +382,82 @@ export function BoardsPage() {
               <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.count', { count: accessibleBoards.length })}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              className="relative"
+              data-testid="boards-search-wrapper"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('board.searchPlaceholder')}
+                aria-label={t('board.searchPlaceholder')}
+                data-testid="boards-search-input"
+                className="w-56 rounded-xl border border-zinc-100 dark:border-zinc-700 bg-white dark:bg-zinc-800 pl-9 pr-9 py-2 text-sm text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label={t('board.clearSearch')}
+                  data-testid="boards-search-clear"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1" data-testid="boards-sort-wrapper">
+              <label
+                htmlFor="boards-sort-select"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                {t('board.sortBy')}:
+              </label>
+              <select
+                id="boards-sort-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as BoardSortKey)}
+                data-testid="boards-sort-select"
+                className="rounded-xl border border-zinc-100 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              >
+                <option value="lastActive">{t('board.sortLastActive')}</option>
+                <option value="createdAt">{t('board.sortCreatedAt')}</option>
+                <option value="taskCount">{t('board.sortTaskCount')}</option>
+                <option value="owner">{t('board.sortOwner')}</option>
+                <option value="name">{t('board.sortName')}</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                aria-label={sortOrder === 'asc' ? t('common.sortAsc') : t('common.sortDesc')}
+                title={sortOrder === 'asc' ? t('common.sortAsc') : t('common.sortDesc')}
+                data-testid="boards-sort-order"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-100 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
             <Link
               to="/dashboard"
               className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-500 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:hover:border-zinc-600 transition-all"
@@ -457,9 +589,31 @@ export function BoardsPage() {
               </div>
             )}
           </div>
+        ) : isFiltering && filteredSortedBoards.length === 0 ? (
+          <div
+            className="rounded-2xl bg-white dark:bg-zinc-800 p-12 text-center shadow-sm border border-zinc-100 dark:border-zinc-700"
+            data-testid="boards-empty-filter"
+          >
+            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-400">
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <p className="text-lg font-medium text-zinc-700 dark:text-zinc-200">
+              {t('board.noResultsForFilter', { query: searchQuery })}
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
+            >
+              {t('board.clearSearch')}
+            </button>
+          </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {accessibleBoards.map((board) => (
+            {filteredSortedBoards.map((board) => (
               <BoardCard
                 key={board.id}
                 board={board}

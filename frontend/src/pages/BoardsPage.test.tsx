@@ -326,3 +326,250 @@ describe('BoardsPage', () => {
     });
   });
 });
+
+describe('BoardsPage search and sort', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedTemplatesGetAll.mockResolvedValue([]);
+    mockedPresetTemplatesGetAll.mockResolvedValue([]);
+    mockedAuthMe.mockResolvedValue({
+      user: { id: 'admin-1', nickname: 'Admin', avatar: null, role: 'ADMIN', type: 'HUMAN', enabled: true, createdAt: '', updatedAt: '' },
+      needsSetup: false,
+    });
+  });
+
+  const makeBoard = (overrides: Partial<{
+    id: string;
+    name: string;
+    description: string;
+    isPublic: boolean;
+    ownerNickname: string;
+    isOwner: boolean;
+    taskCount: number;
+    lastActiveAt: string;
+    createdAt: string;
+    updatedAt: string;
+    effectiveAccess: string;
+  }> = {}) => ({
+    id: 'board',
+    name: 'Board',
+    description: '',
+    isPublic: true,
+    ownerNickname: '',
+    isOwner: false,
+    taskCount: 0,
+    lastActiveAt: '2024-01-01T00:00:00Z',
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-01-01T00:00:00Z',
+    effectiveAccess: 'ADMIN',
+    ...overrides,
+  });
+
+  const visibleBoardNames = () =>
+    screen
+      .getAllByTestId('board-card-meta')
+      .map((node) => {
+        const card = node.closest('[data-testid]')?.parentElement;
+        const title = card?.querySelector('h3');
+        return title?.textContent ?? '';
+      })
+      .filter(Boolean);
+
+  it('filters boards by name, description, id, and owner nickname via the search input', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      makeBoard({ id: 'alpha', name: 'Alpha Roadmap', description: 'Q1 planning' }),
+      makeBoard({ id: 'beta', name: 'Beta Backlog', description: 'engineering' }),
+      makeBoard({ id: 'gamma', name: 'Gamma Notes', description: 'designed by GammaBot', ownerNickname: 'carol' }),
+      makeBoard({ id: 'delta', name: 'Delta', description: '' }),
+    ]);
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(4);
+    });
+
+    const input = screen.getByTestId('boards-search-input') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: 'beta' } });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(1);
+    });
+    expect(screen.getByText('Beta Backlog')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'alpha' } });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(1);
+    });
+    expect(screen.getByText('Alpha Roadmap')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'gammabot' } });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(1);
+    });
+    expect(screen.getByText('Gamma Notes')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'delta' } });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(1);
+    });
+    expect(screen.getByText('Delta')).toBeInTheDocument();
+  });
+
+  it('shows the no-results empty state when the search yields no match and clears on click', async () => {
+    mockedBoardsGetAll.mockResolvedValue([makeBoard({ id: 'alpha', name: 'Alpha' })]);
+
+    renderBoardsPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(1);
+    });
+
+    fireEvent.change(screen.getByTestId('boards-search-input'), { target: { value: 'nothing' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('boards-empty-filter')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('board-card-meta')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('boards-search-clear'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('boards-empty-filter')).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByTestId('board-card-meta')).toHaveLength(1);
+  });
+
+  it('sorts by lastActive descending (default) and ascending when toggled', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      makeBoard({ id: 'a', name: 'A', lastActiveAt: '2024-05-10T00:00:00Z' }),
+      makeBoard({ id: 'b', name: 'B', lastActiveAt: '2024-06-15T00:00:00Z' }),
+      makeBoard({ id: 'c', name: 'C', lastActiveAt: '2024-04-01T00:00:00Z' }),
+    ]);
+
+    renderBoardsPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(3);
+    });
+
+    expect(visibleBoardNames()).toEqual(['B', 'A', 'C']);
+
+    fireEvent.click(screen.getByTestId('boards-sort-order'));
+    expect(visibleBoardNames()).toEqual(['C', 'A', 'B']);
+  });
+
+  it('sorts by createdAt when the sort key changes', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      makeBoard({ id: 'a', name: 'A', createdAt: '2024-03-01T00:00:00Z', lastActiveAt: '2024-08-01T00:00:00Z' }),
+      makeBoard({ id: 'b', name: 'B', createdAt: '2024-06-01T00:00:00Z', lastActiveAt: '2024-04-01T00:00:00Z' }),
+      makeBoard({ id: 'c', name: 'C', createdAt: '2024-01-01T00:00:00Z', lastActiveAt: '2024-09-01T00:00:00Z' }),
+    ]);
+
+    renderBoardsPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(3);
+    });
+
+    fireEvent.change(screen.getByTestId('boards-sort-select'), { target: { value: 'createdAt' } });
+
+    expect(visibleBoardNames()).toEqual(['B', 'A', 'C']);
+  });
+
+  it('sorts by taskCount descending', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      makeBoard({ id: 'a', name: 'A', taskCount: 1 }),
+      makeBoard({ id: 'b', name: 'B', taskCount: 25 }),
+      makeBoard({ id: 'c', name: 'C', taskCount: 5 }),
+    ]);
+
+    renderBoardsPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(3);
+    });
+
+    fireEvent.change(screen.getByTestId('boards-sort-select'), { target: { value: 'taskCount' } });
+    expect(visibleBoardNames()).toEqual(['B', 'C', 'A']);
+  });
+
+  it('sorts by owner nickname (boards without owner go last)', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      makeBoard({ id: 'a', name: 'A', ownerNickname: 'carol' }),
+      makeBoard({ id: 'b', name: 'B', ownerNickname: 'alice', isOwner: true }),
+      makeBoard({ id: 'c', name: 'C', ownerNickname: '' }),
+    ]);
+
+    renderBoardsPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(3);
+    });
+
+    fireEvent.change(screen.getByTestId('boards-sort-select'), { target: { value: 'owner' } });
+    fireEvent.click(screen.getByTestId('boards-sort-order'));
+    expect(visibleBoardNames()).toEqual(['B', 'A', 'C']);
+  });
+
+  it('sorts by name alphabetically', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      makeBoard({ id: 'a', name: 'Charlie' }),
+      makeBoard({ id: 'b', name: 'Alpha' }),
+      makeBoard({ id: 'c', name: 'Bravo' }),
+    ]);
+
+    renderBoardsPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(3);
+    });
+
+    fireEvent.change(screen.getByTestId('boards-sort-select'), { target: { value: 'name' } });
+    fireEvent.click(screen.getByTestId('boards-sort-order'));
+    expect(visibleBoardNames()).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  });
+
+  it('renders last active, task count, and owner nickname on each card', async () => {
+    mockedBoardsGetAll.mockResolvedValue([
+      makeBoard({
+        id: 'a',
+        name: 'Alpha',
+        taskCount: 12,
+        lastActiveAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        ownerNickname: 'alice',
+      }),
+    ]);
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('board-task-count')).toHaveTextContent('12 board.taskCount');
+    });
+    expect(screen.getByTestId('board-last-active')).toHaveTextContent('taskModal.minutesAgo');
+    expect(screen.getByTestId('board-owner-nickname')).toHaveTextContent('alice');
+  });
+
+  it('handles 20+ boards: search responds in well under 200ms', async () => {
+    const bigList = Array.from({ length: 25 }, (_, i) =>
+      makeBoard({
+        id: `board-${i.toString().padStart(2, '0')}`,
+        name: i % 2 === 0 ? `Engineering Sprint ${i}` : `Marketing Plan ${i}`,
+        description: `description for ${i}`,
+        ownerNickname: i % 3 === 0 ? 'carol' : 'bob',
+        taskCount: i * 3,
+        lastActiveAt: new Date(2024, 5, 1 + i).toISOString(),
+        createdAt: new Date(2024, 0, 1 + i).toISOString(),
+      }),
+    );
+    mockedBoardsGetAll.mockResolvedValue(bigList);
+
+    renderBoardsPage();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(25);
+    });
+
+    const input = screen.getByTestId('boards-search-input') as HTMLInputElement;
+    const start = performance.now();
+    fireEvent.change(input, { target: { value: 'engineering' } });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('board-card-meta')).toHaveLength(13);
+    });
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(200);
+  });
+});

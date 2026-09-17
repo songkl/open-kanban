@@ -96,6 +96,25 @@ func setupBoardsVisibilityDB(t *testing.T) *sql.DB {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		description TEXT,
+		priority TEXT DEFAULT 'medium',
+		assignee TEXT,
+		meta TEXT,
+		column_id TEXT NOT NULL,
+		position INTEGER DEFAULT 0,
+		published BOOLEAN DEFAULT 0,
+		archived BOOLEAN DEFAULT 0,
+		archived_at DATETIME,
+		agent_id TEXT,
+		agent_prompt TEXT,
+		created_by TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE
+	);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to create schema: %v", err)

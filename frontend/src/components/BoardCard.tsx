@@ -13,6 +13,25 @@ interface BoardCardProps {
   onDelete: (id: string, name: string) => void;
 }
 
+// formatLastActive mirrors the existing relative-time helpers
+// (see NotificationCenter / ActivityLogPage) so the boards page
+// stays consistent with the rest of the app. Falls back to the
+// absolute date when the value is older than a week.
+function formatLastActive(iso: string | undefined, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diff = Date.now() - then;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < minute) return t('taskModal.justNow');
+  if (diff < hour) return t('taskModal.minutesAgo', { count: Math.round(diff / minute) });
+  if (diff < day) return t('taskModal.hoursAgo', { count: Math.round(diff / hour) });
+  if (diff < 7 * day) return t('taskModal.daysAgo', { count: Math.round(diff / day) });
+  return new Date(iso).toLocaleDateString();
+}
+
 export function BoardCard({
   board,
   onEdit,
@@ -24,6 +43,11 @@ export function BoardCard({
 }: BoardCardProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const lastActiveLabel = formatLastActive(board.lastActiveAt, t);
+  const lastActiveISO = board.lastActiveAt ?? '';
+  const taskCount = typeof board.taskCount === 'number' ? board.taskCount : null;
+  const ownerLabel = board.ownerNickname?.trim() || (board.isOwner ? t('board.ownerBadge') : '');
 
   return (
     <div className="group rounded-2xl bg-white dark:bg-zinc-700 p-5 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:shadow-xl dark:hover:border-zinc-600 transition-all duration-300">
@@ -64,9 +88,43 @@ export function BoardCard({
           <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">ID: {board.id}</p>
         </div>
       </div>
-      <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-5">
-        {t('board.createdAt')}: {new Date(board.createdAt).toLocaleDateString()}
-      </p>
+      <div
+        className="grid grid-cols-3 gap-2 mb-4 text-xs text-zinc-500 dark:text-zinc-400"
+        data-testid="board-card-meta"
+      >
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            {t('board.createdAt')}
+          </span>
+          <span className="truncate">{new Date(board.createdAt).toLocaleDateString()}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            {t('board.lastActive')}
+          </span>
+          <span
+            className="truncate"
+            data-testid="board-last-active"
+            title={lastActiveISO ? new Date(lastActiveISO).toLocaleString() : ''}
+          >
+            {lastActiveLabel || '—'}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            {t('board.taskCount', { count: 0 })}
+          </span>
+          <span className="truncate" data-testid="board-task-count">
+            {taskCount === null ? '—' : t('board.taskCount', { count: taskCount })}
+          </span>
+        </div>
+      </div>
+      {ownerLabel && (
+        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4" data-testid="board-owner-nickname">
+          <span className="text-zinc-400 dark:text-zinc-500">{t('board.owner')}: </span>
+          <span className="text-zinc-600 dark:text-zinc-300">{ownerLabel}</span>
+        </p>
+      )}
       {board.description && (
         <p className="text-xs text-zinc-500 dark:text-zinc-500 mb-4 line-clamp-2">{board.description}</p>
       )}

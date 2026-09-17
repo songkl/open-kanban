@@ -155,8 +155,11 @@ export interface Board {
   description?: string;
   isPublic?: boolean;
   ownerAgentId?: string | null;
+  ownerNickname?: string;
   effectiveAccess?: string;
   isOwner?: boolean;
+  taskCount?: number;
+  lastActiveAt?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -3,12 +3,57 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"open-kanban/internal/models"
 )
+
+// parseSQLiteTimestamp tries the common layouts SQLite hands
+// back for a DATETIME column when the result is computed via an
+// aggregate (e.g. MAX(t.updated_at)) rather than read straight
+// from a column. The mattn/go-sqlite3 driver returns such values
+// as driver.Value=string, so the columns have to be parsed
+// manually before they can be scanned into time.Time.
+func parseSQLiteTimestamp(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	layouts := []string{
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02T15:04:05.999999999-07:00",
+		"2006-01-02T15:04:05.999999999Z",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05",
+		time.RFC3339Nano,
+		time.RFC3339,
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// scanLastActive reads the raw driver value for `last_active_at`
+// (a string when sourced from a subquery) and converts it into a
+// time.Time. Falls back to the board's own updated_at when the
+// subquery returns no rows.
+func scanLastActive(raw sql.NullString, fallback time.Time) time.Time {
+	if !raw.Valid {
+		return fallback
+	}
+	if t, ok := parseSQLiteTimestamp(raw.String); ok {
+		return t
+	}
+	return fallback
+}
 
 // GetBoards returns the list of non-deleted boards.
 //
@@ -38,6 +83,17 @@ import (
 // Result order is owner > ADMIN > WRITE > READ (descending) for
 // authenticated callers; ascending by created_at is preserved as
 // the tiebreaker so the listing stays stable across calls.
+//
+// Every row carries three helper fields for the boards-page UI:
+//   - `taskCount`: number of tasks across all columns of the
+//     board (0 for empty boards).
+//   - `lastActiveAt`: most recent task updated_at for the board,
+//     falling back to board.updated_at when the board has no
+//     tasks. Lets the client sort boards by recent activity
+//     without an extra round trip.
+//   - `ownerNickname`: nickname of the user whose
+//     board_permissions row carries owner_agent_id. Empty when
+//     the board has no recorded owner.
 func GetBoards(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -65,7 +121,19 @@ func GetBoards(db *sql.DB) gin.HandlerFunc {
 func writeAnonymousBoards(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(`
 		SELECT id, name, COALESCE(description, ''), deleted, created_at, updated_at,
-			(SELECT COUNT(*) FROM columns WHERE board_id = b.id) as column_count
+			(SELECT COUNT(*) FROM columns WHERE board_id = b.id) as column_count,
+			COALESCE(
+				(SELECT u.nickname FROM board_permissions bp
+				 JOIN users u ON u.id = bp.owner_agent_id
+				 WHERE bp.board_id = b.id AND bp.owner_agent_id IS NOT NULL
+				 LIMIT 1),
+				''
+			) as owner_nickname,
+			COALESCE(
+				(SELECT COUNT(*) FROM tasks t JOIN columns c ON t.column_id = c.id WHERE c.board_id = b.id),
+				0
+			) as task_count,
+			(SELECT MAX(t.updated_at) FROM tasks t JOIN columns c ON t.column_id = c.id WHERE c.board_id = b.id) as last_active_at
 		FROM boards b
 		WHERE deleted = false AND is_public = 1
 		ORDER BY created_at ASC
@@ -81,8 +149,11 @@ func writeAnonymousBoards(c *gin.Context, db *sql.DB) {
 		var id, name, description string
 		var deleted bool
 		var createdAt, updatedAt time.Time
-		var columnCount int
-		if err := rows.Scan(&id, &name, &description, &deleted, &createdAt, &updatedAt, &columnCount); err == nil {
+		var columnCount, taskCount int
+		var ownerNickname string
+		var lastActiveRaw sql.NullString
+		if err := rows.Scan(&id, &name, &description, &deleted, &createdAt, &updatedAt, &columnCount, &ownerNickname, &taskCount, &lastActiveRaw); err == nil {
+			effective := scanLastActive(lastActiveRaw, updatedAt)
 			boards = append(boards, gin.H{
 				"id":              id,
 				"name":            name,
@@ -93,6 +164,9 @@ func writeAnonymousBoards(c *gin.Context, db *sql.DB) {
 				"updatedAt":       updatedAt,
 				"effectiveAccess": "",
 				"isOwner":         false,
+				"taskCount":       taskCount,
+				"lastActiveAt":    effective,
+				"ownerNickname":   ownerNickname,
 				"_count": gin.H{
 					"columns": columnCount,
 				},
@@ -123,7 +197,19 @@ func writeAuthenticatedBoards(c *gin.Context, db *sql.DB, user *models.User) {
 		SELECT b.id, b.name, COALESCE(b.description, ''), b.is_public, b.deleted, b.created_at, b.updated_at,
 			(SELECT COUNT(*) FROM columns WHERE board_id = b.id) as column_count,
 			COALESCE(bp.access, '') as access,
-			bp.owner_agent_id
+			bp.owner_agent_id,
+			COALESCE(
+				(SELECT u.nickname FROM board_permissions bp2
+				 JOIN users u ON u.id = bp2.owner_agent_id
+				 WHERE bp2.board_id = b.id AND bp2.owner_agent_id IS NOT NULL
+				 LIMIT 1),
+				''
+			) as owner_nickname,
+			COALESCE(
+				(SELECT COUNT(*) FROM tasks t JOIN columns c ON t.column_id = c.id WHERE c.board_id = b.id),
+				0
+			) as task_count,
+			(SELECT MAX(t.updated_at) FROM tasks t JOIN columns c ON t.column_id = c.id WHERE c.board_id = b.id) as last_active_at
 		FROM boards b
 		LEFT JOIN board_permissions bp ON bp.board_id = b.id AND bp.user_id = ?
 		WHERE b.deleted = false
@@ -150,9 +236,11 @@ func writeAuthenticatedBoards(c *gin.Context, db *sql.DB, user *models.User) {
 		var isPublic bool
 		var deleted bool
 		var createdAt, updatedAt time.Time
-		var columnCount int
+		var columnCount, taskCount int
 		var ownerAgentID sql.NullString
-		if err := rows.Scan(&id, &name, &description, &isPublic, &deleted, &createdAt, &updatedAt, &columnCount, &access, &ownerAgentID); err != nil {
+		var ownerNickname string
+		var lastActiveRaw sql.NullString
+		if err := rows.Scan(&id, &name, &description, &isPublic, &deleted, &createdAt, &updatedAt, &columnCount, &access, &ownerAgentID, &ownerNickname, &taskCount, &lastActiveRaw); err != nil {
 			continue
 		}
 
@@ -183,6 +271,8 @@ func writeAuthenticatedBoards(c *gin.Context, db *sql.DB, user *models.User) {
 			effectiveAccess = "ADMIN"
 		}
 
+		effective := scanLastActive(lastActiveRaw, updatedAt)
+
 		boards = append(boards, gin.H{
 			"id":              id,
 			"name":            name,
@@ -193,6 +283,9 @@ func writeAuthenticatedBoards(c *gin.Context, db *sql.DB, user *models.User) {
 			"updatedAt":       updatedAt,
 			"effectiveAccess": effectiveAccess,
 			"isOwner":         isOwner,
+			"taskCount":       taskCount,
+			"lastActiveAt":    effective,
+			"ownerNickname":   ownerNickname,
 			"_count": gin.H{
 				"columns": columnCount,
 			},
