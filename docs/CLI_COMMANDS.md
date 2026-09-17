@@ -950,6 +950,33 @@ Validation rules (loop refuses to start when any fails):
 - `mode: mine` is selected but the active CLI profile is not logged in.
 - Both `boardId` + `status` are missing AND `mode` is not `mine`.
 
+#### Startup health probe / 启动时的健康检查
+
+Right after the loop is constructed, `defaultBuildLoop` issues a one-shot
+`GET /api/v1/boards` (and, for mode-1, `GET /api/v1/columns?boardId=…`) to
+make sure the config still points at a board / status that exist on the
+server. If the configured `boardId` is missing — usually because the
+server's seeded boards were reset, or the operator is pointing at a
+stale config from a different environment — the loop logs a single
+`[kanban-runner] warn:` line per problem and keeps running. This keeps
+the user from having to drop into `--debug` archaeology just to figure
+out why every claim returns `204 / no-content (idle)`.
+
+```text
+$ kanban run --board sys --status todo
+[kanban-runner] runner host-1234-abcd starting
+[kanban-runner] debug: loop config: mode=board boardId=sys status=todo …
+[kanban-runner] warn: configured boardId is missing on the server; available boards: default
+[kanban-runner] warn: hint: re-run `kanban run init` (or pass --board on the CLI) to point at an existing board
+[kanban-runner] debug: claim attempt: boardId=sys status=todo mode=board
+[kanban-runner] debug: claim returned 204/no-content (idle)
+…
+```
+
+The probe is fire-and-forget — HTTP failures (network down, 401, etc.)
+are swallowed so the loop's own retry path keeps being the source of
+truth for transport errors. mode=`mine` skips the probe entirely.
+
 ### `run init` — interactive wizard / 交互式配置向导
 
 ```

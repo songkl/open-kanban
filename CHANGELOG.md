@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### CLI runner — config health probe (s-1160)
+
+- **New `probeRunnerConfigHealth` / `formatRunnerConfigHealth`
+  helpers** in `cli/src/commands/run.ts`. They hit
+  `GET /api/v1/boards` (and `GET /api/v1/columns?boardId=…`)
+  once at startup so a stale `.kanban-runner.yaml` — typically
+  one pointing at a board that was deleted, or a status that
+  was renamed — surfaces a clear `[kanban-runner] warn: …` line
+  instead of leaving the user staring at an endless stream of
+  `claim returned 204/no-content (idle)` debug lines.
+- The probe is fire-and-forget; HTTP failures are swallowed so
+  transport problems still surface through the loop's existing
+  retry path. mode=`mine` skips the probe entirely.
+- 7 new unit tests in `cli/tests/commands/run.test.ts` cover
+  the four observable outcomes (board missing, status missing,
+  both fine, mode=mine skip) plus HTTP-failure swallowing.
+- Also fixed a pre-existing flake in
+  `run.test.ts > surfaces RunnerConfigError as InvalidUsageError`
+  that started timing out once a real `.kanban-runner.yaml`
+  landed in the repo root (s-1188); the test now runs in a
+  fresh tmpdir so the walk-up discovery can't leak into it.
+
 ### Event Center — multi-stage Webhook
 
 > **Status**: in progress. The infrastructure laid out in

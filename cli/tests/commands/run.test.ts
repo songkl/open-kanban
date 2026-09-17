@@ -15,9 +15,11 @@ import {
   buildCommentPoster,
   defaultBuildLoop,
   defaultRunnerId,
+  formatRunnerConfigHealth,
   InvalidUsageError,
   oauthLoggedInPredicate,
   parseRunFlags,
+  probeRunnerConfigHealth,
   resolveAgentType,
   resolveRunnerConfig,
   runRunCommand,
@@ -436,12 +438,16 @@ describe("runRunCommand", () => {
   });
 
   it("surfaces RunnerConfigError as InvalidUsageError", async () => {
+    const dir = freshDir("kanban-runner-empty-");
     const { http, oauth } = makeAuthedClient();
-    // No boardId / status / mine → validator should reject.
+    // Empty directory → no .kanban-runner.yaml discovery → no
+    // boardId / status / mine → validator should reject. We use a
+    // fresh tmpdir so the repo's own .kanban-runner.yaml (added
+    // in s-1188) doesn't leak into the discovery walk-up.
     await expect(
       runRunCommand(
         { apiUrl: "http://kanban.example.com" },
-        { http, oauth, cwd: process.cwd() }
+        { http, oauth, cwd: dir }
       )
     ).rejects.toBeInstanceOf(InvalidUsageError);
   });
@@ -830,5 +836,118 @@ describe("runRunCommand — --debug plumbing", () => {
     );
     const call = buildLoop.mock.calls[0][0] as { debug?: boolean };
     expect(call.debug).toBe(false);
+  });
+});
+
+describe("probeRunnerConfigHealth", () => {
+  function makeHttpReturning(responses: ScriptedResponse[]): HttpClient {
+    const spy = vi.fn(async () => {
+      const r = responses.shift() ?? { status: 500, body: { error: "no response scripted" } };
+      return new Response(
+        r.body === undefined ? "" : JSON.stringify(r.body),
+        { status: r.status, headers: { "Content-Type": "application/json" } }
+      );
+    });
+    vi.spyOn(globalThis, "fetch").mockImplementation(spy);
+    return new HttpClient({ apiUrl: "http://kanban.example.com" });
+  }
+
+  it("flags missing boardId and lists available boards", async () => {
+    const http = makeHttpReturning([
+      { status: 200, body: [{ id: "default", name: "default" }] },
+    ]);
+    const health = await probeRunnerConfigHealth(http, {
+      boardId: "sys",
+      status: "todo",
+    } as RunnerConfig);
+    expect(health.boardNotFound).toBe(true);
+    expect(health.availableBoardIds).toEqual(["default"]);
+    expect(health.hint).toMatch(/kanban run init|--board/);
+  });
+
+  it("flags missing status but keeps boardNotFound false when board exists", async () => {
+    const http = makeHttpReturning([
+      { status: 200, body: [{ id: "default", name: "default" }] },
+      {
+        status: 200,
+        body: [
+          { id: "dai-default", status: "todo" },
+          { id: "zhong-default", status: "in_progress" },
+        ],
+      },
+    ]);
+    const health = await probeRunnerConfigHealth(http, {
+      boardId: "default",
+      status: "review",
+    } as RunnerConfig);
+    expect(health.boardNotFound).toBe(false);
+    expect(health.statusNotFound).toBe(true);
+    expect(health.availableStatuses).toEqual(["todo", "in_progress"]);
+    expect(health.hint).toMatch(/--status/);
+  });
+
+  it("returns empty health when board + status both exist", async () => {
+    const http = makeHttpReturning([
+      { status: 200, body: [{ id: "default", name: "default" }] },
+      { status: 200, body: [{ id: "dai-default", status: "todo" }] },
+    ]);
+    const health = await probeRunnerConfigHealth(http, {
+      boardId: "default",
+      status: "todo",
+    } as RunnerConfig);
+    expect(health.boardNotFound).toBe(false);
+    expect(health.statusNotFound).toBe(false);
+    expect(health.hint).toBe("");
+    expect(formatRunnerConfigHealth(health)).toEqual([]);
+  });
+
+  it("skips the probe for mode=mine", async () => {
+    const http = makeHttpReturning([]);
+    const health = await probeRunnerConfigHealth(http, {
+      mode: "mine",
+    } as RunnerConfig);
+    expect(health.boardNotFound).toBe(false);
+    expect(health.statusNotFound).toBe(false);
+    // No fetch should have been issued.
+    expect(http).toBeDefined();
+  });
+
+  it("swallows HTTP failures and returns empty health", async () => {
+    const http = makeHttpReturning([
+      { status: 500, body: { error: "boom" } },
+    ]);
+    const health = await probeRunnerConfigHealth(http, {
+      boardId: "sys",
+      status: "todo",
+    } as RunnerConfig);
+    expect(health.boardNotFound).toBe(false);
+    expect(health.availableBoardIds).toEqual([]);
+    expect(health.statusNotFound).toBe(false);
+  });
+
+  it("combines boardNotFound + statusNotFound into a single hint", async () => {
+    const http = makeHttpReturning([
+      { status: 200, body: [{ id: "default", name: "default" }] },
+      { status: 200, body: [] },
+    ]);
+    const health = await probeRunnerConfigHealth(http, {
+      boardId: "sys",
+      status: "todo",
+    } as RunnerConfig);
+    expect(health.boardNotFound).toBe(true);
+    expect(health.statusNotFound).toBe(false); // columns not probed when board missing
+    expect(health.hint).toMatch(/kanban run init/);
+  });
+
+  it("renders the available boards in the formatted output", async () => {
+    const http = makeHttpReturning([
+      { status: 200, body: [{ id: "default", name: "default" }, { id: "demo", name: "demo" }] },
+    ]);
+    const health = await probeRunnerConfigHealth(http, {
+      boardId: "sys",
+      status: "todo",
+    } as RunnerConfig);
+    const lines = formatRunnerConfigHealth(health);
+    expect(lines.join("\n")).toMatch(/default, demo/);
   });
 });

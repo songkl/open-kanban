@@ -69,6 +69,25 @@ export class InvalidUsageError extends Error {
 
 const ALLOWED_STATUSES: readonly RunnerStatus[] = ["todo", "in_progress", "review", "done"];
 
+/**
+ * Health issues found while probing the server against the supplied
+ * runner config. Each entry is a human-readable sentence the loop
+ * can log at startup so operators see why every claim returns 204
+ * instead of having to dig through `--debug` traces.
+ */
+export interface RunnerConfigHealth {
+  /** True when the supplied boardId does not exist on the server. */
+  boardNotFound: boolean;
+  /** Board IDs that DO exist — empty when the board list itself failed. */
+  availableBoardIds: string[];
+  /** True when the board has no column matching the configured status. */
+  statusNotFound: boolean;
+  /** Status values that DO exist on the configured board (empty when probe failed). */
+  availableStatuses: string[];
+  /** Optional hint describing the recovery path (e.g. "run `kanban run init`"). */
+  hint: string;
+}
+
 export interface RunCommandOptions {
   /** Path to a runner config file (overrides discovery). */
   configPath?: string;
@@ -321,6 +340,129 @@ export function buildCommentPoster(
 }
 
 /**
+ * Probe the running kanban server to see whether the supplied runner
+ * config actually points at a board + column that exist. The loop's
+ * idle-path debug log (`claim returned 204/no-content (idle)`) is
+ * technically correct but completely opaque: an operator with a
+ * stale `.kanban-runner.yaml` pointing at a board the server never
+ * had will spin forever wondering why nothing ever lands. Calling
+ * this once at startup turns that silence into a clear "configured
+ * boardId 'sys' does not exist; available boards: default" line so
+ * the user can fix the config without `--debug` archaeology.
+ *
+ * Behaviour:
+ *   - mode-2 (`mine`) skips the probe — there's no boardId to
+ *     validate, and `userHasAnyClaimableTask` already returns 403
+ *     upstream if the user owns no tasks.
+ *   - Any HTTP failure (network down, 401, etc.) is swallowed and
+ *     returns an empty health object. The loop's normal retry
+ *     machinery will surface the real error on the next claim;
+ *     we don't want to mask transport problems with a misleading
+ *     "board not found" warning.
+ *   - When we DO find a problem we still let the loop run. Operators
+ *     may have intentionally started the runner before creating the
+ *     board, and the loop will keep retrying with back-off either
+ *     way; the warning just makes the why-it-doesn't-work visible.
+ */
+export async function probeRunnerConfigHealth(
+  http: HttpClient,
+  config: RunnerConfig
+): Promise<RunnerConfigHealth> {
+  const empty: RunnerConfigHealth = {
+    boardNotFound: false,
+    availableBoardIds: [],
+    statusNotFound: false,
+    availableStatuses: [],
+    hint: "",
+  };
+  if (config.mode === "mine") return empty;
+  const boardId = config.boardId;
+  if (!boardId) return empty;
+
+  type BoardSummary = { id?: string; name?: string };
+  type ColumnSummary = { id?: string; name?: string; status?: string };
+  let boards: BoardSummary[] = [];
+  try {
+    const raw = await http.apiGet<BoardSummary[]>("/api/v1/boards");
+    boards = Array.isArray(raw) ? raw : [];
+  } catch {
+    return empty;
+  }
+  const availableBoardIds = boards
+    .map((b) => b.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  const boardNotFound = !availableBoardIds.includes(boardId);
+
+  let availableStatuses: string[] = [];
+  let statusNotFound = false;
+  if (!boardNotFound) {
+    try {
+      const raw = await http.apiGet<ColumnSummary[]>(
+        `/api/v1/columns?boardId=${encodeURIComponent(boardId)}`
+      );
+      const cols = Array.isArray(raw) ? raw : [];
+      availableStatuses = cols
+        .map((c) => c.status)
+        .filter((s): s is string => typeof s === "string" && s.length > 0);
+      if (config.status && !availableStatuses.includes(config.status)) {
+        statusNotFound = true;
+      }
+    } catch {
+      // Leave availableStatuses empty; column probe failed. The
+      // boardNotFound flag is the more important signal anyway.
+    }
+  }
+
+  let hint = "";
+  if (boardNotFound && statusNotFound) {
+    hint =
+      "re-run `kanban run init` (or pass --board/--status on the CLI) to pick a board and status that exist on the server";
+  } else if (boardNotFound) {
+    hint =
+      "re-run `kanban run init` (or pass --board on the CLI) to point at an existing board";
+  } else if (statusNotFound) {
+    hint =
+      "re-run `kanban run init` (or pass --status on the CLI) to pick a status present on the configured board";
+  }
+
+  return {
+    boardNotFound,
+    availableBoardIds,
+    statusNotFound,
+    availableStatuses,
+    hint,
+  };
+}
+
+/**
+ * Render a `RunnerConfigHealth` as a sequence of human-readable lines
+ * the loop's stderr logger can emit at startup. Returns an empty
+ * array when the health probe found no problems so the caller can
+ * skip the log calls entirely.
+ */
+export function formatRunnerConfigHealth(health: RunnerConfigHealth): string[] {
+  const lines: string[] = [];
+  if (health.boardNotFound) {
+    lines.push(
+      health.availableBoardIds.length > 0
+        ? `configured boardId is missing on the server; available boards: ${health.availableBoardIds.join(", ")}`
+        : "configured boardId is missing on the server; the board list returned no rows"
+    );
+  }
+  if (health.statusNotFound) {
+    lines.push(
+      health.availableStatuses.length > 0
+        ? `configured status is missing on the configured board; available statuses: ${health.availableStatuses.join(", ")}`
+        : "configured status is missing on the configured board; the column list returned no rows"
+    );
+  }
+  if (health.hint) {
+    lines.push(`hint: ${health.hint}`);
+  }
+  return lines;
+}
+
+/**
  * Default loop factory: wires `RunClaimClient` + `HeartbeatScheduler`
  * + `ChildProcessSpawner` + the `TaskHydrator` against the supplied
  * `HttpClient`. Tests can pass a `buildLoop` override to inject a stub.
@@ -338,6 +480,14 @@ export function buildCommentPoster(
  * the runner. mode=mine (no boardId) skips the subscription because
  * the server doesn't broadcast "your task" events on the global
  * stream — the poll path is the only mechanism there.
+ *
+ * As of s-1160 we also run a one-shot config health probe so a
+ * stale `.kanban-runner.yaml` (board deleted, status renamed, …)
+ * surfaces a clear error at startup instead of leaving the user
+ * staring at an endless stream of `claim returned 204/no-content
+ * (idle)` debug lines. The probe is fire-and-forget — it never
+ * blocks the loop and any HTTP failure is swallowed (the loop's
+ * own error path will surface transport problems).
  */
 export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
   const { config, runnerId, agentType, http, signal, abortController, debug } = deps;
@@ -365,7 +515,39 @@ export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
     logger: stderrLoopLogger({ debug: debug === true }),
   });
   startBoardWatcherIfPossible({ loop, config, http, signal, debug });
+  runConfigHealthProbe({ config, http, debug });
   return loop;
+}
+
+interface ConfigHealthProbeDeps {
+  config: RunnerConfig;
+  http: HttpClient;
+  debug?: boolean;
+}
+
+/**
+ * Fire-and-forget health probe wired by `defaultBuildLoop`. Runs
+ * once at startup, swallows all errors, and emits a single
+ * `[kanban-runner] warn:` line per problem it discovers. We don't
+ * block the loop on the probe because (a) the loop is perfectly
+ * capable of running while the probe runs, and (b) we never want
+ * a probe failure to be louder than the loop's own error path.
+ */
+function runConfigHealthProbe(deps: ConfigHealthProbeDeps): void {
+  const { config, http, debug } = deps;
+  const log = stderrLoopLogger({ debug: debug === true });
+  void (async () => {
+    try {
+      const health = await probeRunnerConfigHealth(http, config);
+      for (const line of formatRunnerConfigHealth(health)) {
+        log.warn(line);
+      }
+    } catch (err) {
+      log.debug(
+        `config health probe failed: ${(err as Error).message ?? String(err)}`
+      );
+    }
+  })();
 }
 
 interface BoardWatcherDeps {
