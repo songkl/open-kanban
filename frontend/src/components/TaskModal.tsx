@@ -801,6 +801,49 @@ export function TaskModal({
             </div>
 
             {/* Grid Layout for Edit Mode */}
+            {/* s-1202: surface assignee + last runner explicitly in the
+                drawer (read-only view) so the operator sees both fields
+                without having to scroll into the Run info section. Mirrors
+                the card footer chips: 👤 for assignee, 🤖 for runner.
+                PM_REVIEW_2026-09-17 §3.2 finding #3. */}
+            {!isEditing && (task.assignee || (run && run.runnerId)) && (
+              <div
+                className="mb-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-700/40 px-4 py-3"
+                data-testid="task-modal-people"
+              >
+                <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5 text-xs">
+                  {task.assignee && (
+                    <>
+                      <dt className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                        <span aria-hidden>👤</span>
+                        <span>{t('taskModal.assigneeFieldLabel')}</span>
+                      </dt>
+                      <dd
+                        className="text-zinc-700 dark:text-zinc-200"
+                        data-testid="task-modal-assignee"
+                      >
+                        {task.assignee}
+                      </dd>
+                    </>
+                  )}
+                  {run && run.runnerId && (
+                    <>
+                      <dt className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                        <span aria-hidden>🤖</span>
+                        <span>{t('taskModal.lastRunnerFieldLabel')}</span>
+                      </dt>
+                      <dd
+                        className="font-mono text-zinc-700 dark:text-zinc-200 break-all"
+                        title={run.runnerId}
+                        data-testid="task-modal-last-runner"
+                      >
+                        {run.runnerId}
+                      </dd>
+                    </>
+                  )}
+                </dl>
+              </div>
+            )}
             {isEditing && (
               <div className="mb-6 grid grid-cols-2 gap-4">
                 <div>

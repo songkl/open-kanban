@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
   - feat: add full-width mobile SearchBar with leading icon and 32px clear button (s-1192)
   - i18n: add filter.clearSearch key (s-1192)
   - test: add mobile layout tests for SearchBar, BoardToolbar, Column and a new ColumnBoard.test.tsx (s-1192)
+  - feat: split task card assignee and last-runner semantics — the footer now renders a 👤 assignee chip and a separate 🤖 last-runner chip with explicit tooltips, and the task detail drawer surfaces both fields in their own labelled rows so operators can no longer mistake a Runner device name for the real owner (s-1202)
+  - feat: add explicit "Created by" tooltip to the creator avatar on the task card so the previously unexplained avatar now reads as the task author (s-1202)
+  - i18n: add taskCard.{assigneeBadgeTitle,assigneeBadgeAria,lastRunnerBadgeTitle,lastRunnerBadgeAria,createdByTooltip,unassigned} and taskModal.{assigneeFieldLabel,assigneeFieldUnassigned,lastRunnerFieldLabel} (s-1202)
+  - test: cover the new task-card assignee/last-runner chips and the drawer people section (s-1202)
 
 ### Documentation
 

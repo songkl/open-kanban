@@ -843,7 +843,13 @@
     "runnerBadgeAria": "Runner {{runnerId}} is working on this task ({{elapsed}})",
     "runnerElapsedSeconds": "{{count}}s",
     "runnerElapsedMinutes": "{{count}}m",
-    "runnerElapsedHours": "{{count}}h"
+    "runnerElapsedHours": "{{count}}h",
+    "assigneeBadgeTitle": "Assignee: {{name}}",
+    "assigneeBadgeAria": "Assigned to {{name}}",
+    "lastRunnerBadgeTitle": "Last runner: {{runnerId}}",
+    "lastRunnerBadgeAria": "Last runner on this task was {{runnerId}}",
+    "createdByTooltip": "Created by {{name}}",
+    "unassigned": "Unassigned"
   },
   "taskModal": {
     "justNow": "Just now",
@@ -920,7 +926,10 @@
     "runTimelineTitle": "Run timeline",
     "runTimelineStepClaimed": "Claimed",
     "runTimelineStepRunning": "Running",
-    "runTimelineStepFinished": "Finished"
+    "runTimelineStepFinished": "Finished",
+    "assigneeFieldLabel": "Assignee",
+    "assigneeFieldUnassigned": "Unassigned",
+    "lastRunnerFieldLabel": "Last runner"
   },
   "skeleton": {
     "loading": "Loading..."

@@ -378,23 +378,58 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* s-1202: assign distinct icons to assignee vs last runner so
+              the user can no longer mistake a Runner device name for the
+              task's real owner. The "Created by" tooltip explicitly
+              spells out what the red avatar represents — previously it
+              carried no explanation (PM_REVIEW_2026-09-17 §3.2). */}
+          {task.assignee && (
+            <span
+              className="flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300 max-w-[9rem]"
+              title={t('taskCard.assigneeBadgeTitle', { name: task.assignee })}
+              aria-label={t('taskCard.assigneeBadgeAria', { name: task.assignee })}
+              data-testid="task-card-assignee-badge"
+            >
+              <span aria-hidden className="text-[11px] leading-none">👤</span>
+              <span className="truncate">{task.assignee}</span>
+            </span>
+          )}
+          {run && (
+            <span
+              className="flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300 max-w-[9rem]"
+              title={t('taskCard.lastRunnerBadgeTitle', { runnerId: run.runnerId })}
+              aria-label={t('taskCard.lastRunnerBadgeAria', { runnerId: run.runnerId })}
+              data-testid="task-card-last-runner-badge"
+            >
+              <span aria-hidden className="text-[11px] leading-none">🤖</span>
+              <span className="truncate font-mono">
+                {run.runnerId.length > 14 ? `${run.runnerId.slice(0, 11)}…` : run.runnerId}
+              </span>
+            </span>
+          )}
           {(task.createdByNickname || task.createdByUsername) && (
             <div
               className="flex items-center gap-1.5"
-              title={t('taskModal.createdBy')}
+              title={t('taskCard.createdByTooltip', {
+                name: task.createdByNickname || task.createdByUsername || '',
+              })}
+              aria-label={t('taskCard.createdByTooltip', {
+                name: task.createdByNickname || task.createdByUsername || '',
+              })}
+              data-testid="task-card-created-by"
             >
               <UserAvatar
                 username={task.createdByNickname || task.createdByUsername || ''}
                 avatar={task.createdByAvatar}
                 size="sm"
+                title={t('taskCard.createdByTooltip', {
+                  name: task.createdByNickname || task.createdByUsername || '',
+                })}
               />
               <span className="text-xs text-zinc-500 dark:text-zinc-500 truncate max-w-[8rem]">
                 {task.createdByNickname || task.createdByUsername}
               </span>
             </div>
-          )}
-          {task.assignee && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-400">{task.assignee}</span>
           )}
           {((task._count?.comments ?? 0) > 0 || (task.comments && task.comments.length > 0)) && (
             <span

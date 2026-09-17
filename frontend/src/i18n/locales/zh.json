@@ -843,7 +843,13 @@
     "runnerBadgeAria": "运行器 {{runnerId}} 正在处理此任务（已运行 {{elapsed}}）",
     "runnerElapsedSeconds": "{{count}}秒",
     "runnerElapsedMinutes": "{{count}}分",
-    "runnerElapsedHours": "{{count}}时"
+    "runnerElapsedHours": "{{count}}时",
+    "assigneeBadgeTitle": "负责人：{{name}}",
+    "assigneeBadgeAria": "已分配给 {{name}}",
+    "lastRunnerBadgeTitle": "最近运行器：{{runnerId}}",
+    "lastRunnerBadgeAria": "此任务最近一次由 {{runnerId}} 运行",
+    "createdByTooltip": "由 {{name}} 创建",
+    "unassigned": "未分配"
   },
   "taskModal": {
     "justNow": "刚刚",
@@ -920,7 +926,10 @@
     "runTimelineTitle": "运行时间线",
     "runTimelineStepClaimed": "已认领",
     "runTimelineStepRunning": "运行中",
-    "runTimelineStepFinished": "已完成"
+    "runTimelineStepFinished": "已完成",
+    "assigneeFieldLabel": "负责人",
+    "assigneeFieldUnassigned": "未分配",
+    "lastRunnerFieldLabel": "最近运行器"
   },
   "skeleton": {
     "loading": "加载中..."

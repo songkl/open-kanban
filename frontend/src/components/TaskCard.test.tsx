@@ -74,6 +74,53 @@ describe('TaskCard', () => {
     expect(screen.getByText('John Doe')).toBeInTheDocument();
   });
 
+  // s-1202: assignee badge carries an explicit tooltip and aria-label so
+  // it cannot be confused with the runner chip (PM_REVIEW_2026-09-17
+  // §3.2 finding #1). We assert the badge container via its data-testid
+  // and the human/agent icon prefix that the previous plain text didn't
+  // have.
+  it('renders assignee badge with explicit Assignee tooltip', () => {
+    render(<TaskCard {...defaultProps} />);
+    const badge = screen.getByTestId('task-card-assignee-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute('title', 'taskCard.assigneeBadgeTitle');
+    expect(badge).toHaveAttribute('aria-label', 'taskCard.assigneeBadgeAria');
+  });
+
+  it('renders last-runner badge with explicit Runner tooltip when run is provided', () => {
+    const run = {
+      id: 'run-1',
+      taskId: 'task-1',
+      runnerId: 'Mac-66681-9af0',
+      agentId: null,
+      status: 'running' as const,
+      claimedAt: '2024-01-01T00:00:00Z',
+      lastHeartbeatAt: '2024-01-01T00:00:00Z',
+      expiresAt: '2024-01-01T00:10:00Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    };
+    render(<TaskCard {...defaultProps} run={run} />);
+    const badge = screen.getByTestId('task-card-last-runner-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute('title', 'taskCard.lastRunnerBadgeTitle');
+    expect(badge).toHaveAttribute('aria-label', 'taskCard.lastRunnerBadgeAria');
+    expect(badge.textContent).toContain('Mac-66681-9');
+  });
+
+  it('omits the last-runner badge when no run is provided', () => {
+    render(<TaskCard {...defaultProps} />);
+    expect(screen.queryByTestId('task-card-last-runner-badge')).not.toBeInTheDocument();
+  });
+
+  it('labels the creator avatar with an explicit Created-by tooltip', () => {
+    render(<TaskCard {...defaultProps} />);
+    const createdBy = screen.getByTestId('task-card-created-by');
+    expect(createdBy).toHaveAttribute('title', 'taskCard.createdByTooltip');
+    expect(createdBy).toHaveAttribute('aria-label', 'taskCard.createdByTooltip');
+  });
+
   it('calls onClick when view details button is clicked', () => {
     render(<TaskCard {...defaultProps} />);
     fireEvent.click(screen.getByTitle('taskCard.viewDetails'));

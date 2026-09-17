@@ -734,4 +734,63 @@ describe('TaskModal', () => {
       expect(statusBadge).toHaveTextContent('taskModal.runStatus.released');
     });
   });
+
+  /**
+   * s-1202 (PM_REVIEW §3.2 finding #3): the drawer must surface both
+   * `tasks.assignee` and `task_runs.runner` explicitly in read-only mode
+   * so operators can see who owns the task vs. who last ran it without
+   * hunting through the run-info panel. The chip rendered in the card
+   * footer is the visual twin of the row rendered here.
+   */
+  describe('assignee + last runner people section (s-1202)', () => {
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('renders the assignee row with the explicit field label', () => {
+      render(<TaskModal {...defaultProps} />);
+      expect(screen.getByTestId('task-modal-assignee')).toHaveTextContent('John');
+      // The label key should also be visible so translators can verify
+      // localisation without re-reading the implementation.
+      expect(screen.getByText('taskModal.assigneeFieldLabel')).toBeInTheDocument();
+    });
+
+    it('renders the last-runner row when a run row exists', () => {
+      useTaskRunMock.mockReturnValue({
+        run: {
+          id: 'run-1',
+          taskId: 'task-1',
+          runnerId: 'Mac-66681-9abc',
+          agentId: null,
+          status: 'running',
+          claimedAt: '2026-09-17T10:00:00.000Z',
+          lastHeartbeatAt: '2026-09-17T10:00:30.000Z',
+          expiresAt: '2026-09-17T10:02:00.000Z',
+          finishedAt: null,
+          exitCode: null,
+          error: null,
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      const lastRunner = screen.getByTestId('task-modal-last-runner');
+      expect(lastRunner).toHaveTextContent('Mac-66681-9abc');
+      expect(lastRunner).toHaveAttribute('title', 'Mac-66681-9abc');
+      expect(screen.getByText('taskModal.lastRunnerFieldLabel')).toBeInTheDocument();
+    });
+
+    it('omits the last-runner row when no run row exists', () => {
+      render(<TaskModal {...defaultProps} />);
+      expect(screen.queryByTestId('task-modal-last-runner')).not.toBeInTheDocument();
+    });
+
+    it('omits the whole people section when the task has no assignee and no run', () => {
+      const taskUnassigned = { ...mockTask, assignee: null };
+      render(<TaskModal {...defaultProps} task={taskUnassigned} />);
+      expect(screen.queryByTestId('task-modal-people')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-modal-assignee')).not.toBeInTheDocument();
+    });
+  });
 });
