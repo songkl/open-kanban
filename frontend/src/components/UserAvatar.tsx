@@ -15,25 +15,25 @@ const SIZE_CLASSES = {
 
 function getColorFromUsername(username: string): string {
   const colors = [
-    'bg-red-500',
-    'bg-orange-500',
-    'bg-amber-500',
-    'bg-yellow-500',
-    'bg-lime-500',
-    'bg-green-500',
-    'bg-emerald-500',
-    'bg-teal-500',
-    'bg-cyan-500',
-    'bg-sky-500',
-    'bg-blue-500',
-    'bg-indigo-500',
-    'bg-violet-500',
-    'bg-purple-500',
-    'bg-fuchsia-500',
-    'bg-pink-500',
-    'bg-rose-500',
+    'bg-red-500 dark:bg-red-700',
+    'bg-orange-500 dark:bg-orange-700',
+    'bg-amber-500 dark:bg-amber-700',
+    'bg-yellow-500 dark:bg-yellow-700',
+    'bg-lime-500 dark:bg-lime-700',
+    'bg-green-500 dark:bg-green-700',
+    'bg-emerald-500 dark:bg-emerald-700',
+    'bg-teal-500 dark:bg-teal-700',
+    'bg-cyan-500 dark:bg-cyan-700',
+    'bg-sky-500 dark:bg-sky-700',
+    'bg-blue-500 dark:bg-blue-700',
+    'bg-indigo-500 dark:bg-indigo-700',
+    'bg-violet-500 dark:bg-violet-700',
+    'bg-purple-500 dark:bg-purple-700',
+    'bg-fuchsia-500 dark:bg-fuchsia-700',
+    'bg-pink-500 dark:bg-pink-700',
+    'bg-rose-500 dark:bg-rose-700',
   ];
-  
+
   let hash = 0;
   for (let i = 0; i < username.length; i++) {
     hash = username.charCodeAt(i) + ((hash << 5) - hash);

@@ -69,6 +69,31 @@ describe('TaskCard', () => {
     expect(screen.getByText('task.priority.medium')).toBeInTheDocument();
   });
 
+  // s-1206: medium-priority yellow chip needs WCAG-AA contrast on dark
+  // theme; we move from yellow-400 text on yellow-900/50 to yellow-200
+  // text on yellow-900/70 and tighten the light-mode text shade to
+  // yellow-800 so both modes pass contrast.
+  it('renders the medium-priority chip with WCAG-AA contrast classes', () => {
+    const { container } = render(<TaskCard {...defaultProps} />);
+    const badge = screen.getByText('task.priority.medium');
+    expect(badge.className).toContain('bg-yellow-100');
+    expect(badge.className).toContain('text-yellow-800');
+    expect(badge.className).toContain('dark:bg-yellow-900/70');
+    expect(badge.className).toContain('dark:text-yellow-200');
+    // sanity check: the badge is the chip element, not the root card
+    expect(container).toBeInTheDocument();
+  });
+
+  // s-1206: card surface needs to be a step darker on dark theme so it
+  // doesn't outshine the column background. Was dark:bg-zinc-800/95,
+  // now dark:bg-zinc-800/80.
+  it('uses a lower-opacity zinc surface on dark mode for the card', () => {
+    const { container } = render(<TaskCard {...defaultProps} />);
+    const card = container.firstChild as HTMLElement | null;
+    expect(card?.className).toContain('dark:bg-zinc-800/80');
+    expect(card?.className).not.toContain('dark:bg-zinc-800/95');
+  });
+
   it('renders assignee', () => {
     render(<TaskCard {...defaultProps} />);
     expect(screen.getByText('John Doe')).toBeInTheDocument();

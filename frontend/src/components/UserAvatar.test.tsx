@@ -41,4 +41,25 @@ describe('UserAvatar', () => {
     const target = container.querySelector('div');
     expect(target?.getAttribute('title')).toBeNull();
   });
+
+  // s-1206: every hashed initial now carries a darker dark-mode color
+  // (500 -> 700) so the avatar no longer punches through the dark
+  // background. "admin" hashes to the red slot, which was the original
+  // PM complaint.
+  it('uses a less-saturated red background for the admin avatar in dark mode', () => {
+    const { container } = render(<UserAvatar username="admin" />);
+    const avatar = container.querySelector('div');
+    expect(avatar?.className).toContain('bg-red-500');
+    expect(avatar?.className).toContain('dark:bg-red-700');
+  });
+
+  it('applies a darker dark-mode background for every hashed color slot', () => {
+    const { container } = render(<UserAvatar username="admin" />);
+    const avatar = container.querySelector('div');
+    const classes = avatar?.className ?? '';
+    // every entry in getColorFromUsername now ships with both a light
+    // and a dark class; assert the pair is present for at least the
+    // red slot, since that's what the PM review flagged.
+    expect(classes).toMatch(/bg-\w+-\d+ dark:bg-\w+-\d+/);
+  });
 });

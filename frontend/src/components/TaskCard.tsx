@@ -40,7 +40,7 @@ interface TaskCardProps {
 
   const priorityColors: Record<string, string> = {
   high: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400',
-  medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400',
+  medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/70 dark:text-yellow-200',
   low: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400',
 };
 
@@ -125,7 +125,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       {...attributes}
       {...listeners}
       onClick={handleCardClick}
-      className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/95 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:border-zinc-700 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
+      className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/80 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:border-zinc-700 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
         isDragging ? 'opacity-60 ring-2 ring-blue-400 scale-105 z-50 shadow-blue-200 dark:shadow-blue-900/50' : ''
       } ${priorityBorderColors[task.priority] || priorityBorderColors.medium} ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
     >
