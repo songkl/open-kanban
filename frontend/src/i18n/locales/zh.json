@@ -1051,5 +1051,36 @@
       "configSaved": "设置已保存。",
       "dynamicRegistration": "动态注册当前{{enabled}}。"
     }
+  },
+  "publicBoard": {
+    "openKanban": "Open Kanban",
+    "readOnly": "只读",
+    "loading": "加载中…",
+    "notFound": "未找到看板",
+    "notFoundHint": "该分享链接可能已被撤销、过期或对应看板已被删除。",
+    "missingToken": "缺少分享令牌",
+    "noColumns": "暂无列可显示。"
+  },
+  "share": {
+    "menu": "分享",
+    "modalTitle": "分享看板",
+    "modalDescription": "为干系人生成一个只读的公开链接。令牌仅展示一次，请在关闭弹窗前复制保存。",
+    "labelPlaceholder": "备注（如：客户演示）",
+    "mint": "生成分享链接",
+    "minting": "生成中…",
+    "noTokensYet": "暂无分享链接。",
+    "copy": "复制",
+    "copied": "已复制",
+    "revokeConfirm": "撤销该分享链接？持有该链接的所有人将立即失去访问权限。",
+    "revoked": "分享链接已撤销。",
+    "created": "分享链接已生成，请立即复制——该令牌不会再次展示。",
+    "failed": "生成分享链接失败",
+    "embed": "嵌入到其他站点",
+    "embedDescription": "将以下 iframe 代码粘贴到你的网站即可嵌入该看板的只读视图。",
+    "expiresAt": "过期时间",
+    "neverExpires": "永不过期",
+    "setExpiry": "设置过期时间（可选）",
+    "publicUrl": "公开链接",
+    "createdBy": "创建者"
   }
 }

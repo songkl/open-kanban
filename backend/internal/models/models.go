@@ -113,6 +113,23 @@ type Subtask struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// ViewerToken represents a public, read-only share token for a
+// board (s-1204, PM_REVIEW_2026-09-17 §6). The secret value is
+// never returned by the API after the mint call — only the hash is
+// stored, the same way /api/v1/auth/token behaves. PlaintextToken
+// is populated only on the mint response so the caller can copy it
+// out of the dialog exactly once.
+type ViewerToken struct {
+	ID            string     `json:"id"`
+	BoardID       string     `json:"boardId"`
+	Label         string     `json:"label"`
+	CreatedBy     *string    `json:"createdBy,omitempty"`
+	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt     *time.Time `json:"revokedAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	PlaintextToken string    `json:"token,omitempty"`
+}
+
 // BoardPermission represents user permissions for a board
 type BoardPermission struct {
 	ID              string     `json:"id"`

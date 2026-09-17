@@ -278,7 +278,80 @@ export const boardsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // Public read-only share link + iframe embed surface
+  // (s-1204, PM_REVIEW_2026-09-17 §6). Mint is owner/admin only;
+  // the plaintext value is returned exactly once in the response.
+  listViewerTokens: (id: string) =>
+    fetchApi<{ tokens: ViewerToken[] }>(`boards/${id}/viewer-tokens`),
+  mintViewerToken: (id: string, data: { label?: string; expiresAt?: string | null }) =>
+    fetchApi<ViewerToken>(`boards/${id}/viewer-tokens`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  revokeViewerToken: (id: string, tokenId: string) =>
+    fetchApi<{ id: string; revoked: boolean }>(
+      `boards/${id}/viewer-tokens/${tokenId}`,
+      { method: 'DELETE' }
+    ),
+  getViewerEmbedSnippet: (id: string, token: string) =>
+    fetchApi<{ src: string; snippet: string; height: number; width: string }>(
+      `boards/${id}/viewer-tokens/embed?token=${encodeURIComponent(token)}`
+    ),
 };
+
+// Public read-only viewer board surface (s-1204). Anonymous: gated
+// by URL secret, returns a sanitized snapshot with no mutating
+// surface. Used by /public/b/:token.
+export const publicBoardApi = {
+  get: (token: string) =>
+    fetchApi<PublicBoard>(`public/boards/${encodeURIComponent(token)}`, {
+      skip401Handling: true,
+    }),
+};
+
+export interface ViewerToken {
+  id: string;
+  boardId: string;
+  label: string;
+  createdBy?: string;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+  // Only present on the mint response — never returned by list /
+  // lookup paths.
+  token?: string;
+}
+
+export interface PublicBoard {
+  id: string;
+  name: string;
+  description: string;
+  readOnly: true;
+  columns: PublicColumn[];
+}
+
+export interface PublicColumn {
+  id: string;
+  name: string;
+  status?: string;
+  position: number;
+  color: string;
+  description: string;
+  tasks: PublicTask[];
+}
+
+export interface PublicTask {
+  id: string;
+  title: string;
+  description: string;
+  priority: string;
+  assignee: string;
+  meta: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+  _count: { comments: number; subtasks: number };
+}
 
 // Templates API
 interface Template {

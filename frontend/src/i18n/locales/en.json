@@ -1051,5 +1051,36 @@
       "configSaved": "Settings saved.",
       "dynamicRegistration": "Dynamic registration is {{enabled}}."
     }
+  },
+  "publicBoard": {
+    "openKanban": "Open Kanban",
+    "readOnly": "Read-only",
+    "loading": "Loading…",
+    "notFound": "Board not found",
+    "notFoundHint": "The share link may have been revoked, expired, or the board may have been deleted.",
+    "missingToken": "Missing share token",
+    "noColumns": "No columns to show."
+  },
+  "share": {
+    "menu": "Share",
+    "modalTitle": "Share board",
+    "modalDescription": "Mint a public, read-only link for stakeholders. The token is shown exactly once — copy it before closing this dialog.",
+    "labelPlaceholder": "Label (e.g. Stakeholder demo)",
+    "mint": "Mint share link",
+    "minting": "Mint…",
+    "noTokensYet": "No share links yet.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "revokeConfirm": "Revoke this share link? Anyone holding the URL will lose access immediately.",
+    "revoked": "Share link revoked.",
+    "created": "Share link ready. Copy it now — it will not be shown again.",
+    "failed": "Could not mint share link",
+    "embed": "Embed in another site",
+    "embedDescription": "Paste this iframe snippet into your site to embed a read-only view of this board.",
+    "expiresAt": "Expires at",
+    "neverExpires": "Never expires",
+    "setExpiry": "Set expiry (optional)",
+    "publicUrl": "Public URL",
+    "createdBy": "Created by"
   }
 }

@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   - feat: add `GET` / `PUT /api/v1/auth/me/notification-preferences` endpoints with partial-PUT semantics (omitted fields preserved) so the Settings tab can flip one switch at a time
   - feat: move the Theme toggle into the top-right header (one click from any route) for s-1203, de-duping the toggle that used to live only in Settings → Theme
   - feat: hide the OAuth admin tab (client management + signing secret) from non-admin accounts (s-1203)
+  - feat: add public read-only share link + iframe embed for boards (s-1204, PM_REVIEW_2026-09-17 §6): board owners mint a viewer token (migration 013, sha256-hashed at rest, plaintext returned exactly once) and get a sanitized `/public/b/:token` view that anonymous visitors can browse without logging in; mutation endpoints stay auth-gated so a leaked link never escalates into a write surface
 
 ### Bug Fixes
   - fix: fall back to the profile tab when a non-admin lands on `?tab=oauth` via a shared link (s-1203)

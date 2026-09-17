@@ -381,7 +381,23 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		boards.POST("/:id/copy", handlers.CopyBoard(db))
 		boards.POST("/:id/reset", handlers.ResetBoard(db))
 		boards.POST("/import", handlers.ImportBoard(db))
+		// Public read-only share link + iframe embed surface
+		// (s-1204, PM_REVIEW_2026-09-17 §6). Mint / list /
+		// revoke are gated by canManageBoardPermissions (owner +
+		// global admin only — same meta-capability as
+		// SetPermission).
+		boards.POST("/:id/viewer-tokens", handlers.MintViewerToken(db))
+		boards.GET("/:id/viewer-tokens", handlers.ListViewerTokens(db))
+		boards.GET("/:id/viewer-tokens/embed", handlers.GetPublicBoardEmbedSnippet(db))
+		boards.DELETE("/:id/viewer-tokens/:tokenId", handlers.RevokeViewerToken(db))
 	}
+
+	// Public viewer board read endpoint. Intentionally
+	// unauthenticated — gating is done by the URL secret alone
+	// (s-1204, PM_REVIEW_2026-09-17 §6). The mutation endpoints
+	// above stay RequireAuth-protected, so a leaked share link
+	// never escalates into a write surface.
+	r.GET("/api/v1/public/boards/:token", handlers.GetPublicBoard(db))
 
 	templates := r.Group("/api/v1/templates")
 	templates.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))

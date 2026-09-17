@@ -5,6 +5,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { ColumnBoard } from '../components/ColumnBoard';
 import { HeaderRightMenu } from '../components/HeaderRightMenu';
 import { BatchOperationBar } from '../components/BatchOperationBar';
+import { ShareBoardModal } from '../components/ShareBoardModal';
 import { WsWarning } from '../components/WsWarning';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BoardSelector } from '../components/BoardSelector';
@@ -57,6 +58,7 @@ export function BoardPage() {
   const [focusedTaskIndex, setFocusedTaskIndex] = useState(0);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [defaultColumnIdForNewTask, setDefaultColumnIdForNewTask] = useState<string | undefined>();
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
@@ -641,6 +643,34 @@ export function BoardPage() {
               <line x1="16" y1="16" x2="16" y2="16" />
             </svg>
           </Link>
+          {(currentUser?.role === 'ADMIN' || currentBoard?.isOwner) && (
+            <button
+              type="button"
+              onClick={() => setShowShareModal(true)}
+              className="hidden sm:flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 px-2.5 py-1.5 text-sm text-white"
+              title={t('share.menu', 'Share')}
+              aria-label={t('share.menu', 'Share')}
+              data-testid="board-share-button"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            </button>
+          )}
           <BoardActionsMenu
             showMoreMenu={showMoreMenu}
             showExportMenu={showExportMenu}
@@ -709,6 +739,14 @@ export function BoardPage() {
         customFields={customFields}
       />
       </main>
+
+      {currentBoard && (
+        <ShareBoardModal
+          open={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          boardId={currentBoard.id}
+        />
+      )}
 
       {selectedTasks.size > 0 && (
         <BatchOperationBar

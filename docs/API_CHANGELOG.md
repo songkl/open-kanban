@@ -6,6 +6,42 @@ This document tracks changes to the Open-Kanban API specification.
 
 ### Added
 
+- **Public read-only share link + iframe embed for boards (s-1204, PM_REVIEW_2026-09-17 §6)**
+  - `POST /api/v1/boards/{id}/viewer-tokens` - Mint a public,
+    read-only viewer token for a board. The plaintext value is
+    returned exactly once in the response (`{token}` field); the
+    server stores only the SHA-256 hash, same convention as the
+    regular `/api/v1/auth/token` endpoint. Authorization is gated
+    by `canManageBoardPermissions` (global ADMIN or recorded board
+    owner only — share-link management is a meta-capability,
+    matching `SetPermission` / `DeletePermission`).
+    Body: `{label?, expiresAt?}`. `label` max 200 chars,
+    `expiresAt` must be in the future (omit / null = never expires).
+  - `GET /api/v1/boards/{id}/viewer-tokens` - List every
+    non-revoked token for a board. Plaintext is never returned.
+    Authorization mirrors mint.
+  - `DELETE /api/v1/boards/{id}/viewer-tokens/{tokenId}` - Soft-
+    delete a token. After revoke the public lookup returns 404
+    with no leak of whether the token ever existed. Returns 410 if
+    the token is already revoked.
+  - `GET /api/v1/boards/{id}/viewer-tokens/embed?token=...` -
+    Server-rendered iframe snippet the board owner can paste into
+    a third-party site. The snippet is built from the request's
+    scheme + host so a future route move does not silently break
+    embeds already shipped. Requires auth.
+  - `GET /api/v1/public/boards/{token}` - Public, read-only board
+    read endpoint. Intentionally unauthenticated — gating is done
+    by the URL secret alone. Returns a sanitized snapshot
+    (`published=false` and `archived=true` tasks are excluded, the
+    same filter the regular columns endpoint applies) with
+    `readOnly: true` so the client UI can gate itself. Mutation
+    endpoints stay protected by `RequireAuth`, so a leaked share
+    link never escalates into a write surface.
+  - DB migration `013_add_viewer_tokens` adds the `viewer_tokens`
+    table (sha256-hashed token, optional expiry, soft-delete
+    `revoked_at`, board FK with `ON DELETE CASCADE`, creator FK
+    with `ON DELETE SET NULL`).
+
 - **Notifications**
   - `GET /api/v1/auth/me/notification-preferences` - Get the caller's
     per-user notification-delivery preferences. Returns the

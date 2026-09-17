@@ -90,6 +90,14 @@ var VersionMigrationMap = []VersionMigration{
 	// webhook_url, so each delivery channel can be muted
 	// independently. Tracked as s-1203.
 	{Version: "0.12.0", From: 1, To: 12},
+	// 0.13.0 added migration 013 to introduce the viewer_tokens
+	// table that backs the public read-only share link + iframe
+	// embed surface for boards (PM_REVIEW §6). One row per minted
+	// token; the secret value is stored as a SHA-256 hash and the
+	// plaintext is only returned ONCE at mint time, the same way
+	// the regular /api/v1/auth/token endpoint behaves. Tracked as
+	// s-1204.
+	{Version: "0.13.0", From: 1, To: 13},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {
