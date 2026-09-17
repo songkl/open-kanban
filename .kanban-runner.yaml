@@ -1,0 +1,21 @@
+version: 1
+
+# mode-1: 盯住 sys 看板的「待办」列；有新任务出现即领取
+boardId: sys
+status: todo
+
+agent:
+  bin: opencode
+  # opencode 把 message 当位置参数；不传 message 时从 stdin 读取，
+  # 所以用 promptMode: stdin 把渲染好的 prompt 一次性喂进去
+  args: ["run"]
+  promptMode: stdin
+  cwd: .
+  timeoutMs: 1800000
+
+runner:
+  pollIntervalMs: 5000
+  heartbeatIntervalMs: 30000
+  lockTimeoutMs: 120000
+  maxConcurrent: 1
+  mode: claim
