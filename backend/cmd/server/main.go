@@ -490,6 +490,17 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		notifications.POST("/read-all", handlers.MarkAllNotificationsRead(db))
 	}
 
+	// Per-user notification preferences (s-1203,
+	// PM_REVIEW_2026-09-17 §3.7). Backs the new "Notifications"
+	// section in Settings — every authenticated user (admin or
+	// non-admin) can read/write their own row.
+	notificationPrefs := r.Group("/api/v1/auth/me/notification-preferences")
+	notificationPrefs.Use(handlers.RequireAuth(db))
+	{
+		notificationPrefs.GET("", handlers.GetMyNotificationPreferences(db))
+		notificationPrefs.PUT("", handlers.UpdateMyNotificationPreferences(db))
+	}
+
 	// Run completion stub — Agent runners POST here when a task run
 	// reaches a terminal status. The handler fans out a RUN_COMPLETED
 	// notification to the task owner (see internal/handlers/runs.go).

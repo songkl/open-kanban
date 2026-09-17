@@ -2,6 +2,20 @@
 
 This document tracks changes to the Open-Kanban API specification.
 
+## Unreleased
+
+### Added
+
+- **Notifications**
+  - `GET /api/v1/auth/me/notification-preferences` - Get the caller's
+    per-user notification-delivery preferences. Returns the
+    documented defaults (email + webhook enabled, empty webhook URL)
+    on first access so the Settings tab never sees a 404.
+  - `PUT /api/v1/auth/me/notification-preferences` - Partial update
+    of the caller's notification preferences (s-1203,
+    PM_REVIEW_2026-09-17 §3.7). Omitted fields are preserved
+    server-side. `webhookUrl` must be empty or a valid http(s) URL.
+
 ## [1.0.0] - 2026-03-31
 
 ### Added

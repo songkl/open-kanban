@@ -897,3 +897,38 @@ export const notificationsApi = {
       method: 'POST',
     }),
 };
+
+// Per-user notification preferences (s-1203, PM_REVIEW_2026-09-17 §3.7).
+// Backs the "Notifications" section in Settings — every authenticated
+// user can read/write their own row, regardless of role.
+export interface NotificationPreferences {
+  userId: string;
+  emailEnabled: boolean;
+  webhookEnabled: boolean;
+  webhookUrl: string;
+  updatedAt: string;
+}
+
+export type NotificationPreferencesPatch = Partial<
+  Pick<NotificationPreferences, 'emailEnabled' | 'webhookEnabled' | 'webhookUrl'>
+>;
+
+export const notificationPreferencesApi = {
+  /**
+   * Fetch the caller's notification preferences. The backend returns
+   * the documented defaults (email + webhook on, empty URL) when the
+   * user has never saved a row, so callers can treat the result as
+   * always-defined.
+   */
+  get: () => fetchApi<NotificationPreferences>('auth/me/notification-preferences'),
+  /**
+   * Partial update: omitted fields are preserved on the server. The
+   * Settings tab uses this to toggle one switch at a time without
+   * re-sending the whole row.
+   */
+  update: (patch: NotificationPreferencesPatch) =>
+    fetchApi<NotificationPreferences>('auth/me/notification-preferences', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+};

@@ -12,13 +12,14 @@ import { AgentsSettings } from '../components/settings/AgentsSettings';
 import { UsersSettings } from '../components/settings/UsersSettings';
 import { ShortcutsSettings } from '../components/settings/ShortcutsSettings';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
+import { NotificationsSettings } from '../components/settings/NotificationsSettings';
 import { OAuthSettings } from '../components/OAuthSettings';
 import { useUIStore } from '../store/uiStore';
 import type { User } from '../types/kanban';
 
-type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth';
+type Tab = 'profile' | 'notifications' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth';
 
-const ALL_TABS: Tab[] = ['profile', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth'];
+const ALL_TABS: Tab[] = ['profile', 'notifications', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (ALL_TABS as string[]).includes(value);
@@ -82,6 +83,15 @@ export function SettingsPage() {
       if (meData.user.role === 'ADMIN') {
         loadUsers();
       }
+      // If the URL pinned a tab the user cannot see (e.g. non-admin
+      // landing on ?tab=oauth via a shared link), fall back to the
+      // profile so the tabpanel is never blank.
+      setActiveTab((current) => {
+        if (current === 'oauth' && meData.user!.role !== 'ADMIN') {
+          return 'profile';
+        }
+        return current;
+      });
     } catch (err) {
       console.error('Failed to load user data:', err);
     } finally {
@@ -215,6 +225,19 @@ export function SettingsPage() {
               >
                 {t('settings.profile')}
               </button>
+              <button
+                type="button"
+                role="tab"
+                id="settings-tab-notifications"
+                aria-selected={activeTab === 'notifications'}
+                aria-controls="settings-panel-notifications"
+                tabIndex={activeTab === 'notifications' ? 0 : -1}
+                data-tab-id="notifications"
+                onClick={() => switchToTab('notifications')}
+                className={sidebarTabClass(activeTab === 'notifications')}
+              >
+                {t('settings.notificationsTab')}
+              </button>
               {currentUser?.role === 'ADMIN' && (
                 <button
                   type="button"
@@ -291,20 +314,6 @@ export function SettingsPage() {
               <button
                 type="button"
                 role="tab"
-                id="settings-tab-oauth"
-                aria-selected={activeTab === 'oauth'}
-                aria-controls="settings-panel-oauth"
-                tabIndex={activeTab === 'oauth' ? 0 : -1}
-                data-tab-id="oauth"
-                onClick={() => switchToTab('oauth')}
-                className={sidebarTabClass(activeTab === 'oauth')}
-                data-testid="tab-oauth"
-              >
-                {t('oauth.admin.title')}
-              </button>
-              <button
-                type="button"
-                role="tab"
                 id="settings-tab-theme"
                 aria-selected={activeTab === 'theme'}
                 aria-controls="settings-panel-theme"
@@ -332,6 +341,22 @@ export function SettingsPage() {
                   </svg>
                 )}
               </button>
+              {currentUser?.role === 'ADMIN' && (
+                <button
+                  type="button"
+                  role="tab"
+                  id="settings-tab-oauth"
+                  aria-selected={activeTab === 'oauth'}
+                  aria-controls="settings-panel-oauth"
+                  tabIndex={activeTab === 'oauth' ? 0 : -1}
+                  data-tab-id="oauth"
+                  onClick={() => switchToTab('oauth')}
+                  className={sidebarTabClass(activeTab === 'oauth')}
+                  data-testid="tab-oauth"
+                >
+                  {t('oauth.admin.title')}
+                </button>
+              )}
               <div className="border-t border-zinc-200 dark:border-zinc-700 pt-2 mt-2">
                 <button
                   type="button"
@@ -359,6 +384,10 @@ export function SettingsPage() {
                 currentUser={currentUser}
                 onUserUpdate={(user) => setCurrentUser(user)}
               />
+            )}
+
+            {activeTab === 'notifications' && (
+              <NotificationsSettings />
             )}
 
             {activeTab === 'tokens' && (
@@ -391,7 +420,7 @@ export function SettingsPage() {
               <ThemeSettings />
             )}
 
-            {activeTab === 'oauth' && currentUser && (
+            {activeTab === 'oauth' && currentUser?.role === 'ADMIN' && currentUser && (
               <OAuthSettings currentUser={currentUser} />
             )}
           </div>

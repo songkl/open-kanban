@@ -7,10 +7,17 @@ All notable changes to this project will be documented in this file.
 ### Features
   - feat: add column workflow trigger (migration 011) so column_agents.transition_trigger (none / on_enter / on_exit / both) fires the bound Agent automatically when a task crosses the column boundary (s-1214)
   - feat: extend columns management UI with a per-column Agent binding + auto-trigger toggle (s-1214)
+  - feat: add per-user notification preferences (migration 012) backing a new "Notifications" section in Settings (s-1203, PM_REVIEW_2026-09-17 §3.7). Email and webhook delivery can be muted independently; webhook URL is editable and validated server-side
+  - feat: add `GET` / `PUT /api/v1/auth/me/notification-preferences` endpoints with partial-PUT semantics (omitted fields preserved) so the Settings tab can flip one switch at a time
+  - feat: move the Theme toggle into the top-right header (one click from any route) for s-1203, de-duping the toggle that used to live only in Settings → Theme
+  - feat: hide the OAuth admin tab (client management + signing secret) from non-admin accounts (s-1203)
 
 ### Bug Fixes
+  - fix: fall back to the profile tab when a non-admin lands on `?tab=oauth` via a shared link (s-1203)
 
 ### Improvements
+  - i18n: add settings.notifications.* keys (en + zh) for the new Notifications section
+  - test: cover the new notifications-preferences endpoints (handler + migration), the admin-gated OAuth tab, the Notifications tab visibility, the theme toggle, and the partial-PUT contract
   - feat: make board header wrap and hide secondary buttons on mobile so the action bar fits at 375px (s-1192)
   - feat: add mobile icon-only filter and create buttons with 36px tap targets (s-1192)
   - feat: give mobile tab bar and column header 32px+ tap targets for counters, select-all and status badges (s-1192)

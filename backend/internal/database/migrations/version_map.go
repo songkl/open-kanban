@@ -83,6 +83,13 @@ var VersionMigrationMap = []VersionMigration{
 	// when a task crosses the column boundary. Tracked as s-1214
 	// (PM_REVIEW §3.5).
 	{Version: "0.11.0", From: 1, To: 11},
+	// 0.12.0 added migration 012 to introduce the
+	// user_notification_preferences table that backs the new
+	// "Notifications" section in Settings (PM_REVIEW §3.7). One row
+	// per user with email_enabled / webhook_enabled flags plus a
+	// webhook_url, so each delivery channel can be muted
+	// independently. Tracked as s-1203.
+	{Version: "0.12.0", From: 1, To: 12},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

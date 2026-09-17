@@ -1,7 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Sidebar, type SidebarItem } from './Sidebar';
 import { NotificationBell } from './NotificationBell';
 import { useNotifications } from '../hooks/useNotifications';
+import { useUIStore } from '../store/uiStore';
 
 /**
  * AppShell — top-level layout for every authenticated route
@@ -15,6 +17,10 @@ import { useNotifications } from '../hooks/useNotifications';
  * notification subscription and the existing board refresh
  * handler.
  *
+ * s-1203 also surfaces the theme toggle in the header so the
+ * switch is one click from anywhere (instead of two clicks deep
+ * inside Settings → Theme).
+ *
  * Children are rendered inside a scroll container so individual
  * pages don't need to repeat the h-screen + overflow boilerplate.
  */
@@ -25,6 +31,9 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const darkMode = useUIStore((state) => state.darkMode);
+  const toggleDarkMode = useUIStore((state) => state.toggleDarkMode);
 
   useNotifications({ pollIntervalMs: 30_000 });
 
@@ -73,6 +82,57 @@ export function AppShell({ children }: AppShellProps) {
       <Sidebar items={items} />
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <div className="absolute right-4 top-4 z-40 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => toggleDarkMode()}
+            aria-label={darkMode ? t('darkMode.switchToLight') : t('darkMode.switchToDark')}
+            aria-pressed={darkMode}
+            title={darkMode ? t('darkMode.switchToLight') : t('darkMode.switchToDark')}
+            data-testid="header-theme-toggle"
+            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition-colors"
+          >
+            {darkMode ? (
+              <svg
+                aria-hidden="true"
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-orange-400"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="5.64" />
+              </svg>
+            ) : (
+              <svg
+                aria-hidden="true"
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-zinc-500 dark:text-zinc-400"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
+          </button>
           <NotificationBell
             onSelect={(n) => {
               if (n.targetType === 'TASK' && n.targetId) {
