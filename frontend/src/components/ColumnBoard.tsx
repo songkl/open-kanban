@@ -255,26 +255,28 @@ export function ColumnBoard({
         onDragEnd={handleDragEnd}
       >
         {isMobile ? (
-          <div className="flex flex-col h-[calc(100vh-120px)]">
-            <div className="flex items-center justify-between gap-2 p-2 border-b border-zinc-200 dark:border-zinc-700">
-              <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory flex-1">
+          <div className="flex flex-col h-[calc(100vh-180px)] sm:h-[calc(100vh-120px)]">
+            <div className="flex items-center justify-between gap-2 p-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur sticky top-0 z-10">
+              <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory flex-1 min-w-0 -mx-1 px-1">
                 {filteredColumns.filter(Boolean).map((column, idx) => (
                   <button
                     key={column.id}
                     onClick={() => setActiveMobileColumn(idx)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors snap-center ${
+                    aria-pressed={activeMobileColumn === idx}
+                    className={`flex-shrink-0 flex items-center justify-center min-h-[36px] min-w-[44px] px-3 py-2 rounded-full text-sm font-medium transition-colors snap-center ${
                       activeMobileColumn === idx
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+                        ? 'bg-blue-500 text-white shadow-sm'
+                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
                     }`}
                   >
-                    {column.name}
+                    <span className="truncate max-w-[120px]">{column.name}</span>
                   </button>
                 ))}
               </div>
               <button
                 onClick={() => setMobileViewMode(mobileViewMode === 'tabs' ? 'scroll' : 'tabs')}
-                className="flex-shrink-0 p-2 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                className="flex-shrink-0 flex items-center justify-center min-h-[36px] min-w-[36px] p-2 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                aria-label={mobileViewMode === 'tabs' ? t('mobile.switchToSlideView') : t('mobile.switchToListView')}
                 title={mobileViewMode === 'tabs' ? t('mobile.switchToSlideView') : t('mobile.switchToListView')}
               >
                 {mobileViewMode === 'tabs' ? (
@@ -294,7 +296,7 @@ export function ColumnBoard({
               </button>
             </div>
             {mobileViewMode === 'tabs' ? (
-              <div id="mobile-column-container" className="flex-1 overflow-y-auto p-2">
+              <div id="mobile-column-container" className="flex-1 overflow-y-auto p-2 min-w-0">
                 {filteredColumns.filter(Boolean)[activeMobileColumn] && (
                   <Column
                     column={filteredColumns.filter(Boolean)[activeMobileColumn]}
@@ -326,7 +328,7 @@ export function ColumnBoard({
               </div>
             ) : (
               <div id="mobile-scroll-container" className="relative flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-4">
-                <div className="flex gap-3 p-2 h-full min-h-0">
+                <div className="flex gap-3 p-2 h-full min-h-0 min-w-min">
                   {filteredColumns.filter(Boolean).map((column) => (
                     <Column
                       key={column.id}

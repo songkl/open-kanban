@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 ### Improvements
+  - feat: make board header wrap and hide secondary buttons on mobile so the action bar fits at 375px (s-1192)
+  - feat: add mobile icon-only filter and create buttons with 36px tap targets (s-1192)
+  - feat: give mobile tab bar and column header 32px+ tap targets for counters, select-all and status badges (s-1192)
+  - feat: add full-width mobile SearchBar with leading icon and 32px clear button (s-1192)
+  - i18n: add filter.clearSearch key (s-1192)
+  - test: add mobile layout tests for SearchBar, BoardToolbar, Column and a new ColumnBoard.test.tsx (s-1192)
 
 ### Documentation
 

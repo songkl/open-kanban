@@ -106,4 +106,43 @@ describe('BoardToolbar', () => {
       expect(createButton).not.toBeDisabled();
     });
   });
+
+  describe('mobile layout (s-1192)', () => {
+    it('uses an icon-only filter button on mobile', () => {
+      render(<BoardToolbar {...defaultProps} isMobile={true} />);
+      const filterButton = screen.getByRole('button', { name: /filter/i });
+      expect(filterButton).toBeInTheDocument();
+      expect(filterButton.className).toContain('min-h-[36px]');
+      expect(filterButton.className).toContain('min-w-[36px]');
+    });
+
+    it('hides the inline "Filter" label on mobile via hidden class', () => {
+      render(<BoardToolbar {...defaultProps} isMobile={true} />);
+      const label = screen.getByText('filter.filter');
+      expect(label.className).toContain('hidden');
+      expect(label.className).toContain('sm:inline');
+    });
+
+    it('keeps the inline "Filter" label visible on desktop', () => {
+      render(<BoardToolbar {...defaultProps} isMobile={false} />);
+      const label = screen.getByText('filter.filter');
+      expect(label.className).toContain('sm:inline');
+    });
+
+    it('uses an icon-only create button on mobile', () => {
+      render(<BoardToolbar {...defaultProps} isMobile={true} />);
+      const createButton = screen.getByRole('button', { name: /task\.create/i });
+      expect(createButton.className).toContain('min-h-[36px]');
+      expect(createButton.className).toContain('min-w-[36px]');
+      const inlineLabel = createButton.querySelector('.hidden.sm\\:inline');
+      expect(inlineLabel).toBeInTheDocument();
+      expect(inlineLabel?.textContent).toBe('task.create');
+    });
+
+    it('renders a SearchBar in mobile mode (full width)', () => {
+      const { container } = render(<BoardToolbar {...defaultProps} isMobile={true} />);
+      const mobileSearch = container.querySelector('input.w-full.min-h-\\[36px\\]');
+      expect(mobileSearch).toBeInTheDocument();
+    });
+  });
 });

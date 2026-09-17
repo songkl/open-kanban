@@ -434,7 +434,7 @@
     "failed": "登录失败，请重试",
     "usernameRequired": "用户名不能为空"
   },
-  "filter": {
+"filter": {
     "searchPlaceholder": "搜索任务...",
     "search": "搜索...",
     "noResults": "无结果",
@@ -446,12 +446,13 @@
     "low": "低",
     "assignee": "负责人",
     "clear": "清除",
+    "clearSearch": "清除搜索",
     "savePreset": "保存预设",
     "preset": "预设",
     "presetName": "输入预设名称",
     "collapse": "收起",
     "expand": "展开",
-    "dateRange": "时间范围",
+    "dateRange": "日期范围",
     "today": "今天",
     "thisWeek": "本周",
     "thisMonth": "本月",

@@ -125,4 +125,39 @@ describe('Column', () => {
       expect(emptyState).toHaveAttribute('title', 'column.noAddPermission');
     });
   });
+
+  describe('mobile tap targets (s-1192)', () => {
+    it('renders the task count button with at least 32px tap target', () => {
+      render(
+        <BrowserRouter>
+          <Column {...defaultProps} />
+        </BrowserRouter>
+      );
+      const countButton = screen.getByRole('button', { name: /column\.viewColumnDetail/i });
+      expect(countButton.className).toContain('min-h-[32px]');
+      expect(countButton.className).toContain('min-w-[32px]');
+    });
+
+    it('wraps the select-all checkbox in a >= 32px tap target', () => {
+      render(
+        <BrowserRouter>
+          <Column {...defaultProps} onSelectAllTasks={vi.fn()} />
+        </BrowserRouter>
+      );
+      const checkbox = screen.getByLabelText(/column\.selectAll/i);
+      const wrapper = checkbox.parentElement;
+      expect(wrapper?.className).toContain('min-h-[32px]');
+      expect(wrapper?.className).toContain('min-w-[32px]');
+    });
+
+    it('keeps the header at a minimum height for reliable touch interaction', () => {
+      const { container } = render(
+        <BrowserRouter>
+          <Column {...defaultProps} />
+        </BrowserRouter>
+      );
+      const header = container.querySelector('div[style*="background-color"]');
+      expect(header?.className).toContain('min-h-[56px]');
+    });
+  });
 });

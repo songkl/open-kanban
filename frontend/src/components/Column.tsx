@@ -135,14 +135,14 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
         ref={setNodeRef}
         className={`relative flex flex-col rounded-lg bg-zinc-200/50 dark:bg-zinc-800/50 h-full ${
           isOver ? 'ring-2 ring-blue-400 z-10' : ''
-        } ${isMobileView ? 'w-72 min-h-0 flex-shrink-0' : 'w-80 flex-shrink-0'}`}
+        } ${isMobileView ? 'w-full min-h-0 flex-shrink-0' : 'w-80 flex-shrink-0'}`}
       >
         <div
-          className="flex items-center gap-2 rounded-t-lg px-4 py-3"
+          className="flex items-center gap-2 rounded-t-lg px-4 py-3 min-h-[56px]"
           style={{ backgroundColor: column.color + '20' }}
         >
           <div
-            className="h-3 w-3 rounded-full"
+            className="h-3 w-3 rounded-full flex-shrink-0"
             style={{ backgroundColor: column.color }}
           />
           {isEditing ? (
@@ -155,15 +155,15 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
               onChange={(e) => setEditName(e.target.value)}
               onBlur={handleSaveEdit}
               onKeyDown={handleKeyDown}
-              className="flex-1 px-1 py-0.5 text-sm font-semibold bg-white dark:bg-zinc-700 border border-blue-400 rounded text-zinc-700 dark:text-zinc-400 outline-none"
+              className="flex-1 min-h-[32px] px-2 py-1 text-sm font-semibold bg-white dark:bg-zinc-700 border border-blue-400 rounded text-zinc-700 dark:text-zinc-400 outline-none"
             />
           ) : (
             <h2
-              className="flex-1 font-semibold text-zinc-700 dark:text-zinc-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group flex items-center gap-1"
+              className="flex-1 min-h-[32px] flex items-center font-semibold text-zinc-700 dark:text-zinc-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group gap-1"
               onClick={handleStartEdit}
               title={onColumnRename ? t('column.clickToRename') : undefined}
             >
-              <span>{column.name}</span>
+              <span className="truncate">{column.name}</span>
               {onColumnRename && (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -175,7 +175,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 dark:text-zinc-500 hover:text-blue-500"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 dark:text-zinc-500 hover:text-blue-500 flex-shrink-0"
                 >
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -186,33 +186,43 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
           {column.status && (
             <span
               onClick={handleCopyStatus}
-              className="ml-2 rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-600 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors relative"
+              className="ml-2 flex items-center min-h-[32px] min-w-[32px] rounded-full bg-zinc-100 dark:bg-zinc-700 px-3 text-xs font-medium text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-600 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors relative flex-shrink-0"
               title={t('column.clickToCopyStatus')}
             >
               {showCopied ? t('column.copied') : column.status}
             </span>
           )}
-          <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-500 flex items-center gap-2">
+          <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-500 flex items-center gap-1 flex-shrink-0">
             {onSelectAllTasks && tasks.length > 0 && (
               <label className="sr-only" htmlFor={`select-all-${column.id}`}>
                 {t('column.selectAll')}
               </label>
             )}
             {onSelectAllTasks && tasks.length > 0 && (
-              <input
-                id={`select-all-${column.id}`}
-                name={`select-all-${column.id}`}
-                type="checkbox"
-                className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-blue-500 focus:ring-blue-500 cursor-pointer"
-                checked={selectedTasks && tasks.length > 0 && tasks.every(t => selectedTasks.has(t.id))}
-                onChange={(e) => {
+              <span
+                className="flex items-center justify-center min-h-[32px] min-w-[32px] cursor-pointer"
+                onClick={(e) => {
                   e.stopPropagation();
                   if (onSelectAllTasks) {
                     onSelectAllTasks(column.id, tasks.map(t => t.id));
                   }
                 }}
-                aria-label={t('column.selectAll')}
-              />
+              >
+                <input
+                  id={`select-all-${column.id}`}
+                  name={`select-all-${column.id}`}
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-blue-500 focus:ring-blue-500 cursor-pointer pointer-events-none"
+                  checked={selectedTasks && tasks.length > 0 && tasks.every(t => selectedTasks.has(t.id))}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    if (onSelectAllTasks) {
+                      onSelectAllTasks(column.id, tasks.map(t => t.id));
+                    }
+                  }}
+                  aria-label={t('column.selectAll')}
+                />
+              </span>
             )}
             <button
               onClick={(e) => {
@@ -221,8 +231,9 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   navigate(`/board/${currentBoardId}/column/${column.id}`);
                 }
               }}
-              className="hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer transition-colors"
+              className="flex items-center justify-center min-h-[32px] min-w-[32px] px-2 hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer transition-colors"
               title={t('column.viewColumnDetail')}
+              aria-label={t('column.viewColumnDetail')}
             >
               {tasks.length}
             </button>

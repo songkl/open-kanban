@@ -432,8 +432,8 @@ export function BoardPage() {
         onConnectWebSocket={connectWebSocket}
       />
 
-      <header className="p-6 pb-0 mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="p-3 sm:p-6 sm:pb-0 mb-3 sm:mb-6 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <BoardSelector
             ref={boardDropdownRef}
             boards={boards}
@@ -447,11 +447,12 @@ export function BoardPage() {
               if (id !== boardIdFromUrl) navigate(`/board/${id}`);
             }}
           />
-          
+
           <Link
             to={`/columns?boardId=${boardIdFromUrl}`}
-            className="flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700"
+            className="hidden sm:flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
             title={t('column.manageColumns')}
+            aria-label={t('column.manageColumns')}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -497,13 +498,15 @@ export function BoardPage() {
             setShowAddTaskModal(true);
           }}
           canCreateTask={canCreateTaskAnywhere}
+          isMobile={isMobile}
         />
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link
             to="/agent-activity"
-            className="flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700"
+            className="hidden sm:flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
             title={t('agentActivity')}
+            aria-label={t('agentActivity')}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
