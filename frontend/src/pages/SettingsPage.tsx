@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
@@ -110,12 +110,55 @@ export function SettingsPage() {
     }
   }, []);
 
-  const switchToTab = (tab: Tab) => {
+  const switchToTab = useCallback((tab: Tab) => {
     setActiveTab(tab);
     if (tab === 'users') {
       loadUsers();
     }
-  };
+  }, [loadUsers]);
+
+  // s-1199: keyboard navigation between settings tabs (ARIA tablist
+  // pattern). The available tab list is computed dynamically based on
+  // the current user's role/type so we have to walk the DOM instead
+  // of using static indices.
+  const tablistRef = useRef<HTMLDivElement>(null);
+  const handleTablistKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!tablistRef.current) return;
+      const tabs = Array.from(
+        tablistRef.current.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      );
+      if (tabs.length === 0) return;
+      const currentIndex = tabs.findIndex((tab) => tab === document.activeElement);
+      let nextIndex = currentIndex;
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'ArrowDown':
+          nextIndex = (currentIndex + 1) % tabs.length;
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+          break;
+        case 'Home':
+          nextIndex = 0;
+          break;
+        case 'End':
+          nextIndex = tabs.length - 1;
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      const next = tabs[nextIndex];
+      if (next) {
+        next.focus();
+        const tabId = next.dataset.tabId as Tab | undefined;
+        if (tabId) switchToTab(tabId);
+      }
+    },
+    [switchToTab]
+  );
 
   if (loading) {
     return <LoadingScreen />;
@@ -125,7 +168,11 @@ export function SettingsPage() {
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center gap-4">
-          <Link to="/" className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600">
+          <Link
+            to="/"
+            aria-label={t('settings.back')}
+            className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+          >
             ← {t('settings.back')}
           </Link>
           <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('settings.title')}</h1>
@@ -147,8 +194,22 @@ export function SettingsPage() {
 
         <div className="flex gap-6">
           <div className="w-48 flex-shrink-0">
-            <nav className="space-y-1">
+            <div
+              ref={tablistRef}
+              role="tablist"
+              aria-label={t('settings.title')}
+              aria-orientation="vertical"
+              onKeyDown={handleTablistKeyDown}
+              className="space-y-1"
+            >
               <button
+                type="button"
+                role="tab"
+                id="settings-tab-profile"
+                aria-selected={activeTab === 'profile'}
+                aria-controls="settings-panel-profile"
+                tabIndex={activeTab === 'profile' ? 0 : -1}
+                data-tab-id="profile"
                 onClick={() => switchToTab('profile')}
                 className={sidebarTabClass(activeTab === 'profile')}
               >
@@ -156,6 +217,13 @@ export function SettingsPage() {
               </button>
               {currentUser?.role === 'ADMIN' && (
                 <button
+                  type="button"
+                  role="tab"
+                  id="settings-tab-tokens"
+                  aria-selected={activeTab === 'tokens'}
+                  aria-controls="settings-panel-tokens"
+                  tabIndex={activeTab === 'tokens' ? 0 : -1}
+                  data-tab-id="tokens"
                   onClick={() => switchToTab('tokens')}
                   className={sidebarTabClass(activeTab === 'tokens')}
                 >
@@ -164,6 +232,13 @@ export function SettingsPage() {
               )}
               {currentUser?.role === 'ADMIN' && (
                 <button
+                  type="button"
+                  role="tab"
+                  id="settings-tab-activities"
+                  aria-selected={activeTab === 'activities'}
+                  aria-controls="settings-panel-activities"
+                  tabIndex={activeTab === 'activities' ? 0 : -1}
+                  data-tab-id="activities"
                   onClick={() => switchToTab('activities')}
                   className={sidebarTabClass(activeTab === 'activities')}
                 >
@@ -172,6 +247,13 @@ export function SettingsPage() {
               )}
               {currentUser?.role === 'ADMIN' && (
                 <button
+                  type="button"
+                  role="tab"
+                  id="settings-tab-agents"
+                  aria-selected={activeTab === 'agents'}
+                  aria-controls="settings-panel-agents"
+                  tabIndex={activeTab === 'agents' ? 0 : -1}
+                  data-tab-id="agents"
                   onClick={() => switchToTab('agents')}
                   className={sidebarTabClass(activeTab === 'agents')}
                 >
@@ -180,6 +262,13 @@ export function SettingsPage() {
               )}
               {currentUser?.role === 'ADMIN' && (
                 <button
+                  type="button"
+                  role="tab"
+                  id="settings-tab-users"
+                  aria-selected={activeTab === 'users'}
+                  aria-controls="settings-panel-users"
+                  tabIndex={activeTab === 'users' ? 0 : -1}
+                  data-tab-id="users"
                   onClick={() => switchToTab('users')}
                   className={sidebarTabClass(activeTab === 'users')}
                 >
@@ -187,12 +276,26 @@ export function SettingsPage() {
                 </button>
               )}
               <button
+                type="button"
+                role="tab"
+                id="settings-tab-shortcuts"
+                aria-selected={activeTab === 'shortcuts'}
+                aria-controls="settings-panel-shortcuts"
+                tabIndex={activeTab === 'shortcuts' ? 0 : -1}
+                data-tab-id="shortcuts"
                 onClick={() => switchToTab('shortcuts')}
                 className={sidebarTabClass(activeTab === 'shortcuts')}
               >
                 {t('settings.shortcuts')}
               </button>
               <button
+                type="button"
+                role="tab"
+                id="settings-tab-oauth"
+                aria-selected={activeTab === 'oauth'}
+                aria-controls="settings-panel-oauth"
+                tabIndex={activeTab === 'oauth' ? 0 : -1}
+                data-tab-id="oauth"
                 onClick={() => switchToTab('oauth')}
                 className={sidebarTabClass(activeTab === 'oauth')}
                 data-testid="tab-oauth"
@@ -200,12 +303,19 @@ export function SettingsPage() {
                 {t('oauth.admin.title')}
               </button>
               <button
+                type="button"
+                role="tab"
+                id="settings-tab-theme"
+                aria-selected={activeTab === 'theme'}
+                aria-controls="settings-panel-theme"
+                tabIndex={activeTab === 'theme' ? 0 : -1}
+                data-tab-id="theme"
                 onClick={() => switchToTab('theme')}
                 className={sidebarTabClass(activeTab === 'theme', 'flex items-center justify-between')}
               >
                 <span>{t('nav.theme')}</span>
                 {darkMode ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
+                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400">
                     <circle cx="12" cy="12" r="5"/>
                     <line x1="12" y1="1" x2="12" y2="3"/>
                     <line x1="12" y1="21" x2="12" y2="23"/>
@@ -214,16 +324,17 @@ export function SettingsPage() {
                     <line x1="1" y1="12" x2="3" y2="12"/>
                     <line x1="21" y1="12" x2="23" y2="12"/>
                     <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="5.64"/>
                   </svg>
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
+                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                   </svg>
                 )}
               </button>
               <div className="border-t border-zinc-200 dark:border-zinc-700 pt-2 mt-2">
                 <button
+                  type="button"
                   onClick={() => {
                     localStorage.removeItem('token');
                     navigate('/login');
@@ -233,10 +344,16 @@ export function SettingsPage() {
                   {t('auth.logout')}
                 </button>
               </div>
-            </nav>
+            </div>
           </div>
 
-          <div className="flex-1 rounded-lg bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
+          <div
+            className="flex-1 rounded-lg bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800"
+            role="tabpanel"
+            id={`settings-panel-${activeTab}`}
+            aria-labelledby={`settings-tab-${activeTab}`}
+            tabIndex={0}
+          >
             {activeTab === 'profile' && currentUser && (
               <ProfileSettings
                 currentUser={currentUser}

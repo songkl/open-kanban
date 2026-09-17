@@ -154,7 +154,7 @@ describe('TaskModal', () => {
 
     it('calls onClose when close button is clicked', async () => {
       render(<TaskModal {...defaultProps} />);
-      const closeButton = screen.getByRole('button', { name: '' });
+      const closeButton = screen.getByRole('button', { name: /common\.close/i });
       await userEvent.click(closeButton);
       expect(defaultProps.onClose).toHaveBeenCalled();
     });
@@ -579,6 +579,57 @@ describe('TaskModal', () => {
       render(<TaskModal {...defaultProps} task={taskNoAvatar} />);
       const initial = screen.getByText('C');
       expect(initial).toBeInTheDocument();
+    });
+  });
+
+  describe('a11y attributes (s-1199)', () => {
+    it('exposes dialog role with aria-modal and aria-labelledby', () => {
+      render(<TaskModal {...defaultProps} />);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+      expect(dialog).toHaveAttribute('aria-labelledby', 'task-modal-title');
+    });
+
+    it('labels the close button for screen readers', () => {
+      render(<TaskModal {...defaultProps} />);
+      const closeButton = screen.getByRole('button', { name: /common\.close/i });
+      expect(closeButton).toBeInTheDocument();
+    });
+
+    it('labels the copy task id button for screen readers', () => {
+      render(<TaskModal {...defaultProps} />);
+      const copyButton = screen.getByRole('button', { name: /taskModal\.copyTaskId/i });
+      expect(copyButton).toBeInTheDocument();
+    });
+
+    it('exposes aria-pressed on the fullscreen toggle', () => {
+      render(<TaskModal {...defaultProps} />);
+      const fullscreen = screen.getByRole('button', { name: /taskModal\.fullscreen/i });
+      expect(fullscreen).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('traps Tab key within the dialog when the last element is active', () => {
+      render(<TaskModal {...defaultProps} />);
+      fireEvent.keyDown(document, { key: 'Tab' });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+
+    it('closes the dialog when Escape is pressed via the focus trap', () => {
+      render(<TaskModal {...defaultProps} />);
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(defaultProps.onClose).toHaveBeenCalled();
+    });
+
+    it('renders the delete confirmation as an alertdialog', async () => {
+      render(<TaskModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('taskModal.delete'));
+      await waitFor(() => {
+        const alertDialog = screen.getByRole('alertdialog');
+        expect(alertDialog).toHaveAttribute('aria-modal', 'true');
+        expect(alertDialog).toHaveAttribute('aria-labelledby', 'task-modal-delete-title');
+        expect(alertDialog).toHaveAttribute('aria-describedby', 'task-modal-delete-desc');
+      });
     });
 
     it('hides creator block when both username and nickname are missing', () => {

@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { columnsApi } from '@/services/api';
 import { CustomDropdown } from './CustomDropdown';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
 
@@ -70,21 +71,17 @@ export function AddTaskModal({
     onClose();
   }, [resetForm, onClose]);
 
+  // s-1199: trap Tab focus inside the dialog and route Escape to
+  // handleClose. The hook also restores focus to whatever the user
+  // had focused before opening the modal.
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    enabled: isOpen,
+    initialFocus: 'first',
+    onEscape: handleClose,
+    restoreFocus: true,
+  });
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      handleClose();
-      return;
-    }
-
-    const target = e.target as HTMLElement;
-
-    if (e.key === 'Tab' && target === titleInputRef.current) {
-      e.preventDefault();
-      const focusTarget = descEditorRef.current?.querySelector<HTMLElement>('textarea');
-      focusTarget?.focus();
-      return;
-    }
-
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -124,12 +121,6 @@ export function AddTaskModal({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isOpen]);
 
-  useLayoutEffect(() => {
-    if (isOpen) {
-      titleInputRef.current?.focus();
-    }
-  }, [isOpen]);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title.trim()) {
@@ -147,17 +138,27 @@ export function AddTaskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" />
 
-      <div className="relative z-10 w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-xl">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('task.addTask')}</h2>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-task-modal-title"
+        className="relative z-10 w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-xl outline-none"
+      >
+        <h2 id="add-task-modal-title" className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('task.addTask')}</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label htmlFor="add-task-title" className="sr-only">{t('task.titlePlaceholder')}</label>
             <input
               ref={titleInputRef}
+              id="add-task-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('task.titlePlaceholder')}
+              aria-label={t('task.titlePlaceholder')}
+              aria-required="true"
               className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-4 py-3 text-base focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
             />
           </div>
@@ -165,11 +166,12 @@ export function AddTaskModal({
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('taskModal.description')}</label>
             <div ref={descEditorRef} className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none dark:bg-zinc-700 dark:text-zinc-100" style={{ height: 250 }} disabled />}>
+              <Suspense fallback={<textarea aria-label={t('taskModal.description')} className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none dark:bg-zinc-700 dark:text-zinc-100" style={{ height: 250 }} disabled />}>
                 <MarkdownEditor
                   value={description}
                   onChange={(val) => setDescription(val || '')}
                   height={250}
+                  aria-label={t('taskModal.description')}
                 />
               </Suspense>
             </div>

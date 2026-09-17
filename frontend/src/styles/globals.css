@@ -49,6 +49,59 @@ body {
   transition: opacity 0.3s;
 }
 
+/* s-1199: visible focus rings for keyboard users (a11y baseline).
+ * Tailwind's `focus-visible:` utilities rely on the browser's heuristic
+ * to avoid showing rings on mouse clicks; this fallback ensures every
+ * focusable element still gets a clear ring for keyboard navigation
+ * even if a component forgets to add the utility. Mouse focus stays
+ * unaffected because we use :focus-visible (not :focus). */
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.dark :focus-visible {
+  outline-color: #60a5fa;
+}
+
+/* Screen-reader-only utility for labels that exist visually but should
+ * be skipped by AT only when a sighted user doesn't need them. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip-link target: hidden until focused, then appears at the top
+ * of the viewport so keyboard users can bypass the sidebar. */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 12px;
+  background: #2563eb;
+  color: white;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s ease-in-out;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 8px;
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
 ::-webkit-scrollbar:hover {
   opacity: 1;
 }

@@ -825,6 +825,8 @@
     "editTask": "Edit Task",
     "copyTaskId": "Copy Task ID",
     "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "titleField": "Task title",
     "description": "Description",
     "descriptionHint": "(Supports Markdown, paste or drag images)",
     "noDescription": "No description",
@@ -894,6 +896,9 @@
   },
   "skeleton": {
     "loading": "Loading..."
+  },
+  "a11y": {
+    "skipToContent": "Skip to main content"
   },
   "attachment": {
     "preview": "Preview",

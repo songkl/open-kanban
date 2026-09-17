@@ -462,6 +462,12 @@ export function BoardPage() {
 
   return (
     <div className="h-screen bg-zinc-100 dark:bg-zinc-900">
+      <a
+        href="#board-main"
+        className="skip-link"
+      >
+        {t('a11y.skipToContent')}
+      </a>
       <KeyboardNavigation
         selectedTask={selectedTask}
         selectedTasks={selectedTasks}
@@ -486,7 +492,7 @@ export function BoardPage() {
         onConnectWebSocket={connectWebSocket}
       />
 
-      <header className="p-3 sm:p-6 sm:pb-0 mb-3 sm:mb-6 flex items-center justify-between gap-2 flex-wrap">
+      <header className="p-3 sm:p-6 sm:pb-0 mb-3 sm:mb-6 flex items-center justify-between gap-2 flex-wrap" role="banner">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <BoardSelector
             ref={boardDropdownRef}
@@ -629,6 +635,11 @@ export function BoardPage() {
         </div>
       </header>
 
+      <main
+        id="board-main"
+        className="h-[calc(100vh-120px)] sm:h-[calc(100vh-160px)]"
+        aria-label={currentBoard?.name ?? t('board.title')}
+      >
       <ColumnBoard
         columns={columns}
         currentBoard={currentBoard}
@@ -664,6 +675,7 @@ export function BoardPage() {
         runs={runs}
         customFields={customFields}
       />
+      </main>
 
       {selectedTasks.size > 0 && (
         <BatchOperationBar

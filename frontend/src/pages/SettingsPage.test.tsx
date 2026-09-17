@@ -51,15 +51,16 @@ describe('SettingsPage tab URL sync', () => {
     authApiMock.getUsers.mockResolvedValue([]);
   });
 
-  // Sidebar buttons all have a non-unique label because the right pane
-  // shows the same t() key. Anchor every assertion to the <button>
-  // ancestor with the active class instead of using getByText.
-  const profileBtn = () => screen.getByRole('button', { name: 'settings.profile' });
+  // s-1199: tabs are now exposed via the ARIA `tab` role instead of the
+  // generic `button` role. The accessible name still comes from the
+  // visible label via the text content, so getByRole('tab', { name })
+  // finds the same element the user sees.
+  const profileBtn = () => screen.getByRole('tab', { name: 'settings.profile' });
 
   it('honours ?tab=users on first render', async () => {
     renderAtTab('users');
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'settings.users' })).toHaveClass('bg-blue-100')
+      expect(screen.getByRole('tab', { name: 'settings.users' })).toHaveClass('bg-blue-100')
     );
   });
 
@@ -115,7 +116,7 @@ describe('SettingsPage tab URL sync', () => {
       await waitFor(() => expect(profileBtn()).toHaveClass('bg-blue-100'));
       const element = tab.selector
         ? document.querySelector(tab.selector) as HTMLElement
-        : screen.getByRole('button', { name: tab.name });
+        : screen.getByRole('tab', { name: tab.name });
       fireEvent.click(element);
       await waitFor(() => {
         expect(element).toHaveClass('bg-blue-100');
@@ -128,7 +129,7 @@ describe('SettingsPage tab URL sync', () => {
   it('applies consistent active styling in both light and dark mode', async () => {
     // Light mode: classic blue highlight
     renderAtTab('profile');
-    const lightActive = await waitFor(() => screen.getByRole('button', { name: 'settings.profile' }));
+    const lightActive = await waitFor(() => screen.getByRole('tab', { name: 'settings.profile' }));
     expect(lightActive).toHaveClass('bg-blue-100');
     expect(lightActive).toHaveClass('text-blue-700');
     // The `transition-colors` utility smooths the active/inactive swap so the
@@ -139,7 +140,7 @@ describe('SettingsPage tab URL sync', () => {
     // The active button must include the dark variant of bg/text classes.
     document.documentElement.classList.add('dark');
     try {
-      const darkActive = await waitFor(() => screen.getByRole('button', { name: 'settings.profile' }));
+      const darkActive = await waitFor(() => screen.getByRole('tab', { name: 'settings.profile' }));
       expect(darkActive.className).toMatch(/dark:bg-blue-900\/40/);
       expect(darkActive.className).toMatch(/dark:text-blue-300/);
     } finally {
@@ -166,8 +167,8 @@ describe('SettingsPage tab URL sync', () => {
     await waitFor(() => expect(profileBtn()).toHaveClass('bg-blue-100'));
 
     const measureSidebar = () => {
-      const sidebar = document.querySelector('nav')?.parentElement;
-      const buttons = document.querySelectorAll('nav button');
+      const sidebar = document.querySelector('[role="tablist"]')?.parentElement;
+      const buttons = document.querySelectorAll('[role="tablist"] [role="tab"]');
       const sidebarRect = sidebar?.getBoundingClientRect();
       const widths = Array.from(buttons).map((b) => (b as HTMLElement).getBoundingClientRect().width);
       return {
@@ -181,12 +182,50 @@ describe('SettingsPage tab URL sync', () => {
     for (const tab of tabs) {
       const element = tab.selector
         ? document.querySelector(tab.selector) as HTMLElement
-        : screen.getByRole('button', { name: tab.name });
+        : screen.getByRole('tab', { name: tab.name });
       fireEvent.click(element);
       await waitFor(() => expect(element).toHaveClass('bg-blue-100'));
       const measured = measureSidebar();
       expect(measured.sidebarWidth).toBe(baseline.sidebarWidth);
       expect(measured.buttonWidths).toEqual(baseline.buttonWidths);
     }
+  });
+
+  describe('a11y (s-1199)', () => {
+    it('renders the sidebar as a vertical tablist', async () => {
+      renderAtTab();
+      await waitFor(() => expect(profileBtn()).toHaveClass('bg-blue-100'));
+      const tablist = screen.getByRole('tablist');
+      expect(tablist).toHaveAttribute('aria-orientation', 'vertical');
+      expect(tablist).toHaveAccessibleName('settings.title');
+    });
+
+    it('marks only the active tab with aria-selected', async () => {
+      renderAtTab();
+      await waitFor(() => expect(profileBtn()).toHaveClass('bg-blue-100'));
+      expect(profileBtn()).toHaveAttribute('aria-selected', 'true');
+      const tokensTab = screen.getByRole('tab', { name: 'settings.tokens' });
+      expect(tokensTab).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('exposes the tabpanel with aria-labelledby pointing at the active tab', async () => {
+      renderAtTab('users');
+      await waitFor(() =>
+        expect(screen.getByRole('tab', { name: 'settings.users' })).toHaveClass('bg-blue-100')
+      );
+      const panel = screen.getByRole('tabpanel');
+      expect(panel).toHaveAttribute('id', 'settings-panel-users');
+      expect(panel).toHaveAttribute('aria-labelledby', 'settings-tab-users');
+    });
+
+    it('moves focus between tabs with ArrowRight / ArrowLeft', async () => {
+      renderAtTab();
+      await waitFor(() => expect(profileBtn()).toHaveClass('bg-blue-100'));
+      profileBtn().focus();
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
+      expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'settings.tokens' }));
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowLeft' });
+      expect(document.activeElement).toBe(profileBtn());
+    });
   });
 });

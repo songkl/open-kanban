@@ -825,6 +825,8 @@
     "editTask": "编辑任务",
     "copyTaskId": "复制任务ID",
     "fullscreen": "全屏",
+    "exitFullscreen": "退出全屏",
+    "titleField": "任务标题",
     "description": "描述",
     "descriptionHint": "(支持 Markdown，可粘贴或拖拽图片)",
     "noDescription": "暂无描述",
@@ -894,6 +896,9 @@
   },
   "skeleton": {
     "loading": "加载中..."
+  },
+  "a11y": {
+    "skipToContent": "跳到主要内容"
   },
   "attachment": {
     "preview": "预览",
