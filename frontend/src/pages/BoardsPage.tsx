@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { boardsApi, templatesApi, authApi } from '../services/api';
+import { boardsApi, templatesApi, authApi, presetTemplatesApi } from '../services/api';
 import { useSetupGuard } from '../hooks/useSetupGuard';
 import { ErrorToastContainer } from '../components/ErrorToast';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -29,6 +29,7 @@ export function BoardsPage() {
   useSetupGuard();
   const [boards, setBoards] = useState<Board[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [presetCount, setPresetCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingBoard, setEditingBoard] = useState<Board | null>(null);
@@ -61,6 +62,15 @@ export function BoardsPage() {
     }
   }, []);
 
+  const fetchPresetCount = useCallback(async () => {
+    try {
+      const data = await presetTemplatesApi.getAll();
+      setPresetCount((data || []).length);
+    } catch (error) {
+      console.error('Failed to fetch preset count:', error);
+    }
+  }, []);
+
   const fetchBoards = useCallback(async () => {
     try {
       setLoadError(null);
@@ -75,13 +85,14 @@ export function BoardsPage() {
   useEffect(() => {
     fetchBoards();
     fetchTemplates();
+    fetchPresetCount();
     authApi
       .me()
       .then((data) => {
         if (data.user) setCurrentUser(data.user);
       })
       .catch(console.error);
-  }, [fetchBoards, fetchTemplates]);
+  }, [fetchBoards, fetchTemplates, fetchPresetCount]);
 
   const showToastMessage = (message: string) => {
     setToast(message);
@@ -333,6 +344,20 @@ export function BoardsPage() {
               </svg>
               {t('nav.columnManagement')}
             </Link>
+            {presetCount > 0 && canCreateBoard && (
+              <Link
+                to="/templates/marketplace"
+                className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-purple-600 dark:text-purple-300 shadow-sm border border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-zinc-700 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+                {t('nav.templateMarketplace')}
+              </Link>
+            )}
             {canCreateBoard && (
               <button
                 onClick={openAddModal}
@@ -396,16 +421,40 @@ export function BoardsPage() {
             <p className="text-lg font-medium text-zinc-500 dark:text-zinc-500">
               {canCreateBoard ? t('board.noBoardsYet') : t('board.noAccessibleBoards')}
             </p>
+            <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">
+              {t('board.emptyStateHint')}
+            </p>
             {canCreateBoard && (
-              <button
-                onClick={openAddModal}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-                {t('modal.newBoard')}
-              </button>
+              <div className="mt-6 flex flex-col gap-3 items-center sm:flex-row sm:justify-center">
+                {presetCount > 0 && (
+                  <button
+                    onClick={() => navigate('/onboarding')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-purple-500/30 hover:from-purple-600 hover:to-purple-700 transition-all"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                    </svg>
+                    {t('board.importFromTemplate')}
+                  </button>
+                )}
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  {t('modal.newBoard')}
+                </button>
+                {presetCount > 1 && (
+                  <Link
+                    to="/templates/marketplace"
+                    className="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all"
+                  >
+                    {t('board.browseMarketplace')}
+                  </Link>
+                )}
+              </div>
             )}
           </div>
         ) : (

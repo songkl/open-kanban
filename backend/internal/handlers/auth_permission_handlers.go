@@ -538,9 +538,10 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 }
 
 type UpdateAppConfigRequest struct {
-	AllowRegistration *bool `json:"allowRegistration"`
-	RequirePassword   *bool `json:"requirePassword"`
-	AuthEnabled       *bool `json:"authEnabled"`
+	AllowRegistration  *bool `json:"allowRegistration"`
+	RequirePassword    *bool `json:"requirePassword"`
+	AuthEnabled        *bool `json:"authEnabled"`
+	MarketplaceEnabled *bool `json:"marketplaceEnabled"`
 }
 
 type BulkSetPermissionsRequest struct {
@@ -1402,14 +1403,17 @@ func GetAppConfig(db *sql.DB) gin.HandlerFunc {
 		var allowRegistration bool = true
 		var requirePassword bool = false
 		var authEnabled bool = true
+		var marketplaceEnabled bool = true
 		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowRegistration)
 		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePassword)
 		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
+		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'marketplaceEnabled'").Scan(&marketplaceEnabled)
 
 		c.JSON(http.StatusOK, gin.H{
-			"allowRegistration": allowRegistration,
-			"requirePassword":   requirePassword,
-			"authEnabled":       authEnabled,
+			"allowRegistration":  allowRegistration,
+			"requirePassword":    requirePassword,
+			"authEnabled":        authEnabled,
+			"marketplaceEnabled": marketplaceEnabled,
 		})
 	}
 }
@@ -1458,6 +1462,17 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 			_, err := db.Exec(
 				"REPLACE INTO app_config (`key`, value) VALUES ('authEnabled', ?)",
 				map[bool]string{true: "1", false: "0"}[*req.AuthEnabled],
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
+				return
+			}
+		}
+
+		if req.MarketplaceEnabled != nil {
+			_, err := db.Exec(
+				"REPLACE INTO app_config (`key`, value) VALUES ('marketplaceEnabled', ?)",
+				map[bool]string{true: "1", false: "0"}[*req.MarketplaceEnabled],
 			)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})

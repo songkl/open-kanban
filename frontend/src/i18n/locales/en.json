@@ -71,7 +71,9 @@
     "sidebarRuns": "Runs",
     "sidebarSettings": "Settings",
     "sidebarDashboard": "Dashboard",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "templateMarketplace": "Template Marketplace",
+    "onboarding": "Onboarding"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -118,6 +120,9 @@
     "selectBoard": "Select Board",
     "noBoards": "No boards available",
     "noBoardsYet": "No boards yet, create one",
+    "emptyStateHint": "Start with a preset template or build a board from scratch.",
+    "importFromTemplate": "Import from template",
+    "browseMarketplace": "Browse marketplace",
     "noAccessibleBoards": "No accessible boards. Ask an admin to share one with you.",
     "viewerCannotCreate": "Your role does not allow creating boards.",
     "createFirst": "Create your first board",
@@ -251,6 +256,53 @@
   },
   "template": {
     "createdAt": "Created At"
+  },
+  "marketplace": {
+    "title": "Template Marketplace",
+    "subtitle": "Curated starting points — pick a template to spin up a board in one click.",
+    "empty": "No templates available right now. Try again later or build a board from scratch.",
+    "loading": "Loading templates...",
+    "backToBoards": "Back to boards",
+    "filterAll": "All",
+    "showColumns_one": "Preview {{count}} column",
+    "showColumns_other": "Preview {{count}} columns",
+    "hideColumns": "Hide columns",
+    "useTemplate": "Use this template"
+  },
+  "onboarding": {
+    "title": "Get started with a template",
+    "subtitle": "Pick a template, name your board, and we'll set up a sample agent and demo task for you.",
+    "presetRequired": "Please pick a template to continue.",
+    "presetLoadFailed": "Failed to load templates",
+    "noPresetsAvailable": "No templates are available right now.",
+    "skipToBoards": "Skip and create from scratch",
+    "step1Title": "Choose a template",
+    "step1Hint": "Templates pre-fill columns, statuses, and a starter task so you have something to play with immediately.",
+    "step2Title": "Confirm your setup",
+    "step2Hint": "We'll create a board from \"{{presetName}}\" and get you to a non-empty page in one click.",
+    "boardNameLabel": "Board name",
+    "boardNameHint": "Leave blank to use the template's default name.",
+    "sampleAgent": "Sample Agent",
+    "installAgentLabel": "Install {{agent}} (sample Agent)",
+    "installAgentHint": "We'll create an Agent account and grant it admin access on the new board so you can wire up a runner later.",
+    "triggerDemoLabel": "Drop in a demo task",
+    "triggerDemoHint": "Adds one starter card so the board isn't empty.",
+    "create": "Create my board",
+    "creating": "Creating...",
+    "doneTitle": "You're all set!",
+    "doneSubtitle": "\"{{boardName}}\" is ready to go.",
+    "agentTokenLabel": "Sample Agent token",
+    "agentTokenHint": "Save this token now — it's how your Agent runner will talk to the kanban API.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Could not copy to clipboard. Select the token and copy manually.",
+    "openBoard": "Open my new board",
+    "backToBoards": "Back to boards",
+    "stepName": {
+      "pick": "Pick template",
+      "configure": "Configure",
+      "done": "Done"
+    }
   },
   "subtask": {
     "add": "Add Subtask",

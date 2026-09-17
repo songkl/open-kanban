@@ -391,6 +391,26 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		templates.DELETE("/:id", handlers.DeleteTemplate(db))
 	}
 
+	// Preset templates power the public template marketplace and the
+	// first-login wizard (PM_REVIEW_2026-09-17 §5.4 ROI #4 / §6). The
+	// GET is intentionally unauthenticated so unauthenticated visitors
+	// can browse the marketplace from the landing page; the admin
+	// toggle (marketplaceEnabled app_config key) hides the catalog
+	// wholesale when a self-hosted host wants to lock it down. See
+	// internal/handlers/preset_templates.go for the gating logic.
+	r.GET("/api/v1/preset-templates", handlers.GetPresetTemplates(db))
+
+	// Onboarding quickstart is the wizard's single-call escape hatch:
+	// pick preset → create board → install sample Agent → trigger demo
+	// run, all atomically. Requires auth because it materialises a
+	// board + sample agent on behalf of the caller. See
+	// internal/handlers/onboarding.go for the contract.
+	onboarding := r.Group("/api/v1/onboarding")
+	onboarding.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		onboarding.POST("/quickstart", handlers.QuickstartOnboarding(db))
+	}
+
 	columns := r.Group("/api/v1/columns")
 	{
 		columns.GET("", handlers.GetColumns(db))

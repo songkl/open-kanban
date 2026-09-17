@@ -54,6 +54,12 @@ const { apiMock } = vi.hoisted(() => ({
       create: vi.fn(),
       delete: vi.fn(),
     },
+    presetTemplatesApi: {
+      getAll: vi.fn(),
+    },
+    onboardingApi: {
+      quickstart: vi.fn(),
+    },
     authApi: {
       me: vi.fn(),
     },
@@ -62,10 +68,11 @@ const { apiMock } = vi.hoisted(() => ({
 
 vi.mock('../services/api', () => apiMock);
 
-import { boardsApi, templatesApi, authApi } from '../services/api';
+import { boardsApi, templatesApi, presetTemplatesApi, authApi } from '../services/api';
 
 const mockedBoardsGetAll = vi.mocked(boardsApi.getAll);
 const mockedTemplatesGetAll = vi.mocked(templatesApi.getAll);
+const mockedPresetTemplatesGetAll = vi.mocked(presetTemplatesApi.getAll);
 const mockedAuthMe = vi.mocked(authApi.me);
 
 const LocationDisplay = () => {
@@ -109,6 +116,7 @@ describe('BoardsPage', () => {
     vi.clearAllMocks();
     mockedTemplatesGetAll.mockResolvedValue([]);
     mockedBoardsGetAll.mockResolvedValue([]);
+    mockedPresetTemplatesGetAll.mockResolvedValue([]);
     mockedAuthMe.mockResolvedValue({ user: null, needsSetup: false });
   });
 
@@ -260,5 +268,61 @@ describe('BoardsPage', () => {
     });
 
     expect(screen.getByTestId('board-owner-crown')).toBeInTheDocument();
+  });
+
+  it('shows the import-from-template CTA on empty boards when presets exist', async () => {
+    mockedPresetTemplatesGetAll.mockResolvedValue([
+      { id: 'a', slug: 'alpha-template', name: 'Alpha', description: '', category: '', columnsConfig: '[]', sampleTasks: '[]', sampleAgent: '', position: 0 },
+      { id: 'b', slug: 'beta-template', name: 'Beta', description: '', category: '', columnsConfig: '[]', sampleTasks: '[]', sampleAgent: '', position: 1 },
+    ]);
+    mockedAuthMe.mockResolvedValue({
+      user: { id: 'admin-1', nickname: 'Admin', avatar: null, role: 'ADMIN', type: 'HUMAN', enabled: true, createdAt: '', updatedAt: '' },
+      needsSetup: false,
+    });
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('board.noBoardsYet')).toBeInTheDocument();
+    });
+    // The empty state surfaces the new CTA.
+    expect(screen.getByRole('button', { name: /board.importFromTemplate/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /board.browseMarketplace/ })).toBeInTheDocument();
+  });
+
+  it('hides the import-from-template CTA when no presets are available', async () => {
+    mockedPresetTemplatesGetAll.mockResolvedValue([]);
+    mockedAuthMe.mockResolvedValue({
+      user: { id: 'admin-1', nickname: 'Admin', avatar: null, role: 'ADMIN', type: 'HUMAN', enabled: true, createdAt: '', updatedAt: '' },
+      needsSetup: false,
+    });
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('board.noBoardsYet')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /board.importFromTemplate/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /board.browseMarketplace/ })).not.toBeInTheDocument();
+  });
+
+  it('navigates to /onboarding when the empty-state CTA is clicked', async () => {
+    mockedPresetTemplatesGetAll.mockResolvedValue([
+      { id: 'a', slug: 'alpha-template', name: 'Alpha', description: '', category: '', columnsConfig: '[]', sampleTasks: '[]', sampleAgent: '', position: 0 },
+    ]);
+    mockedAuthMe.mockResolvedValue({
+      user: { id: 'admin-1', nickname: 'Admin', avatar: null, role: 'ADMIN', type: 'HUMAN', enabled: true, createdAt: '', updatedAt: '' },
+      needsSetup: false,
+    });
+
+    renderBoardsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('board.noBoardsYet')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /board.importFromTemplate/ }));
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/onboarding');
+    });
   });
 });

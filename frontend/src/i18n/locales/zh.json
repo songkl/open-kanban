@@ -71,7 +71,9 @@
     "sidebarRuns": "运行",
     "sidebarSettings": "设置",
     "sidebarDashboard": "仪表盘",
-    "dashboard": "仪表盘"
+    "dashboard": "仪表盘",
+    "templateMarketplace": "模板市场",
+    "onboarding": "新手引导"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -118,6 +120,9 @@
     "selectBoard": "选择看板",
     "noBoards": "暂无看板",
     "noBoardsYet": "还没有任何看板，创建一个吧",
+    "emptyStateHint": "可以从模板市场一键开始，或从空白看板自建。",
+    "importFromTemplate": "从模板导入",
+    "browseMarketplace": "浏览模板市场",
     "noAccessibleBoards": "暂无可访问的看板，请联系管理员为您授权。",
     "viewerCannotCreate": "您当前的角色无法创建看板。",
     "createFirst": "创建你的第一个看板",
@@ -251,6 +256,53 @@
   },
   "template": {
     "createdAt": "创建时间"
+  },
+  "marketplace": {
+    "title": "模板市场",
+    "subtitle": "精选模板——点一下即可基于模板创建看板。",
+    "empty": "当前没有可用的模板，请稍后再试或自建看板。",
+    "loading": "正在加载模板...",
+    "backToBoards": "返回看板列表",
+    "filterAll": "全部",
+    "showColumns_one": "查看 {{count}} 个列",
+    "showColumns_other": "查看 {{count}} 个列",
+    "hideColumns": "收起列",
+    "useTemplate": "使用此模板"
+  },
+  "onboarding": {
+    "title": "通过模板快速开始",
+    "subtitle": "选一个模板，给看板起个名字，我们将一并创建示例 Agent 和示例任务。",
+    "presetRequired": "请选择一个模板再继续。",
+    "presetLoadFailed": "模板加载失败",
+    "noPresetsAvailable": "当前没有可用的模板。",
+    "skipToBoards": "跳过，直接创建空白看板",
+    "step1Title": "选择模板",
+    "step1Hint": "模板会预填列、状态和一张示例卡片，打开就有内容可看。",
+    "step2Title": "确认设置",
+    "step2Hint": "我们将基于 \"{{presetName}}\" 创建看板，一键即可进入非空页面。",
+    "boardNameLabel": "看板名称",
+    "boardNameHint": "留空则使用模板的默认名称。",
+    "sampleAgent": "示例 Agent",
+    "installAgentLabel": "安装 {{agent}}（示例 Agent）",
+    "installAgentHint": "我们会创建一个 Agent 账号并授予新看板的管理员权限，方便后续接入 Runner。",
+    "triggerDemoLabel": "放入示例任务",
+    "triggerDemoHint": "在看板里加一张示例卡片，避免空白。",
+    "create": "创建我的看板",
+    "creating": "创建中...",
+    "doneTitle": "准备好了！",
+    "doneSubtitle": "看板 \"{{boardName}}\" 已就绪。",
+    "agentTokenLabel": "示例 Agent Token",
+    "agentTokenHint": "请妥善保存——Agent Runner 用此 token 访问看板 API。",
+    "copy": "复制",
+    "copied": "已复制",
+    "copyFailed": "复制失败，请手动选中后复制。",
+    "openBoard": "打开新看板",
+    "backToBoards": "返回看板列表",
+    "stepName": {
+      "pick": "选择模板",
+      "configure": "配置",
+      "done": "完成"
+    }
   },
   "subtask": {
     "add": "添加子任务",

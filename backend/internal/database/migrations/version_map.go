@@ -69,6 +69,14 @@ var VersionMigrationMap = []VersionMigration{
 	// stream driven by the existing WebSocket connection. Tracked
 	// as s-1194.
 	{Version: "0.9.0", From: 1, To: 9},
+	// 0.10.0 added migration 010 to introduce the preset_templates
+	// table that backs the first-login wizard and the public template
+	// marketplace (PM_REVIEW §5.4 ROI #4 / §6). The table is seeded
+	// with at least 4 starter presets (product iteration, bug triage,
+	// content calendar, customer support) by the migration itself, so a
+	// fresh install lands on a populated marketplace without any manual
+	// configuration. Tracked as s-1196.
+	{Version: "0.10.0", From: 1, To: 10},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

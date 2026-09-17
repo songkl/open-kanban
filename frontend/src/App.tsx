@@ -21,6 +21,8 @@ const ColumnDetailPage = lazy(() => import('./pages/ColumnDetailPage').then(m =>
 const OAuthDevicePage = lazy(() => import('./pages/OAuthDevicePage').then(m => ({ default: m.OAuthDevicePage })));
 const RunsPage = lazy(() => import('./pages/RunsPage').then(m => ({ default: m.RunsPage })));
 const SearchPage = lazy(() => import('./pages/SearchPage').then(m => ({ default: m.SearchPage })));
+const TemplateMarketplacePage = lazy(() => import('./pages/TemplateMarketplacePage').then(m => ({ default: m.TemplateMarketplacePage })));
+const OnboardingWizardPage = lazy(() => import('./pages/OnboardingWizardPage').then(m => ({ default: m.OnboardingWizardPage })));
 
 function HomeRedirect() {
   const navigate = useNavigate();
@@ -86,6 +88,8 @@ function App() {
         <Route path="/oauth/device" element={<OAuthDevicePage />} />
         <Route path="/runs" element={<ShellWrapper><RunsPage /></ShellWrapper>} />
         <Route path="/search" element={<ShellWrapper><SearchPage /></ShellWrapper>} />
+        <Route path="/templates/marketplace" element={<ShellWrapper><TemplateMarketplacePage /></ShellWrapper>} />
+        <Route path="/onboarding" element={<ShellWrapper><OnboardingWizardPage /></ShellWrapper>} />
       </Routes>
     </Suspense>
   );

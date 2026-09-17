@@ -303,6 +303,65 @@ export const templatesApi = {
     fetchApi<void>(`templates/${id}`, { method: 'DELETE' }),
 };
 
+// Preset templates API (s-1196, PM_REVIEW_2026-09-17 §5.4 ROI #4).
+// Powers the public template marketplace and the first-login wizard.
+// The GET endpoint is intentionally unauthenticated so the marketplace
+// can be browsed from the landing page; admins can disable the entire
+// marketplace via the marketplaceEnabled app_config toggle (the server
+// returns 404 in that case, which this client surfaces by collapsing
+// the result to an empty list).
+export interface PresetTemplate {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  columnsConfig: string;
+  sampleTasks: string;
+  sampleAgent: string;
+  position: number;
+}
+
+export interface QuickstartResult {
+  boardId: string;
+  boardName: string;
+  agentId?: string;
+  agentToken?: string;
+  demoTaskId?: string;
+}
+
+export const presetTemplatesApi = {
+  // getAll returns the curated marketplace. We swallow 404s (the disable
+  // signal) so callers don't have to special-case a locked-down host.
+  getAll: async (): Promise<PresetTemplate[]> => {
+    try {
+      return await fetchApi<PresetTemplate[]>('preset-templates');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        return [];
+      }
+      throw err;
+    }
+  },
+};
+
+export const onboardingApi = {
+  // quickstart materialises a board + sample Agent + demo task in one
+  // shot. The InstallAgent / TriggerDemoRun fields use pointer types on
+  // the server so an unspecified field keeps the wizard's default
+  // (true); the caller opts out explicitly by setting them to false.
+  quickstart: (data: {
+    presetSlug: string;
+    boardName?: string;
+    installAgent?: boolean;
+    triggerDemoRun?: boolean;
+  }) =>
+    fetchApi<QuickstartResult>('onboarding/quickstart', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
 // Columns API
 export const columnsApi = {
   getAll: () => fetchApi<Column[]>('columns'),
