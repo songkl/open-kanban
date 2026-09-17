@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -8,14 +8,16 @@ import { BatchOperationBar } from '../components/BatchOperationBar';
 import { WsWarning } from '../components/WsWarning';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BoardSelector } from '../components/BoardSelector';
-import { ErrorToastContainer } from '../components/ErrorToast';
+import { ErrorToastContainer, showErrorToast } from '../components/ErrorToast';
 import { boardsApi, tasksApi } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
+import { useBoardTaskRuns } from '../hooks/useBoardTaskRuns';
 import { useSetupGuard } from '../hooks/useSetupGuard';
 import { KeyboardNavigation } from '../components/KeyboardNavigation';
 import { BoardToolbar } from '../components/BoardToolbar';
 import { BoardActionsMenu } from '../components/BoardActionsMenu';
+import { useRunStore } from '../store/runStore';
 import type { Task, Column as ColumnType } from '../types/kanban';
 
 const LAST_BOARD_KEY = 'lastSelectedBoardId';
@@ -123,6 +125,50 @@ export function BoardPage() {
     setToast(message);
     setTimeout(() => setToast(null), 2000);
   }, []);
+
+  // s-1193: subscribe to the shared run store so each TaskCard can
+  // re-render in isolation when *its* run row flips status, and pass
+  // the map down to ColumnBoard → Column → TaskCard.
+  const runs = useRunStore((s) => s.runs);
+
+  // Compute the list of currently-visible task IDs once per columns
+  // change. Hooked into a memo so the polling effect only re-binds
+  // when the task set really changes (u-p-1193: avoid restarting the
+  // timer on unrelated state changes).
+  const visibleTaskIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const col of columns) {
+      for (const task of col.tasks ?? []) {
+        if (task.id) ids.push(task.id);
+      }
+    }
+    return ids;
+  }, [columns]);
+
+  const handleRunComplete = useCallback(
+    (event: { taskId: string; run: { status: string; runnerId: string } }) => {
+      // s-1193: surface an in-app toast when an Agent run completes
+      // (PM_REVIEW_2026-09-17 §5.1 finding #4). The toast is "info"
+      // for success / "warning" for failures so the colour matches
+      // the severity without becoming noise during long happy-path
+      // operations.
+      const title = t('runComplete.toastTitle');
+      const body = t('runComplete.toastBody', {
+        runner: event.run.runnerId,
+        status: event.run.status,
+      });
+      const tone =
+        event.run.status === 'failed'
+          ? 'warning'
+          : event.run.status === 'completed'
+          ? 'info'
+          : 'info';
+      showErrorToast(`${title} — ${body}`, tone);
+    },
+    [t]
+  );
+
+  useBoardTaskRuns(visibleTaskIds, { intervalMs: 5000, onRunComplete: handleRunComplete });
 
   useEffect(() => {
     if (darkMode) {
@@ -501,7 +547,27 @@ export function BoardPage() {
           isMobile={isMobile}
         />
 
-        <div className="flex items-center gap-2 sm:gap-3">
+<div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            to="/runs"
+            className="hidden sm:flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+            title={t('nav.runs')}
+            aria-label={t('nav.runs')}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+          </Link>
           <Link
             to="/agent-activity"
             className="hidden sm:flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
@@ -519,7 +585,7 @@ export function BoardPage() {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <rect x="3" y="11" width="18" height="10" rx="2" />
+              <rect x="3" y1="11" y2="10" width="18" height="10" rx="2" />
               <circle cx="12" cy="5" r="2" />
               <path d="M12 7v4" />
               <line x1="8" y1="16" x2="8" y2="16" />
@@ -585,6 +651,7 @@ export function BoardPage() {
         getFilteredColumns={getFilteredColumns}
         updateTaskPosition={updateTaskPosition}
         canCreateTaskInColumn={canCreateTaskInColumn}
+        runs={runs}
       />
 
       {selectedTasks.size > 0 && (

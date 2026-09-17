@@ -16,7 +16,7 @@ import { Column } from './Column';
 import { DragLayer } from './DragLayer';
 import { AddTaskModal } from './AddTaskModal';
 import { TaskModalSkeleton } from './Skeleton';
-import type { Board, Column as ColumnType, Task } from '@/types/kanban';
+import type { Board, Column as ColumnType, Task, TaskRun } from '@/types/kanban';
 
 const TaskModal = lazy(() => import('./TaskModal').then(m => ({ default: m.TaskModal })));
 
@@ -52,6 +52,13 @@ interface ColumnBoardProps {
   getFilteredColumns: () => ColumnType[];
   updateTaskPosition: (activeId: string, overId: string, activeColumn: ColumnType, overColumn: ColumnType, activeTask: Task | null) => Promise<void>;
   canCreateTaskInColumn?: (columnId: string) => boolean;
+  /**
+   * s-1193: lookup of in-flight `task_runs` rows by taskId, populated
+   * by `useBoardTaskRuns` at the board level. Threaded down to each
+   * Column → TaskCard so the runner badge can render without each
+   * card firing its own polling request.
+   */
+  runs?: Record<string, TaskRun>;
 }
 
 export function ColumnBoard({
@@ -86,6 +93,7 @@ export function ColumnBoard({
   getFilteredColumns,
   updateTaskPosition,
   canCreateTaskInColumn,
+  runs,
 }: ColumnBoardProps) {
   const { t } = useTranslation();
   const [activeMobileColumn, setActiveMobileColumn] = useState(0);
@@ -323,6 +331,7 @@ export function ColumnBoard({
                     onLoadMore={onLoadMoreTasks}
                     hasMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.hasMore}
                     isLoadingMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.isLoadingMore}
+                    runs={runs}
                   />
                 )}
               </div>
@@ -356,6 +365,7 @@ export function ColumnBoard({
                       onLoadMore={onLoadMoreTasks}
                       hasMore={columnPagination[column.id]?.hasMore}
                       isLoadingMore={columnPagination[column.id]?.isLoadingMore}
+                      runs={runs}
                     />
                   ))}
                 </div>
@@ -396,6 +406,7 @@ export function ColumnBoard({
                   onLoadMore={onLoadMoreTasks}
                   hasMore={columnPagination[column.id]?.hasMore}
                   isLoadingMore={columnPagination[column.id]?.isLoadingMore}
+                  runs={runs}
                 />
               ))}
             </div>

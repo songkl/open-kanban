@@ -2,9 +2,10 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useState, useId, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Task } from '@/types/kanban';
+import type { Task, TaskRun } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
 import { UserAvatar } from './UserAvatar';
+import { TaskRunIndicator } from './TaskRunIndicator';
 
 interface TaskCardProps {
   task: Task;
@@ -18,6 +19,14 @@ interface TaskCardProps {
   searchQuery?: string;
   isSelected?: boolean;
   onSelect?: (taskId: string, e?: React.ChangeEvent<HTMLInputElement>) => void;
+  /**
+   * Live `task_runs` row for this card. Surfaced as a runner badge /
+   * progress block so the user can see in-flight Agent runs on the
+   * board without opening the drawer (s-1193,
+   * PM_REVIEW_2026-09-17 §5.1). When absent (no run, or polling
+   * disabled) the card renders unchanged.
+   */
+  run?: TaskRun | null;
 }
 
   const priorityColors: Record<string, string> = {
@@ -42,7 +51,7 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
-export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect }: TaskCardProps) {
+export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
   const taskId = task?.id ?? `temp-${randomId}`;
@@ -282,6 +291,15 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           </button>
         </div>
       </div>
+      {/* s-1193: live Runner badge / progress block — surfaces the
+          in-flight Agent run directly on the board (PM_REVIEW_2026-09-17
+          §5.1). Rendered only when a `task_runs` row exists so the card
+          footprint is unchanged for tasks without a runner. */}
+      {run && (
+        <div className={`mt-2 ${onSelect ? 'pl-6' : 'pl-3'} pr-1`}>
+          <TaskRunIndicator run={run} />
+        </div>
+      )}
       {task.description && typeof task.description === 'string' && (
         <div className="mb-3 pl-3">
           <p

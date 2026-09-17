@@ -61,7 +61,8 @@
     "admin": "Admin",
     "userManagement": "User Management",
     "permissionManagement": "Permission Management",
-    "agentActivity": "Agent Activity"
+    "agentActivity": "Agent Activity",
+    "runs": "Runs"
   },
   "board": {
     "count_one": "{{count}} board",
@@ -267,6 +268,22 @@
     "batchArchive": "Batch Archive",
     "batchDelete": "Batch Delete",
     "loading": "Loading..."
+  },
+  "runs": {
+    "pageTitle": "Live Runs",
+    "subtitle": "Real-time view of in-flight and recently finished runs.",
+    "liveTitle": "Live ({{count}})",
+    "emptyLive": "No runs are currently in flight.",
+    "recentTitle": "Recently completed",
+    "emptyRecent": "No runs have finished yet.",
+    "wsConnected": "WebSocket live",
+    "wsPolling": "Polling (5s)",
+    "enterFullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen"
+  },
+  "runComplete": {
+    "toastTitle": "Run finished",
+    "toastBody": "{{runner}} · {{status}}"
   },
   "column": {
     "addColumn": "Add Column",
@@ -652,7 +669,12 @@
     "moreSubtasks": "+{{count}} more",
     "completed": "Completed",
     "viewComments": "View comments",
-    "selectTask": "Select task"
+    "selectTask": "Select task",
+    "runnerLabel": "Runner: {{runnerId}}",
+    "runnerBadgeAria": "Runner {{runnerId}} is working on this task ({{elapsed}})",
+    "runnerElapsedSeconds": "{{count}}s",
+    "runnerElapsedMinutes": "{{count}}m",
+    "runnerElapsedHours": "{{count}}h"
   },
   "taskModal": {
     "justNow": "Just now",
@@ -723,7 +745,11 @@
     "runExitCode": "Exit code",
     "runError": "Error",
     "retryRun": "Retry run",
-    "retrying": "Retrying…"
+    "retrying": "Retrying…",
+    "runTimelineTitle": "Run timeline",
+    "runTimelineStepClaimed": "Claimed",
+    "runTimelineStepRunning": "Running",
+    "runTimelineStepFinished": "Finished"
   },
   "skeleton": {
     "loading": "Loading..."

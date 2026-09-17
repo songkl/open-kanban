@@ -8,7 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { TaskCard } from './TaskCard';
-import type { Column as ColumnType, Task } from '@/types/kanban';
+import type { Column as ColumnType, Task, TaskRun } from '@/types/kanban';
 
 const LARGE_COLUMN_THRESHOLD = 50;
 
@@ -34,6 +34,12 @@ interface ColumnProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   canCreateTask?: boolean;
+  /**
+   * s-1193: lookup of in-flight `task_runs` rows by taskId. Read from
+   * `useRunStore` at the BoardPage level and threaded through so each
+   * TaskCard can subscribe without firing its own polling request.
+   */
+  runs?: Record<string, TaskRun>;
 }
 
 interface Board {
@@ -41,7 +47,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true }: ColumnProps) {
+export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, runs }: ColumnProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { setNodeRef, isOver } = useDroppable({
@@ -301,6 +307,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   searchQuery={searchQuery}
                   isSelected={selectedTasks?.has(task.id)}
                   onSelect={onSelectTask ? (id, e) => onSelectTask(id, task, e as unknown as React.MouseEvent) : undefined}
+                  run={runs ? runs[task.id] ?? null : undefined}
                 />
               ))
             )}

@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { UserAvatar } from './UserAvatar';
 import { useTaskRun } from '../hooks/useTaskRun';
+import { RunTimeline } from './RunTimeline';
 import type { Task, Attachment, Column, Agent, Subtask, Comment, TaskRun } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
-import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi } from '@/services/api';
+import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi, tasksApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
 
@@ -686,6 +687,16 @@ export function TaskModal({
             </button>
           </div>
         </div>
+
+        {/* s-1193: persistent CI-pipeline-style stepper in the drawer
+            header. Sits below the title row so the operator sees the
+            run timeline even when scrolled deep into the comment
+            thread (PM_REVIEW_2026-09-17 §5.1 finding #2). */}
+        {run && (
+          <div className="flex-shrink-0 border-b border-zinc-100 dark:border-zinc-700 px-6 py-3">
+            <RunTimeline run={run} />
+          </div>
+        )}
 
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}

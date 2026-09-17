@@ -61,7 +61,8 @@
     "admin": "管理",
     "userManagement": "用户管理",
     "permissionManagement": "权限管理",
-    "agentActivity": "Agent 活动状态"
+    "agentActivity": "Agent 活动状态",
+    "runs": "运行大屏"
   },
   "board": {
     "count_one": "{{count}} 个看板",
@@ -267,6 +268,22 @@
     "batchArchive": "批量归档",
     "batchDelete": "批量删除",
     "loading": "加载中..."
+  },
+  "runs": {
+    "pageTitle": "运行大屏",
+    "subtitle": "实时显示当前正在运行以及最近完成的 Agent 任务。",
+    "liveTitle": "正在运行 ({{count}})",
+    "emptyLive": "当前没有正在运行的 Agent 任务。",
+    "recentTitle": "最近完成",
+    "emptyRecent": "暂无已完成的运行记录。",
+    "wsConnected": "WebSocket 实时",
+    "wsPolling": "轮询中（5秒）",
+    "enterFullscreen": "进入全屏",
+    "exitFullscreen": "退出全屏"
+  },
+  "runComplete": {
+    "toastTitle": "运行结束",
+    "toastBody": "{{runner}} · {{status}}"
   },
   "column": {
     "addColumn": "添加列",
@@ -652,7 +669,12 @@
     "moreSubtasks": "+{{count}} 更多",
     "completed": "已完成",
     "viewComments": "查看评论",
-    "selectTask": "选择任务"
+    "selectTask": "选择任务",
+    "runnerLabel": "运行器：{{runnerId}}",
+    "runnerBadgeAria": "运行器 {{runnerId}} 正在处理此任务（已运行 {{elapsed}}）",
+    "runnerElapsedSeconds": "{{count}}秒",
+    "runnerElapsedMinutes": "{{count}}分",
+    "runnerElapsedHours": "{{count}}时"
   },
   "taskModal": {
     "justNow": "刚刚",
@@ -723,7 +745,11 @@
     "runExitCode": "退出码",
     "runError": "错误",
     "retryRun": "重跑任务",
-    "retrying": "正在重跑…"
+    "retrying": "正在重跑…",
+    "runTimelineTitle": "运行时间线",
+    "runTimelineStepClaimed": "已认领",
+    "runTimelineStepRunning": "运行中",
+    "runTimelineStepFinished": "已完成"
   },
   "skeleton": {
     "loading": "加载中..."
