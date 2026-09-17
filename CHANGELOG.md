@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### CLI runner — initial delivery (s-1060)
+
+- **Shipped the `kanban run` / `kanban runs` CLI runner** under
+  `cli/src/runner/` and `cli/src/commands/run.ts`. The runner
+  turns the kanban server's claim/complete REST endpoints into
+  a single command that a local AI agent (opencode, claude, or
+  any shell command) can subscribe to. It codifies the
+  pick → claim → spawn → heartbeat → comment → complete loop
+  that was previously driven by hand via MCP tools.
+- **Configurable via `.kanban-runner.yaml`** at the project
+  root, with a fallback chain of
+  `./.kanban-runner.yaml` → `./.kanban-runner.local.yaml`
+  → `~/.config/kanban-cli/runner.yaml`. The shared config in
+  this repo (`boardId: sys`, `status: todo`,
+  `agent.bin: opencode`, `agent.promptMode: stdin`) is what
+  powers `opencode run` against the live kanban server.
+- **Subcommands**: `kanban run [taskId]` (claim the next
+  task or run a specific one), `kanban runs` (history),
+  `kanban attach <runId>` (websocket tail). Companion e2e
+  suites (s-1170..s-1179) cover create/list/update/move/
+  complete/delete/comment/subtask/auth commands against a
+  live `httptest` server.
+- **Test coverage**: 46 vitest files / 919 tests across the
+  CLI. Runner-specific tests live under
+  `cli/tests/runner/{config,loop,spawn,watcher}.test.ts`.
+  All tests pass locally with `npm test`; `npm run lint`
+  (tsc --noEmit) is clean.
+- **Smoke verification**: `tsc --noEmit` passes; `vitest run`
+  reports 46 files / 919 tests passing in ~17s. The built
+  binary in `cli/dist/index.js` is loadable via the published
+  `kanban` bin name.
+
 ### CLI runner — config health probe (s-1160)
 
 - **New `probeRunnerConfigHealth` / `formatRunnerConfigHealth`
