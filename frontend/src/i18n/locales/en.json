@@ -703,7 +703,24 @@
     "agentPromptPlaceholder": "Instructions for the agent...",
     "publishedAt": "Published",
     "updatedAt": "Updated",
-    "createdBy": "Created by"
+    "createdBy": "Created by",
+    "runInfo": "Run info",
+    "runStatus": {
+      "claimed": "Running",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "released": "Queued"
+    },
+    "runElapsed": "Running for {{elapsed}}",
+    "runRunner": "Runner",
+    "runAgent": "Agent",
+    "runClaimedAt": "Claimed at",
+    "runLastHeartbeat": "Last heartbeat",
+    "runExpiresAt": "Expires at",
+    "runFinishedAt": "Finished at",
+    "runExitCode": "Exit code",
+    "runError": "Error"
   },
   "skeleton": {
     "loading": "Loading..."

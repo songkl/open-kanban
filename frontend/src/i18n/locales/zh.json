@@ -703,7 +703,24 @@
     "agentPromptPlaceholder": "给 Agent 的指令...",
     "publishedAt": "发布日期",
     "updatedAt": "更新日期",
-    "createdBy": "创建者"
+    "createdBy": "创建者",
+    "runInfo": "运行信息",
+    "runStatus": {
+      "claimed": "运行中",
+      "running": "运行中",
+      "completed": "已完成",
+      "failed": "失败",
+      "released": "排队中"
+    },
+    "runElapsed": "已运行 {{elapsed}}",
+    "runRunner": "Runner",
+    "runAgent": "Agent",
+    "runClaimedAt": "开始时间",
+    "runLastHeartbeat": "最近心跳",
+    "runExpiresAt": "过期时间",
+    "runFinishedAt": "结束时间",
+    "runExitCode": "退出码",
+    "runError": "错误"
   },
   "skeleton": {
     "loading": "加载中..."

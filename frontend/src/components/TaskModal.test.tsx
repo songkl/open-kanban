@@ -98,6 +98,14 @@ vi.mock('@/components/SafeMarkdown', () => ({
   SafeMarkdown: ({ children }: { children: string }) => <div data-testid="safe-markdown">{children}</div>,
 }));
 
+// useTaskRun is mocked per-test inside the "run status badge (s-1190)"
+// describe block so other tests can rely on the real hook returning
+// `null` (no row → no run badge).
+const useTaskRunMock = vi.fn(() => ({ run: null, loading: false, error: null }));
+vi.mock('@/hooks/useTaskRun', () => ({
+  useTaskRun: (...args: unknown[]) => useTaskRunMock(...args),
+}));
+
 describe('TaskModal', () => {
   const defaultProps = {
     task: mockTask,
@@ -583,6 +591,96 @@ describe('TaskModal', () => {
       render(<TaskModal {...defaultProps} task={taskAnon} />);
       expect(screen.queryByText('Creator Nick')).not.toBeInTheDocument();
       expect(screen.queryByText('creatorlogin')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * PM_REVIEW_2026-09-17 §3.6 finding #1 (s-1190): the drawer used to
+   * show "🤖 运行中" and "已完成" on the same row. The fix routes the
+   * status badge through `task_runs` (single source of truth) and
+   * suppresses the column-name pill whenever a run row exists, so
+   * exactly one of {Running, Completed, Failed, Queued} renders.
+   *
+   * `useTaskRun` is mocked at the top of the file so other tests can
+   * rely on the real hook returning `null` (no row → no run badge).
+   */
+  describe('run status badge (s-1190, PM_REVIEW §3.6)', () => {
+    const liveRun = {
+      id: 'run-1',
+      taskId: 'task-1',
+      runnerId: 'runner-mac-66681-9abc',
+      agentId: 'agent-claude',
+      status: 'running',
+      claimedAt: '2026-09-17T10:00:00.000Z',
+      lastHeartbeatAt: '2026-09-17T10:00:30.000Z',
+      expiresAt: '2026-09-17T10:02:00.000Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    } as const;
+
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('renders the column name when no run row exists', () => {
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      expect(screen.getByText('已完成')).toBeInTheDocument();
+      expect(screen.queryByTestId('task-run-info')).not.toBeInTheDocument();
+    });
+
+    it('suppresses the column name when a live run row exists (s-1190 core fix)', async () => {
+      useTaskRunMock.mockReturnValue({ run: liveRun, loading: false, error: null });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
+      expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      expect(screen.getByTestId('run-status')).toHaveTextContent('taskModal.runStatus.running');
+    });
+
+    it('shows exactly one Completed badge when the latest run is completed', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'completed', finishedAt: '2026-09-17T10:01:00.000Z', exitCode: 0 },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
+      const statusBadge = screen.getByTestId('run-status');
+      expect(statusBadge).toHaveTextContent('taskModal.runStatus.completed');
+    });
+
+    it('shows exactly one Failed badge when the latest run is failed', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'failed', finishedAt: '2026-09-17T10:01:00.000Z', exitCode: 1, error: 'boom' },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
+      const statusBadge = screen.getByTestId('run-status');
+      expect(statusBadge).toHaveTextContent('taskModal.runStatus.failed');
+    });
+
+    it('shows exactly one Queued badge when the latest run was released', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'released', finishedAt: '2026-09-17T10:01:00.000Z' },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
+      const statusBadge = screen.getByTestId('run-status');
+      expect(statusBadge).toHaveTextContent('taskModal.runStatus.released');
     });
   });
 });

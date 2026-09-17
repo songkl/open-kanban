@@ -14,6 +14,7 @@ import type {
   BoardPermission,
   ColumnPermission,
   BoardBulkGrantResult,
+  TaskRun,
 } from '@/types/kanban';
 import i18n from '@/i18n';
 
@@ -700,4 +701,46 @@ export const attachmentsApi = {
 
   delete: (id: string) =>
     fetchApi<void>(`attachments/${id}`, { method: 'DELETE' }),
+};
+
+// Task runs API — surfaces the live `task_runs` row for a task so the
+// drawer can decide whether to render the run status badge or fall
+// back to the columnName (see PM_REVIEW_2026-09-17 §3.6).
+export const runsApi = {
+  /**
+   * Fetch the latest task_runs row for the given task. Returns
+   * `null` when no row exists (either the task was never claimed or
+   * the row has been reaped). 404 responses are normalised to null so
+   * callers don't need a try/catch around the "no run yet" case.
+   */
+  getByTask: async (taskId: string, options?: { signal?: AbortSignal }): Promise<TaskRun | null> => {
+    const url = `${API_BASE}runs/${encodeURIComponent(taskId)}`;
+    try {
+      const response = await fetch(url, {
+        credentials: 'include',
+        signal: options?.signal,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.status === 404) return null;
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login';
+          throw new ApiError(i18n.t('app.error.unauthorized'), 401);
+        }
+        throw new ApiError(data?.error || i18n.t('app.error.requestFailed', { status: response.status }), response.status);
+      }
+      if (data === null || data === undefined) return null;
+      return data as TaskRun;
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw new ApiError('Request was cancelled', undefined, false, true);
+      }
+      if (error instanceof ApiError) throw error;
+      if (isNetworkError(error)) {
+        throw new ApiError(i18n.t('app.error.networkError'), undefined, true);
+      }
+      throw error;
+    }
+  },
 };

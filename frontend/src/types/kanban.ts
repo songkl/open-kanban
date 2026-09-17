@@ -180,3 +180,30 @@ export interface OAuthConfigEntry {
   default: string;
   description: string;
 }
+
+/**
+ * Live CLI runner row returned by GET /api/v1/runs/:taskId. Mirrors the
+ * `task_runs` table — see backend/internal/handlers/tasks_run.go. The
+ * status enum collapses to the four user-facing states the PM review
+ * (PM_REVIEW_2026-09-17 §3.6) requires the drawer to render exactly
+ * one of: Running, Completed, Failed, Queued.
+ *
+ *   - `claimed` / `running`   → "Running"
+ *   - `completed`             → "Completed"
+ *   - `failed`                → "Failed"
+ *   - `released`              → "Queued" (runner voluntarily gave the
+ *                               task back, awaiting the next claim)
+ */
+export interface TaskRun {
+  id: string;
+  taskId: string;
+  runnerId: string;
+  agentId: string | null;
+  status: 'claimed' | 'running' | 'completed' | 'failed' | 'released';
+  claimedAt: string;
+  lastHeartbeatAt: string;
+  expiresAt: string;
+  finishedAt: string | null;
+  exitCode: number | null;
+  error: string | null;
+}

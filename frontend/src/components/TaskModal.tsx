@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { UserAvatar } from './UserAvatar';
-import type { Task, Attachment, Column, Agent, Subtask, Comment } from '@/types/kanban';
+import { useTaskRun } from '../hooks/useTaskRun';
+import type { Task, Attachment, Column, Agent, Subtask, Comment, TaskRun } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
 import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi } from '@/services/api';
@@ -36,6 +37,135 @@ function formatCommentDate(t: ReturnType<typeof useTranslation>[0], dateStr: str
       minute: '2-digit'
     });
   }
+}
+
+/**
+ * Format the elapsed time since `claimedAt` into a short human label.
+ * Frozen at `endMs` (defaulting to now) once the run has settled so the
+ * modal stops re-rendering for a runner that has already gone away
+ * (s-1168).
+ */
+function formatRunElapsed(
+  claimedAt: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  endMs: number | null = null
+): string {
+  const startMs = new Date(claimedAt).getTime();
+  if (Number.isNaN(startMs)) return t('taskCard.runnerElapsedSeconds', { count: 0 });
+  const stopMs = endMs ?? Date.now();
+  const elapsedSec = Math.max(0, Math.floor((stopMs - startMs) / 1000));
+  if (elapsedSec < 60) return t('taskCard.runnerElapsedSeconds', { count: elapsedSec });
+  if (elapsedSec < 3600) {
+    return t('taskCard.runnerElapsedMinutes', { count: Math.floor(elapsedSec / 60) });
+  }
+  return t('taskCard.runnerElapsedHours', { count: Math.floor(elapsedSec / 3600) });
+}
+
+/**
+ * Map a `task_runs.status` row to one of the four user-facing badges
+ * PM_REVIEW_2026-09-17 §3.6 requires the drawer to render. The drawer
+ * must never show two of these side-by-side — see s-1190. Returned
+ * values map onto `taskModal.runStatus.*` keys.
+ */
+function runStatusBadgeKey(run: TaskRun): 'claimed' | 'running' | 'completed' | 'failed' | 'released' {
+  return run.status;
+}
+
+const RUN_STATUS_COLORS: Record<TaskRun['status'], string> = {
+  claimed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700/50',
+  running: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-violet-200 dark:border-violet-700/50',
+  completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700/50',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700/50',
+  released: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-600',
+};
+
+/**
+ * RunInfoSection — banner shown inside the task modal while a CLI
+ * runner holds the task. Single source of truth for the
+ * "Running / Completed / Failed / Queued" badge the PM review called
+ * out as a trust anchor: the column name is hidden whenever this
+ * section renders so the user never sees "🤖 运行中" and "已完成"
+ * on the same row (s-1190, PM_REVIEW_2026-09-17 §3.6 finding #1).
+ */
+function RunInfoSection({ run }: { run: TaskRun }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === 'zh' ? 'zh-CN' : i18n.language;
+  const dateFmt = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  const isLive = run.status === 'claimed' || run.status === 'running';
+  const [, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    if (!isLive) return undefined;
+    const handle = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(handle);
+  }, [isLive]);
+
+  const finishedMs = run.finishedAt ? new Date(run.finishedAt).getTime() : null;
+
+  return (
+    <div
+      className="mb-6 rounded-lg border border-violet-200 dark:border-violet-700/50 bg-violet-50/50 dark:bg-violet-900/20 p-4"
+      data-testid="task-run-info"
+    >
+      <div className="mb-3 flex items-center gap-2 flex-wrap">
+        <span aria-hidden className="text-base">🤖</span>
+        <h4 className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+          {t('taskModal.runInfo')}
+        </h4>
+        <span
+          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${RUN_STATUS_COLORS[runStatusBadgeKey(run)]}`}
+          data-testid="run-status"
+        >
+          {t(`taskModal.runStatus.${runStatusBadgeKey(run)}`)}
+        </span>
+        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400" data-testid="run-elapsed">
+          {t('taskModal.runElapsed', { elapsed: formatRunElapsed(run.claimedAt, t, finishedMs) })}
+        </span>
+      </div>
+      <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5 text-xs">
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runRunner')}</dt>
+        <dd className="font-mono text-zinc-700 dark:text-zinc-200 break-all" title={run.runnerId}>{run.runnerId}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runAgent')}</dt>
+        <dd className="font-mono text-zinc-700 dark:text-zinc-200 break-all">{run.agentId || '—'}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runClaimedAt')}</dt>
+        <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.claimedAt))}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runLastHeartbeat')}</dt>
+        <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.lastHeartbeatAt))}</dd>
+
+        <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runExpiresAt')}</dt>
+        <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.expiresAt))}</dd>
+
+        {run.finishedAt && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runFinishedAt')}</dt>
+            <dd className="text-zinc-700 dark:text-zinc-200">{dateFmt.format(new Date(run.finishedAt))}</dd>
+          </>
+        )}
+        {run.exitCode !== undefined && run.exitCode !== null && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runExitCode')}</dt>
+            <dd className="font-mono text-zinc-700 dark:text-zinc-200">{run.exitCode}</dd>
+          </>
+        )}
+        {run.error && (
+          <>
+            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runError')}</dt>
+            <dd className="text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{run.error}</dd>
+          </>
+        )}
+      </dl>
+    </div>
+  );
 }
 
 interface Board {
@@ -250,6 +380,11 @@ export function TaskModal({
     authApi.getAgents().then(setAgents).catch(console.error);
   }, []);
 
+  // Poll the live CLI runner on this task. The section is the single
+  // source of truth for the run status badge the PM review (s-1190)
+  // requires — see RunInfoSection above.
+  const { run } = useTaskRun(task.id, { intervalMs: 5000 });
+
   const handleAuthorChange = (value: string) => {
     setCommentAuthor(value);
     localStorage.setItem(STORAGE_KEY, value);
@@ -394,7 +529,15 @@ export function TaskModal({
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-700 px-6 py-4">
           <div className="flex items-center gap-3 flex-wrap">
-            {columnName && (
+            {/*
+              Single source of truth for the status pill. PM_REVIEW_2026-09-17
+              §3.6 finding #1 (s-1190): the column name (e.g. "已完成") must
+              be hidden whenever a live/terminal task_runs row exists, so the
+              drawer never shows both "🤖 运行中" and "已完成" on the same
+              row. The run status badge is rendered inside RunInfoSection
+              below and re-renders the single canonical state.
+            */}
+            {columnName && !run && (
               <span className="rounded-full bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300">
                 {columnName}
               </span>
@@ -487,6 +630,13 @@ export function TaskModal({
                 className="mb-4 w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-xl font-semibold"
               />
             )}
+
+            {/* Run Info — only rendered while a CLI runner holds the task.
+                Surfaced near the top of the modal so operators can see
+                who is working on the task without scrolling. The run
+                status badge here is the single source of truth — see the
+                columnName suppression above. */}
+            {run && <RunInfoSection run={run} />}
 
             {/* Description */}
             <div className="mb-6">
