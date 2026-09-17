@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { SearchBar } from './SearchBar';
 import { FilterPanelContent } from './FilterPanelContent';
 import type { FilterPreset, FilterState } from '../hooks/useFilters';
+import type { CustomField } from '@/types/kanban';
 
 interface BoardToolbarProps {
   searchQuery: string;
@@ -10,6 +11,8 @@ interface BoardToolbarProps {
   filterPresets: FilterPreset[];
   uniqueAssignees: string[];
   uniqueTags: string[];
+  uniqueCustomFieldValues: Record<string, string[]>;
+  customFields: CustomField[];
   hasActiveFilters: boolean;
   showFilterPanel: boolean;
   showPresetDropdown: boolean;
@@ -33,6 +36,8 @@ export function BoardToolbar({
   filterPresets,
   uniqueAssignees,
   uniqueTags,
+  uniqueCustomFieldValues,
+  customFields,
   hasActiveFilters,
   showFilterPanel,
   showPresetDropdown,
@@ -62,7 +67,14 @@ export function BoardToolbar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterPanel, onCloseFilterPanel]);
 
-  const activeFilterCount = [filters.searchQuery, filters.priority, filters.assignee, filters.dateRange, filters.tag].filter(Boolean).length;
+  const activeFilterCount = [
+    filters.searchQuery,
+    filters.priority,
+    filters.assignee,
+    filters.dateRange,
+    filters.tag,
+    filters.customField.fieldId,
+  ].filter(Boolean).length;
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 order-3 sm:order-2 w-full sm:w-auto mt-2 sm:mt-0">
@@ -120,6 +132,8 @@ export function BoardToolbar({
               filters={filters}
               uniqueAssignees={uniqueAssignees}
               uniqueTags={uniqueTags}
+              uniqueCustomFieldValues={uniqueCustomFieldValues}
+              customFields={customFields}
               filterPresets={filterPresets}
               showPresetDropdown={showPresetDropdown}
               onSetFilters={onSetFilters}

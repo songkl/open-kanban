@@ -2,10 +2,11 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useState, useId, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Task, TaskRun } from '@/types/kanban';
+import type { CustomField, Task, TaskRun } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
 import { UserAvatar } from './UserAvatar';
 import { TaskRunIndicator } from './TaskRunIndicator';
+import { CustomFieldChips } from './CustomFieldChips';
 
 interface TaskCardProps {
   task: Task;
@@ -27,6 +28,14 @@ interface TaskCardProps {
    * disabled) the card renders unchanged.
    */
   run?: TaskRun | null;
+  /**
+   * s-1197: per-board custom field definitions. When provided, any
+   * matching values from `task.meta` render as colored chips between
+   * the description and the footer. Threaded from BoardPage → ColumnBoard
+   * → Column → TaskCard (same plumbing as `run`) so the chip rendering
+   * doesn't need its own localStorage hook.
+   */
+  customFields?: CustomField[];
 }
 
   const priorityColors: Record<string, string> = {
@@ -51,7 +60,7 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
-export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run }: TaskCardProps) {
+export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run, customFields }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
   const taskId = task?.id ?? `temp-${randomId}`;
@@ -326,6 +335,13 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
             </button>
           )}
         </div>
+      )}
+      {/* s-1197: custom field chips. Render only when at least one
+          defined field has a non-empty value on the task meta; otherwise
+          the component returns null so the layout stays identical for
+          boards without custom fields defined. */}
+      {customFields && customFields.length > 0 && (
+        <CustomFieldChips meta={task.meta} customFields={customFields} />
       )}
       {/* Subtasks preview */}
       {task.subtasks && task.subtasks.length > 0 && (

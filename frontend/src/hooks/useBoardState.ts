@@ -8,9 +8,10 @@ import { useBoardWebSocket } from './useBoardWebSocket';
 import { useBoardRefresh } from './useBoardRefresh';
 import { useFilters } from './useFilters';
 import { useColumnPermissions } from './useColumnPermissions';
+import { useCustomFields } from './useCustomFields';
 import type { ColumnAccess } from './useColumnPermissions';
 import type { FilterState, FilterPreset } from './useFilters';
-import type { Board, Column as ColumnType, Task, User } from '../types/kanban';
+import type { Board, Column as ColumnType, CustomField, Task, User } from '../types/kanban';
 
 export interface FailedTaskCreation {
   title: string;
@@ -54,6 +55,8 @@ interface UseBoardStateReturn {
   searchQuery: string;
   uniqueAssignees: string[];
   uniqueTags: string[];
+  uniqueCustomFieldValues: Record<string, string[]>;
+  customFields: CustomField[];
   isInDateRange: (taskCreatedAt: string) => boolean;
   getFilteredColumns: () => ColumnType[];
   fetchBoards: () => Promise<void>;
@@ -151,12 +154,15 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     isProcessingQueueRef,
   } = useTasks({ columns, currentBoard, onColumnsChange: setColumns, onLastLocalUpdate: () => {} });
 
+  const { customFields } = useCustomFields(currentBoard?.id);
+
   const {
     filters,
     filterPresets,
     searchQuery,
     uniqueAssignees,
     uniqueTags,
+    uniqueCustomFieldValues,
     isInDateRange,
     getFilteredColumns,
     setFilters,
@@ -167,7 +173,7 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     deletePreset,
     clearFilters,
     hasActiveFilters,
-  } = useFilters({ columns });
+  } = useFilters({ columns, customFields });
 
   const {
     handleTaskNotificationUpdate,
@@ -301,6 +307,8 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     searchQuery,
     uniqueAssignees,
     uniqueTags,
+    uniqueCustomFieldValues,
+    customFields,
     isInDateRange,
     getFilteredColumns,
     fetchBoards,

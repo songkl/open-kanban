@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useFilters } from './useFilters';
-import type { Column as ColumnType } from '@/types/kanban';
+import { useFilters, EMPTY_CUSTOM_FIELD_FILTER } from './useFilters';
+import type { Column as ColumnType, CustomField } from '@/types/kanban';
 
 const createMockTask = (id: string, overrides = {}) => ({
   id,
@@ -67,6 +67,7 @@ describe('useFilters', () => {
         searchQuery: '',
         dateRange: '',
         tag: '',
+        customField: EMPTY_CUSTOM_FIELD_FILTER,
       });
     });
 
@@ -85,7 +86,7 @@ describe('useFilters', () => {
     it('should update filters state', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.filters.priority).toBe('high');
     });
@@ -105,7 +106,7 @@ describe('useFilters', () => {
     it('should reset all filters to empty', () => {
       const { result } = renderHook(() => useFilters({ columns: mockColumns }));
       act(() => {
-        result.current.setFilters({ priority: 'high', assignee: 'Alice', searchQuery: 'test', dateRange: 'today', tag: 'bug' });
+        result.current.setFilters({ priority: 'high', assignee: 'Alice', searchQuery: 'test', dateRange: 'today', tag: 'bug', customField: { fieldId: 'a', value: 'b' } });
         result.current.setSearchQuery('test');
       });
       act(() => {
@@ -117,6 +118,7 @@ describe('useFilters', () => {
         searchQuery: '',
         dateRange: '',
         tag: '',
+        customField: EMPTY_CUSTOM_FIELD_FILTER,
       });
       expect(result.current.searchQuery).toBe('');
     });
@@ -170,7 +172,7 @@ describe('useFilters', () => {
     it('should return true for today when dateRange is today', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'today', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'today', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.isInDateRange(new Date().toISOString())).toBe(true);
     });
@@ -178,7 +180,7 @@ describe('useFilters', () => {
     it('should return false for old date when dateRange is today', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'today', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'today', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const oldDate = new Date(Date.now() - 86400000 * 2).toISOString();
       expect(result.current.isInDateRange(oldDate)).toBe(false);
@@ -187,7 +189,7 @@ describe('useFilters', () => {
     it('should return true for thisWeek when date is within current week', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'thisWeek', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'thisWeek', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.isInDateRange(new Date().toISOString())).toBe(true);
     });
@@ -195,7 +197,7 @@ describe('useFilters', () => {
     it('should return true for thisMonth when date is within current month', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'thisMonth', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'thisMonth', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.isInDateRange(new Date().toISOString())).toBe(true);
     });
@@ -211,7 +213,7 @@ describe('useFilters', () => {
     it('should filter by searchQuery in title', () => {
       const { result } = renderHook(() => useFilters({ columns: mockColumns }));
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'Task task-1', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'Task task-1', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const filtered = result.current.getFilteredColumns();
       expect(filtered[0].tasks.length).toBe(1);
@@ -221,13 +223,13 @@ describe('useFilters', () => {
     it('should filter by searchQuery in description', () => {
       const columnsWithDesc = mockColumns.map(col => ({
         ...col,
-        tasks: col.tasks.map(task => 
+        tasks: col.tasks.map(task =>
           task.id === 'task-1' ? { ...task, description: 'Special description' } : task
         ),
       }));
       const { result } = renderHook(() => useFilters({ columns: columnsWithDesc }));
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'Special', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'Special', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const filtered = result.current.getFilteredColumns();
       expect(filtered[0].tasks.length).toBe(1);
@@ -236,7 +238,7 @@ describe('useFilters', () => {
     it('should filter by searchQuery in id', () => {
       const { result } = renderHook(() => useFilters({ columns: mockColumns }));
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'task-1', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'task-1', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const filtered = result.current.getFilteredColumns();
       expect(filtered[0].tasks.length).toBe(1);
@@ -245,7 +247,7 @@ describe('useFilters', () => {
     it('should filter by priority', () => {
       const { result } = renderHook(() => useFilters({ columns: mockColumns }));
       act(() => {
-        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const filtered = result.current.getFilteredColumns();
       expect(filtered[0].tasks.length).toBe(1);
@@ -255,7 +257,7 @@ describe('useFilters', () => {
     it('should filter by assignee', () => {
       const { result } = renderHook(() => useFilters({ columns: mockColumns }));
       act(() => {
-        result.current.setFilters({ priority: '', assignee: 'Alice', searchQuery: '', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: '', assignee: 'Alice', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const filtered = result.current.getFilteredColumns();
       expect(filtered[0].tasks.length).toBe(1);
@@ -272,7 +274,7 @@ describe('useFilters', () => {
       }));
       const { result } = renderHook(() => useFilters({ columns: columnsWithTags }));
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: 'bug' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: 'bug', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const filtered = result.current.getFilteredColumns();
       expect(filtered[0].tasks.length).toBe(1);
@@ -281,7 +283,7 @@ describe('useFilters', () => {
     it('should combine multiple filters', () => {
       const { result } = renderHook(() => useFilters({ columns: mockColumns }));
       act(() => {
-        result.current.setFilters({ priority: 'high', assignee: 'Alice', searchQuery: '', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: 'high', assignee: 'Alice', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       const filtered = result.current.getFilteredColumns();
       expect(filtered[0].tasks.length).toBe(1);
@@ -299,7 +301,7 @@ describe('useFilters', () => {
     it('should return true when searchQuery is set', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'test', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: 'test', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.hasActiveFilters).toBe(true);
     });
@@ -307,7 +309,7 @@ describe('useFilters', () => {
     it('should return true when priority is set', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.hasActiveFilters).toBe(true);
     });
@@ -315,7 +317,7 @@ describe('useFilters', () => {
     it('should return true when assignee is set', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: 'Alice', searchQuery: '', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: '', assignee: 'Alice', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.hasActiveFilters).toBe(true);
     });
@@ -323,7 +325,7 @@ describe('useFilters', () => {
     it('should return true when dateRange is set', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'today', tag: '' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: 'today', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       expect(result.current.hasActiveFilters).toBe(true);
     });
@@ -331,7 +333,15 @@ describe('useFilters', () => {
     it('should return true when tag is set', () => {
       const { result } = renderHook(() => useFilters());
       act(() => {
-        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: 'bug' });
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: 'bug', customField: EMPTY_CUSTOM_FIELD_FILTER });
+      });
+      expect(result.current.hasActiveFilters).toBe(true);
+    });
+
+    it('should return true when a custom field filter is set', () => {
+      const { result } = renderHook(() => useFilters());
+      act(() => {
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: { fieldId: 'a', value: '' } });
       });
       expect(result.current.hasActiveFilters).toBe(true);
     });
@@ -342,7 +352,7 @@ describe('useFilters', () => {
       const { result } = renderHook(() => useFilters());
       vi.spyOn(window, 'prompt').mockReturnValue('My Preset');
       act(() => {
-        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '' });
+        result.current.setFilters({ priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER });
       });
       act(() => {
         result.current.saveCurrentAsPreset();
@@ -367,7 +377,7 @@ describe('useFilters', () => {
 
     it('should load presets from localStorage on init', () => {
       localStorage.setItem('filterPresets', JSON.stringify([
-        { id: '1', name: 'Test Preset', filters: { priority: 'low', assignee: '', searchQuery: '', dateRange: '', tag: '' } }
+        { id: '1', name: 'Test Preset', filters: { priority: 'low', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER } }
       ]));
       const { result } = renderHook(() => useFilters());
       expect(result.current.filterPresets.length).toBe(1);
@@ -376,7 +386,7 @@ describe('useFilters', () => {
 
     it('should apply preset filters', () => {
       localStorage.setItem('filterPresets', JSON.stringify([
-        { id: '1', name: 'Test Preset', filters: { priority: 'low', assignee: 'Bob', searchQuery: 'test', dateRange: '', tag: '' } }
+        { id: '1', name: 'Test Preset', filters: { priority: 'low', assignee: 'Bob', searchQuery: 'test', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER } }
       ]));
       const { result } = renderHook(() => useFilters());
       act(() => {
@@ -389,8 +399,8 @@ describe('useFilters', () => {
 
     it('should delete preset', () => {
       localStorage.setItem('filterPresets', JSON.stringify([
-        { id: '1', name: 'Test Preset', filters: { priority: 'low', assignee: '', searchQuery: '', dateRange: '', tag: '' } },
-        { id: '2', name: 'Another Preset', filters: { priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '' } }
+        { id: '1', name: 'Test Preset', filters: { priority: 'low', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER } },
+        { id: '2', name: 'Another Preset', filters: { priority: 'high', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER } }
       ]));
       const { result } = renderHook(() => useFilters());
       expect(result.current.filterPresets.length).toBe(2);
@@ -404,12 +414,106 @@ describe('useFilters', () => {
     it('should set filterPresets directly', () => {
       const { result } = renderHook(() => useFilters());
       const newPresets = [
-        { id: '1', name: 'Preset 1', filters: { priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '' } }
+        { id: '1', name: 'Preset 1', filters: { priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: EMPTY_CUSTOM_FIELD_FILTER } }
       ];
       act(() => {
         result.current.setFilterPresets(newPresets);
       });
       expect(result.current.filterPresets).toEqual(newPresets);
+    });
+  });
+
+  describe('customField filter', () => {
+    const customFields: CustomField[] = [
+      { id: 'cf-1', name: 'Severity', type: 'single-select', color: '#ef4444', options: ['low', 'high'] },
+      { id: 'cf-2', name: 'Labels', type: 'multi-select', color: '#3b82f6', options: ['bug', 'ui'] },
+    ];
+
+    it('computes uniqueCustomFieldValues across tasks', () => {
+      const columns: ColumnType[] = mockColumns.map(col => ({
+        ...col,
+        tasks: col.tasks.map((task, i) => ({
+          ...task,
+          meta: i === 0 ? { Severity: 'high' } : i === 1 ? { Severity: 'low' } : null,
+        })),
+      }));
+      const { result } = renderHook(() => useFilters({ columns, customFields }));
+      expect(result.current.uniqueCustomFieldValues['cf-1'].sort()).toEqual(['high', 'low']);
+    });
+
+    it('flattens multi-select values for the options list', () => {
+      const columns: ColumnType[] = mockColumns.map(col => ({
+        ...col,
+        tasks: col.tasks.map((task, i) => ({
+          ...task,
+          meta: i === 0 ? { Labels: ['bug', 'ui'] } : i === 1 ? { Labels: 'bug, perf' } : null,
+        })),
+      }));
+      const { result } = renderHook(() => useFilters({ columns, customFields }));
+      const values = result.current.uniqueCustomFieldValues['cf-2'];
+      expect(values.sort()).toEqual(['bug', 'perf', 'ui']);
+    });
+
+    it('returns empty map when no custom fields are provided', () => {
+      const { result } = renderHook(() => useFilters({ columns: mockColumns }));
+      expect(result.current.uniqueCustomFieldValues).toEqual({});
+    });
+
+    it('filters tasks by single-select custom field value', () => {
+      const columns: ColumnType[] = mockColumns.map(col => ({
+        ...col,
+        tasks: col.id === 'col-1'
+          ? col.tasks.map((task, i) => ({
+              ...task,
+              meta: i === 0 ? { Severity: 'high' } : i === 1 ? { Severity: 'low' } : null,
+            }))
+          : col.tasks.map(task => ({ ...task, meta: null })),
+      }));
+      const { result } = renderHook(() => useFilters({ columns, customFields }));
+      act(() => {
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: { fieldId: 'cf-1', value: 'high' } });
+      });
+      const filtered = result.current.getFilteredColumns();
+      const allTasks = filtered.flatMap(c => c.tasks);
+      expect(allTasks.length).toBe(1);
+      expect((allTasks[0].meta as Record<string, unknown>).Severity).toBe('high');
+    });
+
+    it('filters tasks by multi-select custom field value (array form)', () => {
+      const columns: ColumnType[] = mockColumns.map(col => ({
+        ...col,
+        tasks: col.id === 'col-1'
+          ? col.tasks.map((task, i) => ({
+              ...task,
+              meta: i === 0 ? { Labels: ['bug', 'ui'] } : i === 1 ? { Labels: ['perf'] } : null,
+            }))
+          : col.tasks.map(task => ({ ...task, meta: null })),
+      }));
+      const { result } = renderHook(() => useFilters({ columns, customFields }));
+      act(() => {
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: { fieldId: 'cf-2', value: 'bug' } });
+      });
+      const filtered = result.current.getFilteredColumns();
+      const allTasks = filtered.flatMap(c => c.tasks);
+      expect(allTasks.length).toBe(1);
+      expect((allTasks[0].meta as Record<string, unknown>).Labels).toEqual(['bug', 'ui']);
+    });
+
+    it('excludes tasks that do not carry the filtered custom field', () => {
+      const columns: ColumnType[] = mockColumns.map(col => ({
+        ...col,
+        tasks: col.tasks.map((task, i) => ({
+          ...task,
+          meta: i === 0 ? { Severity: 'high' } : null,
+        })),
+      }));
+      const { result } = renderHook(() => useFilters({ columns, customFields }));
+      act(() => {
+        result.current.setFilters({ priority: '', assignee: '', searchQuery: '', dateRange: '', tag: '', customField: { fieldId: 'cf-1', value: 'high' } });
+      });
+      const filtered = result.current.getFilteredColumns();
+      const allTasks = filtered.flatMap(c => c.tasks);
+      expect(allTasks.every(t => t.meta && (t.meta as Record<string, unknown>).Severity === 'high')).toBe(true);
     });
   });
 });

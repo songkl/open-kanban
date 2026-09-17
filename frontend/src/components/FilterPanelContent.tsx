@@ -1,11 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import type { FilterState, FilterPreset } from '../hooks/useFilters';
+import type { CustomField } from '@/types/kanban';
 import { CustomDropdown } from './CustomDropdown';
 
 interface FilterPanelContentProps {
   filters: FilterState;
   uniqueAssignees: string[];
   uniqueTags: string[];
+  uniqueCustomFieldValues: Record<string, string[]>;
+  customFields: CustomField[];
   filterPresets: FilterPreset[];
   showPresetDropdown: boolean;
   onSetFilters: React.Dispatch<React.SetStateAction<FilterState>>;
@@ -20,6 +23,8 @@ export function FilterPanelContent({
   filters,
   uniqueAssignees,
   uniqueTags,
+  uniqueCustomFieldValues,
+  customFields,
   filterPresets,
   showPresetDropdown,
   onSetFilters,
@@ -30,6 +35,14 @@ export function FilterPanelContent({
   onSetShowPresetDropdown,
 }: FilterPanelContentProps) {
   const { t } = useTranslation();
+
+  // s-1197: render the custom-field filter as two coupled dropdowns —
+  // first pick the field (any non-archived definition), then pick a
+  // value from the unique values seen across this board's tasks. We
+  // deliberately keep both dropdowns mounted even when the field is
+  // empty so the layout doesn't jump when toggled.
+  const selectedField = customFields.find(f => f.id === filters.customField.fieldId);
+  const valueOptions = selectedField ? (uniqueCustomFieldValues[selectedField.id] ?? []) : [];
 
   return (
     <>
@@ -88,6 +101,41 @@ export function FilterPanelContent({
             value={filters.tag}
             onChange={(val) => onSetFilters((prev) => ({ ...prev, tag: val }))}
             className="w-full"
+          />
+        </div>
+      )}
+      {customFields.length > 0 && (
+        <div className="mb-3">
+          <label htmlFor="filter-customField" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.customField')}</label>
+          <CustomDropdown
+            id="filter-customField"
+            options={[
+              { value: '', label: t('filter.all') },
+              ...customFields.map((f) => ({ value: f.id, label: f.name })),
+            ]}
+            value={filters.customField.fieldId}
+            onChange={(val) =>
+              onSetFilters((prev) => ({ ...prev, customField: { fieldId: val, value: '' } }))
+            }
+            className="w-full"
+          />
+        </div>
+      )}
+      {customFields.length > 0 && filters.customField.fieldId && (
+        <div className="mb-3">
+          <label htmlFor="filter-customField-value" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.customFieldValue')}</label>
+          <CustomDropdown
+            id="filter-customField-value"
+            options={[
+              { value: '', label: t('filter.all') },
+              ...valueOptions.map((v) => ({ value: v, label: v })),
+            ]}
+            value={filters.customField.value}
+            onChange={(val) =>
+              onSetFilters((prev) => ({ ...prev, customField: { ...prev.customField, value: val } }))
+            }
+            className="w-full"
+            disabled={valueOptions.length === 0}
           />
         </div>
       )}

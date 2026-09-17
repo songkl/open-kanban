@@ -8,7 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { TaskCard } from './TaskCard';
-import type { Column as ColumnType, Task, TaskRun } from '@/types/kanban';
+import type { Column as ColumnType, CustomField, Task, TaskRun } from '@/types/kanban';
 
 const LARGE_COLUMN_THRESHOLD = 50;
 
@@ -40,6 +40,11 @@ interface ColumnProps {
    * TaskCard can subscribe without firing its own polling request.
    */
   runs?: Record<string, TaskRun>;
+  /**
+   * s-1197: per-board custom field definitions. Threaded from BoardPage
+   * so each card renders matching chips without re-reading localStorage.
+   */
+  customFields?: CustomField[];
 }
 
 interface Board {
@@ -47,7 +52,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, runs }: ColumnProps) {
+export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, runs, customFields }: ColumnProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { setNodeRef, isOver } = useDroppable({
@@ -308,6 +313,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   isSelected={selectedTasks?.has(task.id)}
                   onSelect={onSelectTask ? (id, e) => onSelectTask(id, task, e as unknown as React.MouseEvent) : undefined}
                   run={runs ? runs[task.id] ?? null : undefined}
+                  customFields={customFields}
                 />
               ))
             )}

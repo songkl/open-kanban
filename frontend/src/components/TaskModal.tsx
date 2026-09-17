@@ -2,9 +2,11 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { UserAvatar } from './UserAvatar';
+import { CustomFieldEditor } from './CustomFieldEditor';
 import { useTaskRun } from '../hooks/useTaskRun';
 import { RunTimeline } from './RunTimeline';
-import type { Task, Attachment, Column, Agent, Subtask, Comment, TaskRun } from '@/types/kanban';
+import { useCustomFields } from '../hooks/useCustomFields';
+import type { Task, Attachment, Column, Agent, Subtask, Comment, CustomField, TaskRun } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
 import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi, tasksApi } from '@/services/api';
@@ -217,6 +219,13 @@ interface TaskModalProps {
   boards?: Board[];
   canEdit?: boolean;
   startEditing?: boolean;
+  /**
+   * s-1197: pre-loaded custom field definitions. When omitted, the
+   * modal falls back to its own `useCustomFields(boardId)` lookup so
+   * other entry points (ColumnDetailPage, etc.) get the chips too.
+   * Passing them in avoids a redundant localStorage read.
+   */
+  customFields?: CustomField[];
   onClose: () => void;
   onUpdate: (task: Task) => void;
   onDelete: (taskId: string) => void;
@@ -233,6 +242,7 @@ export function TaskModal({
   boards: _boards = [],
   canEdit = true,
   startEditing = false,
+  customFields: customFieldsProp,
   onClose,
   onUpdate,
   onDelete,
@@ -309,7 +319,7 @@ export function TaskModal({
   const [editAssignee, setEditAssignee] = useState(task.assignee || '');
   const [editAgentId, setEditAgentId] = useState(task.agentId || '');
   const [editAgentPrompt, setEditAgentPrompt] = useState(task.agentPrompt || '');
-  const [editMeta, setEditMeta] = useState<Record<string, string>>({});
+  const [editMeta, setEditMeta] = useState<Record<string, unknown>>({});
   const [newMetaKey, setNewMetaKey] = useState('');
   const [newMetaValue, setNewMetaValue] = useState('');
   const [newComment, setNewComment] = useState('');
@@ -338,18 +348,26 @@ export function TaskModal({
   const COMMENTS_PER_PAGE = 10;
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const parseMeta = (metaStr: string | Record<string, unknown> | null): Record<string, string> => {
+  const parseMeta = (metaStr: string | Record<string, unknown> | null): Record<string, unknown> => {
     if (!metaStr) return {};
-    if (typeof metaStr === 'object' && metaStr !== null) return metaStr as Record<string, string>;
+    if (typeof metaStr === 'object' && metaStr !== null) return metaStr as Record<string, unknown>;
     if (typeof metaStr === 'string') {
       try {
-        return JSON.parse(metaStr);
+        const parsed = JSON.parse(metaStr);
+        return parsed && typeof parsed === 'object' ? parsed : {};
       } catch {
         return {};
       }
     }
     return {};
   };
+
+  // s-1197: prefer the prop-injected list (avoids re-reading
+  // localStorage); fall back to the per-board lookup for entry points
+  // that don't pipe it through (e.g. ColumnDetailPage). When no board
+  // is loaded yet, both paths return [] and the editor self-hides.
+  const { customFields: ownCustomFields } = useCustomFields(boardId);
+  const customFields = customFieldsProp ?? ownCustomFields;
 
   useEffect(() => {
     const loadAuthor = async () => {
@@ -825,14 +843,35 @@ export function TaskModal({
               </div>
             )}
 
-            {/* Meta */}
+            {/* s-1197: typed custom-field editor. Renders nothing when no
+                fields are defined for this board so legacy meta-only
+                boards stay unchanged. */}
+            {customFields.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('customFields.editorTitle')}</h4>
+                <CustomFieldEditor
+                  customFields={customFields}
+                  values={editMeta}
+                  isEditing={isEditing}
+                  onChange={(next) => setEditMeta(next)}
+                />
+              </div>
+            )}
+
+            {/* Meta — legacy free-form key/value editor. Kept as a
+                fallback so existing users' metadata isn't dropped when
+                a board hasn't opted into the typed editor yet. */}
             <div>
               <h4 className="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.meta')}</h4>
               <div className="space-y-2">
-                {Object.entries(editMeta).map(([key, value]) => (
+                {Object.entries(editMeta)
+                  .filter(([key]) => !customFields.some(f => f.name === key))
+                  .map(([key, value]) => (
                   <div key={key} className="flex items-center gap-2">
                     <span className="min-w-[80px] text-sm">{key}:</span>
-                    <span className="flex-1 text-sm">{value}</span>
+                    <span className="flex-1 text-sm">
+                      {Array.isArray(value) ? value.join(', ') : String(value ?? '')}
+                    </span>
                     {isEditing && (
                       <button
                         onClick={() => {

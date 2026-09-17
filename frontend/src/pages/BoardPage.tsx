@@ -13,6 +13,7 @@ import { boardsApi, tasksApi } from '../services/api';
 import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
 import { useBoardTaskRuns } from '../hooks/useBoardTaskRuns';
+import { useCustomFields } from '../hooks/useCustomFields';
 import { useSetupGuard } from '../hooks/useSetupGuard';
 import { KeyboardNavigation } from '../components/KeyboardNavigation';
 import { BoardToolbar } from '../components/BoardToolbar';
@@ -90,6 +91,7 @@ export function BoardPage() {
     searchQuery,
     uniqueAssignees,
     uniqueTags,
+    uniqueCustomFieldValues,
     getFilteredColumns,
     fetchBoards,
     updateTask,
@@ -130,6 +132,12 @@ export function BoardPage() {
   // re-render in isolation when *its* run row flips status, and pass
   // the map down to ColumnBoard → Column → TaskCard.
   const runs = useRunStore((s) => s.runs);
+
+  // s-1197: per-board custom field definitions — stored in localStorage
+  // by the same hook the ColumnsPage settings modal writes to. The hook
+  // returns an empty array when no board is loaded so the chip renderer
+  // stays a no-op during transitions.
+  const { customFields } = useCustomFields(currentBoard?.id);
 
   // Compute the list of currently-visible task IDs once per columns
   // change. Hooked into a memo so the polling effect only re-binds
@@ -524,6 +532,8 @@ export function BoardPage() {
           filterPresets={filterPresets}
           uniqueAssignees={uniqueAssignees}
           uniqueTags={uniqueTags}
+          uniqueCustomFieldValues={uniqueCustomFieldValues}
+          customFields={customFields}
           hasActiveFilters={hasActiveFilters}
           showFilterPanel={showFilterPanel}
           showPresetDropdown={showPresetDropdown}
@@ -652,6 +662,7 @@ export function BoardPage() {
         updateTaskPosition={updateTaskPosition}
         canCreateTaskInColumn={canCreateTaskInColumn}
         runs={runs}
+        customFields={customFields}
       />
 
       {selectedTasks.size > 0 && (

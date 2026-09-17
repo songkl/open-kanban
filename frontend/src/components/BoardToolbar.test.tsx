@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BoardToolbar } from './BoardToolbar';
-import type { FilterPreset, FilterState } from '@/hooks/useFilters';
+import { EMPTY_CUSTOM_FIELD_FILTER, type FilterPreset, type FilterState } from '@/hooks/useFilters';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -16,6 +16,7 @@ describe('BoardToolbar', () => {
     searchQuery: '',
     dateRange: '',
     tag: '',
+    customField: EMPTY_CUSTOM_FIELD_FILTER,
   };
 
   const mockPresets: FilterPreset[] = [];
@@ -26,6 +27,8 @@ describe('BoardToolbar', () => {
     filterPresets: mockPresets,
     uniqueAssignees: [],
     uniqueTags: [],
+    uniqueCustomFieldValues: {},
+    customFields: [],
     hasActiveFilters: false,
     showFilterPanel: false,
     showPresetDropdown: false,

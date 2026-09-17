@@ -16,7 +16,7 @@ import { Column } from './Column';
 import { DragLayer } from './DragLayer';
 import { AddTaskModal } from './AddTaskModal';
 import { TaskModalSkeleton } from './Skeleton';
-import type { Board, Column as ColumnType, Task, TaskRun } from '@/types/kanban';
+import type { Board, Column as ColumnType, CustomField, Task, TaskRun } from '@/types/kanban';
 
 const TaskModal = lazy(() => import('./TaskModal').then(m => ({ default: m.TaskModal })));
 
@@ -59,6 +59,13 @@ interface ColumnBoardProps {
    * card firing its own polling request.
    */
   runs?: Record<string, TaskRun>;
+  /**
+   * s-1197: per-board custom field definitions, populated by the
+   * `useCustomFields` hook in BoardPage. Threaded down to each Column
+   * → TaskCard so the chips can render without re-reading localStorage
+   * per-card (would also race with the modal save).
+   */
+  customFields?: CustomField[];
 }
 
 export function ColumnBoard({
@@ -94,6 +101,7 @@ export function ColumnBoard({
   updateTaskPosition,
   canCreateTaskInColumn,
   runs,
+  customFields,
 }: ColumnBoardProps) {
   const { t } = useTranslation();
   const [activeMobileColumn, setActiveMobileColumn] = useState(0);
@@ -332,6 +340,7 @@ export function ColumnBoard({
                     hasMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.hasMore}
                     isLoadingMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.isLoadingMore}
                     runs={runs}
+                    customFields={customFields}
                   />
                 )}
               </div>
@@ -366,6 +375,7 @@ export function ColumnBoard({
                       hasMore={columnPagination[column.id]?.hasMore}
                       isLoadingMore={columnPagination[column.id]?.isLoadingMore}
                       runs={runs}
+                      customFields={customFields}
                     />
                   ))}
                 </div>
@@ -407,6 +417,7 @@ export function ColumnBoard({
                   hasMore={columnPagination[column.id]?.hasMore}
                   isLoadingMore={columnPagination[column.id]?.isLoadingMore}
                   runs={runs}
+                  customFields={customFields}
                 />
               ))}
             </div>
@@ -446,6 +457,7 @@ export function ColumnBoard({
             columns={columns.map((c) => ({ id: c.id, name: c.name }))}
             boardId={boardIdFromUrl}
             boards={boards}
+            customFields={customFields}
             canEdit={true}
             startEditing={editTaskId === selectedTask.id}
             onClose={() => { onSetSelectedTask(null); onSetEditTaskId(null); }}
