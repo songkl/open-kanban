@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="theme-color" content="#3b82f6" />
+    <title>Offline · Kanban Web</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+             background: #f4f4f5; color: #18181b; margin: 0; min-height: 100vh;
+             display: flex; align-items: center; justify-content: center; padding: 24px; }
+      main { max-width: 420px; text-align: center; }
+      h1 { font-size: 1.25rem; margin: 0 0 12px; }
+      p { margin: 0 0 16px; color: #52525b; line-height: 1.5; }
+      button { background: #3b82f6; color: #fff; border: 0; border-radius: 8px;
+               padding: 10px 18px; font-size: 0.95rem; cursor: pointer; }
+      button:hover { background: #2563eb; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>You are offline</h1>
+      <p>The Kanban shell is still available, but this view was not cached. Reconnect to load the latest board state.</p>
+      <button onclick="location.reload()">Retry</button>
+    </main>
+  </body>
+</html>

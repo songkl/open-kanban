@@ -546,16 +546,17 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 
 func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 	mimeTypes := map[string]string{
-		".js":    "application/javascript",
-		".css":   "text/css",
-		".html":  "text/html",
-		".json":  "application/json",
-		".png":   "image/png",
-		".jpg":   "image/jpeg",
-		".svg":   "image/svg+xml",
-		".ico":   "image/x-icon",
-		".woff":  "font/woff",
-		".woff2": "font/woff2",
+		".js":           "application/javascript",
+		".css":          "text/css",
+		".html":         "text/html",
+		".json":         "application/json",
+		".webmanifest":  "application/manifest+json",
+		".png":          "image/png",
+		".jpg":          "image/jpeg",
+		".svg":          "image/svg+xml",
+		".ico":          "image/x-icon",
+		".woff":         "font/woff",
+		".woff2":        "font/woff2",
 	}
 
 	getMimeType := func(path string) string {
@@ -573,7 +574,7 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 		".js": true, ".css": true, ".png": true, ".jpg": true, ".jpeg": true,
 		".svg": true, ".ico": true, ".woff": true, ".woff2": true, ".ttf": true,
 		".eot": true, ".otf": true, ".webp": true, ".gif": true, ".webm": true,
-		".mp4": true, ".wav": true, ".mp3": true,
+		".mp4": true, ".wav": true, ".mp3": true, ".webmanifest": true,
 	}
 
 	isValidAsset := func(ext string) bool {
@@ -622,6 +623,47 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 			}
 		})
 
+		// PWA / mobile shell assets that live at the root of the embedded
+		// `web/` directory (manifest, service worker, icons, offline page).
+		// Keep this list aligned with frontend/public/ — anything not listed
+		// here will fall through to the SPA NoRoute handler, which is fine
+		// for navigation routes but wrong for binary / manifest files.
+		rootStaticFiles := map[string]string{
+			"/manifest.webmanifest":    "manifest.webmanifest",
+			"/sw.js":                   "sw.js",
+			"/offline.html":            "offline.html",
+			"/icon.svg":                "icon.svg",
+			"/icon-192.png":            "icon-192.png",
+			"/icon-512.png":            "icon-512.png",
+			"/icon-maskable-512.png":   "icon-maskable-512.png",
+			"/apple-touch-icon.png":    "apple-touch-icon.png",
+		}
+		for route, asset := range rootStaticFiles {
+			asset := asset
+			handle := func(c *gin.Context) {
+				f, err := subFS.Open(asset)
+				if err != nil {
+					c.String(404, "file not found")
+					return
+				}
+				defer f.Close()
+				c.Header("Content-Type", getMimeType(asset))
+				// Service workers must be served with this header for the
+				// browser to accept the registration.
+				if asset == "sw.js" {
+					c.Header("Service-Worker-Allowed", "/")
+				}
+				if _, err := io.Copy(c.Writer, f); err != nil {
+					c.String(500, "Failed to serve file")
+				}
+			}
+			// Register GET and HEAD separately so HEAD probes (`curl -I`,
+			// `wget --spider`, link-checkers) don't fall through to the
+			// SPA NoRoute handler and report a fake `text/html` body.
+			r.GET(route, handle)
+			r.HEAD(route, handle)
+		}
+
 		r.NoRoute(func(c *gin.Context) {
 			path := c.Request.URL.Path
 			if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
@@ -658,6 +700,36 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 			}
 			c.File(webDir + "/assets/" + path)
 		})
+
+		// PWA shell assets served from the on-disk web directory. We
+		// read the file ourselves instead of using c.File() so we can
+		// pin the Content-Type — c.File() lets http.ServeFile's extension
+		// lookup choose, and Go does not know about .webmanifest, so it
+		// would reply "text/plain" and break the install prompt.
+		rootStaticFiles := []string{
+			"/manifest.webmanifest",
+			"/sw.js",
+			"/offline.html",
+			"/icon.svg",
+			"/icon-192.png",
+			"/icon-512.png",
+			"/icon-maskable-512.png",
+			"/apple-touch-icon.png",
+		}
+		for _, route := range rootStaticFiles {
+			route := route
+			handle := func(c *gin.Context) {
+				filename := filepath.Base(route)
+				fullPath := filepath.Join(webDir, filename)
+				if strings.HasSuffix(route, ".js") {
+					c.Header("Service-Worker-Allowed", "/")
+				}
+				c.Header("Content-Type", getMimeType(filename))
+				c.File(fullPath)
+			}
+			r.GET(route, handle)
+			r.HEAD(route, handle)
+		}
 
 		r.NoRoute(func(c *gin.Context) {
 			path := c.Request.URL.Path

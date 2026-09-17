@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -322,5 +323,116 @@ func TestSetupOnlyRoutesRegistersMe(t *testing.T) {
 	}
 	if resp["user"] != nil {
 		t.Errorf("expected nil user from /me in setupOnlyRoutes, got %v", resp["user"])
+	}
+}
+
+// pwaShellFiles lists the static files that the PWA / mobile install flow
+// depends on. setupStaticRoutes must serve each one at the root with the
+// correct content type. The list is duplicated from setupStaticRoutes
+// because Go has no public introspection of the route table.
+var pwaShellFiles = []struct {
+	path        string
+	contentType string
+	header      string // optional header name to assert
+	headerVal   string // expected value when header != ""
+}{
+	{"/manifest.webmanifest", "application/manifest+json", "", ""},
+	{"/sw.js", "application/javascript", "Service-Worker-Allowed", "/"},
+	{"/offline.html", "text/html", "", ""},
+	{"/icon.svg", "image/svg+xml", "", ""},
+	{"/icon-192.png", "image/png", "", ""},
+	{"/icon-512.png", "image/png", "", ""},
+	{"/icon-maskable-512.png", "image/png", "", ""},
+	{"/apple-touch-icon.png", "image/png", "", ""},
+}
+
+// emptyEmbedFS is a stand-in for the production embeddedWeb when we only
+// want to exercise the webDir != "" branch of setupStaticRoutes. The
+// embedded branch is exercised separately in pwa_static_test.go via a
+// real //go:embed'd directory. An empty embed.FS satisfies the parameter
+// type but is never read from in this branch.
+var emptyEmbedFS embed.FS
+
+// TestPwaShellServedBySetupStaticRoutes exercises the on-disk branch of
+// setupStaticRoutes. It writes the PWA shell files into a temp directory,
+// wires up the routes, and asserts each file is reachable with the correct
+// content type. This guards against the most common regression: forgetting
+// to keep the PWA file list in sync with frontend/public/*.
+func TestPwaShellServedBySetupStaticRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	webDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(webDir, "assets"), 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	for name, body := range map[string]string{
+		"manifest.webmanifest":  `{"name":"Kanban Web","start_url":"/","display":"standalone"}`,
+		"sw.js":                 "/* stub service worker */\n",
+		"offline.html":          "<!doctype html><title>offline</title>",
+		"icon.svg":              "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+		"icon-192.png":          "fake-png",
+		"icon-512.png":          "fake-png",
+		"icon-maskable-512.png": "fake-png",
+		"apple-touch-icon.png":  "fake-png",
+		"index.html":            "<!doctype html><title>app</title>",
+		"assets/app.js":         "console.log('app')",
+	} {
+		if err := os.WriteFile(filepath.Join(webDir, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	router := gin.New()
+	setupStaticRoutes(router, webDir, emptyEmbedFS)
+
+	for _, f := range pwaShellFiles {
+		f := f
+		t.Run(f.path, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodGet, f.path, nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("GET %s: expected 200, got %d body=%q", f.path, w.Code, w.Body.String())
+			}
+			if got := w.Header().Get("Content-Type"); got != f.contentType {
+				t.Errorf("GET %s: expected Content-Type=%q, got %q", f.path, f.contentType, got)
+			}
+			if f.header != "" {
+				if got := w.Header().Get(f.header); got != f.headerVal {
+					t.Errorf("GET %s: expected %s=%q, got %q", f.path, f.header, f.headerVal, got)
+				}
+			}
+		})
+	}
+}
+
+// TestPwaUnknownRootPathFallsThroughToSpa ensures that random root paths
+// (e.g. /boards, /board/abc) do NOT resolve to a static file — they are
+// SPA routes and must be served index.html by the NoRoute handler. This
+// protects the install flow from being shadowed by an over-eager static
+// route that breaks deep links.
+func TestPwaUnknownRootPathFallsThroughToSpa(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	webDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<!doctype html><title>app</title>"), 0o644); err != nil {
+		t.Fatalf("write index.html: %v", err)
+	}
+
+	router := gin.New()
+	setupStaticRoutes(router, webDir, emptyEmbedFS)
+
+	for _, path := range []string{"/boards", "/board/abc-123", "/dashboard"} {
+		req, _ := http.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s: expected 200 from SPA fallback, got %d body=%q", path, w.Code, w.Body.String())
+		}
+		if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Errorf("GET %s: expected HTML content type from SPA fallback, got %q", path, ct)
+		}
 	}
 }

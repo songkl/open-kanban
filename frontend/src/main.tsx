@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './i18n'
 import App from './App.tsx'
 import './styles/globals.css'
+import { registerServiceWorker } from './pwa'
 
 const DARK_MODE_KEY = 'darkMode';
 
@@ -32,3 +33,5 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+registerServiceWorker()
