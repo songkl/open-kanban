@@ -457,6 +457,28 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		webhook.POST("/notify", handlers.WebhookNotify(db))
 	}
 
+	// In-app notification center (s-1194). The GET is intentionally
+	// outside the signature-verification group so the WebSocket-driven
+	// bell badge can hydrate on first paint without waiting for the
+	// signature round-trip; the mutating endpoints stay behind
+	// RequireAuth to match the rest of the kanban surface.
+	notifications := r.Group("/api/v1/notifications")
+	notifications.Use(handlers.RequireAuth(db))
+	{
+		notifications.GET("", handlers.GetNotifications(db))
+		notifications.POST("/:id/read", handlers.MarkNotificationRead(db))
+		notifications.POST("/read-all", handlers.MarkAllNotificationsRead(db))
+	}
+
+	// Run completion stub — Agent runners POST here when a task run
+	// reaches a terminal status. The handler fans out a RUN_COMPLETED
+	// notification to the task owner (see internal/handlers/runs.go).
+	r.POST("/api/v1/runs/:taskId/complete",
+		handlers.RequireSignatureVerification(),
+		handlers.RequireAuth(db),
+		handlers.MarkRunComplete(db),
+	)
+
 	r.POST("/api/v1/upload", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.UploadFile(db))
 	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
 	r.DELETE("/api/v1/attachments/:id", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))

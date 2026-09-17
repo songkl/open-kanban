@@ -1,6 +1,7 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { LoadingScreen } from './components/LoadingScreen';
+import { AppShell } from './components/AppShell';
 import { authApi } from './services/api';
 
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -18,6 +19,7 @@ const UserDetailPage = lazy(() => import('./pages/UserDetailPage').then(m => ({ 
 const ColumnDetailPage = lazy(() => import('./pages/ColumnDetailPage').then(m => ({ default: m.ColumnDetailPage })));
 const OAuthDevicePage = lazy(() => import('./pages/OAuthDevicePage').then(m => ({ default: m.OAuthDevicePage })));
 const RunsPage = lazy(() => import('./pages/RunsPage').then(m => ({ default: m.RunsPage })));
+const SearchPage = lazy(() => import('./pages/SearchPage').then(m => ({ default: m.SearchPage })));
 
 function HomeRedirect() {
   const navigate = useNavigate();
@@ -52,6 +54,14 @@ function HomeRedirect() {
   return null;
 }
 
+interface ShellWrapperProps {
+  children: React.ReactNode;
+}
+
+function ShellWrapper({ children }: ShellWrapperProps) {
+  return <AppShell>{children}</AppShell>;
+}
+
 function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
@@ -59,20 +69,21 @@ function App() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup" element={<SetupPage />} />
-        <Route path="/board/:boardId" element={<BoardPage />} />
-        <Route path="/board/:boardId/column/:columnId" element={<ColumnDetailPage />} />
-        <Route path="/boards" element={<BoardsPage />} />
-        <Route path="/drafts" element={<DraftsPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/columns" element={<ColumnsPage />} />
-        <Route path="/completed" element={<CompletedPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/activities" element={<ActivityLogPage />} />
-        <Route path="/activity" element={<ActivityLogPage />} />
-        <Route path="/agent-activity" element={<AgentActivityPage />} />
-        <Route path="/user/:userId" element={<UserDetailPage />} />
+        <Route path="/board/:boardId" element={<ShellWrapper><BoardPage /></ShellWrapper>} />
+        <Route path="/board/:boardId/column/:columnId" element={<ShellWrapper><ColumnDetailPage /></ShellWrapper>} />
+        <Route path="/boards" element={<ShellWrapper><BoardsPage /></ShellWrapper>} />
+        <Route path="/drafts" element={<ShellWrapper><DraftsPage /></ShellWrapper>} />
+        <Route path="/history" element={<ShellWrapper><HistoryPage /></ShellWrapper>} />
+        <Route path="/columns" element={<ShellWrapper><ColumnsPage /></ShellWrapper>} />
+        <Route path="/completed" element={<ShellWrapper><CompletedPage /></ShellWrapper>} />
+        <Route path="/settings" element={<ShellWrapper><SettingsPage /></ShellWrapper>} />
+        <Route path="/activities" element={<ShellWrapper><ActivityLogPage /></ShellWrapper>} />
+        <Route path="/activity" element={<ShellWrapper><ActivityLogPage /></ShellWrapper>} />
+        <Route path="/agent-activity" element={<ShellWrapper><AgentActivityPage /></ShellWrapper>} />
+        <Route path="/user/:userId" element={<ShellWrapper><UserDetailPage /></ShellWrapper>} />
         <Route path="/oauth/device" element={<OAuthDevicePage />} />
-        <Route path="/runs" element={<RunsPage />} />
+        <Route path="/runs" element={<ShellWrapper><RunsPage /></ShellWrapper>} />
+        <Route path="/search" element={<ShellWrapper><SearchPage /></ShellWrapper>} />
       </Routes>
     </Suspense>
   );

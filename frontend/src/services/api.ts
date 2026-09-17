@@ -654,6 +654,22 @@ interface UploadResult {
   abort: () => void;
 }
 
+// Notification wire-shape returned by GET /api/v1/notifications.
+// The `readAt` field is omitted by the backend when the row hasn't
+// been read yet (so the bell list can use `Boolean(n.readAt)` as
+// the unread predicate without a separate flag).
+export interface Notification {
+  id: string;
+  userId: string;
+  source: 'TASK_ASSIGNED' | 'TASK_MENTIONED' | 'RUN_COMPLETED' | 'WEBHOOK_FAILED';
+  title: string;
+  body: string;
+  targetType: '' | 'TASK' | 'COMMENT' | 'RUN' | 'WEBHOOK';
+  targetId: string;
+  readAt?: string;
+  createdAt: string;
+}
+
 export const attachmentsApi = {
   upload: (file: File, taskId?: string, commentId?: string, onProgress?: (progress: number) => void): UploadResult => {
     const formData = new FormData();
@@ -743,4 +759,49 @@ export const runsApi = {
       throw error;
     }
   },
+};
+
+// Notifications API (s-1194). Powers the bell-badge UI in the new
+// global top bar; the GET endpoint also returns `unreadCount` so the
+// badge can hydrate without a second round-trip.
+export interface NotificationListResult {
+  notifications: Notification[];
+  unreadCount: number;
+}
+
+export const notificationsApi = {
+  /**
+   * Fetch the caller's notifications, newest first.
+   *
+   * @param opts.unreadOnly when true, only unread rows are returned.
+   *                        The bell list uses this on first paint to
+   *                        avoid paging through already-read rows.
+   * @param opts.limit      defaults to 50, capped at 100 server-side.
+   * @param opts.offset     defaults to 0; bell-list virtual scroll
+   *                        passes an incrementing offset to load more.
+   */
+  list: (opts?: { unreadOnly?: boolean; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.unreadOnly) params.set('unreadOnly', 'true');
+    if (typeof opts?.limit === 'number') params.set('limit', String(opts.limit));
+    if (typeof opts?.offset === 'number') params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return fetchApi<NotificationListResult>(`notifications${qs ? `?${qs}` : ''}`);
+  },
+  /**
+   * Mark a single notification read. Idempotent — a second call on
+   * an already-read row returns 200 with the original readAt, not 404.
+   */
+  markRead: (id: string) =>
+    fetchApi<{ success: boolean; readAt: string }>(`notifications/${id}/read`, {
+      method: 'POST',
+    }),
+  /**
+   * Mark every unread row owned by the caller read. Single UPDATE,
+   * so it's cheap enough to call on bell-list close.
+   */
+  markAllRead: () =>
+    fetchApi<{ success: boolean; readAt: string }>('notifications/read-all', {
+      method: 'POST',
+    }),
 };

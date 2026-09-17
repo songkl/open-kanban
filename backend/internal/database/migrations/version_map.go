@@ -62,6 +62,13 @@ var VersionMigrationMap = []VersionMigration{
 	// write, and DELETE was replaced with a soft-delete UPDATE so the
 	// audit trail survives revoke. Tracked as s-1037.
 	{Version: "0.8.0", From: 1, To: 8},
+	// 0.9.0 added migration 009 to introduce the notifications table
+	// that powers the in-app notification center (PM_REVIEW §5.2 ROI
+	// #2). Rows are fan-out inserts by the handlers in
+	// internal/handlers/notifications.go and surface as a bell-badge
+	// stream driven by the existing WebSocket connection. Tracked
+	// as s-1194.
+	{Version: "0.9.0", From: 1, To: 9},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -84,6 +85,10 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			taskService.TriggerAgentForTask(task.ID, *task.AgentID, agentPrompt, task.Title)
 		}
 
+		if task.Assignee != nil && *task.Assignee != "" && *task.Assignee != user.ID {
+			go notifyTaskAssigned(db, *task.Assignee, user.Nickname, task.ID, task.Title)
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"id":          task.ID,
 			"title":       task.Title,
@@ -150,6 +155,19 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		var previousAssignee *string
+		if req.Assignee != nil {
+			var oldAssignee sql.NullString
+			if err := db.QueryRow("SELECT assignee FROM tasks WHERE id = ?", id).Scan(&oldAssignee); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load task"})
+				return
+			}
+			if oldAssignee.Valid {
+				v := oldAssignee.String
+				previousAssignee = &v
+			}
+		}
+
 		taskService := services.NewTaskService(db)
 		task, changes, err := taskService.UpdateTask(id, user.ID, user.Role, services.UpdateTaskInput{
 			Title:       req.Title,
@@ -175,6 +193,20 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		LogActivity(db, user.ID, "UPDATE_TASK", "TASK", id, task.Title, details, c.ClientIP(), getRequestSource(c))
+
+		if req.Assignee != nil {
+			newAssignee := ""
+			if task.Assignee != nil {
+				newAssignee = *task.Assignee
+			}
+			oldAssignee := ""
+			if previousAssignee != nil {
+				oldAssignee = *previousAssignee
+			}
+			if newAssignee != oldAssignee && newAssignee != "" {
+				go notifyTaskAssigned(db, newAssignee, user.Nickname, id, task.Title)
+			}
+		}
 
 		broadcast()
 
@@ -267,5 +299,32 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 
 		broadcast()
 		c.JSON(http.StatusOK, gin.H{"success": true})
+	}
+}
+
+// notifyTaskAssigned inserts a TASK_ASSIGNED notification for the
+// user picked up by the assignee update. It is intentionally a fire-
+// and-forget helper (called via `go notifyTaskAssigned(...)`) so the
+// originating PUT does not block on the bell-badge fan-out.
+//
+// The `assignee` argument is treated as a user_id — the kanban API
+// stores the assignee column as the user.id (see CreateTaskRequest),
+// so the value can be looked up directly. If the user has been
+// disabled or removed the lookup returns sql.ErrNoRows and the
+// notification is silently skipped; the task update still succeeds
+// because the assignee column has no FK on it.
+func notifyTaskAssigned(db *sql.DB, assignee, actorNickname, taskID, taskTitle string) {
+	var enabled bool
+	if err := db.QueryRow("SELECT enabled FROM users WHERE id = ?", assignee).Scan(&enabled); err != nil {
+		slog.Error("notifyTaskAssigned: assignee lookup failed", "error", err, "assignee", assignee)
+		return
+	}
+	if !enabled {
+		return
+	}
+	title := actorNickname + " assigned you a task"
+	body := taskTitle
+	if err := InsertNotification(db, assignee, NotificationSourceTaskAssigned, title, body, "TASK", taskID); err != nil {
+		slog.Error("notifyTaskAssigned: insert failed", "error", err, "assignee", assignee)
 	}
 }

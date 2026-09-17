@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"time"
 
+	"open-kanban/internal/models"
 	"open-kanban/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -205,6 +207,8 @@ func CreateComment(db *sql.DB) gin.HandlerFunc {
 			LogActivity(db, user.ID, "ADD_COMMENT", "COMMENT", commentID, req.Content[:min(50, len(req.Content))]+"...", "", c.ClientIP(), getRequestSource(c))
 		}
 
+		go dispatchCommentMentions(db, user, commentID, req.TaskID, req.Content)
+
 		broadcast()
 
 		go func() {
@@ -232,5 +236,44 @@ func CreateComment(db *sql.DB) gin.HandlerFunc {
 			"createdAt": now,
 			"updatedAt": now,
 		})
+	}
+}
+
+// dispatchCommentMentions fans out TASK_MENTIONED notifications for
+// every @nickname in the comment body. It is intentionally fire-
+// and-forget (the caller does `go dispatchCommentMentions(...)`)
+// because the originating POST has already returned by the time we
+// get here and the user-visible latency must not include the WS
+// broadcast round-trip.
+//
+// Self-mentions are skipped: pinging yourself in your own comment
+// would just generate noise in the bell list. Unknown nicknames are
+// also skipped — the regex / lookup pair naturally tolerates typos
+// because ExtractMentions returns them and ResolveUserIDsByNickname
+// filters them out, so a malformed @-token never causes an error.
+func dispatchCommentMentions(db *sql.DB, author *models.User, commentID, taskID, content string) {
+	nicks := ExtractMentions(content)
+	if len(nicks) == 0 {
+		return
+	}
+	ids, err := ResolveUserIDsByNickname(db, nicks)
+	if err != nil {
+		slog.Error("dispatchCommentMentions: nickname lookup failed", "error", err)
+		return
+	}
+	var taskTitle string
+	if err := db.QueryRow("SELECT title FROM tasks WHERE id = ?", taskID).Scan(&taskTitle); err != nil {
+		slog.Error("dispatchCommentMentions: task lookup failed", "error", err, "taskID", taskID)
+		return
+	}
+	title := author.Nickname + " mentioned you"
+	body := "In: " + taskTitle
+	for id, nick := range ids {
+		if id == author.ID {
+			continue
+		}
+		if err := InsertNotification(db, id, NotificationSourceTaskMentioned, title, body, "COMMENT", commentID); err != nil {
+			slog.Error("dispatchCommentMentions: insert failed", "error", err, "userID", id, "nick", nick)
+		}
 	}
 }

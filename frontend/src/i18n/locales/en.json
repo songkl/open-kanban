@@ -62,7 +62,37 @@
     "userManagement": "User Management",
     "permissionManagement": "Permission Management",
     "agentActivity": "Agent Activity",
-    "runs": "Runs"
+    "runs": "Runs",
+    "sidebar": "Sidebar navigation",
+    "sidebarBoards": "Boards",
+    "sidebarSearch": "Search",
+    "sidebarAgents": "Agents",
+    "sidebarActivity": "Activity",
+    "sidebarRuns": "Runs",
+    "sidebarSettings": "Settings"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet",
+    "markAllRead": "Mark all as read",
+    "unread": "Unread",
+    "unreadBadge_one": "{{count}} unread notification",
+    "unreadBadge_other": "{{count}} unread notifications",
+    "justNow": "just now",
+    "minutesAgo_one": "{{count}} minute ago",
+    "minutesAgo_other": "{{count}} minutes ago",
+    "hoursAgo_one": "{{count}} hour ago",
+    "hoursAgo_other": "{{count}} hours ago",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search tasks...",
+    "go": "Search",
+    "loading": "Searching...",
+    "noResults": "No matching tasks",
+    "error": "Search failed: {{error}}"
   },
   "board": {
     "count_one": "{{count}} board",

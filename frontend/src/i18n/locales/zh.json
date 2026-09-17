@@ -62,7 +62,37 @@
     "userManagement": "用户管理",
     "permissionManagement": "权限管理",
     "agentActivity": "Agent 活动状态",
-    "runs": "运行大屏"
+    "runs": "运行大屏",
+    "sidebar": "侧边导航",
+    "sidebarBoards": "看板",
+    "sidebarSearch": "搜索",
+    "sidebarAgents": "Agents",
+    "sidebarActivity": "活动",
+    "sidebarRuns": "运行",
+    "sidebarSettings": "设置"
+  },
+  "notifications": {
+    "title": "通知",
+    "empty": "暂无通知",
+    "markAllRead": "全部标记为已读",
+    "unread": "未读",
+    "unreadBadge_one": "{{count}} 条未读通知",
+    "unreadBadge_other": "{{count}} 条未读通知",
+    "justNow": "刚刚",
+    "minutesAgo_one": "{{count}} 分钟前",
+    "minutesAgo_other": "{{count}} 分钟前",
+    "hoursAgo_one": "{{count}} 小时前",
+    "hoursAgo_other": "{{count}} 小时前",
+    "daysAgo_one": "{{count}} 天前",
+    "daysAgo_other": "{{count}} 天前"
+  },
+  "search": {
+    "title": "搜索",
+    "placeholder": "搜索任务...",
+    "go": "搜索",
+    "loading": "搜索中...",
+    "noResults": "没有匹配的任务",
+    "error": "搜索失败：{{error}}"
   },
   "board": {
     "count_one": "{{count}} 个看板",
