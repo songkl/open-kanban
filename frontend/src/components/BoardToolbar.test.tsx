@@ -5,7 +5,12 @@ import { EMPTY_CUSTOM_FIELD_FILTER, type FilterPreset, type FilterState } from '
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      if (key === 'filter.appliedCount' && params) {
+        return `${params.count} filters applied`;
+      }
+      return key;
+    },
   }),
 }));
 
@@ -17,6 +22,9 @@ describe('BoardToolbar', () => {
     dateRange: '',
     tag: '',
     customField: EMPTY_CUSTOM_FIELD_FILTER,
+    runStatus: '',
+    hasComments: '',
+    hasSubtasks: '',
   };
 
   const mockPresets: FilterPreset[] = [];
@@ -30,11 +38,13 @@ describe('BoardToolbar', () => {
     uniqueCustomFieldValues: {},
     customFields: [],
     hasActiveFilters: false,
+    activeFilterCount: 0,
     showFilterPanel: false,
     showPresetDropdown: false,
     onSetSearchQuery: vi.fn(),
     onSetFilters: vi.fn(),
     onClearFilters: vi.fn(),
+    onClearSingleFilter: vi.fn(),
     onSaveCurrentAsPreset: vi.fn(),
     onApplyPreset: vi.fn(),
     onDeletePreset: vi.fn(),
@@ -67,8 +77,9 @@ describe('BoardToolbar', () => {
   });
 
   it('should show filter count badge when hasActiveFilters is true', () => {
-    render(<BoardToolbar {...defaultProps} hasActiveFilters={true} filters={{ ...mockFilters, priority: 'high' }} />);
-    expect(screen.getByText('1')).toBeInTheDocument();
+    const { container } = render(<BoardToolbar {...defaultProps} hasActiveFilters={true} activeFilterCount={1} filters={{ ...mockFilters, priority: 'high' }} />);
+    const badge = container.querySelector('span.rounded-full.bg-blue-500');
+    expect(badge?.textContent).toBe('1');
   });
 
   it('should show filter panel when showFilterPanel is true', () => {
@@ -146,6 +157,86 @@ describe('BoardToolbar', () => {
       const { container } = render(<BoardToolbar {...defaultProps} isMobile={true} />);
       const mobileSearch = container.querySelector('input.w-full.min-h-\\[36px\\]');
       expect(mobileSearch).toBeInTheDocument();
+    });
+  });
+
+  describe('applied-filter chips (s-1201)', () => {
+    it('does not render chips when no filter is active', () => {
+      const { container } = render(<BoardToolbar {...defaultProps} hasActiveFilters={false} />);
+      expect(container.querySelector('[data-testid="applied-filter-chips"]')).toBeNull();
+    });
+
+    it('renders the "N filters applied" chip when at least one filter is active', () => {
+      const { container } = render(
+        <BoardToolbar
+          {...defaultProps}
+          hasActiveFilters={true}
+          activeFilterCount={3}
+          filters={{ ...mockFilters, priority: 'high', assignee: 'Alice', runStatus: 'running' }}
+        />,
+      );
+      const chips = container.querySelector('[data-testid="applied-filter-chips"]');
+      expect(chips).toBeInTheDocument();
+      expect(chips?.textContent).toContain('3');
+    });
+
+    it('renders one chip per active dimension with × buttons', () => {
+      const { container } = render(
+        <BoardToolbar
+          {...defaultProps}
+          hasActiveFilters={true}
+          activeFilterCount={2}
+          filters={{ ...mockFilters, priority: 'high', assignee: 'Alice' }}
+        />,
+      );
+      const removeButtons = container.querySelectorAll('[data-testid="applied-filter-chips"] button[aria-label^="filter.removeFilter"]');
+      expect(removeButtons.length).toBe(2);
+    });
+
+    it('calls onClearSingleFilter with the right dimension when a chip × is clicked', () => {
+      const onClearSingleFilter = vi.fn();
+      const { container } = render(
+        <BoardToolbar
+          {...defaultProps}
+          hasActiveFilters={true}
+          activeFilterCount={1}
+          filters={{ ...mockFilters, priority: 'high' }}
+          onClearSingleFilter={onClearSingleFilter}
+        />,
+      );
+      const removeButton = container.querySelector('button[aria-label^="filter.removeFilter"]') as HTMLButtonElement;
+      fireEvent.click(removeButton);
+      expect(onClearSingleFilter).toHaveBeenCalledWith('priority');
+    });
+
+    it('calls onClearFilters when the aggregate "N filters applied" chip is clicked', () => {
+      const onClearFilters = vi.fn();
+      const { container } = render(
+        <BoardToolbar
+          {...defaultProps}
+          hasActiveFilters={true}
+          activeFilterCount={2}
+          filters={{ ...mockFilters, priority: 'high', assignee: 'Alice' }}
+          onClearFilters={onClearFilters}
+        />,
+      );
+      const aggregate = container.querySelector('button[title="filter.clearAll"]') as HTMLButtonElement;
+      expect(aggregate).toBeTruthy();
+      fireEvent.click(aggregate);
+      expect(onClearFilters).toHaveBeenCalled();
+    });
+
+    it('renders chips even when the filter panel is closed', () => {
+      const { container } = render(
+        <BoardToolbar
+          {...defaultProps}
+          hasActiveFilters={true}
+          activeFilterCount={1}
+          showFilterPanel={false}
+          filters={{ ...mockFilters, runStatus: 'running' }}
+        />,
+      );
+      expect(container.querySelector('[data-testid="applied-filter-chips"]')).toBeInTheDocument();
     });
   });
 });

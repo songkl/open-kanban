@@ -17,6 +17,9 @@ describe('FilterPanelContent', () => {
     dateRange: '',
     tag: '',
     customField: EMPTY_CUSTOM_FIELD_FILTER,
+    runStatus: '',
+    hasComments: '',
+    hasSubtasks: '',
   };
 
   const mockPresets: FilterPreset[] = [];
@@ -147,5 +150,48 @@ describe('FilterPanelContent', () => {
     render(<FilterPanelContent {...defaultProps} filterPresets={presets} showPresetDropdown={false} />);
     fireEvent.click(screen.getByText(/filter\.expand/i));
     expect(defaultProps.onSetShowPresetDropdown).toHaveBeenCalledWith(true);
+  });
+
+  it('should render the runStatus dimension', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    expect(screen.getByLabelText(/filter\.runStatus/i)).toBeInTheDocument();
+  });
+
+  it('should render the hasComments dimension', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    expect(screen.getByLabelText(/filter\.hasComments/i)).toBeInTheDocument();
+  });
+
+  it('should render the hasSubtasks dimension', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    expect(screen.getByLabelText(/filter\.hasSubtasks/i)).toBeInTheDocument();
+  });
+
+  it('should always render runStatus/hasComments/hasSubtasks even when uniqueTags is empty', () => {
+    render(<FilterPanelContent {...defaultProps} uniqueTags={[]} />);
+    expect(screen.getByLabelText(/filter\.runStatus/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/filter\.hasComments/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/filter\.hasSubtasks/i)).toBeInTheDocument();
+  });
+
+  it('should call onSetFilters when runStatus changes', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText(/filter\.runStatus/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.runStatusRunning/i }));
+    expect(defaultProps.onSetFilters).toHaveBeenCalled();
+  });
+
+  it('should call onSetFilters when hasComments changes', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText(/filter\.hasComments/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.yes/i }));
+    expect(defaultProps.onSetFilters).toHaveBeenCalled();
+  });
+
+  it('should call onSetFilters when hasSubtasks changes', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText(/filter\.hasSubtasks/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.no/i }));
+    expect(defaultProps.onSetFilters).toHaveBeenCalled();
   });
 });

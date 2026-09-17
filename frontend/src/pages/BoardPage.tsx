@@ -19,6 +19,7 @@ import { KeyboardNavigation } from '../components/KeyboardNavigation';
 import { BoardToolbar } from '../components/BoardToolbar';
 import { BoardActionsMenu } from '../components/BoardActionsMenu';
 import { useRunStore } from '../store/runStore';
+import { encodeFiltersToParams } from '../hooks/useFilters';
 import type { Task, Column as ColumnType } from '../types/kanban';
 
 const LAST_BOARD_KEY = 'lastSelectedBoardId';
@@ -37,7 +38,7 @@ export function BoardPage() {
   const navigate = useNavigate();
   const params = useParams();
   useSetupGuard();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const boardIdFromUrl = params.boardId as string;
   const taskIdFromUrl = searchParams.get('taskId');
 
@@ -116,7 +117,9 @@ export function BoardPage() {
     applyPreset,
     deletePreset,
     clearFilters,
+    clearSingleFilter,
     hasActiveFilters,
+    activeFilterCount,
     lastLocalUpdateRef,
     setColumns,
     canCreateTaskInColumn,
@@ -208,6 +211,34 @@ export function BoardPage() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // s-1201: mirror the filter state into the URL so a shared or
+  // bookmarked board link preserves the user's view. We preserve the
+  // existing `taskId` param (used by the deep-link task modal) and
+  // use `replace: true` so the back button still navigates between
+  // pages rather than walking through every chip toggle.
+  useEffect(() => {
+    const filterParams = encodeFiltersToParams(filters);
+    const next = new URLSearchParams(searchParams);
+    // Wipe any previously-written filter keys so clearing a
+    // dimension actually disappears from the URL instead of leaving
+    // stale values behind.
+    for (const key of [
+      'f_pri', 'f_asg', 'f_q', 'f_dr', 'f_tag', 'f_cf', 'f_cfv',
+      'f_rs', 'f_hc', 'f_hs',
+    ]) {
+      next.delete(key);
+    }
+    filterParams.forEach((value, key) => next.set(key, value));
+    // Skip the write if nothing changed to avoid a no-op history
+    // entry when the page first hydrates from the URL itself.
+    if (next.toString() === searchParams.toString()) return;
+    setSearchParams(next, { replace: true });
+    // We intentionally only re-run when the filter shape changes;
+    // re-running on every searchParams mutation would cause an
+    // infinite write/read loop with the hydration path above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   const updateTaskPosition = useCallback(async (
     activeId: string,
@@ -541,6 +572,7 @@ export function BoardPage() {
           uniqueCustomFieldValues={uniqueCustomFieldValues}
           customFields={customFields}
           hasActiveFilters={hasActiveFilters}
+          activeFilterCount={activeFilterCount}
           showFilterPanel={showFilterPanel}
           showPresetDropdown={showPresetDropdown}
           onSetSearchQuery={setSearchQuery}
@@ -549,6 +581,7 @@ export function BoardPage() {
             clearFilters();
             setShowFilterPanel(false);
           }}
+          onClearSingleFilter={clearSingleFilter}
           onSaveCurrentAsPreset={saveCurrentAsPreset}
           onApplyPreset={applyPreset}
           onDeletePreset={deletePreset}

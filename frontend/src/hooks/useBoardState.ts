@@ -1,14 +1,15 @@
-import { useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { setGlobalErrorHandler } from '../services/api';
 import { useBoard } from './useBoard';
 import { useColumns } from './useColumns';
 import { useTasks } from './useTasks';
 import { useBoardWebSocket } from './useBoardWebSocket';
 import { useBoardRefresh } from './useBoardRefresh';
-import { useFilters } from './useFilters';
+import { useFilters, decodeFiltersFromParams } from './useFilters';
 import { useColumnPermissions } from './useColumnPermissions';
 import { useCustomFields } from './useCustomFields';
+import { useRunStore } from '../store/runStore';
 import type { ColumnAccess } from './useColumnPermissions';
 import type { FilterState, FilterPreset } from './useFilters';
 import type { Board, Column as ColumnType, CustomField, Task, User } from '../types/kanban';
@@ -87,7 +88,9 @@ interface UseBoardStateReturn {
   applyPreset: (preset: FilterPreset) => void;
   deletePreset: (presetId: string) => void;
   clearFilters: () => void;
+  clearSingleFilter: (dimension: keyof FilterState | 'customField.fieldId' | 'customField.value') => void;
   hasActiveFilters: boolean;
+  activeFilterCount: number;
   handleTaskNotificationUpdate: (taskId: string) => Promise<void>;
   lastLocalUpdateRef: React.MutableRefObject<number>;
   offlineQueueRef: React.MutableRefObject<Array<{ action: string; data: unknown; timestamp: number }>>;
@@ -107,6 +110,26 @@ interface UseBoardStateReturn {
 
 export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOptions = {}): UseBoardStateReturn {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // s-1201: hydrate the filter state from URL search params so a
+  // shared or bookmarked board link preserves the user's filters.
+  // Only the keys that are present are populated; missing keys keep
+  // their default values via `withDefaults` inside the hook.
+  const initial = useMemo(
+    () => decodeFiltersFromParams(searchParams),
+    // searchParams identity changes on every setSearchParams, so
+    // pinning the seed to first-mount avoids re-seeding on every
+    // filter edit. The bidirectional URL sync in BoardPage writes
+    // the URL; we just consume it once on entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // s-1201: subscribe to the shared run store so the new
+  // `runStatus` filter dimension has live data. Selector keeps the
+  // re-render narrow — we only need the `runs` map, not actions.
+  const runs = useRunStore((s) => s.runs);
 
   const {
     boards,
@@ -172,8 +195,10 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     applyPreset,
     deletePreset,
     clearFilters,
+    clearSingleFilter,
     hasActiveFilters,
-  } = useFilters({ columns, customFields });
+    activeFilterCount,
+  } = useFilters({ columns, customFields, runsByTaskId: runs, initial });
 
   const {
     handleTaskNotificationUpdate,
@@ -338,7 +363,9 @@ export function useBoardState({ boardIdFromUrl, taskIdFromUrl }: UseBoardStateOp
     applyPreset,
     deletePreset,
     clearFilters,
+    clearSingleFilter,
     hasActiveFilters,
+    activeFilterCount,
     handleTaskNotificationUpdate,
     lastLocalUpdateRef,
     offlineQueueRef,

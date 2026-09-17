@@ -576,7 +576,7 @@
     "failed": "登录失败，请重试",
     "usernameRequired": "用户名不能为空"
   },
-"filter": {
+  "filter": {
     "searchPlaceholder": "搜索任务...",
     "search": "搜索...",
     "noResults": "无结果",
@@ -588,6 +588,7 @@
     "low": "低",
     "assignee": "负责人",
     "clear": "清除",
+    "clearAll": "清除全部筛选",
     "clearSearch": "清除搜索",
     "savePreset": "保存预设",
     "preset": "预设",
@@ -600,7 +601,20 @@
     "thisMonth": "本月",
     "tag": "标签",
     "customField": "自定义字段",
-    "customFieldValue": "自定义字段值"
+    "customFieldValue": "自定义字段值",
+    "runStatus": "运行状态",
+    "runStatusNone": "无运行",
+    "runStatusRunning": "运行中",
+    "runStatusCompleted": "已完成",
+    "runStatusFailed": "失败",
+    "runStatusQueued": "排队中",
+    "hasComments": "有评论",
+    "hasSubtasks": "有子任务",
+    "yes": "是",
+    "no": "否",
+    "appliedCount_one": "已应用 {{count}} 个筛选",
+    "appliedCount_other": "已应用 {{count}} 个筛选",
+    "removeFilter": "移除筛选 {{label}}"
   },
   "customFields": {
     "button": "自定义字段",

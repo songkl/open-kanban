@@ -104,6 +104,51 @@ export function FilterPanelContent({
           />
         </div>
       )}
+      <div className="mb-3">
+        <label htmlFor="filter-runStatus" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.runStatus')}</label>
+        <CustomDropdown
+          id="filter-runStatus"
+          options={[
+            { value: '', label: t('filter.all') },
+            { value: 'none', label: t('filter.runStatusNone') },
+            { value: 'running', label: t('filter.runStatusRunning') },
+            { value: 'completed', label: t('filter.runStatusCompleted') },
+            { value: 'failed', label: t('filter.runStatusFailed') },
+            { value: 'queued', label: t('filter.runStatusQueued') },
+          ]}
+          value={filters.runStatus}
+          onChange={(val) => onSetFilters((prev) => ({ ...prev, runStatus: val as FilterState['runStatus'] }))}
+          className="w-full"
+        />
+      </div>
+      <div className="mb-3">
+        <label htmlFor="filter-hasComments" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.hasComments')}</label>
+        <CustomDropdown
+          id="filter-hasComments"
+          options={[
+            { value: '', label: t('filter.all') },
+            { value: 'yes', label: t('filter.yes') },
+            { value: 'no', label: t('filter.no') },
+          ]}
+          value={filters.hasComments}
+          onChange={(val) => onSetFilters((prev) => ({ ...prev, hasComments: val as FilterState['hasComments'] }))}
+          className="w-full"
+        />
+      </div>
+      <div className="mb-3">
+        <label htmlFor="filter-hasSubtasks" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.hasSubtasks')}</label>
+        <CustomDropdown
+          id="filter-hasSubtasks"
+          options={[
+            { value: '', label: t('filter.all') },
+            { value: 'yes', label: t('filter.yes') },
+            { value: 'no', label: t('filter.no') },
+          ]}
+          value={filters.hasSubtasks}
+          onChange={(val) => onSetFilters((prev) => ({ ...prev, hasSubtasks: val as FilterState['hasSubtasks'] }))}
+          className="w-full"
+        />
+      </div>
       {customFields.length > 0 && (
         <div className="mb-3">
           <label htmlFor="filter-customField" className="block text-xs font-medium text-zinc-500 dark:text-zinc-500 mb-1">{t('filter.customField')}</label>
