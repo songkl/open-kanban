@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { boardsApi, authApi } from '../services/api';
 
 export function LoginPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +23,12 @@ export function LoginPage() {
       }
     }).catch(console.error);
   }, [navigate]);
+
+  const handleLanguageToggle = () => {
+    const newLang = i18n.language === 'zh' ? 'en' : 'zh';
+    i18n.changeLanguage(newLang);
+    localStorage.setItem('language', newLang);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,9 +79,19 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-900">
       <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-8 shadow-lg">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Open kanban</h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">{t('login.welcome')}</p>
+        <div className="mb-6 flex items-start justify-between">
+          <div className="flex-1 text-center">
+            <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('login.title')}</h1>
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">{t('login.welcome')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleLanguageToggle}
+            aria-label={t('nav.language')}
+            className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          >
+            {i18n.language === 'zh' ? t('language.en') : t('language.zh')}
+          </button>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">

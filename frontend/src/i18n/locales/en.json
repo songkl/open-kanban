@@ -534,9 +534,10 @@
     "createBoard": "Create Board",
     "hint": "Create a board to get started"
   },
-  "login": {
-    "welcome": "Enter your username to get started",
-    "firstUserAdmin": "The first user will become admin",
+"login": {
+    "title": "Open kanban",
+    "welcome": "Enter your nickname to get started",
+    "firstUserAdmin": "The first user becomes admin",
     "selectAvatar": "Select Avatar",
     "username": "Username",
     "enterUsername": "Enter your username",
@@ -885,6 +886,12 @@
     "restartingBody": "The server is restarting with the new configuration. This usually takes a few seconds.",
     "restartTimeout": "The server did not come back in time. You can try reloading the page manually.",
     "continueAnyway": "Reload manually"
+  },
+  "markdownEditor": {
+    "editTab": "Edit",
+    "previewTab": "Preview",
+    "livePreview": "Live Markdown Preview",
+    "empty": "Nothing to preview"
   },
   "userDetail": {
     "title": "User Detail",

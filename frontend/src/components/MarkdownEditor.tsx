@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 
@@ -12,6 +13,7 @@ interface MarkdownEditorProps {
 }
 
 export default function MarkdownEditor({ value, onChange, height = 200, placeholder, id, 'aria-label': ariaLabel }: MarkdownEditorProps) {
+  const { t } = useTranslation();
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -44,39 +46,39 @@ export default function MarkdownEditor({ value, onChange, height = 200, placehol
             type="button"
             onClick={() => setShowPreview(false)}
             className={`px-2 py-1 text-xs rounded ${
-              !showPreview 
-                ? 'bg-blue-500 text-white' 
+              !showPreview
+                ? 'bg-blue-500 text-white'
                 : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
             }`}
           >
-            编辑
+            {t('markdownEditor.editTab')}
           </button>
           <button
             type="button"
             onClick={() => setShowPreview(true)}
             className={`px-2 py-1 text-xs rounded ${
-              showPreview 
-                ? 'bg-blue-500 text-white' 
+              showPreview
+                ? 'bg-blue-500 text-white'
                 : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
             }`}
           >
-            预览
+            {t('markdownEditor.previewTab')}
           </button>
         </div>
         {showPreview && (
-          <span className="text-xs text-zinc-500 dark:text-zinc-500">Markdown 实时预览</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-500">{t('markdownEditor.livePreview')}</span>
         )}
       </div>
-      
+
       {showPreview ? (
-        <div 
+        <div
           className="overflow-auto p-3 bg-white dark:bg-zinc-900 prose prose-sm dark:prose-invert max-w-none"
           style={{ height: panelHeight }}
         >
           {value ? (
             <ReactMarkdown rehype-sanitize>{renderMarkdown(value)}</ReactMarkdown>
           ) : (
-            <p className="text-zinc-400 dark:text-zinc-400 italic">暂无内容</p>
+            <p className="text-zinc-400 dark:text-zinc-400 italic">{t('markdownEditor.empty')}</p>
           )}
         </div>
       ) : (
