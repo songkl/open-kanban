@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -617,6 +618,108 @@ func (s *TaskService) TriggerAgentForTask(taskID, agentID, agentPrompt, taskTitl
 
 		slog.Info("Agent trigger payload", "task_id", taskID, "agent_id", agentID, "payload", string(payloadBytes))
 	}()
+}
+
+// ColumnTransitionEdge enumerates the two edges a column can hook
+// into when it wants to wake a bound Agent automatically (s-1214).
+type ColumnTransitionEdge string
+
+const (
+	// ColumnTransitionEnter fires when a task is moved INTO a column
+	// whose transition_trigger is on_enter / both.
+	ColumnTransitionEnter ColumnTransitionEdge = "enter"
+	// ColumnTransitionExit fires when a task is moved OUT OF a column
+	// whose transition_trigger is on_exit / both.
+	ColumnTransitionExit ColumnTransitionEdge = "exit"
+)
+
+// ColumnTransitionContext carries everything a downstream Agent run
+// needs to know about why it was woken up. The Agent field is a
+// user-id (the bound Agent's id from users WHERE type = 'AGENT').
+type ColumnTransitionContext struct {
+	TaskID      string
+	TaskTitle   string
+	AgentID     string
+	AgentPrompt string
+	Edge        ColumnTransitionEdge
+	FromColumn  string
+	ToColumn    string
+}
+
+// FireColumnTransitions wakes any Agent bound to either the source
+// or destination column when the column has opted in to the
+// relevant edge via column_agents.transition_trigger. The function
+// is intentionally fire-and-forget — it returns the number of
+// triggers that were actually enqueued (used by the handler tests)
+// without blocking on the Agent run itself.
+//
+// A column with transition_trigger='none' (the legacy default) does
+// nothing. A column with 'on_enter' fires when the task moves INTO
+// it; 'on_exit' fires when the task leaves it; 'both' fires for
+// either edge. Empty column ids (e.g. task created in / out of
+// existence) are silently skipped — only columns with a real
+// agent_types binding participate.
+func (s *TaskService) FireColumnTransitions(ctx ColumnTransitionContext) int {
+	if s == nil || s.db == nil || ctx.TaskID == "" {
+		return 0
+	}
+	fired := 0
+	fired += s.fireColumnTransitionEdge(ctx, ctx.ToColumn, ColumnTransitionEnter)
+	fired += s.fireColumnTransitionEdge(ctx, ctx.FromColumn, ColumnTransitionExit)
+	return fired
+}
+
+func (s *TaskService) fireColumnTransitionEdge(ctx ColumnTransitionContext, columnID string, edge ColumnTransitionEdge) int {
+	if columnID == "" {
+		return 0
+	}
+	var agentTypesJSON, trigger string
+	err := s.db.QueryRow(
+		"SELECT agent_types, COALESCE(transition_trigger, 'none') FROM column_agents WHERE column_id = ?",
+		columnID,
+	).Scan(&agentTypesJSON, &trigger)
+	if err != nil {
+		return 0
+	}
+	// Skip when the binding is purely declarative (legacy default)
+	// or when the requested edge is not opted-in.
+	switch edge {
+	case ColumnTransitionEnter:
+		if trigger != "on_enter" && trigger != "both" {
+			return 0
+		}
+	case ColumnTransitionExit:
+		if trigger != "on_exit" && trigger != "both" {
+			return 0
+		}
+	default:
+		return 0
+	}
+	var agentTypes []string
+	if err := json.Unmarshal([]byte(agentTypesJSON), &agentTypes); err != nil {
+		slog.Error("column agent trigger: malformed agent_types",
+			"column_id", columnID, "error", err)
+		return 0
+	}
+	if len(agentTypes) == 0 {
+		return 0
+	}
+	for _, agentType := range agentTypes {
+		agentType = strings.TrimSpace(agentType)
+		if agentType == "" {
+			continue
+		}
+		slog.Info("Agent trigger column transition",
+			"task_id", ctx.TaskID,
+			"task_title", ctx.TaskTitle,
+			"agent_id", agentType,
+			"edge", string(edge),
+			"from_column", ctx.FromColumn,
+			"to_column", ctx.ToColumn,
+		)
+		s.TriggerAgentForTask(ctx.TaskID, agentType, ctx.AgentPrompt, ctx.TaskTitle)
+	}
+	return len(agentTypes)
 }
 
 type SearchTasksInput struct {

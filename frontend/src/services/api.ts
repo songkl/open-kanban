@@ -386,6 +386,30 @@ export const columnsApi = {
       method: 'PUT',
       body: JSON.stringify({ boardId, columns }),
     }),
+  /**
+   * setAgent replaces the Agent binding for a column (s-1214). When
+   * `agentTypes` is empty the row is removed so the column drops out
+   * of the auto-trigger fan-out entirely. `transitionTrigger` is one
+   * of "none" / "on_enter" / "on_exit" / "both" — see the column
+   * workflow triggers spec (PM_REVIEW §3.5).
+   */
+  setAgent: (
+    columnId: string,
+    data: { agentTypes: string[]; transitionTrigger: 'none' | 'on_enter' | 'on_exit' | 'both' },
+  ) =>
+    fetchApi<{ agentTypes: string[]; transitionTrigger: string }>(
+      `columns/${columnId}/agent`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    ),
+  getAgent: (columnId: string) =>
+    fetchApi<{ agentTypes: string[]; transitionTrigger: string }>(
+      `columns/${columnId}/agent`,
+    ),
+  deleteAgent: (columnId: string) =>
+    fetchApi<void>(`columns/${columnId}/agent`, { method: 'DELETE' }),
 };
 
 // Tasks API

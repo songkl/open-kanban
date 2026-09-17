@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Features
+  - feat: add column workflow trigger (migration 011) so column_agents.transition_trigger (none / on_enter / on_exit / both) fires the bound Agent automatically when a task crosses the column boundary (s-1214)
+  - feat: extend columns management UI with a per-column Agent binding + auto-trigger toggle (s-1214)
 
 ### Bug Fixes
 

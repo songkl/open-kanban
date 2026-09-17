@@ -19,12 +19,14 @@ import {
 import { boardsApi, columnsApi, authApi } from '@/services/api';
 import { ColumnCard } from '@/components/ColumnCard';
 import { AddColumnModal } from '@/components/AddColumnModal';
-import { EditColumnModal } from '@/components/EditColumnModal';
+import { EditColumnModal, ColumnTransitionTrigger } from '@/components/EditColumnModal';
 import { DeleteColumnModal } from '@/components/DeleteColumnModal';
 import { ColumnPermissionsModal } from '@/components/ColumnPermissionsModal';
-import type { Agent, Column, ColumnPermission } from '@/types/kanban';
+import { CustomFieldsSettings } from '@/components/CustomFieldsSettings';
+import type { Agent, Column, ColumnPermission, CustomField } from '@/types/kanban';
 import { useSetupGuard } from '@/hooks/useSetupGuard';
 import { useBoardPermission } from '@/hooks/useBoardPermission';
+import { useCustomFields } from '@/hooks/useCustomFields';
 
 interface Board {
   id: string;
@@ -53,6 +55,8 @@ export function ColumnsPage() {
   const [editColumnColor, setEditColumnColor] = useState('#6b7280');
   const [editColumnStatus, setEditColumnStatus] = useState('');
   const [editColumnDescription, setEditColumnDescription] = useState('');
+  const [editColumnBoundAgentTypes, setEditColumnBoundAgentTypes] = useState<string[]>([]);
+  const [editColumnTransitionTrigger, setEditColumnTransitionTrigger] = useState<ColumnTransitionTrigger>('none');
   const [toast, setToast] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null);
@@ -65,6 +69,12 @@ export function ColumnsPage() {
   const [permissionColumn, setPermissionColumn] = useState<Column | null>(null);
   const [columnPermissions, setColumnPermissions] = useState<ColumnPermission[]>([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
+  const [showCustomFieldsModal, setShowCustomFieldsModal] = useState(false);
+  const {
+    customFields,
+    upsertField,
+    clearFields,
+  } = useCustomFields(selectedBoard?.id);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -251,6 +261,23 @@ export function ColumnsPage() {
         ownerAgentId: editColumnOwnerAgent || undefined,
       });
 
+      // s-1214: persist the column workflow trigger. Empty agent
+      // types removes the binding so the column drops out of the
+      // auto-trigger fan-out entirely.
+      try {
+        await columnsApi.setAgent(editingColumn.id, {
+          agentTypes: editColumnBoundAgentTypes,
+          transitionTrigger: editColumnTransitionTrigger,
+        });
+      } catch (agentErr) {
+        // Surface the agent-config failure alongside the toast so
+        // an admin who lacks API permission on /agent doesn't think
+        // the column update itself failed silently.
+        console.error('Failed to update column agent binding:', agentErr);
+        showToastMessage(t('column.updateAgentFailed'));
+        return;
+      }
+
       showToastMessage(t('column.updateSuccess'));
       setEditingColumn(null);
       setNewColumnName('');
@@ -258,6 +285,8 @@ export function ColumnsPage() {
       setEditColumnStatus('');
       setEditColumnDescription('');
       setEditColumnOwnerAgent('');
+      setEditColumnBoundAgentTypes([]);
+      setEditColumnTransitionTrigger('none');
       fetchColumns(selectedBoard!.id);
     } catch (err) {
       console.error('Failed to update column:', err);
@@ -424,6 +453,25 @@ export function ColumnsPage() {
             {t('column.addColumn')}
           </button>
         )}
+        {(userBoardAccess === 'ADMIN' || userBoardAccess === 'WRITE' || currentUser?.role === 'ADMIN') && selectedBoard && (
+          <button
+            type="button"
+            onClick={() => setShowCustomFieldsModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 shadow-sm border border-zinc-100 dark:border-zinc-600 hover:border-blue-400 hover:text-blue-500 transition-all"
+            data-testid="open-custom-fields"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+              <line x1="7" y1="7" x2="7.01" y2="7"/>
+            </svg>
+            {t('customFields.button')}
+            {customFields.length > 0 && (
+              <span className="ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs font-semibold text-white">
+                {customFields.length}
+              </span>
+            )}
+          </button>
+        )}
         <span className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-500">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
@@ -458,6 +506,13 @@ export function ColumnsPage() {
                     setEditColumnStatus(col.status || '');
                     setEditColumnDescription(col.description || '');
                     setEditColumnOwnerAgent(col.ownerAgentId || '');
+                    const agentConfig = (col as Column & {
+                      agentConfig?: { agentTypes?: string[]; transitionTrigger?: string };
+                    }).agentConfig;
+                    setEditColumnBoundAgentTypes(agentConfig?.agentTypes || []);
+                    setEditColumnTransitionTrigger(
+                      (agentConfig?.transitionTrigger as ColumnTransitionTrigger) || 'none',
+                    );
                   }}
                   onDelete={handleDeleteColumn}
                   onPermission={handleOpenPermissionModal}
@@ -497,6 +552,8 @@ export function ColumnsPage() {
         description={editColumnDescription}
         ownerAgent={editColumnOwnerAgent}
         agents={agents}
+        boundAgentTypes={editColumnBoundAgentTypes}
+        transitionTrigger={editColumnTransitionTrigger}
         onClose={() => {
           setEditingColumn(null);
           setNewColumnName('');
@@ -504,6 +561,8 @@ export function ColumnsPage() {
           setEditColumnStatus('');
           setEditColumnDescription('');
           setEditColumnOwnerAgent('');
+          setEditColumnBoundAgentTypes([]);
+          setEditColumnTransitionTrigger('none');
         }}
         onSave={handleUpdateColumn}
         onNameChange={setNewColumnName}
@@ -511,6 +570,8 @@ export function ColumnsPage() {
         onStatusChange={setEditColumnStatus}
         onDescriptionChange={setEditColumnDescription}
         onOwnerAgentChange={setEditColumnOwnerAgent}
+        onBoundAgentTypesChange={setEditColumnBoundAgentTypes}
+        onTransitionTriggerChange={setEditColumnTransitionTrigger}
       />
 
       <DeleteColumnModal
@@ -537,6 +598,19 @@ export function ColumnsPage() {
           if (permissionColumn) {
             handleOpenPermissionModal(permissionColumn);
           }
+        }}
+      />
+
+      <CustomFieldsSettings
+        isOpen={showCustomFieldsModal}
+        customFields={customFields}
+        onClose={() => setShowCustomFieldsModal(false)}
+        onSave={(fields: CustomField[]) => {
+          // Replace the whole set so deletions stick (upsertField /
+          // removeField only know about a single id at a time).
+          clearFields();
+          fields.forEach(f => upsertField(f));
+          showToastMessage(t('customFields.saved'));
         }}
       />
 

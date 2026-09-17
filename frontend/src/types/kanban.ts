@@ -28,6 +28,25 @@ export interface Subtask {
   updatedAt: string;
 }
 
+/**
+ * Custom field definition (s-1197). Stored per board on the client in
+ * localStorage under `customFields:<boardId>` because the backend's
+ * `tasks.meta` JSON already accepts arbitrary K-V — the definitions are
+ * UI metadata (type, color, options) rather than data, so they live with
+ * the column settings rather than as another migration. Type controls the
+ * editor surface in the modal; `color` is the chip background on the
+ * card; `options` is required for single-/multi-select.
+ */
+export type CustomFieldType = 'text' | 'number' | 'date' | 'single-select' | 'multi-select';
+
+export interface CustomField {
+  id: string;
+  name: string;
+  type: CustomFieldType;
+  color: string;
+  options?: string[];
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -68,6 +87,19 @@ export interface Column {
   tasks: Task[];
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * ColumnAgentBinding is the per-column Agent trigger configuration
+ * returned by GET /api/v1/columns (s-1214). When a column carries an
+ * `agentConfig`, the bound agent types fire automatically whenever a
+ * task crosses the column edge that matches `transitionTrigger` —
+ * 'on_enter' on entry, 'on_exit' on exit, 'both' on either edge, and
+ * 'none' (the legacy default) for purely-declarative bindings.
+ */
+export interface ColumnAgentBinding {
+  agentTypes: string[];
+  transitionTrigger: 'none' | 'on_enter' | 'on_exit' | 'both';
 }
 
 export type PermissionAccess = 'READ' | 'WRITE' | 'ADMIN';

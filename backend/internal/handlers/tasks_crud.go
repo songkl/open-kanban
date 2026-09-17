@@ -211,6 +211,22 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 		broadcast()
 
 		if req.ColumnID != "" && req.ColumnID != columnID {
+			// Wake any Agent bound to either edge of the column
+			// move when the relevant column has opted-in to
+			// transition_trigger (s-1214). Fire-and-forget so the
+			// PUT response is not blocked on Agent dispatch.
+			agentPrompt := ""
+			if task.AgentPrompt != nil {
+				agentPrompt = *task.AgentPrompt
+			}
+			taskService.FireColumnTransitions(services.ColumnTransitionContext{
+				TaskID:      task.ID,
+				TaskTitle:   task.Title,
+				AgentPrompt: agentPrompt,
+				FromColumn:  columnID,
+				ToColumn:    task.ColumnID,
+			})
+
 			go func() {
 				webhookSvc := services.GetWebhookService()
 				columnName := getColumnName(db, task.ColumnID)

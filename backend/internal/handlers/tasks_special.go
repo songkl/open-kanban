@@ -156,16 +156,35 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		broadcast()
 		GetTask(db)(c)
 
+		// Fire transition triggers for the column move that
+		// CompleteTask just performed (s-1214). Same fire-and-forget
+		// semantics as UpdateTask; the Agents bound to either edge
+		// run in their own goroutines without blocking the response.
+		var agentPrompt string
+		var assigneePtr *string
+		if err := db.QueryRow("SELECT agent_prompt, assignee FROM tasks WHERE id = ?", id).Scan(&agentPrompt, &assigneePtr); err != nil {
+			agentPrompt = ""
+		}
+		if newColumnID != "" && newColumnID != columnID {
+			taskService.FireColumnTransitions(services.ColumnTransitionContext{
+				TaskID:      id,
+				TaskTitle:   taskTitle,
+				AgentPrompt: agentPrompt,
+				FromColumn:  columnID,
+				ToColumn:    newColumnID,
+			})
+		}
+
 		go func() {
 			webhookSvc := services.GetWebhookService()
 			columnName := getColumnName(db, newColumnID)
 			var priority string
-			var assigneePtr *string
-			if err := db.QueryRow("SELECT priority, assignee FROM tasks WHERE id = ?", id).Scan(&priority, &assigneePtr); err != nil {
+			var assigneePtr2 *string
+			if err := db.QueryRow("SELECT priority, assignee FROM tasks WHERE id = ?", id).Scan(&priority, &assigneePtr2); err != nil {
 				priority = ""
-				assigneePtr = nil
+				assigneePtr2 = nil
 			}
-			assignee := derefString(assigneePtr)
+			assignee := derefString(assigneePtr2)
 			webhookSvc.NotifyTaskMoved(services.WebhookTask{
 				ID:         id,
 				Title:      taskTitle,
@@ -260,9 +279,46 @@ func ReorderTasks(db *sql.DB) gin.HandlerFunc {
 		}
 
 		taskService := services.NewTaskService(db)
+		// Snapshot the previous column + title for every task that
+		// is being reordered so we can fire transition triggers for
+		// tasks whose column actually changed (s-1214). We do this
+		// before ReorderTasks so the snapshot reflects the
+		// pre-move state even on a transaction rollback.
+		prevColumns := make(map[string]string, len(req.Tasks))
+		prevTitles := make(map[string]string, len(req.Tasks))
+		prevPrompts := make(map[string]string, len(req.Tasks))
+		for _, t := range req.Tasks {
+			var prevCol, prevTitle, prevPrompt string
+			if err := db.QueryRow("SELECT column_id, title, COALESCE(agent_prompt, '') FROM tasks WHERE id = ?", t.ID).Scan(&prevCol, &prevTitle, &prevPrompt); err != nil {
+				continue
+			}
+			prevColumns[t.ID] = prevCol
+			prevTitles[t.ID] = prevTitle
+			prevPrompts[t.ID] = prevPrompt
+		}
+
 		if err := taskService.ReorderTasks(input); err != nil {
 			ServerError(c, "Failed to reorder tasks", err)
 			return
+		}
+
+		// Fire column-transition triggers for tasks that crossed
+		// a column boundary during the reorder. Pure position
+		// swaps within the same column are skipped — those are not
+		// transitions. Same fire-and-forget semantics as
+		// UpdateTask so the bulk reorder response stays snappy.
+		for _, t := range req.Tasks {
+			from, ok := prevColumns[t.ID]
+			if !ok || from == "" || from == t.ColumnID {
+				continue
+			}
+			taskService.FireColumnTransitions(services.ColumnTransitionContext{
+				TaskID:      t.ID,
+				TaskTitle:   prevTitles[t.ID],
+				AgentPrompt: prevPrompts[t.ID],
+				FromColumn:  from,
+				ToColumn:    t.ColumnID,
+			})
 		}
 
 		var ids []string

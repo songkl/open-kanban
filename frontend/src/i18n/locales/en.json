@@ -432,6 +432,17 @@
     "ownerAgent": "Owner Agent",
     "ownerAgentHint": "Assign an Agent to own this column. The Agent can get exclusive tasks via MCP.",
     "noOwnerAgent": "None",
+    "boundAgents": "Bound Agents (workflow trigger)",
+    "boundAgentsHint": "Pick the Agent types that should fire when a task crosses this column.",
+    "noAgentsAvailable": "No Agents registered yet — create one in Settings → Agents first.",
+    "transitionTrigger": "Auto-trigger Agent",
+    "transitionTriggerHint": "When enabled, the bound Agents are invoked automatically as tasks move across this column.",
+    "transitionDisabled": "Off",
+    "transitionEnabled": "On",
+    "transitionRequiresAgents": "Bind at least one Agent above before enabling the auto-trigger.",
+    "triggerOnEnter": "On task enter",
+    "triggerOnExit": "On task exit",
+    "updateAgentFailed": "Column saved, but the Agent binding could not be updated.",
     "permissions": "Permissions",
     "columnPermissions": "Column Permissions",
     "currentPermissions": "Current Permissions",
@@ -573,7 +584,37 @@
     "today": "Today",
     "thisWeek": "This Week",
     "thisMonth": "This Month",
-    "tag": "Tag"
+    "tag": "Tag",
+    "customField": "Custom Field",
+    "customFieldValue": "Custom Field Value"
+  },
+  "customFields": {
+    "button": "Custom Fields",
+    "title": "Custom Fields",
+    "subtitle": "Define typed fields that appear on every task in this board.",
+    "empty": "No custom fields yet. Click \"Add field\" to define one.",
+    "namePlaceholder": "Field name",
+    "color": "Color",
+    "options": "Options",
+    "optionPlaceholder": "Option label",
+    "addOption": "Add option",
+    "removeOption": "Remove option",
+    "addField": "Add field",
+    "remove": "Remove field",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saved": "Custom fields saved",
+    "editorTitle": "Custom Fields",
+    "editor": {
+      "placeholder": "Enter value"
+    },
+    "types": {
+      "text": "Text",
+      "number": "Number",
+      "date": "Date",
+      "single-select": "Single select",
+      "multi-select": "Multi select"
+    }
   },
   "mobile": {
     "switchToSlideView": "Switch to slide view",

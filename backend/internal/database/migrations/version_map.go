@@ -77,6 +77,12 @@ var VersionMigrationMap = []VersionMigration{
 	// fresh install lands on a populated marketplace without any manual
 	// configuration. Tracked as s-1196.
 	{Version: "0.10.0", From: 1, To: 10},
+	// 0.11.0 added migration 011 to give column_agents a
+	// transition_trigger flag (none / on_enter / on_exit / both) so
+	// the SetColumnAgent handler can wake a bound Agent automatically
+	// when a task crosses the column boundary. Tracked as s-1214
+	// (PM_REVIEW §3.5).
+	{Version: "0.11.0", From: 1, To: 11},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

@@ -432,6 +432,17 @@
     "ownerAgent": "负责人Agent",
     "ownerAgentHint": "指定负责该列的Agent，通过MCP可获取专属任务",
     "noOwnerAgent": "无",
+    "boundAgents": "绑定Agent（工作流触发）",
+    "boundAgentsHint": "选择当任务跨过该列时自动唤起的Agent类型。",
+    "noAgentsAvailable": "暂未注册Agent，请先在设置→Agent中创建。",
+    "transitionTrigger": "自动触发Agent",
+    "transitionTriggerHint": "开启后，绑定的Agent会在任务跨过该列时自动被唤起。",
+    "transitionDisabled": "关闭",
+    "transitionEnabled": "开启",
+    "transitionRequiresAgents": "请先在上方绑定至少一个Agent，再开启自动触发。",
+    "triggerOnEnter": "任务进入时",
+    "triggerOnExit": "任务离开时",
+    "updateAgentFailed": "列已保存，但Agent绑定更新失败。",
     "permissions": "权限",
     "columnPermissions": "列权限",
     "currentPermissions": "当前权限",
@@ -573,7 +584,37 @@
     "today": "今天",
     "thisWeek": "本周",
     "thisMonth": "本月",
-    "tag": "标签"
+    "tag": "标签",
+    "customField": "自定义字段",
+    "customFieldValue": "自定义字段值"
+  },
+  "customFields": {
+    "button": "自定义字段",
+    "title": "自定义字段",
+    "subtitle": "为该看板的所有任务定义带类型的字段。",
+    "empty": "暂无自定义字段，点击“添加字段”开始定义。",
+    "namePlaceholder": "字段名称",
+    "color": "颜色",
+    "options": "可选项",
+    "optionPlaceholder": "选项名称",
+    "addOption": "添加选项",
+    "removeOption": "删除选项",
+    "addField": "添加字段",
+    "remove": "删除字段",
+    "cancel": "取消",
+    "save": "保存",
+    "saved": "自定义字段已保存",
+    "editorTitle": "自定义字段",
+    "editor": {
+      "placeholder": "请输入值"
+    },
+    "types": {
+      "text": "文本",
+      "number": "数字",
+      "date": "日期",
+      "single-select": "单选",
+      "multi-select": "多选"
+    }
   },
   "mobile": {
     "switchToSlideView": "切换到滑动视图",
