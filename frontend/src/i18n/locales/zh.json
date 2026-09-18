@@ -680,6 +680,18 @@
       "multi-select": "多选"
     }
   },
+  "activityLog": {
+    "scope": {
+      "board": "看板",
+      "column": "列表",
+      "task": "任务"
+    },
+    "allBoards": "全部看板",
+    "allColumns": "全部列表",
+    "allTasks": "全部任务",
+    "exportCsv": "导出 CSV",
+    "exporting": "导出中..."
+  },
   "mobile": {
     "switchToSlideView": "切换到滑动视图",
     "switchToListView": "切换到列表视图",

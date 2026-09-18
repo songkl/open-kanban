@@ -783,12 +783,27 @@ interface Activity {
 }
 
 export const activitiesApi = {
-  getAll: (filters?: { action?: string; startTime?: string; endTime?: string; pageSize?: number }) => {
+  getAll: (filters?: {
+    action?: string;
+    startTime?: string;
+    endTime?: string;
+    pageSize?: number;
+    boardId?: string;
+    columnId?: string;
+    taskId?: string;
+  }) => {
     const params = new URLSearchParams();
     if (filters?.action) params.append('action', filters.action);
     if (filters?.startTime) params.append('startTime', filters.startTime);
     if (filters?.endTime) params.append('endTime', filters.endTime);
     if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
+    // s-1208 (PM-s1188 §3.8): scope filters. Each is independently
+    // optional and combines with the existing actor/type/time filters
+    // — a single GET can ask for, say, `CREATE_TASK` events on a
+    // single board in a given time window.
+    if (filters?.boardId) params.append('boardId', filters.boardId);
+    if (filters?.columnId) params.append('columnId', filters.columnId);
+    if (filters?.taskId) params.append('taskId', filters.taskId);
     const queryString = params.toString();
     return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
       `auth/activities${queryString ? '?' + queryString : ''}`,
@@ -815,6 +830,42 @@ export const activitiesApi = {
       `auth/activities?${params.toString()}`,
       { skip401Handling: true }
     );
+  },
+  /**
+   * s-1208: download the same slice the on-screen list would render,
+   * as a CSV stream produced server-side. Returns the raw `Response`
+   * so the caller can read `Content-Disposition` and stream the blob
+   * to a file. Throws ApiError on non-2xx.
+   */
+  exportCsv: async (filters: {
+    action?: string;
+    startTime?: string;
+    endTime?: string;
+    boardId?: string;
+    columnId?: string;
+    taskId?: string;
+  } = {}): Promise<Response> => {
+    const params = new URLSearchParams();
+    params.append('format', 'csv');
+    if (filters.action) params.append('action', filters.action);
+    if (filters.startTime) params.append('startTime', filters.startTime);
+    if (filters.endTime) params.append('endTime', filters.endTime);
+    if (filters.boardId) params.append('boardId', filters.boardId);
+    if (filters.columnId) params.append('columnId', filters.columnId);
+    if (filters.taskId) params.append('taskId', filters.taskId);
+    const url = `${API_BASE}auth/activities/export?${params.toString()}`;
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) {
+      let message = i18n.t('app.error.requestFailed', { status: response.status });
+      try {
+        const data = await response.json();
+        if (data?.error) message = data.error;
+      } catch {
+        // not JSON; fall through with the default
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response;
   },
 };
 

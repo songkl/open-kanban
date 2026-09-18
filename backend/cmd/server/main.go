@@ -327,6 +327,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.PUT("/token", handlers.UpdateToken(db))
 		authProtected.DELETE("/token", handlers.DeleteToken(db))
 		authProtected.GET("/activities", handlers.GetActivities(db))
+		authProtected.GET("/activities/export", handlers.ExportActivities(db))
 		authProtected.GET("/agents", handlers.GetAgents(db))
 		authProtected.POST("/agents", handlers.CreateAgent(db))
 		authProtected.POST("/agents/reset-token", handlers.ResetAgentToken(db))

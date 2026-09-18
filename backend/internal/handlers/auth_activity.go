@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -104,93 +105,35 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		filterUserID := c.Query("userId")
-		filterAction := c.Query("action")
-		filterStartTime := c.Query("startTime")
-		filterEndTime := c.Query("endTime")
-		filterAgentOnly := c.Query("agentOnly")
-
-		baseQuery := "SELECT a.id, a.user_id, a.action, a.target_type, a.target_id, a.target_title, a.details, a.ip_address, a.source, a.created_at FROM activities a"
-		whereClause := ""
-		args := []interface{}{}
-
-		if filterAgentOnly == "true" {
-			baseQuery += " JOIN users u ON a.user_id = u.id AND u.type = 'AGENT'"
+		filters := parseActivityFilters(c, user)
+		if filters.forbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can view activity scope outside your account"})
+			return
 		}
 
-		if !isAdmin(user) {
-			filterUserID = user.ID
-		}
+		limit, offset := parseActivityPagination(c)
 
-		if filterUserID != "" {
-			if whereClause != "" {
-				whereClause += " AND "
-			}
-			whereClause += "a.user_id = ?"
-			args = append(args, filterUserID)
-		}
+		baseQuery, args := buildActivityListQuery(filters)
+		countQuery, countArgs := buildActivityCountQuery(filters)
 
-		if filterAction != "" {
-			if whereClause != "" {
-				whereClause += " AND "
-			}
-			whereClause += "a.action = ?"
-			args = append(args, filterAction)
-		}
-
-		if filterStartTime != "" {
-			if whereClause != "" {
-				whereClause += " AND "
-			}
-			whereClause += "a.created_at >= ?"
-			args = append(args, filterStartTime)
-		}
-
-		if filterEndTime != "" {
-			if whereClause != "" {
-				whereClause += " AND "
-			}
-			whereClause += "a.created_at <= ?"
-			args = append(args, filterEndTime)
-		}
-
-		if whereClause != "" {
-			baseQuery += " WHERE " + whereClause
-		}
-
-		limit := 50
-		offset := 0
-		if l := c.Query("limit"); l != "" {
-			if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-				limit = parsed
-			}
-		}
-		if o := c.Query("offset"); o != "" {
-			if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-				offset = parsed
-			}
-		}
-
-		countQuery := "SELECT COUNT(*) FROM activities a"
-		if filterAgentOnly == "true" {
-			countQuery += " JOIN users u ON a.user_id = u.id AND u.type = 'AGENT'"
-		}
-		if whereClause != "" {
-			countQuery += " WHERE " + whereClause
-		}
 		var total int
-		if len(args) > 0 {
-			db.QueryRow(countQuery, args...).Scan(&total)
+		if len(countArgs) > 0 {
+			if err := db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
+				c.JSON(500, gin.H{"error": "Failed to get activity records"})
+				return
+			}
 		} else {
-			db.QueryRow(countQuery).Scan(&total)
+			if err := db.QueryRow(countQuery).Scan(&total); err != nil {
+				c.JSON(500, gin.H{"error": "Failed to get activity records"})
+				return
+			}
 		}
 
 		baseQuery += " ORDER BY a.created_at DESC LIMIT ? OFFSET ?"
-		queryArgs := append(args, limit, offset)
+		queryArgs := append(append([]interface{}{}, args...), limit, offset)
 
 		var rows *sql.Rows
 		var err error
-
 		if len(queryArgs) > 0 {
 			rows, err = db.Query(baseQuery, queryArgs...)
 		} else {
@@ -213,6 +156,249 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 
 		hasMore := offset+len(activities) < total
 		c.JSON(200, gin.H{"activities": activities, "hasMore": hasMore, "total": total})
+	}
+}
+
+// activityFilters is the parsed, normalized set of ?query= arguments
+// accepted by both GetActivities and ExportActivities. Centralizing
+// the parsing here keeps the two endpoints returning the exact same
+// slice for the same URL.
+//
+//   - userID is the actor filter. Non-admins are forced to their own
+//     user ID so they cannot enumerate other accounts.
+//   - action / startTime / endTime / agentOnly mirror the original
+//     activity-log filters.
+//   - boardID / columnID / taskID are the new scope filters
+//     (PM-s1188 §3.8). Each is resolved through SQL subqueries so a
+//     filter on `boardID` returns BOARD-target rows on that board plus
+//     COLUMN/TASK/COMMENT rows whose target chain walks through that
+//     board.
+//   - forbidden is set when a non-admin requested a cross-account
+//     userId filter; the handler turns that into a 403.
+type activityFilters struct {
+	userID     string
+	action     string
+	startTime  string
+	endTime    string
+	agentOnly  bool
+	boardID    string
+	columnID   string
+	taskID     string
+	forbidden  bool
+	joinsAgent bool
+}
+
+func parseActivityFilters(c *gin.Context, user *models.User) activityFilters {
+	f := activityFilters{
+		userID:    c.Query("userId"),
+		action:    c.Query("action"),
+		startTime: c.Query("startTime"),
+		endTime:   c.Query("endTime"),
+		boardID:   c.Query("boardId"),
+		columnID:  c.Query("columnId"),
+		taskID:    c.Query("taskId"),
+	}
+	if c.Query("agentOnly") == "true" {
+		f.agentOnly = true
+		f.joinsAgent = true
+	}
+	if !isAdmin(user) {
+		if f.userID != "" && f.userID != user.ID {
+			f.forbidden = true
+			return f
+		}
+		f.userID = user.ID
+	}
+	return f
+}
+
+func parseActivityPagination(c *gin.Context) (int, int) {
+	limit := 50
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	return limit, offset
+}
+
+// appendActivityWhere joins every non-empty filter into a single WHERE
+// clause + matching args slice. The same fragment is reused by the
+// list query, the count query, and the CSV exporter so they can never
+// drift apart.
+func (f activityFilters) appendActivityWhere() (string, []interface{}) {
+	clause := ""
+	args := []interface{}{}
+	add := func(pred string, val ...interface{}) {
+		if clause != "" {
+			clause += " AND "
+		}
+		clause += pred
+		args = append(args, val...)
+	}
+
+	if f.userID != "" {
+		add("a.user_id = ?", f.userID)
+	}
+	if f.action != "" {
+		add("a.action = ?", f.action)
+	}
+	if f.startTime != "" {
+		add("a.created_at >= ?", f.startTime)
+	}
+	if f.endTime != "" {
+		add("a.created_at <= ?", f.endTime)
+	}
+
+	if f.taskID != "" {
+		// TargetType TASK rows hit directly; COMMENT rows on that
+		// task inherit the scope via comments.task_id. The outer
+		// parentheses are load-bearing: without them the surrounding
+		// AND/OR chain would only apply the action filter to TASK
+		// rows because AND binds tighter than OR.
+		add(`((a.target_type = 'TASK' AND a.target_id = ?) OR (a.target_type = 'COMMENT' AND a.target_id IN (SELECT id FROM comments WHERE task_id = ?)))`, f.taskID, f.taskID)
+	}
+	if f.columnID != "" {
+		// COLUMN rows direct; TASK rows whose column_id matches;
+		// COMMENT rows that resolve through tasks.column_id.
+		add(`((a.target_type = 'COLUMN' AND a.target_id = ?)
+			OR (a.target_type = 'TASK' AND a.target_id IN (SELECT id FROM tasks WHERE column_id = ?))
+			OR (a.target_type = 'COMMENT' AND a.target_id IN (SELECT cm.id FROM comments cm JOIN tasks t ON cm.task_id = t.id WHERE t.column_id = ?)))`, f.columnID, f.columnID, f.columnID)
+	}
+	if f.boardID != "" {
+		// BOARD rows direct; COLUMN rows whose column.board_id matches;
+		// TASK rows resolved via tasks → columns.board_id; COMMENT
+		// rows resolved via comments → tasks → columns.board_id.
+		add(`((a.target_type = 'BOARD' AND a.target_id = ?)
+			OR (a.target_type = 'COLUMN' AND a.target_id IN (SELECT id FROM columns WHERE board_id = ?))
+			OR (a.target_type = 'TASK' AND a.target_id IN (SELECT t.id FROM tasks t JOIN columns c ON t.column_id = c.id WHERE c.board_id = ?))
+			OR (a.target_type = 'COMMENT' AND a.target_id IN (SELECT cm.id FROM comments cm JOIN tasks t ON cm.task_id = t.id JOIN columns c ON t.column_id = c.id WHERE c.board_id = ?)))`, f.boardID, f.boardID, f.boardID, f.boardID)
+	}
+
+	return clause, args
+}
+
+// buildActivityListQuery produces the SELECT used by GetActivities and
+// ExportActivities. Both endpoints must run the same row scan so the
+// exported CSV is byte-for-byte identical to the on-screen slice.
+func buildActivityListQuery(f activityFilters) (string, []interface{}) {
+	q := "SELECT a.id, a.user_id, a.action, a.target_type, a.target_id, a.target_title, a.details, a.ip_address, a.source, a.created_at FROM activities a"
+	if f.joinsAgent {
+		q += " JOIN users u ON a.user_id = u.id AND u.type = 'AGENT'"
+	}
+	where, args := f.appendActivityWhere()
+	if where != "" {
+		q += " WHERE " + where
+	}
+	return q, args
+}
+
+func buildActivityCountQuery(f activityFilters) (string, []interface{}) {
+	q := "SELECT COUNT(*) FROM activities a"
+	if f.joinsAgent {
+		q += " JOIN users u ON a.user_id = u.id AND u.type = 'AGENT'"
+	}
+	where, args := f.appendActivityWhere()
+	if where != "" {
+		q += " WHERE " + where
+	}
+	return q, args
+}
+
+// ExportActivities streams the same activity slice returned by
+// GetActivities as a CSV download. Server-side streaming keeps memory
+// flat for large exports — rows are written to the gin.ResponseWriter
+// directly through encoding/csv rather than buffered into a slice.
+//
+// The endpoint honours every filter accepted by GetActivities (scope
+// + actor + type + time) so a CSV export reflects exactly what the
+// caller sees on screen. The header row is stable; clients can diff
+// exports across runs without spurious schema churn.
+func ExportActivities(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		filters := parseActivityFilters(c, user)
+		if filters.forbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can export activity scope outside your account"})
+			return
+		}
+
+		format := strings.ToLower(c.DefaultQuery("format", "csv"))
+		if format != "csv" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported export format, only csv is supported"})
+			return
+		}
+
+		query, args := buildActivityListQuery(filters)
+		query += " ORDER BY a.created_at DESC"
+		// Cap each individual scan; if the dataset is larger the
+		// client can use the existing pagination parameters, but
+		// exports are intentionally unbounded to back the
+		// "download the whole slice" DoD.
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			slog.Error("ExportActivities: query failed", "error", err, "userID", user.ID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to export activity records"})
+			return
+		}
+		defer rows.Close()
+
+		filename := fmt.Sprintf("activity_log_%s.csv", time.Now().UTC().Format("20060102_150405"))
+		c.Header("Content-Description", "File Transfer")
+		c.Header("Content-Disposition", "attachment; filename="+filename)
+		c.Header("Content-Type", "text/csv; charset=utf-8")
+		c.Status(http.StatusOK)
+
+		writer := csv.NewWriter(c.Writer)
+		if err := writer.Write([]string{
+			"id", "userId", "action", "targetType", "targetId",
+			"targetTitle", "details", "ipAddress", "source", "createdAt",
+		}); err != nil {
+			slog.Error("ExportActivities: failed to write header", "error", err)
+			return
+		}
+
+		for rows.Next() {
+			var a Activity
+			if err := rows.Scan(&a.ID, &a.UserID, &a.Action, &a.TargetType, &a.TargetID, &a.TargetTitle, &a.Details, &a.IPAddress, &a.Source, &a.CreatedAt); err != nil {
+				slog.Error("ExportActivities: row scan failed", "error", err)
+				continue
+			}
+			row := []string{
+				a.ID,
+				a.UserID,
+				a.Action,
+				a.TargetType,
+				a.TargetID,
+				a.TargetTitle,
+				a.Details,
+				a.IPAddress,
+				a.Source,
+				a.CreatedAt.UTC().Format(time.RFC3339),
+			}
+			if err := writer.Write(row); err != nil {
+				slog.Error("ExportActivities: row write failed", "error", err)
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			slog.Error("ExportActivities: rows iteration", "error", err)
+		}
+		writer.Flush()
+		if err := writer.Error(); err != nil {
+			slog.Error("ExportActivities: flush", "error", err)
+		}
 	}
 }
 

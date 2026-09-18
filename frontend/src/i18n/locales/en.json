@@ -680,6 +680,18 @@
       "multi-select": "Multi select"
     }
   },
+  "activityLog": {
+    "scope": {
+      "board": "Board",
+      "column": "Column",
+      "task": "Task"
+    },
+    "allBoards": "All boards",
+    "allColumns": "All columns",
+    "allTasks": "All tasks",
+    "exportCsv": "Export CSV",
+    "exporting": "Exporting..."
+  },
   "mobile": {
     "switchToSlideView": "Switch to slide view",
     "switchToListView": "Switch to list view",
