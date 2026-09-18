@@ -1232,6 +1232,153 @@ func TestGetAgentsHandler(t *testing.T) {
 	})
 }
 
+func TestGetAgentsHandlerHealthMetrics(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	// Fresh agent with no activity yet — health counters must
+	// default to zero rather than NULL so the frontend can render
+	// "0 / 0%" placeholders without a guard.
+	if _, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled, last_active_at)
+		VALUES ('agent-quiet', 'aq', 'Quiet Agent', '', 'MEMBER', 'AGENT', 1, datetime('now', '-2 hours'))`); err != nil {
+		t.Fatalf("insert quiet agent: %v", err)
+	}
+
+	// Active agent — last_active_at within the last minute,
+	// three successful runs (UPDATE_TASK) and one failure
+	// (DELETE_TASK) in the last 24h, plus an old (>24h) run to
+	// prove the 24h window is respected, plus an old (>24h)
+	// failure to prove fails_last_24h excludes it.
+	if _, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled, last_active_at)
+		VALUES ('agent-busy', 'ab', 'Busy Agent', '', 'MEMBER', 'AGENT', 1, datetime('now'))`); err != nil {
+		t.Fatalf("insert busy agent: %v", err)
+	}
+	activities := []struct {
+		id      string
+		action  string
+		minutes string
+	}{
+		// recent successful runs
+		{"a1", "UPDATE_TASK", "-30"},
+		{"a2", "COMPLETE_TASK", "-45"},
+		{"a3", "ADD_COMMENT", "-60"},
+		// recent failure
+		{"a4", "DELETE_TASK", "-15"},
+		// old run (>24h ago) — must NOT count in runs_last_24h
+		{"a5", "CREATE_TASK", "-1500"},
+		// old failure (>24h ago) — must NOT count in fails_last_24h
+		{"a6", "BOARD_DELETE", "-2880"},
+	}
+	for _, a := range activities {
+		if _, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source, created_at)
+			VALUES (?, 'agent-busy', ?, 'TASK', 'mcp', datetime('now', ?))`,
+			a.id, a.action, a.minutes+" minutes"); err != nil {
+			t.Fatalf("insert activity %s: %v", a.id, err)
+		}
+	}
+
+	// A third agent with mixed activity from a non-agent user —
+	// proves the join pins health metrics to u.type='AGENT' only.
+	if _, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled)
+		VALUES ('agent-noisy', 'an', 'Noisy Agent', '', 'MEMBER', 'AGENT', 1)`); err != nil {
+		t.Fatalf("insert noisy agent: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source)
+		VALUES ('a-noise-1', 'agent-noisy', 'DELETE_TASK', 'TASK', 'mcp'),
+		       ('a-noise-2', 'agent-noisy', 'CREATE_TASK', 'TASK', 'mcp')`); err != nil {
+		t.Fatalf("insert noisy activity: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.GET("/api/agents", handlers.GetAgents(db))
+
+	req, _ := http.NewRequest("GET", "/api/agents", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Agents []map[string]interface{} `json:"agents"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Agents) != 3 {
+		t.Fatalf("expected 3 agents, got %d", len(resp.Agents))
+	}
+
+	byID := map[string]map[string]interface{}{}
+	for _, a := range resp.Agents {
+		byID[a["id"].(string)] = a
+	}
+
+	t.Run("quiet agent exposes zero counters and last_heartbeat_at from last_active_at", func(t *testing.T) {
+		a := byID["agent-quiet"]
+		if a == nil {
+			t.Fatal("missing agent-quiet")
+		}
+		// runs_last_24h / fails_last_24h / total_runs default to 0
+		// (not null/missing) so the frontend can render without
+		// a null check.
+		for _, key := range []string{"runsLast24h", "failsLast24h", "totalRuns"} {
+			got, ok := a[key].(float64)
+			if !ok {
+				t.Errorf("quiet agent: %s missing or non-numeric: %v", key, a[key])
+				continue
+			}
+			if got != 0 {
+				t.Errorf("quiet agent: expected %s=0, got %v", key, got)
+			}
+		}
+		// last_heartbeat_at mirrors last_active_at so the frontend
+		// has a single field to render in the health badge.
+		if _, ok := a["lastHeartbeatAt"]; !ok {
+			t.Error("quiet agent: expected lastHeartbeatAt to be set from last_active_at")
+		}
+		if _, ok := a["lastActiveAt"]; !ok {
+			t.Error("quiet agent: expected lastActiveAt to be set")
+		}
+	})
+
+	t.Run("busy agent counts only last-24h runs and last-24h failures", func(t *testing.T) {
+		a := byID["agent-busy"]
+		if a == nil {
+			t.Fatal("missing agent-busy")
+		}
+		if got := a["runsLast24h"].(float64); got != 4 {
+			t.Errorf("runsLast24h: expected 4 (3 successful + 1 fail), got %v", got)
+		}
+		if got := a["failsLast24h"].(float64); got != 1 {
+			t.Errorf("failsLast24h: expected 1, got %v", got)
+		}
+		// total_runs counts every activity row regardless of age.
+		if got := a["totalRuns"].(float64); got != 6 {
+			t.Errorf("totalRuns: expected 6, got %v", got)
+		}
+	})
+
+	t.Run("noisy agent sees only its own activity even when sharing the users table", func(t *testing.T) {
+		a := byID["agent-noisy"]
+		if a == nil {
+			t.Fatal("missing agent-noisy")
+		}
+		if got := a["runsLast24h"].(float64); got != 2 {
+			t.Errorf("runsLast24h: expected 2, got %v", got)
+		}
+		if got := a["failsLast24h"].(float64); got != 1 {
+			t.Errorf("failsLast24h: expected 1, got %v", got)
+		}
+		if got := a["totalRuns"].(float64); got != 2 {
+			t.Errorf("totalRuns: expected 2, got %v", got)
+		}
+	})
+}
+
 func TestCreateAgentHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)

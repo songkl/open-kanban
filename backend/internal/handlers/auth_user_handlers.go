@@ -481,7 +481,13 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 
 		rows, err := db.Query(`
 			SELECT u.id, u.nickname, u.avatar, u.type, u.role, u.enabled, u.created_at, u.updated_at, u.last_active_at,
-				(SELECT COUNT(*) FROM tokens WHERE user_id = u.id) as token_count
+				(SELECT COUNT(*) FROM tokens WHERE user_id = u.id) as token_count,
+				COALESCE((SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id
+					AND a.created_at >= datetime('now', '-1 day')), 0) as runs_last_24h,
+				COALESCE((SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id
+					AND a.created_at >= datetime('now', '-1 day')
+					AND a.action IN ('DELETE_TASK', 'BOARD_DELETE', 'COLUMN_DELETE', 'TEMPLATE_DELETE')), 0) as fails_last_24h,
+				COALESCE((SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id), 0) as total_runs
 			FROM users u
 			WHERE u.type = 'AGENT'
 			ORDER BY u.created_at DESC
@@ -495,22 +501,26 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 		var agents []gin.H
 		for rows.Next() {
 			var u models.User
-			var tokenCount int
+			var tokenCount, runsLast24h, failsLast24h, totalRuns int
 			var lastActiveAt sql.NullTime
-			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &tokenCount); err == nil {
+			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &tokenCount, &runsLast24h, &failsLast24h, &totalRuns); err == nil {
 				agent := gin.H{
-					"id":         u.ID,
-					"nickname":   u.Nickname,
-					"avatar":     u.Avatar,
-					"type":       u.Type,
-					"role":       u.Role,
-					"enabled":    u.Enabled,
-					"createdAt":  u.CreatedAt,
-					"updatedAt":  u.UpdatedAt,
-					"tokenCount": tokenCount,
+					"id":            u.ID,
+					"nickname":      u.Nickname,
+					"avatar":        u.Avatar,
+					"type":          u.Type,
+					"role":          u.Role,
+					"enabled":       u.Enabled,
+					"createdAt":     u.CreatedAt,
+					"updatedAt":     u.UpdatedAt,
+					"tokenCount":    tokenCount,
+					"runsLast24h":   runsLast24h,
+					"failsLast24h":  failsLast24h,
+					"totalRuns":     totalRuns,
 				}
 				if lastActiveAt.Valid {
 					agent["lastActiveAt"] = lastActiveAt.Time
+					agent["lastHeartbeatAt"] = lastActiveAt.Time
 				}
 				agents = append(agents, agent)
 			}

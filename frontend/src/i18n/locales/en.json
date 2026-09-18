@@ -787,7 +787,24 @@
       "recordCountWithTotal": "{{count}} / {{total}}",
       "separator": "•",
       "dashPrefix": "-",
-      "pipeSeparator": "|"
+      "pipeSeparator": "|",
+      "sortBy": "Sort agents by",
+      "sortLastActive": "Last active",
+      "sortFailureRate": "Failure rate (24h)",
+      "sortTotalRuns": "Total runs",
+      "sortName": "Name",
+      "healthBadge": "Health",
+      "failureRate24h": "Failure (24h)",
+      "healthPanelTitle": "Agent health",
+      "lastHeartbeatAt": "Last heartbeat",
+      "runsLast24h": "Runs (24h)",
+      "failsLast24h": "Failures (24h)",
+      "totalRuns": "Total runs",
+      "health": {
+        "healthy": "Healthy",
+        "warning": "Warning",
+        "unhealthy": "Unhealthy"
+      }
     },
     "agentManagement": "Agent Management",
     "agentDescription": "Agents are non-human users that access the system via API Tokens. Each Agent has its own Token.",

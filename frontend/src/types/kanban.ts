@@ -178,6 +178,10 @@ export interface User {
 
 export interface Agent extends User {
   tokenCount: number;
+  runsLast24h: number;
+  failsLast24h: number;
+  totalRuns: number;
+  lastHeartbeatAt?: string;
 }
 
 export interface Token {

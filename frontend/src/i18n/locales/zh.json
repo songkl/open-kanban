@@ -787,7 +787,24 @@
       "recordCountWithTotal": "{{count}} / {{total}}",
       "separator": "•",
       "dashPrefix": "-",
-      "pipeSeparator": "|"
+      "pipeSeparator": "|",
+      "sortBy": "Agent 排序",
+      "sortLastActive": "最近活跃",
+      "sortFailureRate": "24h 失败率",
+      "sortTotalRuns": "累计运行次数",
+      "sortName": "名称",
+      "healthBadge": "健康度",
+      "failureRate24h": "24h 失败率",
+      "healthPanelTitle": "Agent 健康度",
+      "lastHeartbeatAt": "最近心跳",
+      "runsLast24h": "24h 运行次数",
+      "failsLast24h": "24h 失败次数",
+      "totalRuns": "累计运行次数",
+      "health": {
+        "healthy": "健康",
+        "warning": "注意",
+        "unhealthy": "异常"
+      }
     },
     "agentManagement": "Agent 管理",
     "agentDescription": "Agent 是非人类用户，通过 API Token 访问系统。每个 Agent 都有独立的 Token。",
