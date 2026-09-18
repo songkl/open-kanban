@@ -24,6 +24,7 @@ const SearchPage = lazy(() => import('./pages/SearchPage').then(m => ({ default:
 const TemplateMarketplacePage = lazy(() => import('./pages/TemplateMarketplacePage').then(m => ({ default: m.TemplateMarketplacePage })));
 const OnboardingWizardPage = lazy(() => import('./pages/OnboardingWizardPage').then(m => ({ default: m.OnboardingWizardPage })));
 const PublicBoardPage = lazy(() => import('./pages/PublicBoardPage').then(m => ({ default: m.PublicBoardPage })));
+const StatusPage = lazy(() => import('./pages/StatusPage').then(m => ({ default: m.StatusPage })));
 
 function HomeRedirect() {
   const navigate = useNavigate();
@@ -92,6 +93,7 @@ function App() {
         <Route path="/templates/marketplace" element={<ShellWrapper><TemplateMarketplacePage /></ShellWrapper>} />
         <Route path="/onboarding" element={<ShellWrapper><OnboardingWizardPage /></ShellWrapper>} />
         <Route path="/public/b/:token" element={<PublicBoardPage />} />
+        <Route path="/status" element={<StatusPage />} />
       </Routes>
     </Suspense>
   );

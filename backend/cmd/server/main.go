@@ -878,9 +878,17 @@ func main() {
 	// CORS middleware
 	r.Use(corsMiddleware())
 
-	// Health check endpoint (public, no auth required)
+	// Health check endpoints (public, no auth required).
+	// /api/v1/health returns the legacy minimal shape so existing
+	// load balancer probes keep working; /api/v1/status returns
+	// the rich payload used by the public /status page.
 	r.GET("/api/v1/health", handlers.HealthCheck)
-	r.GET("/api/v1/status", handlers.HealthCheck)
+	if db != nil {
+		r.GET("/api/v1/status", func(c *gin.Context) {
+			c.Set(handlers.StatusDBKey, db)
+			handlers.StatusCheck(c)
+		})
+	}
 
 	// Setup API routes. The init endpoint can request a self-restart once the
 	// setup wizard finishes writing kanban.env, so we forward a callback that
@@ -938,6 +946,14 @@ func main() {
 	fmt.Println("")
 	fmt.Println("")
 	log.Printf("Server starting on port %s", port)
+
+	// Stamp the process start time so the /api/v1/status endpoint
+	// can report an accurate uptime figure (and so the diagnostic
+	// payload distinguishes a process that just restarted from one
+	// that has been up for hours). We record the moment right
+	// before ListenAndServe so the counter starts as the listener
+	// binds the port, not as main() entered.
+	handlers.SetServerStartTime(time.Now())
 
 	httpServer := &http.Server{
 		Addr:    ":" + port,

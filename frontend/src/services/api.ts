@@ -1122,3 +1122,47 @@ export const frontendEventsApi = {
       userId?: string;
     }>; total: number }>(`frontend-events?limit=${limit}`),
 };
+
+// Public /api/v1/status payload (s-1211). The endpoint is
+// intentionally unauthenticated so the /status page can be
+// opened by anyone — including unauthenticated visitors who
+// want to confirm an instance is up before logging in. We
+// pin skip401Handling to true as belt-and-braces: if the
+// route ever gets accidentally wrapped in auth middleware
+// the /status page would otherwise bounce to /login, which
+// is exactly the wrong UX for an "is the server alive?" page.
+export interface StatusReport {
+  status: 'ok' | 'degraded' | 'error';
+  timestamp: string;
+  version: string;
+  uptimeSeconds: number;
+  database: {
+    type: string;
+    version: string;
+    reachable: boolean;
+  };
+  migration: {
+    lastAppliedAt: string;
+    lastVersion: string;
+  };
+  counts: {
+    tasks: number;
+    activities: number;
+    activitiesLast24h: number;
+  };
+  agents: {
+    total: number;
+    active: number;
+  };
+  webhook: {
+    enabled: boolean;
+    urlConfigured: boolean;
+    lastFailureAt?: string;
+    recentFailures: number;
+  };
+}
+
+export const statusApi = {
+  /** Fetch the rich /api/v1/status payload. Public — no auth required. */
+  get: () => fetchApi<StatusReport>('status', { skip401Handling: true }),
+};
