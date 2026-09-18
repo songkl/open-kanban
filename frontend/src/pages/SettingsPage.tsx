@@ -13,13 +13,14 @@ import { UsersSettings } from '../components/settings/UsersSettings';
 import { ShortcutsSettings } from '../components/settings/ShortcutsSettings';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
 import { NotificationsSettings } from '../components/settings/NotificationsSettings';
+import { ErrorReportingSettings } from '../components/settings/ErrorReportingSettings';
 import { OAuthSettings } from '../components/OAuthSettings';
 import { useUIStore } from '../store/uiStore';
 import type { User } from '../types/kanban';
 
-type Tab = 'profile' | 'notifications' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth';
+type Tab = 'profile' | 'notifications' | 'errorReporting' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth';
 
-const ALL_TABS: Tab[] = ['profile', 'notifications', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth'];
+const ALL_TABS: Tab[] = ['profile', 'notifications', 'errorReporting', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (ALL_TABS as string[]).includes(value);
@@ -238,6 +239,19 @@ export function SettingsPage() {
               >
                 {t('settings.notificationsTab')}
               </button>
+              <button
+                type="button"
+                role="tab"
+                id="settings-tab-errorReporting"
+                aria-selected={activeTab === 'errorReporting'}
+                aria-controls="settings-panel-errorReporting"
+                tabIndex={activeTab === 'errorReporting' ? 0 : -1}
+                data-tab-id="errorReporting"
+                onClick={() => switchToTab('errorReporting')}
+                className={sidebarTabClass(activeTab === 'errorReporting')}
+              >
+                {t('settings.errorReportingTab')}
+              </button>
               {currentUser?.role === 'ADMIN' && (
                 <button
                   type="button"
@@ -388,6 +402,10 @@ export function SettingsPage() {
 
             {activeTab === 'notifications' && (
               <NotificationsSettings />
+            )}
+
+            {activeTab === 'errorReporting' && (
+              <ErrorReportingSettings isAdmin={currentUser?.role === 'ADMIN'} />
             )}
 
             {activeTab === 'tokens' && (

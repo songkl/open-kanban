@@ -544,6 +544,20 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	}
 
 	r.GET("/ws", handlers.WebSocketHandler(db))
+
+	// Frontend error reporting sink (s-1210, PM_REVIEW_2026-09-17 §7).
+	// The POST endpoint sits OUTSIDE the auth-protected group so an
+	// unhandled exception during the pre-login setup flow still has
+	// a place to land; the row simply carries a NULL user_id. The
+	// OptionalAuth helper probes the session opportunistically so
+	// logged-in users get their id stamped onto the row.
+	frontendEvents := r.Group("/api/v1/frontend-events")
+	{
+		frontendEvents.POST("", handlers.OptionalAuth(db), handlers.IngestFrontendEvent(db))
+		frontendEvents.GET("", handlers.RequireAuth(db), handlers.ListFrontendEvents(db))
+		frontendEvents.GET("/config", handlers.RequireAuth(db), handlers.GetFrontendEventsEnabled(db))
+	}
+	authProtected.PUT("/frontend-events/config", handlers.SetFrontendEventsEnabled(db))
 }
 
 func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {

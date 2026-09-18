@@ -1081,3 +1081,44 @@ export const notificationPreferencesApi = {
       body: JSON.stringify(patch),
     }),
 };
+
+// Admin-only error reporting configuration (s-1210,
+// PM_REVIEW_2026-09-17 §7). Backed by the
+// /api/v1/frontend-events/config endpoints added in the same
+// task. The Settings → Error Reporting tab uses this to flip
+// the global sink on/off for the whole deployment — a
+// self-hosted admin can disable remote capture of unhandled
+// exceptions without rebuilding the frontend bundle.
+export interface FrontendEventsConfig {
+  enabled: boolean;
+}
+
+export const frontendEventsApi = {
+  /** Read the current admin-side toggle. Admin-only on the server. */
+  getConfig: () => fetchApi<FrontendEventsConfig>('frontend-events/config'),
+  /**
+   * Flip the admin-side toggle. When set to false the ingest
+   * endpoint returns 204 with no row written, which the
+   * client treats as "all good, nothing to do" so the
+   * disabled sink does not turn into a flood of console
+   * errors on every page.
+   */
+  setConfig: (enabled: boolean) =>
+    fetchApi<FrontendEventsConfig>('frontend-events/config', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
+  /** Admin-only list of the most recent captured events. */
+  list: (limit = 50) =>
+    fetchApi<{ events: Array<{
+      id: string;
+      eventType: string;
+      message?: string;
+      stack?: string;
+      url?: string;
+      source?: string;
+      details?: Record<string, unknown>;
+      receivedAt: string;
+      userId?: string;
+    }>; total: number }>(`frontend-events?limit=${limit}`),
+};

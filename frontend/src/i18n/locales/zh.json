@@ -3,14 +3,16 @@
     "title": "Agent流水线",
     "subtitle": "AI 驱动的Agent流水线",
     "loading": "加载中...",
-    "error": {
+"error": {
       "loadFailed": "加载看板数据失败",
       "retry": "重试",
-      "connectionFailed": "无法连接到服务器",
+      "connectionFailed": "连接失败",
       "requestFailed": "请求失败 ({{status}})",
-      "unauthorized": "请先登录后再操作",
+      "unauthorized": "请先登录",
       "warning": "警告",
-      "info": "提示"
+      "info": "信息",
+      "boundaryTitle": "页面出错了",
+      "boundaryDescription": "页面在渲染过程中崩溃，错误已上报。可以安全刷新页面恢复。"
     },
     "close": "关闭"
   },
@@ -722,6 +724,19 @@
       "loadFailed": "加载通知偏好失败",
       "saveFailed": "保存通知偏好失败",
       "bellHint": "应用内的铃铛始终开启，这些设置只会影响邮件和 Webhook 的投递。"
+    },
+    "errorReportingTab": "错误上报",
+    "errorReporting": {
+      "title": "错误上报",
+      "description": "决定是否将未捕获的异常上报到服务端。",
+      "clientLabel": "在此浏览器上报错误",
+      "clientDescription": "捕获到的异常会在离开浏览器前自动脱敏（移除 Authorization、Cookie、Bearer 令牌等）。关闭后只影响本设备的捕获。",
+      "serverLabel": "持久化上报的错误（全局生效）",
+      "serverDescription": "关闭后，接收端点返回 204 且不再写入数据库。推荐离线部署使用。",
+      "redactionHint": "Authorization 头、kanban-token Cookie、查询字符串令牌以及 JSON 形态的密钥在上报前都会自动脱敏。",
+      "saved": "已保存",
+      "loadFailed": "加载错误上报配置失败",
+      "saveFailed": "保存错误上报配置失败"
     },
     "edit": "编辑",
     "delete": "删除",

@@ -10,7 +10,9 @@
       "requestFailed": "Request failed ({{status}})",
       "unauthorized": "Please login first",
       "warning": "Warning",
-      "info": "Info"
+      "info": "Info",
+      "boundaryTitle": "Something went wrong",
+      "boundaryDescription": "The page crashed before it could finish rendering. The error has been reported — you can safely reload to recover."
     },
     "close": "Close"
   },
@@ -722,6 +724,19 @@
       "loadFailed": "Failed to load notification preferences",
       "saveFailed": "Failed to save notification preferences",
       "bellHint": "The in-app bell badge is always on — these settings only affect email and webhook delivery."
+    },
+    "errorReportingTab": "Error Reporting",
+    "errorReporting": {
+      "title": "Error Reporting",
+      "description": "Decide whether unhandled exceptions should be reported to the server.",
+      "clientLabel": "Report errors from this browser",
+      "clientDescription": "Captured exceptions are scrubbed (Authorization / cookie / Bearer tokens removed) before they leave the browser. Disabling stops capture on this device only.",
+      "serverLabel": "Persist reported errors (deployment-wide)",
+      "serverDescription": "When off, the ingest endpoint returns 204 with no row written. Disabling is recommended for air-gapped deployments that cannot reach the server sink.",
+      "redactionHint": "Authorization headers, kanban-token cookies, query-string tokens and JSON-shaped secrets are always redacted before they reach the wire.",
+      "saved": "Saved",
+      "loadFailed": "Failed to load error reporting configuration",
+      "saveFailed": "Failed to save error reporting configuration"
     },
     "edit": "Edit",
     "delete": "Delete",

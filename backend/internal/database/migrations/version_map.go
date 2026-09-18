@@ -115,6 +115,16 @@ var VersionMigrationMap = []VersionMigration{
 	// completed" action surfaced by the new column-header
 	// 3-dot menu. Tracked as s-1212.
 	{Version: "0.15.0", From: 1, To: 15},
+	// 0.16.0 added migration 016 to introduce the frontend_events
+	// table that backs the new Sentry-compatible error sink at
+	// /api/v1/frontend-events (PM_REVIEW_2026-09-17 §7). One row per
+	// unhandled React error / window.onerror / unhandledrejection
+	// captured by the root ErrorBoundary + global handlers. The
+	// handler runs the same secret-redaction pass on the client
+	// payload that the client runs itself, so a future client
+	// regression cannot leak a credential into the database.
+	// Tracked as s-1210.
+	{Version: "0.16.0", From: 1, To: 16},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

@@ -164,10 +164,10 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 			var (
 				id, userID, username, nickname, userType, userRole,
 				boardID, boardName, access string
-				ownerAgentID                sql.NullString
-				grantedByUserID             sql.NullString
-				grantedByUsername           sql.NullString
-				grantedByNickname           sql.NullString
+				ownerAgentID                  sql.NullString
+				grantedByUserID               sql.NullString
+				grantedByUsername             sql.NullString
+				grantedByNickname             sql.NullString
 				grantedAt, expiresAt, revoked sql.NullTime
 			)
 			if err := rows.Scan(
@@ -538,10 +538,11 @@ func DeletePermission(db *sql.DB) gin.HandlerFunc {
 }
 
 type UpdateAppConfigRequest struct {
-	AllowRegistration  *bool `json:"allowRegistration"`
-	RequirePassword    *bool `json:"requirePassword"`
-	AuthEnabled        *bool `json:"authEnabled"`
-	MarketplaceEnabled *bool `json:"marketplaceEnabled"`
+	AllowRegistration     *bool `json:"allowRegistration"`
+	RequirePassword       *bool `json:"requirePassword"`
+	AuthEnabled           *bool `json:"authEnabled"`
+	MarketplaceEnabled    *bool `json:"marketplaceEnabled"`
+	FrontendEventsEnabled *bool `json:"frontendEventsEnabled"`
 }
 
 type BulkSetPermissionsRequest struct {
@@ -1391,8 +1392,8 @@ func TransferOwnership(db *sql.DB) gin.HandlerFunc {
 		)
 
 		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"boardId": req.BoardID,
+			"success":        true,
+			"boardId":        req.BoardID,
 			"newOwnerUserId": req.NewOwnerUserID,
 		})
 	}
@@ -1404,16 +1405,19 @@ func GetAppConfig(db *sql.DB) gin.HandlerFunc {
 		var requirePassword bool = false
 		var authEnabled bool = true
 		var marketplaceEnabled bool = true
+		var frontendEventsEnabled bool = true
 		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowRegistration)
 		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePassword)
 		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
 		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'marketplaceEnabled'").Scan(&marketplaceEnabled)
+		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'frontendEventsEnabled'").Scan(&frontendEventsEnabled)
 
 		c.JSON(http.StatusOK, gin.H{
-			"allowRegistration":  allowRegistration,
-			"requirePassword":    requirePassword,
-			"authEnabled":        authEnabled,
-			"marketplaceEnabled": marketplaceEnabled,
+			"allowRegistration":     allowRegistration,
+			"requirePassword":       requirePassword,
+			"authEnabled":           authEnabled,
+			"marketplaceEnabled":    marketplaceEnabled,
+			"frontendEventsEnabled": frontendEventsEnabled,
 		})
 	}
 }
@@ -1473,6 +1477,17 @@ func UpdateAppConfig(db *sql.DB) gin.HandlerFunc {
 			_, err := db.Exec(
 				"REPLACE INTO app_config (`key`, value) VALUES ('marketplaceEnabled', ?)",
 				map[bool]string{true: "1", false: "0"}[*req.MarketplaceEnabled],
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
+				return
+			}
+		}
+
+		if req.FrontendEventsEnabled != nil {
+			_, err := db.Exec(
+				"REPLACE INTO app_config (`key`, value) VALUES ('frontendEventsEnabled', ?)",
+				map[bool]string{true: "1", false: "0"}[*req.FrontendEventsEnabled],
 			)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
