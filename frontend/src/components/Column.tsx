@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { TaskCard } from './TaskCard';
 import type { Column as ColumnType, CustomField, Task, TaskRun } from '@/types/kanban';
+import type { CardDensity } from '../hooks/useCardDensity';
 
 const LARGE_COLUMN_THRESHOLD = 50;
 
@@ -60,6 +61,13 @@ interface ColumnProps {
    * so each card renders matching chips without re-reading localStorage.
    */
   customFields?: CustomField[];
+  /**
+   * s-1213: per-user card density preference. Threaded from
+   * BoardPage → ColumnBoard → Column → TaskCard. Defaults to
+   * 'standard' so existing call sites that haven't been wired up
+   * yet keep rendering the legacy card layout.
+   */
+  density?: CardDensity;
 }
 
 interface Board {
@@ -67,7 +75,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, onColumnMarkAllCompleted, onColumnArchiveAll, onColumnExportCsv, runs, customFields }: ColumnProps) {
+export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, onColumnMarkAllCompleted, onColumnArchiveAll, onColumnExportCsv, runs, customFields, density = 'standard' }: ColumnProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { setNodeRef, isOver } = useDroppable({
@@ -437,6 +445,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   onSelect={onSelectTask ? (id, e) => onSelectTask(id, task, e as unknown as React.MouseEvent) : undefined}
                   run={runs ? runs[task.id] ?? null : undefined}
                   customFields={customFields}
+                  density={density}
                 />
               ))
             )}

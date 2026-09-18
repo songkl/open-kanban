@@ -311,4 +311,112 @@ describe('TaskCard', () => {
       expect(screen.queryByText('creatorlogin')).not.toBeInTheDocument();
     });
   });
+
+  // s-1213: card density toggle (PM-s1188 §3.3).
+  describe('card density (s-1213)', () => {
+    const runLive = {
+      id: 'run-live',
+      taskId: 'task-1',
+      runnerId: 'Mac-66681-live',
+      agentId: null,
+      status: 'running' as const,
+      claimedAt: '2024-01-01T00:00:00Z',
+      lastHeartbeatAt: '2024-01-01T00:00:00Z',
+      expiresAt: '2024-01-01T00:10:00Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    };
+    const runTerminal = {
+      ...runLive,
+      id: 'run-terminal',
+      status: 'completed' as const,
+      finishedAt: '2024-01-01T00:05:00Z',
+      exitCode: 0,
+      error: null,
+    };
+
+    it('defaults to standard density when prop is omitted', () => {
+      render(<TaskCard {...defaultProps} />);
+      expect(screen.getByTestId('task-card-assignee-badge')).toBeInTheDocument();
+      expect(screen.getByText('task.priority.medium')).toBeInTheDocument();
+    });
+
+    it('compact density hides the description block', () => {
+      render(<TaskCard {...defaultProps} density="compact" />);
+      expect(screen.queryByText('This is a test task description')).not.toBeInTheDocument();
+    });
+
+    it('compact density hides the footer (priority badge, assignee, comments)', () => {
+      const taskWithComments = {
+        ...mockTask,
+        comments: [
+          { id: 'c-1', content: 'c', author: 'a', taskId: 'task-1', createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+        ],
+      };
+      render(<TaskCard {...defaultProps} task={taskWithComments} density="compact" />);
+      expect(screen.queryByText('task.priority.medium')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-card-assignee-badge')).not.toBeInTheDocument();
+    });
+
+    it('compact density hides the more-actions and view-details buttons', () => {
+      render(
+        <TaskCard
+          {...defaultProps}
+          density="compact"
+          onArchive={vi.fn()}
+          onDelete={vi.fn()}
+        />,
+      );
+      expect(screen.queryByTitle('taskCard.moreActions')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('taskCard.viewDetails')).not.toBeInTheDocument();
+    });
+
+    it('compact density hides the live run indicator', () => {
+      render(<TaskCard {...defaultProps} density="compact" run={runLive} />);
+      expect(screen.queryByTestId('task-run-indicator')).not.toBeInTheDocument();
+    });
+
+    it('compact density still shows the title, ID and priority dot', () => {
+      const { container } = render(<TaskCard {...defaultProps} density="compact" />);
+      expect(screen.getByText('Test Task')).toBeInTheDocument();
+      // ID is rendered as #xxxxxx slice; we look for the font-mono span
+      expect(container.querySelector('span.font-mono')).toBeInTheDocument();
+      // priority dot is the 2x2 round span
+      expect(container.querySelector('span.rounded-full.flex-shrink-0')).toBeInTheDocument();
+    });
+
+    it('standard density still shows the run indicator for any run (current behaviour)', () => {
+      render(<TaskCard {...defaultProps} density="standard" run={runTerminal} />);
+      expect(screen.getByTestId('task-run-indicator')).toBeInTheDocument();
+    });
+
+    it('detailed density surfaces the last-activity stamp', () => {
+      render(<TaskCard {...defaultProps} density="detailed" />);
+      expect(screen.getByTestId('task-card-last-activity')).toBeInTheDocument();
+    });
+
+    it('detailed density hides the last-activity stamp when there is no updatedAt', () => {
+      const taskNoUpdated = { ...mockTask, updatedAt: '' };
+      render(<TaskCard {...defaultProps} density="detailed" task={taskNoUpdated} />);
+      expect(screen.queryByTestId('task-card-last-activity')).not.toBeInTheDocument();
+    });
+
+    it('detailed density shows the run indicator only for live runs', () => {
+      const { rerender } = render(<TaskCard {...defaultProps} density="detailed" run={runLive} />);
+      expect(screen.getByTestId('task-run-indicator')).toBeInTheDocument();
+      rerender(<TaskCard {...defaultProps} density="detailed" run={runTerminal} />);
+      expect(screen.queryByTestId('task-run-indicator')).not.toBeInTheDocument();
+    });
+
+    it('detailed density hides the last-runner chip for terminal runs', () => {
+      render(<TaskCard {...defaultProps} density="detailed" run={runTerminal} />);
+      expect(screen.queryByTestId('task-card-last-runner-badge')).not.toBeInTheDocument();
+    });
+
+    it('detailed density keeps the last-runner chip for live runs', () => {
+      render(<TaskCard {...defaultProps} density="detailed" run={runLive} />);
+      expect(screen.getByTestId('task-card-last-runner-badge')).toBeInTheDocument();
+    });
+  });
 });

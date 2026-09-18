@@ -202,6 +202,15 @@
       "viewer": "Viewer"
     }
   },
+  "boardToolbar": {
+    "densityLabel": "Card density",
+    "densityCompact": "Compact",
+    "densityCompactAria": "Compact cards (id, title, priority dot)",
+    "densityStandard": "Standard",
+    "densityStandardAria": "Standard cards (add assignee and counts)",
+    "densityDetailed": "Detailed",
+    "densityDetailedAria": "Detailed cards (add description preview, last activity, and live runner badge)"
+  },
   "task": {
     "addTask": "Add Task",
     "taskTitle": "Task title",
@@ -891,7 +900,8 @@
     "lastRunnerBadgeTitle": "Last runner: {{runnerId}}",
     "lastRunnerBadgeAria": "Last runner on this task was {{runnerId}}",
     "createdByTooltip": "Created by {{name}}",
-    "unassigned": "Unassigned"
+    "unassigned": "Unassigned",
+    "lastActivity": "Updated {{when}}"
   },
   "taskModal": {
     "justNow": "Just now",

@@ -202,6 +202,15 @@
       "viewer": "查看者"
     }
   },
+  "boardToolbar": {
+    "densityLabel": "卡片密度",
+    "densityCompact": "紧凑",
+    "densityCompactAria": "紧凑卡片（ID、标题、优先级圆点）",
+    "densityStandard": "标准",
+    "densityStandardAria": "标准卡片（增加负责人和计数）",
+    "densityDetailed": "详细",
+    "densityDetailedAria": "详细卡片（增加描述预览、最后活动以及进行中的运行器徽章）"
+  },
   "task": {
     "addTask": "添加任务",
     "taskTitle": "任务标题",
@@ -891,7 +900,8 @@
     "lastRunnerBadgeTitle": "最近运行器：{{runnerId}}",
     "lastRunnerBadgeAria": "此任务最近一次由 {{runnerId}} 运行",
     "createdByTooltip": "由 {{name}} 创建",
-    "unassigned": "未分配"
+    "unassigned": "未分配",
+    "lastActivity": "{{when}} 更新"
   },
   "taskModal": {
     "justNow": "刚刚",

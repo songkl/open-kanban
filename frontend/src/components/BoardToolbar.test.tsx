@@ -239,4 +239,58 @@ describe('BoardToolbar', () => {
       expect(container.querySelector('[data-testid="applied-filter-chips"]')).toBeInTheDocument();
     });
   });
+
+  // s-1213: card density toggle (PM-s1188 §3.3). The selector is
+  // gated behind `onSetDensity` so older callers (and tests) keep
+  // working unchanged.
+  describe('card density selector (s-1213)', () => {
+    it('does not render the density selector when onSetDensity is omitted', () => {
+      const { container } = render(<BoardToolbar {...defaultProps} />);
+      expect(container.querySelector('[data-testid="board-density-selector"]')).toBeNull();
+    });
+
+    it('renders a radiogroup with three options when onSetDensity is provided', () => {
+      const { container } = render(
+        <BoardToolbar {...defaultProps} density="standard" onSetDensity={vi.fn()} />,
+      );
+      const group = container.querySelector('[data-testid="board-density-selector"]');
+      expect(group).toBeInTheDocument();
+      expect(group?.getAttribute('role')).toBe('radiogroup');
+      expect(container.querySelector('[data-testid="board-density-compact"]')).toBeInTheDocument();
+      expect(container.querySelector('[data-testid="board-density-standard"]')).toBeInTheDocument();
+      expect(container.querySelector('[data-testid="board-density-detailed"]')).toBeInTheDocument();
+    });
+
+    it('marks the active density via aria-checked', () => {
+      const { container } = render(
+        <BoardToolbar {...defaultProps} density="compact" onSetDensity={vi.fn()} />,
+      );
+      const compact = container.querySelector('[data-testid="board-density-compact"]') as HTMLButtonElement;
+      const standard = container.querySelector('[data-testid="board-density-standard"]') as HTMLButtonElement;
+      const detailed = container.querySelector('[data-testid="board-density-detailed"]') as HTMLButtonElement;
+      expect(compact.getAttribute('aria-checked')).toBe('true');
+      expect(standard.getAttribute('aria-checked')).toBe('false');
+      expect(detailed.getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('calls onSetDensity with the new value when an option is clicked', () => {
+      const onSetDensity = vi.fn();
+      const { container } = render(
+        <BoardToolbar {...defaultProps} density="standard" onSetDensity={onSetDensity} />,
+      );
+      const compact = container.querySelector('[data-testid="board-density-compact"]') as HTMLButtonElement;
+      fireEvent.click(compact);
+      expect(onSetDensity).toHaveBeenCalledWith('compact');
+    });
+
+    it('does not call onSetDensity when the already-active option is clicked', () => {
+      const onSetDensity = vi.fn();
+      const { container } = render(
+        <BoardToolbar {...defaultProps} density="standard" onSetDensity={onSetDensity} />,
+      );
+      const standard = container.querySelector('[data-testid="board-density-standard"]') as HTMLButtonElement;
+      fireEvent.click(standard);
+      expect(onSetDensity).not.toHaveBeenCalled();
+    });
+  });
 });

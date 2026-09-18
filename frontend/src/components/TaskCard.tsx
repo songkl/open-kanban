@@ -1,12 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState, useId, useEffect, useRef } from 'react';
+import { useState, useId, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CustomField, Task, TaskRun } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
 import { UserAvatar } from './UserAvatar';
 import { TaskRunIndicator } from './TaskRunIndicator';
 import { CustomFieldChips } from './CustomFieldChips';
+import type { CardDensity } from '../hooks/useCardDensity';
 
 interface TaskCardProps {
   task: Task;
@@ -36,6 +37,18 @@ interface TaskCardProps {
    * doesn't need its own localStorage hook.
    */
   customFields?: CustomField[];
+  /**
+   * s-1213: per-user card density preference (PM-s1188 §3.3).
+   *   - 'compact'  → only the ID, title, and priority dot render
+   *   - 'standard' → current behaviour (assignee + counts)
+   *   - 'detailed' → + description preview + last activity + live Run
+   *                 badge when a task_runs row exists for this task
+   *
+   * Defaults to 'standard' to match the existing rendering for any
+   * caller that hasn't been threaded through yet (tests, column
+   * detail drawer, etc.).
+   */
+  density?: CardDensity;
 }
 
   const priorityColors: Record<string, string> = {
@@ -60,7 +73,7 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
-export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run, customFields }: TaskCardProps) {
+export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run, customFields, density = 'standard' }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
   const taskId = task?.id ?? `temp-${randomId}`;
@@ -117,6 +130,26 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       onClick();
     }
   };
+
+  // s-1213: density gating (PM-s1188 §3.3). Compact shows just the
+  // top header strip; detailed layers on a description preview, a
+  // last-activity timestamp, and a run badge that only fires when a
+  // live run row exists. Standard mirrors the legacy rendering so
+  // existing snapshots / tests stay green.
+  const isCompact = density === 'compact';
+  const isDetailed = density === 'detailed';
+  const isLiveRun = Boolean(run && (run.status === 'claimed' || run.status === 'running'));
+  const lastActivityLabel = useMemo(() => {
+    if (!task.updatedAt) return null;
+    const updated = new Date(task.updatedAt);
+    if (Number.isNaN(updated.getTime())) return null;
+    return updated.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, [task.updatedAt]);
 
   return (
     <div
@@ -185,7 +218,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           </h3>
         </div>
         <div className="flex items-center gap-1 relative">
-          {(onArchive || onDelete || onMoveToColumn) && (
+          {!isCompact && (onArchive || onDelete || onMoveToColumn) && (
             <button
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
@@ -280,6 +313,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               )}
             </div>
           )}
+          {!isCompact && (
           <button
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
@@ -298,18 +332,22 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               <path d="M12 8h.01"/>
             </svg>
           </button>
+          )}
         </div>
       </div>
       {/* s-1193: live Runner badge / progress block — surfaces the
           in-flight Agent run directly on the board (PM_REVIEW_2026-09-17
           §5.1). Rendered only when a `task_runs` row exists so the card
-          footprint is unchanged for tasks without a runner. */}
-      {run && (
+          footprint is unchanged for tasks without a runner.
+          s-1213: hidden in compact density; in detailed mode we only
+          surface live runs (claimed/running) so the badge stays a
+          signal rather than a stale footer. */}
+      {!isCompact && run && (!isDetailed || isLiveRun) && (
         <div className={`mt-2 ${onSelect ? 'pl-6' : 'pl-3'} pr-1`}>
           <TaskRunIndicator run={run} />
         </div>
       )}
-      {task.description && typeof task.description === 'string' && (
+      {!isCompact && task.description && typeof task.description === 'string' && (
         <div className="mb-3 pl-3">
           <p
             className={`text-sm text-zinc-500 dark:text-zinc-500 cursor-pointer hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300 transition-all leading-relaxed ${
@@ -340,11 +378,11 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           defined field has a non-empty value on the task meta; otherwise
           the component returns null so the layout stays identical for
           boards without custom fields defined. */}
-      {customFields && customFields.length > 0 && (
+      {!isCompact && customFields && customFields.length > 0 && (
         <CustomFieldChips meta={task.meta} customFields={customFields} />
       )}
       {/* Subtasks preview */}
-      {task.subtasks && task.subtasks.length > 0 && (
+      {!isCompact && task.subtasks && task.subtasks.length > 0 && (
         <div className="mb-3 pl-3 space-y-1.5">
           {task.subtasks.slice(0, 3).map((subtask) => (
             <div key={subtask.id} className="flex items-center gap-2 text-xs">
@@ -359,6 +397,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
       )}
+      {!isCompact && (
       <div className="flex items-center justify-between pl-3 pt-1 border-t border-zinc-100 dark:border-zinc-700/50">
         <div className="flex items-center gap-2.5">
           {columnName === t('task.status.done') && (
@@ -374,6 +413,17 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           {task.subtasks && task.subtasks.length > 0 && (
             <span className="text-xs text-zinc-400 dark:text-zinc-400">
               ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
+            </span>
+          )}
+          {/* s-1213: last-activity stamp surfaces in detailed density
+              so the triage operator can spot stale cards at a glance. */}
+          {isDetailed && lastActivityLabel && (
+            <span
+              className="text-xs text-zinc-400 dark:text-zinc-500"
+              data-testid="task-card-last-activity"
+              title={task.updatedAt}
+            >
+              {t('taskCard.lastActivity', { when: lastActivityLabel })}
             </span>
           )}
         </div>
@@ -394,7 +444,11 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               <span className="truncate">{task.assignee}</span>
             </span>
           )}
-          {run && (
+          {/* s-1213: detailed density keeps the last-runner chip only
+              while the run is actually live. Once the runner settles
+              into a terminal status the chip drops out so it stops
+              reading as "currently being worked on". */}
+          {run && (!isDetailed || isLiveRun) && (
             <span
               className="flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300 max-w-[9rem]"
               title={t('taskCard.lastRunnerBadgeTitle', { runnerId: run.runnerId })}
@@ -452,6 +506,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
       </div>
+      )}
       {confirmDialog.isOpen && (
         <ConfirmDialog
           isOpen={confirmDialog.isOpen}

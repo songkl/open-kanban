@@ -17,6 +17,7 @@ import { DragLayer } from './DragLayer';
 import { AddTaskModal } from './AddTaskModal';
 import { TaskModalSkeleton } from './Skeleton';
 import type { Board, Column as ColumnType, CustomField, Task, TaskRun } from '@/types/kanban';
+import type { CardDensity } from '../hooks/useCardDensity';
 
 const TaskModal = lazy(() => import('./TaskModal').then(m => ({ default: m.TaskModal })));
 
@@ -75,6 +76,13 @@ interface ColumnBoardProps {
    * per-card (would also race with the modal save).
    */
   customFields?: CustomField[];
+  /**
+   * s-1213: per-user card density preference. Read from
+   * `useCardDensity` at the BoardPage level and threaded down so each
+   * card can render the right amount of metadata without re-reading
+   * localStorage per card.
+   */
+  density?: CardDensity;
 }
 
 export function ColumnBoard({
@@ -114,6 +122,7 @@ export function ColumnBoard({
   canCreateTaskInColumn,
   runs,
   customFields,
+  density = 'standard',
 }: ColumnBoardProps) {
   const { t } = useTranslation();
   const [activeMobileColumn, setActiveMobileColumn] = useState(0);
@@ -356,6 +365,7 @@ export function ColumnBoard({
                     isLoadingMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.isLoadingMore}
                     runs={runs}
                     customFields={customFields}
+                    density={density}
                   />
                 )}
               </div>
@@ -394,6 +404,7 @@ export function ColumnBoard({
                       isLoadingMore={columnPagination[column.id]?.isLoadingMore}
                       runs={runs}
                       customFields={customFields}
+                      density={density}
                     />
                   ))}
                 </div>
@@ -439,6 +450,7 @@ export function ColumnBoard({
                   isLoadingMore={columnPagination[column.id]?.isLoadingMore}
                   runs={runs}
                   customFields={customFields}
+                  density={density}
                 />
               ))}
             </div>

@@ -16,6 +16,7 @@ import { BoardSkeleton } from '../components/Skeleton';
 import { useBoardState } from '../hooks/useBoardState';
 import { useBoardTaskRuns } from '../hooks/useBoardTaskRuns';
 import { useCustomFields } from '../hooks/useCustomFields';
+import { useCardDensity } from '../hooks/useCardDensity';
 import { useSetupGuard } from '../hooks/useSetupGuard';
 import { KeyboardNavigation } from '../components/KeyboardNavigation';
 import { BoardToolbar } from '../components/BoardToolbar';
@@ -157,6 +158,12 @@ export function BoardPage() {
   // returns an empty array when no board is loaded so the chip renderer
   // stays a no-op during transitions.
   const { customFields } = useCustomFields(currentBoard?.id);
+
+  // s-1213: per-user card density preference (PM-s1188 §3.3). Stored in
+  // localStorage so it survives reloads. We deliberately do NOT route
+  // this through any server endpoint — switching density must not
+  // refetch tasks (DoD for the toggle).
+  const { density, setDensity } = useCardDensity();
 
   // Compute the list of currently-visible task IDs once per columns
   // change. Hooked into a memo so the polling effect only re-binds
@@ -708,6 +715,8 @@ export function BoardPage() {
           }}
           canCreateTask={canCreateTaskAnywhere}
           isMobile={isMobile}
+          density={density}
+          onSetDensity={setDensity}
         />
 
 <div className="flex items-center gap-2 sm:gap-3">
@@ -852,6 +861,7 @@ export function BoardPage() {
         canCreateTaskInColumn={canCreateTaskInColumn}
         runs={runs}
         customFields={customFields}
+        density={density}
       />
       </main>
 

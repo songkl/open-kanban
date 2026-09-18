@@ -5,6 +5,7 @@ import { FilterPanelContent } from './FilterPanelContent';
 import { AppliedFilterChips } from './AppliedFilterChips';
 import type { FilterPreset, FilterState } from '../hooks/useFilters';
 import type { CustomField } from '@/types/kanban';
+import type { CardDensity } from '../hooks/useCardDensity';
 
 interface BoardToolbarProps {
   searchQuery: string;
@@ -31,6 +32,12 @@ interface BoardToolbarProps {
   onAddTask: () => void;
   canCreateTask?: boolean;
   isMobile?: boolean;
+  /**
+   * s-1213: per-user card density preference (PM-s1188 §3.3).
+   * Drives the segmented density button next to the filter panel.
+   */
+  density?: CardDensity;
+  onSetDensity?: (next: CardDensity) => void;
 }
 
 export function BoardToolbar({
@@ -58,6 +65,8 @@ export function BoardToolbar({
   onAddTask,
   canCreateTask = true,
   isMobile = false,
+  density = 'standard',
+  onSetDensity,
 }: BoardToolbarProps) {
   const { t } = useTranslation();
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -143,6 +152,49 @@ export function BoardToolbar({
             </div>
           )}
         </div>
+
+        {onSetDensity && (
+          <div
+            role="radiogroup"
+            aria-label={t('boardToolbar.densityLabel')}
+            data-testid="board-density-selector"
+            className="inline-flex items-stretch overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+          >
+            {([
+              { value: 'compact' as const, labelKey: 'boardToolbar.densityCompact', ariaKey: 'boardToolbar.densityCompactAria' },
+              { value: 'standard' as const, labelKey: 'boardToolbar.densityStandard', ariaKey: 'boardToolbar.densityStandardAria' },
+              { value: 'detailed' as const, labelKey: 'boardToolbar.densityDetailed', ariaKey: 'boardToolbar.densityDetailedAria' },
+            ]).map((opt, idx, arr) => {
+              const active = density === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={t(opt.ariaKey)}
+                  title={t(opt.labelKey)}
+                  data-testid={`board-density-${opt.value}`}
+                  onClick={() => {
+                    if (!active) onSetDensity(opt.value);
+                  }}
+                  className={`flex items-center justify-center min-h-[36px] min-w-[36px] px-2 text-xs font-medium transition-colors ${
+                    idx === 0 ? '' : 'border-l border-zinc-200 dark:border-zinc-700'
+                  } ${idx === arr.length - 1 ? '' : ''} ${
+                    active
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <span className="hidden sm:inline">{t(opt.labelKey)}</span>
+                  <span className="sm:hidden" aria-hidden>
+                    {opt.value === 'compact' ? '☰' : opt.value === 'standard' ? '≣' : '☷'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <button
           onClick={() => {
