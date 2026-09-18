@@ -521,6 +521,31 @@ export const tasksApi = {
       method: 'POST',
       body: JSON.stringify({ archived }),
     }),
+  /**
+   * bulkColumnAction powers the column-header ⋯ menu introduced in
+   * s-1212. A single click sends a POST to
+   * /api/v1/tasks/bulk/column-action with the column id and the
+   * chosen action — the server resolves every live task in the
+   * column, applies the action, and writes one audit row per
+   * request. `affectedIds` is optional and only used to keep the
+   * client preview in sync; the server re-queries the column so a
+   * stale client cannot trick it into skipping rows.
+   */
+  bulkColumnAction: (
+    columnId: string,
+    action: 'archive' | 'complete',
+    affectedIds?: string[],
+  ) =>
+    fetchApi<{
+      action: string;
+      columnId: string;
+      affected: string[];
+      count: number;
+      skipped: number;
+    }>('tasks/bulk/column-action', {
+      method: 'POST',
+      body: JSON.stringify({ columnId, action, affectedIds }),
+    }),
   reorder: (tasks: { id: string; columnId: string; position: number }[]) =>
     fetchApi<{ success: boolean; count: number; details?: string }>('tasks/reorder', {
       method: 'PUT',

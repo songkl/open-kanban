@@ -474,6 +474,33 @@
       "READ": "读取",
       "WRITE": "写入",
       "ADMIN": "管理"
+    },
+    "menu": {
+      "open": "列操作",
+      "markAllCompleted": "全部标记为完成",
+      "archiveAll": "全部归档",
+      "exportCsv": "导出 CSV",
+      "noActions": "该列暂无可用操作"
+    },
+    "bulkConfirm": {
+      "archiveTitle": "归档「{{columnName}}」中的全部任务？",
+      "archiveMessage": "将会归档该列下 {{count}} 个任务。归档后可在已完成页面恢复。",
+      "completeTitle": "将「{{columnName}}」中的全部任务标记为完成？",
+      "completeMessage": "将会把 {{count}} 个任务移动到下一工作流列。已在最后一列的任务会被跳过。",
+      "exportTitle": "导出「{{columnName}}」为 CSV？",
+      "exportMessage": "下载该列下 {{count}} 个任务的 CSV 文件。",
+      "confirm": "确认",
+      "cancel": "取消",
+      "affected": "受影响的任务："
+    },
+    "bulkResult": {
+      "archivedOne": "已归档 1 个任务",
+      "archivedMany": "已归档 {{count}} 个任务",
+      "completedOne": "已将 1 个任务标记为完成",
+      "completedMany": "已将 {{count}} 个任务标记为完成",
+      "skipped": "已跳过 {{count}} 个",
+      "exported": "已导出 {{count}} 个任务为 CSV",
+      "exportFailed": "导出失败"
     }
   },
   "wsStatus": {
@@ -886,6 +913,13 @@
     "priorityHigh": "高优先级",
     "assignee": "负责人",
     "unassigned": "未分配",
+    "assigneeLoadFailed": "无法加载可选负责人",
+    "dueDate": "截止日期",
+    "dueDatePlaceholder": "选择截止时间",
+    "dueDateClear": "清除截止日期",
+    "dueDateOverdue": "已逾期",
+    "dueDateDueToday": "今天到期",
+    "dueDateDueTomorrow": "明天到期",
     "meta": "元信息",
     "metaKey": "键名",
     "metaValue": "值",
@@ -895,6 +929,12 @@
     "addSubtask": "添加子任务",
     "noSubtasks": "暂无子任务",
     "attachments": "附件",
+    "addAttachment": "添加附件",
+    "attachmentHint": "文件将在创建任务之前上传",
+    "attachmentUploadProgress": "正在上传 {{name}}…",
+    "attachmentUploaded": "{{name}} 上传完成",
+    "attachmentUploadFailed": "{{name}} 上传失败",
+    "removeAttachment": "移除附件",
     "loading": "加载中...",
     "noAttachments": "暂无附件",
     "uploading": "图片上传中...",

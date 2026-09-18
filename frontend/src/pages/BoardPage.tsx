@@ -8,6 +8,7 @@ import { BatchOperationBar } from '../components/BatchOperationBar';
 import { ShareBoardModal } from '../components/ShareBoardModal';
 import { WsWarning } from '../components/WsWarning';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ColumnMenuConfirmDialog, type ColumnBulkAction } from '../components/ColumnMenuConfirmDialog';
 import { BoardSelector } from '../components/BoardSelector';
 import { ErrorToastContainer, showErrorToast } from '../components/ErrorToast';
 import { boardsApi, tasksApi } from '../services/api';
@@ -32,6 +33,15 @@ interface ConfirmDialogState {
   message: string;
   onConfirm: () => void;
   variant?: 'danger' | 'warning' | 'default';
+}
+
+// s-1212 — confirmation dialog state for the column-header ⋯
+// menu. `column` carries the tasks the user is about to touch so
+// the dialog can list them, and `action` drives both the dialog
+// title and the eventual API call.
+interface ColumnBulkConfirmState {
+  column: ColumnType | null;
+  action: ColumnBulkAction | null;
 }
 
 export function BoardPage() {
@@ -66,6 +76,10 @@ export function BoardPage() {
     title: '',
     message: '',
     onConfirm: () => {},
+  });
+  const [columnBulkConfirm, setColumnBulkConfirm] = useState<ColumnBulkConfirmState>({
+    column: null,
+    action: null,
   });
 
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -432,6 +446,104 @@ export function BoardPage() {
     });
   }, [t, deleteTask]);
 
+  // s-1212 — column-header ⋯ menu handlers. Each handler opens the
+  // shared confirmation dialog with the column snapshot the user
+  // clicked on; the actual API call lives in `confirmColumnBulkAction`
+  // so the same dialog state can drive archive / complete / export.
+  const requestColumnArchiveAll = useCallback((column: ColumnType) => {
+    if (column.tasks.length === 0) return;
+    setColumnBulkConfirm({ column, action: 'archive' });
+  }, []);
+
+  const requestColumnMarkAllCompleted = useCallback((column: ColumnType) => {
+    if (column.tasks.length === 0) return;
+    setColumnBulkConfirm({ column, action: 'complete' });
+  }, []);
+
+  const requestColumnExportCsv = useCallback((column: ColumnType) => {
+    if (column.tasks.length === 0) return;
+    setColumnBulkConfirm({ column, action: 'exportCsv' });
+  }, []);
+
+  const cancelColumnBulkAction = useCallback(() => {
+    setColumnBulkConfirm({ column: null, action: null });
+  }, []);
+
+  const confirmColumnBulkAction = useCallback(async () => {
+    const state = columnBulkConfirm;
+    const column = state.column;
+    const action = state.action;
+    setColumnBulkConfirm({ column: null, action: null });
+    if (!column || !action) return;
+
+    if (action === 'exportCsv') {
+      // Export reuses the board-export endpoint by reconstructing
+      // a CSV locally from the tasks we already have on the
+      // client — round-tripping the whole board through the
+      // server would be wasteful for a single column and would
+      // require a brand-new server endpoint just for this case.
+      try {
+        const csv = buildColumnCsv(column);
+        const blob = new Blob(["\xEF\xBB\xBF" + csv], { type: 'text/csv;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        a.download = `${column.name}_${timestamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        showToastMessage(t('column.bulkResult.exported', { count: column.tasks.length }));
+      } catch (error) {
+        console.error('Column CSV export failed:', error);
+        showToastMessage(t('column.bulkResult.exportFailed'));
+      }
+      return;
+    }
+
+    try {
+      const result = await tasksApi.bulkColumnAction(
+        column.id,
+        action,
+        column.tasks.map((task) => task.id),
+      );
+
+      // Optimistic local update: drop the affected tasks from
+      // the source column. For "complete" the WebSocket fan-out
+      // will re-add them to the destination column; the local
+      // preview matches what the user saw in the dialog.
+      setColumns((cols) =>
+        cols.map((col) => {
+          if (col.id !== column.id) return col;
+          if (action === 'archive') {
+            return { ...col, tasks: col.tasks.filter((task) => !result.affected.includes(task.id)) };
+          }
+          if (action === 'complete') {
+            return { ...col, tasks: col.tasks.filter((task) => !result.affected.includes(task.id)) };
+          }
+          return col;
+        }),
+      );
+
+      const toastKey =
+        action === 'archive'
+          ? result.count === 1
+            ? 'column.bulkResult.archivedOne'
+            : 'column.bulkResult.archivedMany'
+          : result.count === 1
+            ? 'column.bulkResult.completedOne'
+            : 'column.bulkResult.completedMany';
+      showToastMessage(t(toastKey, { count: result.count }));
+      if (result.skipped > 0) {
+        showToastMessage(t('column.bulkResult.skipped', { count: result.skipped }));
+      }
+    } catch (error) {
+      console.error('Bulk column action failed:', error);
+      showErrorToast(t('export.failed'), 'error');
+    }
+  }, [columnBulkConfirm, setColumns, showToastMessage, t]);
+
   if (loading || boardSwitching) return <BoardSkeleton />;
 
   if (loadError) {
@@ -726,6 +838,9 @@ export function BoardPage() {
         onSelectAllTasks={selectAllInColumn}
         onLoadMoreTasks={() => {}}
         onColumnRename={handleColumnRename}
+        onColumnMarkAllCompleted={requestColumnMarkAllCompleted}
+        onColumnArchiveAll={requestColumnArchiveAll}
+        onColumnExportCsv={requestColumnExportCsv}
         onSetSelectedTask={setSelectedTask}
         onSetActiveTask={setActiveTask}
         onSetShowAddTaskModal={setShowAddTaskModal}
@@ -779,7 +894,44 @@ export function BoardPage() {
         />
       )}
 
+      <ColumnMenuConfirmDialog
+        isOpen={columnBulkConfirm.column !== null && columnBulkConfirm.action !== null}
+        action={columnBulkConfirm.action}
+        columnName={columnBulkConfirm.column?.name ?? ''}
+        affectedTasks={(columnBulkConfirm.column?.tasks ?? []).map((task) => ({ id: task.id, title: task.title }))}
+        onConfirm={confirmColumnBulkAction}
+        onCancel={cancelColumnBulkAction}
+      />
+
       <ErrorToastContainer />
     </div>
   );
+}
+
+// buildColumnCsv renders a single column's tasks as CSV bytes
+// suitable for a file download. Mirrors the column shape produced
+// by generateCSV on the server side (tasks_export.go) so an
+// export downloaded from the column menu is interchangeable with
+// a per-column slice of the board-level export.
+//
+// Kept local to BoardPage because only the bulk-menu confirm path
+// needs it; a future column export endpoint can replace it
+// without touching any other consumer.
+function buildColumnCsv(column: ColumnType): string {
+  const escape = (s: string) =>
+    `"${s.replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
+  const header = 'Title,Description,Priority,Assignee,Created At,Updated At';
+  const rows = column.tasks.map((task) => {
+    const createdAt = task.createdAt ? new Date(task.createdAt).toISOString() : '';
+    const updatedAt = task.updatedAt ? new Date(task.updatedAt).toISOString() : '';
+    return [
+      escape(task.title ?? ''),
+      escape(task.description ?? ''),
+      escape(task.priority ?? ''),
+      escape(task.assignee ?? ''),
+      escape(createdAt),
+      escape(updatedAt),
+    ].join(',');
+  });
+  return [header, ...rows].join('\n');
 }

@@ -474,6 +474,33 @@
       "READ": "Read",
       "WRITE": "Write",
       "ADMIN": "Admin"
+    },
+    "menu": {
+      "open": "Column actions",
+      "markAllCompleted": "Mark all as completed",
+      "archiveAll": "Archive all",
+      "exportCsv": "Export CSV",
+      "noActions": "No actions available for this column"
+    },
+    "bulkConfirm": {
+      "archiveTitle": "Archive every task in \"{{columnName}}\"?",
+      "archiveMessage": "This will archive {{count}} task(s) in this column. You can restore archived tasks from the Completed page.",
+      "completeTitle": "Mark every task in \"{{columnName}}\" as completed?",
+      "completeMessage": "This will move {{count}} task(s) to the next workflow column. Tasks already in the last column will be skipped.",
+      "exportTitle": "Export \"{{columnName}}\" to CSV?",
+      "exportMessage": "Download a CSV of the {{count}} task(s) currently in this column.",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "affected": "Affected tasks:"
+    },
+    "bulkResult": {
+      "archivedOne": "Archived 1 task",
+      "archivedMany": "Archived {{count}} tasks",
+      "completedOne": "Marked 1 task as completed",
+      "completedMany": "Marked {{count}} tasks as completed",
+      "skipped": "{{count}} skipped",
+      "exported": "Exported {{count}} task(s) to CSV",
+      "exportFailed": "Export failed"
     }
   },
   "wsStatus": {
@@ -886,6 +913,13 @@
     "priorityHigh": "High priority",
     "assignee": "Assignee",
     "unassigned": "Unassigned",
+    "assigneeLoadFailed": "Could not load assignees",
+    "dueDate": "Due date",
+    "dueDatePlaceholder": "Pick a deadline",
+    "dueDateClear": "Clear due date",
+    "dueDateOverdue": "Overdue",
+    "dueDateDueToday": "Due today",
+    "dueDateDueTomorrow": "Due tomorrow",
     "meta": "Metadata",
     "metaKey": "Key",
     "metaValue": "Value",
@@ -895,6 +929,12 @@
     "addSubtask": "Add Subtask",
     "noSubtasks": "No subtasks",
     "attachments": "Attachments",
+    "addAttachment": "Add attachment",
+    "attachmentHint": "Files upload before the task is created",
+    "attachmentUploadProgress": "Uploading {{name}}…",
+    "attachmentUploaded": "{{name}} uploaded",
+    "attachmentUploadFailed": "Failed to upload {{name}}",
+    "removeAttachment": "Remove attachment",
     "loading": "Loading...",
     "noAttachments": "No attachments",
     "uploading": "Uploading image...",

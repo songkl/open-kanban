@@ -44,6 +44,15 @@ interface ColumnBoardProps {
   onSelectAllTasks: (columnId: string, taskIds: string[]) => void;
   onLoadMoreTasks: (columnId: string) => void;
   onColumnRename: (columnId: string, newName: string) => void;
+  /**
+   * s-1212: column-header ⋯ menu callbacks. Surfacing the buttons
+   * is the Column component's job; the dialog + API call live at
+   * the BoardPage level so we can keep one confirmation surface
+   * for the whole page.
+   */
+  onColumnMarkAllCompleted?: (column: ColumnType) => void;
+  onColumnArchiveAll?: (column: ColumnType) => void;
+  onColumnExportCsv?: (column: ColumnType) => void;
   onSetSelectedTask: (task: Task | null) => void;
   onSetActiveTask: (task: Task | null) => void;
   onSetShowAddTaskModal: (show: boolean) => void;
@@ -92,6 +101,9 @@ export function ColumnBoard({
   onSelectAllTasks,
   onLoadMoreTasks,
   onColumnRename,
+  onColumnMarkAllCompleted,
+  onColumnArchiveAll,
+  onColumnExportCsv,
   onSetSelectedTask,
   onSetActiveTask,
   onSetShowAddTaskModal,
@@ -332,6 +344,9 @@ export function ColumnBoard({
                       onSetShowAddTaskModal(true);
                     }}
                     onColumnRename={onColumnRename}
+                    onColumnMarkAllCompleted={onColumnMarkAllCompleted}
+                    onColumnArchiveAll={onColumnArchiveAll}
+                    onColumnExportCsv={onColumnExportCsv}
                     searchQuery={filters.searchQuery}
                     selectedTasks={selectedTasks}
                     onSelectTask={onTaskSelect}
@@ -367,6 +382,9 @@ export function ColumnBoard({
                         onSetShowAddTaskModal(true);
                       }}
                       onColumnRename={onColumnRename}
+                      onColumnMarkAllCompleted={onColumnMarkAllCompleted}
+                      onColumnArchiveAll={onColumnArchiveAll}
+                      onColumnExportCsv={onColumnExportCsv}
                       searchQuery={filters.searchQuery}
                       selectedTasks={selectedTasks}
                       onSelectTask={onTaskSelect}
@@ -409,6 +427,9 @@ export function ColumnBoard({
                     onSetShowAddTaskModal(true);
                   }}
                   onColumnRename={onColumnRename}
+                  onColumnMarkAllCompleted={onColumnMarkAllCompleted}
+                  onColumnArchiveAll={onColumnArchiveAll}
+                  onColumnExportCsv={onColumnExportCsv}
                   searchQuery={filters.searchQuery}
                   selectedTasks={selectedTasks}
                   onSelectTask={onTaskSelect}

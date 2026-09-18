@@ -98,6 +98,23 @@ var VersionMigrationMap = []VersionMigration{
 	// the regular /api/v1/auth/token endpoint behaves. Tracked as
 	// s-1204.
 	{Version: "0.13.0", From: 1, To: 13},
+	// 0.14.0 added migration 014 to introduce the tasks.due_at
+	// column so a freshly created task can carry a due date
+	// straight through the create-task modal into the storage
+	// layer (PM_REVIEW §3.12). The column is nullable; existing
+	// rows are backfilled with NULL. The idx_tasks_due_at index
+	// is built in the same migration so the upcoming "overdue /
+	// due in next N days" surface can be served by a plain index
+	// scan. Tracked as T-1207 / s-1207.
+	{Version: "0.14.0", From: 1, To: 14},
+	// 0.15.0 added migration 015 to extend the activities.action
+	// CHECK constraint with BULK_ARCHIVE_COLUMN /
+	// BULK_COMPLETE_COLUMN so the new BulkColumnAction handler
+	// (POST /api/v1/tasks/bulk/column-action) can record a single
+	// audit-log row per column-level "Archive all" / "Mark all as
+	// completed" action surfaced by the new column-header
+	// 3-dot menu. Tracked as s-1212.
+	{Version: "0.15.0", From: 1, To: 15},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

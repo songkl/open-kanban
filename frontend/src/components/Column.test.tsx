@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { Column } from './Column';
 import type { Column as ColumnType } from '@/types/kanban';
@@ -158,6 +159,154 @@ describe('Column', () => {
       );
       const header = container.querySelector('div[style*="background-color"]');
       expect(header?.className).toContain('min-h-[56px]');
+    });
+  });
+
+  // s-1212 — column-header ⋯ menu (PM_REVIEW §3.2 finding #4).
+  // The Column component owns surfacing the menu; the parent owns
+  // the confirmation dialog + API call. We verify the three wiring
+  // contracts here:
+  //   1. No menu button when none of the bulk handlers are passed.
+  //   2. The button opens a dropdown listing all three actions.
+  //   3. Each action fires the matching handler with the column.
+  describe('column-level bulk menu (s-1212)', () => {
+    const onArchive = vi.fn();
+    const onComplete = vi.fn();
+    const onExport = vi.fn();
+
+    it('hides the menu button entirely when no bulk handlers are passed', () => {
+      render(
+        <BrowserRouter>
+          <Column {...defaultProps} />
+        </BrowserRouter>
+      );
+      expect(screen.queryByTestId(`column-menu-button-${mockColumn.id}`)).toBeNull();
+    });
+
+    it('renders a menu button with the three actions when handlers are wired', async () => {
+      const user = userEvent.setup();
+      render(
+        <BrowserRouter>
+          <Column
+            {...defaultProps}
+            onColumnArchiveAll={onArchive}
+            onColumnMarkAllCompleted={onComplete}
+            onColumnExportCsv={onExport}
+          />
+        </BrowserRouter>
+      );
+
+      const trigger = screen.getByTestId(`column-menu-button-${mockColumn.id}`);
+      expect(trigger).toBeInTheDocument();
+      expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+      await user.click(trigger);
+
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(screen.getByTestId(`column-menu-archive-${mockColumn.id}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`column-menu-complete-${mockColumn.id}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`column-menu-export-${mockColumn.id}`)).toBeInTheDocument();
+    });
+
+    it('invokes onColumnArchiveAll when the archive action is clicked', async () => {
+      const user = userEvent.setup();
+      render(
+        <BrowserRouter>
+          <Column
+            {...defaultProps}
+            onColumnArchiveAll={onArchive}
+            onColumnMarkAllCompleted={onComplete}
+            onColumnExportCsv={onExport}
+          />
+        </BrowserRouter>
+      );
+      await user.click(screen.getByTestId(`column-menu-button-${mockColumn.id}`));
+      await user.click(screen.getByTestId(`column-menu-archive-${mockColumn.id}`));
+
+      expect(onArchive).toHaveBeenCalledWith(mockColumn);
+      expect(onComplete).not.toHaveBeenCalled();
+      expect(onExport).not.toHaveBeenCalled();
+    });
+
+    it('invokes onColumnMarkAllCompleted when the complete action is clicked', async () => {
+      const user = userEvent.setup();
+      render(
+        <BrowserRouter>
+          <Column
+            {...defaultProps}
+            onColumnArchiveAll={onArchive}
+            onColumnMarkAllCompleted={onComplete}
+            onColumnExportCsv={onExport}
+          />
+        </BrowserRouter>
+      );
+      await user.click(screen.getByTestId(`column-menu-button-${mockColumn.id}`));
+      await user.click(screen.getByTestId(`column-menu-complete-${mockColumn.id}`));
+
+      expect(onComplete).toHaveBeenCalledWith(mockColumn);
+      expect(onArchive).not.toHaveBeenCalled();
+      expect(onExport).not.toHaveBeenCalled();
+    });
+
+    it('invokes onColumnExportCsv when the export action is clicked', async () => {
+      const user = userEvent.setup();
+      render(
+        <BrowserRouter>
+          <Column
+            {...defaultProps}
+            onColumnArchiveAll={onArchive}
+            onColumnMarkAllCompleted={onComplete}
+            onColumnExportCsv={onExport}
+          />
+        </BrowserRouter>
+      );
+      await user.click(screen.getByTestId(`column-menu-button-${mockColumn.id}`));
+      await user.click(screen.getByTestId(`column-menu-export-${mockColumn.id}`));
+
+      expect(onExport).toHaveBeenCalledWith(mockColumn);
+      expect(onArchive).not.toHaveBeenCalled();
+      expect(onComplete).not.toHaveBeenCalled();
+    });
+
+    it('closes the menu after an action is clicked', async () => {
+      const user = userEvent.setup();
+      render(
+        <BrowserRouter>
+          <Column
+            {...defaultProps}
+            onColumnArchiveAll={onArchive}
+          />
+        </BrowserRouter>
+      );
+      const trigger = screen.getByTestId(`column-menu-button-${mockColumn.id}`);
+      await user.click(trigger);
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      await user.click(screen.getByTestId(`column-menu-archive-${mockColumn.id}`));
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('disables all three actions when the column has no tasks', () => {
+      const emptyColumn = { ...mockColumn, tasks: [] };
+      render(
+        <BrowserRouter>
+          <Column
+            {...defaultProps}
+            column={emptyColumn}
+            onColumnArchiveAll={onArchive}
+            onColumnMarkAllCompleted={onComplete}
+            onColumnExportCsv={onExport}
+          />
+        </BrowserRouter>
+      );
+      // The ⋯ button is rendered (column exists), but the actions
+      // surface only after the user clicks the trigger. Validate
+      // the trigger still works and then check the disabled state.
+      const trigger = screen.getByTestId(`column-menu-button-${mockColumn.id}`);
+      fireEvent.click(trigger);
+      expect(screen.getByTestId(`column-menu-archive-${mockColumn.id}`)).toBeDisabled();
+      expect(screen.getByTestId(`column-menu-complete-${mockColumn.id}`)).toBeDisabled();
+      expect(screen.getByTestId(`column-menu-export-${mockColumn.id}`)).toBeDisabled();
     });
   });
 });

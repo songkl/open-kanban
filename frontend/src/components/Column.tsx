@@ -35,6 +35,21 @@ interface ColumnProps {
   isLoadingMore?: boolean;
   canCreateTask?: boolean;
   /**
+   * s-1212: column-header ⋯ menu (s-1188 finding #4). Surfacing the
+   * menu items is the Column component's job; the parent owns the
+   * confirmation dialog and the actual API call. We pass the menu
+   * callbacks through instead of pulling them in via context so the
+   * existing ColumnBoard / BoardPage wiring stays untouched.
+   *
+   * The three handlers are optional so the existing mobile menu
+   * (which does not surface these actions today) keeps working
+   * without changes — when none of the handlers are wired up the
+   * ⋯ button hides itself entirely.
+   */
+  onColumnMarkAllCompleted?: (column: ColumnType) => void;
+  onColumnArchiveAll?: (column: ColumnType) => void;
+  onColumnExportCsv?: (column: ColumnType) => void;
+  /**
    * s-1193: lookup of in-flight `task_runs` rows by taskId. Read from
    * `useRunStore` at the BoardPage level and threaded through so each
    * TaskCard can subscribe without firing its own polling request.
@@ -52,7 +67,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, runs, customFields }: ColumnProps) {
+export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, onColumnMarkAllCompleted, onColumnArchiveAll, onColumnExportCsv, runs, customFields }: ColumnProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { setNodeRef, isOver } = useDroppable({
@@ -63,8 +78,25 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
   const [editName, setEditName] = useState(column.name);
   const [showDescription, setShowDescription] = useState(false);
   const [showCopied, setShowCopied] = useState(false);
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
+
+  // s-1212 — close the column ⋯ menu on outside-click so the
+  // existing mousedown pattern in CustomDropdown stays consistent.
+  // The menu is small enough that we don't pull in a popover
+  // library; a click-outside handler is enough.
+  useEffect(() => {
+    if (!showColumnMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target as Node)) {
+        setShowColumnMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showColumnMenu]);
 
   const handleCopyStatus = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -248,6 +280,97 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
             >
               {tasks.length}
             </button>
+            {(onColumnMarkAllCompleted || onColumnArchiveAll || onColumnExportCsv) && (
+              <div ref={columnMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowColumnMenu((prev) => !prev);
+                  }}
+                  className="flex items-center justify-center min-h-[32px] min-w-[32px] px-2 rounded-md text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                  title={t('column.menu.open')}
+                  aria-label={t('column.menu.open')}
+                  aria-haspopup="menu"
+                  aria-expanded={showColumnMenu}
+                  data-testid={`column-menu-button-${column.id}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="5" r="1.4" />
+                    <circle cx="12" cy="12" r="1.4" />
+                    <circle cx="12" cy="19" r="1.4" />
+                  </svg>
+                </button>
+                {showColumnMenu && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50"
+                  >
+                    {onColumnMarkAllCompleted && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasks.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowColumnMenu(false);
+                          onColumnMarkAllCompleted(column);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid={`column-menu-complete-${column.id}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        {t('column.menu.markAllCompleted')}
+                      </button>
+                    )}
+                    {onColumnArchiveAll && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasks.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowColumnMenu(false);
+                          onColumnArchiveAll(column);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid={`column-menu-archive-${column.id}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="4" width="20" height="5" rx="1" />
+                          <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+                          <path d="M10 13h4" />
+                        </svg>
+                        {t('column.menu.archiveAll')}
+                      </button>
+                    )}
+                    {onColumnExportCsv && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasks.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowColumnMenu(false);
+                          onColumnExportCsv(column);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid={`column-menu-export-${column.id}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        {t('column.menu.exportCsv')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </span>
         </div>
 

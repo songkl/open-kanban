@@ -452,6 +452,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		tasks.PUT("/batch", handlers.BatchUpdateTasks(db))
 		tasks.PUT("/reorder", handlers.ReorderTasks(db))
 		tasks.DELETE("/batch", handlers.BatchDeleteTasks(db))
+		tasks.POST("/bulk/column-action", handlers.BulkColumnAction(db))
 		tasks.PUT("/:id", handlers.UpdateTask(db))
 		tasks.DELETE("/:id", handlers.DeleteTask(db))
 		tasks.POST("/:id/archive", handlers.ArchiveTask(db))
