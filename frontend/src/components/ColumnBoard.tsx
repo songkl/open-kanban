@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   DndContext,
@@ -138,6 +138,42 @@ export function ColumnBoard({
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const isDraggingRef = useRef(false);
+
+  // Stable callbacks for the modals. Passing inline closures meant every
+  // board re-render (WebSocket tick, task-run poll) produced a new
+  // function identity, which re-fired the modals' effects — including
+  // the focus trap and the "focus title on edit" effect — and stole the
+  // caret out of the description editor mid-keystroke.
+  const handleAddTaskClose = useCallback(() => {
+    onSetShowAddTaskModal(false);
+    onSetDefaultColumnIdForNewTask(undefined);
+  }, [onSetShowAddTaskModal, onSetDefaultColumnIdForNewTask]);
+
+  const handleAddTaskSubmit = useCallback(
+    (
+      title: string,
+      description: string,
+      published: boolean,
+      columnId?: string,
+      boardId?: string,
+      priority?: string,
+      extra?: { dueAt?: string | null; assignee?: string | null; attachmentIds?: string[] },
+    ) => {
+      onAddTask(columnId ?? '', title, description, published, boardId, priority ?? 'medium', extra);
+      onSetShowAddTaskModal(false);
+      onSetDefaultColumnIdForNewTask(undefined);
+    },
+    [onAddTask, onSetShowAddTaskModal, onSetDefaultColumnIdForNewTask],
+  );
+
+  const handleTaskModalClose = useCallback(() => {
+    onSetSelectedTask(null);
+    onSetEditTaskId(null);
+  }, [onSetSelectedTask, onSetEditTaskId]);
+
+  const handleEditingStarted = useCallback(() => {
+    onSetEditTaskId(null);
+  }, [onSetEditTaskId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -476,15 +512,8 @@ export function ColumnBoard({
           currentBoardId={currentBoard?.id}
           boards={boards}
           canCreateTaskInColumn={canCreateTaskInColumn}
-          onClose={() => {
-            onSetShowAddTaskModal(false);
-            onSetDefaultColumnIdForNewTask(undefined);
-          }}
-          onSubmit={(title, description, published, columnId, boardId, priority, extra) => {
-            onAddTask(columnId, title, description, published, boardId, priority, extra);
-            onSetShowAddTaskModal(false);
-            onSetDefaultColumnIdForNewTask(undefined);
-          }}
+          onClose={handleAddTaskClose}
+          onSubmit={handleAddTaskSubmit}
         />
 
         <DragLayer activeTask={activeTask} />
@@ -501,12 +530,12 @@ export function ColumnBoard({
             customFields={customFields}
             canEdit={true}
             startEditing={editTaskId === selectedTask.id}
-            onClose={() => { onSetSelectedTask(null); onSetEditTaskId(null); }}
+            onClose={handleTaskModalClose}
             onUpdate={onUpdateTask}
             onDelete={onDeleteTask}
             onArchive={onArchiveTask}
             onAddComment={onAddComment}
-            onEditingStarted={() => onSetEditTaskId(null)}
+            onEditingStarted={handleEditingStarted}
           />
         </Suspense>
       )}
