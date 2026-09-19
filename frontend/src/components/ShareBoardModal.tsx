@@ -132,8 +132,8 @@ export function ShareBoardModal({ open, onClose, boardId }: ShareBoardModalProps
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       data-testid="share-board-modal"
     >
-      <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-900 shadow-xl">
-        <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 px-5 py-3">
+      <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-zinc-900 shadow-xl overflow-hidden">
+        <header className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
             {t('share.modalTitle', 'Share board')}
           </h2>
@@ -147,7 +147,7 @@ export function ShareBoardModal({ open, onClose, boardId }: ShareBoardModalProps
           </button>
         </header>
 
-        <div className="space-y-4 px-5 py-4 max-h-[70vh] overflow-y-auto">
+        <div className="space-y-4 px-6 py-4 max-h-[70vh] overflow-y-auto">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             {t(
               'share.modalDescription',

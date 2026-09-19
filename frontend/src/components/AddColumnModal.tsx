@@ -56,7 +56,7 @@ export function AddColumnModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-column-modal-title"
-        className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 outline-none"
+        className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 outline-none p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">

@@ -66,7 +66,7 @@ export function ColumnMenuConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descId}
-        className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 outline-none"
+        className="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 outline-none p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center gap-3">
