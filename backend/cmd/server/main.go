@@ -540,22 +540,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		handlers.MarkRunComplete(db),
 	)
 
-	// CLI runner claim / heartbeat / finish / release / attach
-	// endpoints (s-1086). Signature + auth are enforced at the
-	// group level; per-handler WRITE permission checks live inside
-	// tasks_run.go so a VIEWER token gets a clean 403 from
-	// userHasBoardStatusWrite / HasColumnWrite rather than a generic
-	// auth-middleware rejection.
-	runs := r.Group("/api/v1/runs")
-	runs.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-	{
-		runs.POST("/claim", handlers.ClaimRun(db))
-		runs.POST("/release", handlers.ReleaseRuns(db))
-		runs.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
-		runs.POST("/:taskId/finish", handlers.FinishRun(db))
-		runs.POST("/:taskId/attach", handlers.AttachRun(db))
-		runs.GET("/:taskId", handlers.GetRun(db))
-	}
+	setupRunsRoutes(r, db)
 
 	r.POST("/api/v1/upload", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.UploadFile(db))
 	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
@@ -587,6 +572,36 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		frontendEvents.GET("/config", handlers.RequireAuth(db), handlers.GetFrontendEventsEnabled(db))
 	}
 	authProtected.PUT("/frontend-events/config", handlers.SetFrontendEventsEnabled(db))
+}
+
+// setupRunsRoutes wires the CLI runner surface under /api/v1/runs:
+// claim / heartbeat / finish / release / attach for the write path
+// (s-1086), GET /:taskId for the per-task card surface, and
+// GET /history for the terminal-run list the `kanban runs list`
+// command hits. Signature verification + auth are enforced at the
+// group level; per-handler WRITE permission checks live inside
+// tasks_run.go so a VIEWER token gets a clean 403 from
+// userHasBoardStatusWrite / HasColumnWrite rather than a generic
+// auth-middleware rejection.
+//
+// Pulled out of setupAPIRoutes so the route table can be asserted
+// directly in cmd/server/main_test.go without standing up a full
+// database — this is the regression guard for s-1234 ("cli runs
+// list error: API error 404 on /api/v1/runs/history"), where the
+// history endpoint shipped in tasks_run.go but was never mounted
+// on the live router, so every CLI `runs list` call 404'd.
+func setupRunsRoutes(r *gin.Engine, db *sql.DB) {
+	runs := r.Group("/api/v1/runs")
+	runs.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		runs.POST("/claim", handlers.ClaimRun(db))
+		runs.POST("/release", handlers.ReleaseRuns(db))
+		runs.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
+		runs.POST("/:taskId/finish", handlers.FinishRun(db))
+		runs.POST("/:taskId/attach", handlers.AttachRun(db))
+		runs.GET("/:taskId", handlers.GetRun(db))
+		runs.GET("/history", handlers.ListRunsHistory(db))
+	}
 }
 
 func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {

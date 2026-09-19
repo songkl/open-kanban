@@ -444,6 +444,66 @@ func TestSetupOnlyRoutesRegistersUsersMeAlias(t *testing.T) {
 	}
 }
 
+// TestSetupRunsRoutesRegistersAllEndpoints is the regression guard for
+// s-1234 ("cli runs list error: API error 404 on /api/v1/runs/history").
+// The handler existed in internal/handlers/tasks_run.go and was covered
+// by the per-handler test suite, but setupAPIRoutes in main.go never
+// mounted it — so the CLI's `kanban runs list` command 404'd against a
+// real server. We assert the full route table here so a future refactor
+// that drops one of the endpoints has to update the test deliberately.
+//
+// The db argument is nil because we never serve a real request — we
+// only walk the engine's registered route table via Routes().
+func TestSetupRunsRoutesRegistersAllEndpoints(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	setupRunsRoutes(router, nil)
+
+	want := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/runs/claim"},
+		{http.MethodPost, "/api/v1/runs/release"},
+		{http.MethodPost, "/api/v1/runs/:taskId/heartbeat"},
+		{http.MethodPost, "/api/v1/runs/:taskId/finish"},
+		{http.MethodPost, "/api/v1/runs/:taskId/attach"},
+		{http.MethodGet, "/api/v1/runs/:taskId"},
+		// The whole reason this test exists — without this line the
+		// CLI `runs list` command gets a 404 against the live server.
+		{http.MethodGet, "/api/v1/runs/history"},
+	}
+
+	got := map[string]bool{}
+	for _, r := range router.Routes() {
+		got[r.Method+" "+r.Path] = true
+	}
+
+	for _, w := range want {
+		key := w.method + " " + w.path
+		if !got[key] {
+			t.Errorf("setupRunsRoutes is missing %s %q (registered routes: %v)", w.method, w.path, sortedKeys(got))
+		}
+	}
+}
+
+// sortedKeys returns the keys of m sorted alphabetically. Used to
+// produce stable diff output when TestSetupRunsRoutesRegistersAllEndpoints
+// fails so the failure message isn't dependent on map iteration order.
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	// Sort in place so the output is deterministic across runs.
+	for i := 1; i < len(keys); i++ {
+		for j := i; j > 0 && keys[j-1] > keys[j]; j-- {
+			keys[j-1], keys[j] = keys[j], keys[j-1]
+		}
+	}
+	return keys
+}
+
 // pwaShellFiles lists the static files that the PWA / mobile install flow
 // depends on. setupStaticRoutes must serve each one at the root with the
 // correct content type. The list is duplicated from setupStaticRoutes
