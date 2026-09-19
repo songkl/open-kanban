@@ -17,6 +17,7 @@ import {
   HttpClient,
   AuthError,
   NotFoundError,
+  NetworkError,
 } from "../http/client.js";
 import {
   InMemorySecretProvider,
@@ -27,6 +28,8 @@ import {
   runAgentCreate,
   runAgentBind,
   runAgentDelete,
+  runAgentLogin,
+  openInBrowser,
   writeAgentToken,
   CLIENT_NAME_AGENT,
 } from "./agents.js";
@@ -719,6 +722,397 @@ describe("writeAgentToken", () => {
     writeAgentToken(oauth, "http://kanban.example.com", "tok", {});
     const stored = oauth.secretProvider.read();
     expect(stored?.clientId).toBe("agent:agent-unknown");
+  });
+});
+
+describe("runAgentLogin", () => {
+  beforeEach(() => {
+    delete process.env.KANBAN_API_URL;
+    delete process.env.KANBAN_CLI_PROFILE;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Drive the OAuth device flow by injecting a canned onPrompt
+  // handler + access_token response. Mirrors the pattern in
+  // auth/commands.test.ts (which patches authorizeInteractive directly
+  // on the OAuthClient mock).
+  function makeLoginStub(oauth: OAuthClient, token = "agent-bearer-xyz") {
+    return async (params: {
+      apiUrl: string;
+      onPrompt?: (poll: {
+        verificationUri: string;
+        verificationUriComplete?: string;
+        userCode: string;
+        scope: string;
+        expiresAt: number;
+      }) => Promise<"approve" | "deny">;
+    }) => {
+      await params.onPrompt?.({
+        deviceCode: "dev",
+        userCode: "WXYZ-1234",
+        verificationUri: "http://kanban.example.com/oauth/device",
+        verificationUriComplete:
+          "http://kanban.example.com/oauth/device?code=WXYZ-1234",
+        expiresAt: Date.now() + 600_000,
+        intervalSeconds: 5,
+        scope: "kanban:read",
+        clientId: "cid",
+      });
+      // Simulate OAuthClient side-effect: human-marker credential is
+      // persisted in the secretProvider.
+      oauth.secretProvider.write({
+        apiUrl: params.apiUrl,
+        clientId: "cid",
+        clientName: "open-kanban-cli",
+        accessToken: token,
+        refreshToken: "rt",
+        accessExpiresAt: Date.now() + 3_600_000,
+        scope: "kanban:read",
+      });
+      return {
+        access_token: token,
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: "kanban:read",
+      };
+    };
+  }
+
+  it("runs the device flow, validates the token, and persists under the agent marker", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "agent-1", type: "AGENT", nickname: "ci-runner" } },
+      },
+    ]);
+    const cap = makeCapture();
+    const openSpy = vi.fn();
+    const result = await runAgentLogin({
+      apiUrl: "http://kanban.example.com",
+      http,
+      oauth,
+      io: cap.io,
+      openBrowserImpl: openSpy,
+      authorizeImpl: makeLoginStub(oauth),
+    });
+    expect(result.agent.id).toBe("agent-1");
+    expect(result.agent.nickname).toBe("ci-runner");
+    expect(result.bound).toBe(true);
+    const stored = oauth.secretProvider.read();
+    expect(stored?.clientId).toBe("agent:agent-1");
+    expect(stored?.clientName).toBe(CLIENT_NAME_AGENT);
+    expect(stored?.accessToken).toBe("agent-bearer-xyz");
+    // onPrompt must surface the deep-link URL + user code on stderr,
+    // and the browser-launch helper must be invoked with the deep
+    // link (verificationUriComplete) when openBrowser is true.
+    const { stderr } = cap.read();
+    expect(stderr).toContain("Visit:");
+    expect(stderr).toContain("WXYZ-1234");
+    expect(stderr).toContain("?code=WXYZ-1234");
+    expect(stderr).toMatch(/bind existing agent|create new agent/i);
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(
+      "http://kanban.example.com/oauth/device?code=WXYZ-1234"
+    );
+  });
+
+  it("skips the browser launch when openBrowser=false", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "agent-1", type: "AGENT", nickname: "x" } },
+      },
+    ]);
+    const openSpy = vi.fn();
+    await runAgentLogin({
+      apiUrl: "http://kanban.example.com",
+      http,
+      oauth,
+      openBrowser: false,
+      openBrowserImpl: openSpy,
+      authorizeImpl: makeLoginStub(oauth),
+    });
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the bare verification URI when no deep link is provided", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "agent-1", type: "AGENT", nickname: "x" } },
+      },
+    ]);
+    const openSpy = vi.fn();
+    const stub = async (params: {
+      onPrompt?: (poll: {
+        verificationUri: string;
+        verificationUriComplete?: string;
+        userCode: string;
+        scope: string;
+        expiresAt: number;
+      }) => Promise<"approve" | "deny">;
+    }) => {
+      await params.onPrompt?.({
+        deviceCode: "dev",
+        userCode: "WXYZ-1234",
+        verificationUri: "http://kanban.example.com/oauth/device",
+        expiresAt: Date.now() + 600_000,
+        intervalSeconds: 5,
+        scope: "kanban:read",
+        clientId: "cid",
+      });
+      oauth.secretProvider.write({
+        apiUrl: "http://kanban.example.com",
+        clientId: "cid",
+        clientName: "open-kanban-cli",
+        accessToken: "agent-bearer-xyz",
+      });
+      return {
+        access_token: "agent-bearer-xyz",
+        token_type: "Bearer",
+        expires_in: 3600,
+      };
+    };
+    await runAgentLogin({
+      apiUrl: "http://kanban.example.com",
+      http,
+      oauth,
+      openBrowserImpl: openSpy,
+      authorizeImpl: stub,
+    });
+    expect(openSpy).toHaveBeenCalledWith(
+      "http://kanban.example.com/oauth/device"
+    );
+  });
+
+  it("logs but does not throw when the browser launcher fails", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "agent-1", type: "AGENT", nickname: "x" } },
+      },
+    ]);
+    const cap = makeCapture();
+    await runAgentLogin({
+      apiUrl: "http://kanban.example.com",
+      http,
+      oauth,
+      io: cap.io,
+      openBrowserImpl: () => {
+        throw new Error("ENOENT: xdg-open");
+      },
+      authorizeImpl: makeLoginStub(oauth),
+    });
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/could not launch browser/);
+    // The login itself must still succeed so the operator can copy
+    // the printed URL manually.
+    const stored = oauth.secretProvider.read();
+    expect(stored?.clientName).toBe(CLIENT_NAME_AGENT);
+  });
+
+  it("refuses to bind and restores previous credentials when the bound user is HUMAN", async () => {
+    const oauth = makeOAuth();
+    // Pre-seed a valid agent-bound credential so we can verify the
+    // failure path restores it instead of clearing.
+    oauth.secretProvider.write({
+      apiUrl: "http://kanban.example.com",
+      clientId: "agent:agent-99",
+      clientName: "agent-token-stub",
+      accessToken: "previous-good-token",
+    });
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "u-1", type: "HUMAN", nickname: "Alice" } },
+      },
+    ]);
+    const cap = makeCapture();
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        io: cap.io,
+        openBrowser: false,
+        authorizeImpl: makeLoginStub(oauth, "human-token"),
+      })
+    ).rejects.toBeInstanceOf(InvalidUsageError);
+    const stored = oauth.secretProvider.read();
+    expect(stored?.clientName).toBe("agent-token-stub");
+    expect(stored?.accessToken).toBe("previous-good-token");
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/HUMAN/);
+    expect(stderr).toMatch(/Refusing to bind/);
+  });
+
+  it("clears the credential store on failure when there were no prior credentials", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "u-1", type: "HUMAN", nickname: "Alice" } },
+      },
+    ]);
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        openBrowser: false,
+        authorizeImpl: makeLoginStub(oauth, "human-token"),
+      })
+    ).rejects.toBeInstanceOf(InvalidUsageError);
+    expect(oauth.secretProvider.read()).toBeNull();
+  });
+
+  it("treats a 401 from /api/v1/users/me as an invalid token and restores previous credentials", async () => {
+    const oauth = makeOAuth();
+    oauth.secretProvider.write({
+      apiUrl: "http://kanban.example.com",
+      clientId: "agent:agent-99",
+      clientName: "agent-token-stub",
+      accessToken: "previous-good-token",
+    });
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([{ status: 401, body: { error: "invalid_token" } }]);
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        openBrowser: false,
+        authorizeImpl: makeLoginStub(oauth),
+      })
+    ).rejects.toBeInstanceOf(InvalidUsageError);
+    expect(oauth.secretProvider.read()?.accessToken).toBe(
+      "previous-good-token"
+    );
+  });
+
+  it("maps denial to InvalidUsageError", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        openBrowser: false,
+        authorizeImpl: async () => {
+          throw new Error("user denied authorization");
+        },
+      })
+    ).rejects.toThrow(/denied/i);
+    expect(oauth.secretProvider.read()).toBeNull();
+  });
+
+  it("maps device-code expiry to InvalidUsageError", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        openBrowser: false,
+        authorizeImpl: async () => {
+          throw new Error("device code expired");
+        },
+      })
+    ).rejects.toThrow(/timed out|expired/i);
+    expect(oauth.secretProvider.read()).toBeNull();
+  });
+
+  it("maps network failures to NetworkError and clears the partial credential", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        openBrowser: false,
+        authorizeImpl: async () => {
+          throw new Error("fetch failed: ECONNREFUSED");
+        },
+      })
+    ).rejects.toBeInstanceOf(NetworkError);
+    expect(oauth.secretProvider.read()).toBeNull();
+  });
+
+  it("throws InvalidUsageError when the device flow returns no access token", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        openBrowser: false,
+        authorizeImpl: async () => {
+          // Real OAuthClient would write to secretProvider before
+          // returning; simulate the buggy edge case where neither
+          // happens.
+          return {
+            access_token: "",
+            token_type: "Bearer",
+            expires_in: 3600,
+          };
+        },
+      })
+    ).rejects.toThrow(/no access token/i);
+    expect(oauth.secretProvider.read()).toBeNull();
+  });
+
+  it("renders the bind table in JSON when format=json", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "agent-7", type: "AGENT", nickname: "j" } },
+      },
+    ]);
+    const cap = makeCapture();
+    await runAgentLogin({
+      apiUrl: "http://kanban.example.com",
+      http,
+      oauth,
+      format: "json",
+      io: cap.io,
+      openBrowser: false,
+      authorizeImpl: makeLoginStub(oauth),
+    });
+    const parsed = JSON.parse(cap.read().stdout.trim()) as {
+      apiUrl: string;
+      agent: { id: string };
+      bound: boolean;
+    };
+    expect(parsed.apiUrl).toBe("http://kanban.example.com");
+    expect(parsed.agent.id).toBe("agent-7");
+    expect(parsed.bound).toBe(true);
+  });
+});
+
+describe("openInBrowser", () => {
+  it("is exported so platform-aware dispatch can be spied on in tests", () => {
+    expect(typeof openInBrowser).toBe("function");
+    // Invoking it must not throw even when no display is attached:
+    // the helper swallows ENOENT / EACCES from the spawned shell.
+    expect(() => openInBrowser("about:blank")).not.toThrow();
   });
 });
 

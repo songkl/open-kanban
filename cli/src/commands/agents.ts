@@ -33,14 +33,22 @@
 // `auth agent create` and `auth agent bind` share a small helper
 // (writeAgentToken) so the credential-store mechanics live in one place.
 
+import { spawn } from "node:child_process";
 import chalk from "chalk";
 import Table from "cli-table3";
-import { HttpClient, AuthError, NotFoundError, ApiError } from "../http/client.js";
+import {
+  HttpClient,
+  AuthError,
+  NotFoundError,
+  ApiError,
+  NetworkError,
+} from "../http/client.js";
 import { InvalidUsageError } from "./boards.js";
 import { NotLoggedInError } from "./dashboard.js";
 import { formatStructured } from "../output/format.js";
 import { OAuthClient } from "../auth/client.js";
 import type { StoredCredentials } from "../auth/token-store.js";
+import { DeviceFlowError } from "../auth/device-flow.js";
 
 export type OutputFormat = "table" | "json" | "yaml";
 
@@ -168,6 +176,51 @@ export interface RunAgentDeleteOptions {
     stderr?: NodeJS.WritableStream;
   };
   http: HttpClient;
+}
+
+// runAgentLogin drives an end-to-end "log in as an Agent" flow: it runs
+// the OAuth device authorization grant (same plumbing as `auth login`),
+// launches the browser to the verification page so the human approver
+// can pick "bind existing Agent" or "create new Agent", then validates
+// that the resulting token resolves to a `type='AGENT'` user before
+// persisting it under the agent-token marker. The previous credentials
+// (human or agent) are preserved on any failure so the operator is
+// never stranded mid-migration.
+export interface RunAgentLoginOptions {
+  apiUrl: string;
+  format?: OutputFormat;
+  io?: {
+    stdout?: NodeJS.WritableStream;
+    stderr?: NodeJS.WritableStream;
+  };
+  http: HttpClient;
+  oauth: OAuthClient;
+  // openBrowser (default: true) controls whether the verification URL
+  // is launched in the user's default browser via the OS shell. CI /
+  // headless setups pass false to suppress the side effect. Failures
+  // from the browser-launch helper are logged but never fatal — the
+  // operator can still copy the URL manually.
+  openBrowser?: boolean;
+  // openBrowserImpl is injectable for tests; defaults to a platform-
+  // aware openInBrowser helper that calls `open` (macOS),
+  // `xdg-open` (Linux), or `cmd /c start` (Windows).
+  openBrowserImpl?: (url: string) => void | Promise<void>;
+  // authorizeImpl is injectable for tests; defaults to
+  // `opts.oauth.authorizeInteractive`. The override lets tests skip
+  // the real device flow while still exercising the post-login
+  // validation + persistence branches.
+  authorizeImpl?: (params: {
+    apiUrl: string;
+    clientName?: string;
+    appName?: string;
+    onPrompt?: (poll: {
+      verificationUri: string;
+      verificationUriComplete?: string;
+      userCode: string;
+      scope: string;
+      expiresAt: number;
+    }) => Promise<"approve" | "deny">;
+  }) => Promise<{ access_token: string; scope?: string; expires_in: number }>;
 }
 
 // runAgentsList GETs /api/v1/auth/agents and renders the result as a
@@ -509,6 +562,258 @@ export function writeAgentToken(
   };
   oauth.secretProvider.write(stored);
   return true;
+}
+
+// runAgentLogin drives the end-to-end "log in as an Agent" flow.
+//
+//   1. capture the previous credentials (so we can restore on failure)
+//   2. run the OAuth 2.1 device authorization grant via
+//      OAuthClient.authorizeInteractive. The onPrompt callback prints
+//      the verification URL + user code on stderr and, by default,
+//      launches the URL in the user's default browser so the human
+//      approver can pick "bind existing Agent" or "create new Agent"
+//      on the page.
+//   3. after approval, call GET /api/v1/users/me with the freshly
+//      minted access token to confirm the bound user is type='AGENT'.
+//      A HUMAN result means the operator approved as themselves
+//      instead of an Agent, so we refuse to bind and restore the
+//      previous credentials.
+//   4. if type='AGENT', persist the token under the agent-marker
+//      format (clientName=kanban-cli/agent-token, clientId=agent:<id>)
+//      so subsequent `kanban ...` calls run as the Agent.
+//
+// The previous credentials are preserved on every failure path
+// (network, denial, expiry, HUMAN bound, missing agent_id, ...) so the
+// operator is never stranded mid-migration.
+export async function runAgentLogin(
+  opts: RunAgentLoginOptions
+): Promise<AgentBindResult> {
+  const stderr = opts.io?.stderr ?? process.stderr;
+  const stdout = opts.io?.stdout ?? process.stdout;
+  const apiUrl = stripTrailingSlash(opts.apiUrl);
+  const format: OutputFormat = opts.format ?? "table";
+
+  // Snapshot the previous credentials so we can restore on any
+  // failure path (denial, HUMAN bound, network, ...). The
+  // FileSecretProvider stores ciphertext at rest, so a JSON round-trip
+  // through `read()` is safe.
+  const credsBefore = opts.oauth.loadCredentials();
+  const openBrowser = opts.openBrowser !== false;
+  const openImpl = opts.openBrowserImpl ?? openInBrowser;
+  const authorize =
+    opts.authorizeImpl ??
+    ((params: Parameters<NonNullable<RunAgentLoginOptions["authorizeImpl"]>>[0]) =>
+      opts.oauth.authorizeInteractive(params) as Promise<{
+        access_token: string;
+        scope?: string;
+        expires_in: number;
+      }>);
+
+  let tok: { access_token: string; scope?: string; expires_in: number };
+  try {
+    tok = await authorize({
+      apiUrl,
+      clientName: "open-kanban-cli",
+      appName: "kanban-cli",
+      onPrompt: buildAgentLoginOnPrompt(stderr, openBrowser, openImpl),
+    });
+  } catch (err) {
+    // Map the same denial / expiry / network shapes as runLogin so the
+    // top-level CLI exit code matches the documented contract.
+    const reason = (err as Error).message ?? String(err);
+    if (/denied/i.test(reason)) {
+      stderr.write(chalk.red(`Authorization denied: ${reason}\n`));
+      throw new InvalidUsageError(`kanban auth agent login denied: ${reason}`);
+    }
+    if (/expired/i.test(reason)) {
+      stderr.write(chalk.red(`Authorization timed out: ${reason}\n`));
+      throw new InvalidUsageError(`kanban auth agent login timed out: ${reason}`);
+    }
+    if (
+      err instanceof NetworkError ||
+      /network|ENOTFOUND|ECONN|fetch failed/i.test(reason)
+    ) {
+      stderr.write(chalk.red(`Network error during agent login: ${reason}\n`));
+      throw new NetworkError(reason);
+    }
+    if (err instanceof DeviceFlowError) {
+      stderr.write(chalk.red(`OAuth device flow failed: ${reason}\n`));
+    } else {
+      stderr.write(chalk.red(`Agent login failed: ${reason}\n`));
+    }
+    throw err;
+  }
+
+  // The OAuth client already persisted the token (human-style marker).
+  // Read it back so we can validate + rewrite in agent-style format.
+  const justPersisted = opts.oauth.loadCredentials();
+  const token = tok.access_token ?? justPersisted?.accessToken;
+  if (!token) {
+    restorePreviousCredentials(opts.oauth, credsBefore);
+    throw new InvalidUsageError(
+      "kanban auth agent login: OAuth device flow returned no access token"
+    );
+  }
+
+  let agent: AgentRecord;
+  try {
+    agent = await verifyAgentToken(opts.apiUrl, token, stderr);
+  } catch (err) {
+    // verifyAgentToken surfaces InvalidUsageError on 401/404/HUMAN,
+    // and a network-shaped InvalidUsageError on fetch failure. In
+    // every case the human-side token left over from the device flow
+    // is useless for `kanban auth agent ...`, so restore the previous
+    // credentials before re-throwing so the operator is never left
+    // mid-migration.
+    restorePreviousCredentials(opts.oauth, credsBefore);
+    throw err;
+  }
+
+  const bound = writeAgentToken(opts.oauth, opts.apiUrl, token, agent);
+
+  const result: AgentBindResult = { apiUrl, agent, bound };
+  const structured = formatStructured(result, format);
+  if (structured) {
+    stdout.write(structured);
+  } else {
+    stdout.write(formatAgentLoginResult(result) + "\n");
+  }
+  return result;
+}
+
+// restorePreviousCredentials is the failure-path backstop for
+// runAgentLogin: OAuthClient.authorizeInteractive has already
+// overwritten the credential file with the freshly minted (but
+// possibly HUMAN-bound) token, so we need to put the operator's
+// pre-login state back. A no-op when the operator started fresh.
+function restorePreviousCredentials(
+  oauth: OAuthClient,
+  prev: StoredCredentials | null
+): void {
+  if (prev) {
+    oauth.secretProvider.write(prev);
+  } else {
+    try {
+      oauth.secretProvider.clear();
+    } catch {
+      // best effort: if clear() fails the operator can recover with
+      // `kanban auth logout` once the broken state surfaces.
+    }
+  }
+}
+
+// buildAgentLoginOnPrompt returns the onPrompt handler that prints the
+// device-flow verification URL + user code on stderr and (when
+// enabled) launches the URL in the default browser. Mirrors the
+// shape of runLogin's onPrompt (s-1131 deep-link preference, identity-
+// selection hint) so the operator-facing message stays consistent
+// between `auth login` and `auth agent login`.
+function buildAgentLoginOnPrompt(
+  stderr: NodeJS.WritableStream,
+  openBrowser: boolean,
+  openImpl: (url: string) => void | Promise<void>
+) {
+  return async (poll: {
+    verificationUri: string;
+    verificationUriComplete?: string;
+    userCode: string;
+    scope: string;
+    expiresAt: number;
+  }): Promise<"approve"> => {
+    const expiresIn = Math.max(
+      0,
+      Math.round((poll.expiresAt - Date.now()) / 1000)
+    );
+    const visitLine = poll.verificationUriComplete
+      ? `  Visit:  ${chalk.cyan(poll.verificationUriComplete)}`
+      : `  Visit:  ${chalk.cyan(poll.verificationUri)}  (code ${poll.userCode})`;
+    const lines: string[] = [
+      "",
+      chalk.bold("Open Kanban agent authorization required"),
+      visitLine,
+      poll.verificationUriComplete
+        ? `  Or enter code ${chalk.cyan(poll.userCode)} at ${chalk.cyan(poll.verificationUri)}`
+        : "",
+      `  Scope:  ${poll.scope}`,
+      "",
+      chalk.yellow(
+        "  On the approval page, pick \"Bind existing agent\" or \"Create new agent\" so the device flow resolves to an Agent identity (not your personal account)."
+      ),
+      "",
+      `  Waiting for approval (expires in ${expiresIn}s)...`,
+      "",
+    ].filter((line) => line !== "");
+    stderr.write(lines.join("\n") + "\n");
+    if (openBrowser) {
+      const url = poll.verificationUriComplete ?? poll.verificationUri;
+      try {
+        await openImpl(url);
+      } catch (err) {
+        // Browser launch is best-effort: an unattended CI runner
+        // without $DISPLAY will throw ENOENT / EACCES, but the
+        // operator can still copy the URL printed above.
+        stderr.write(
+          chalk.yellow(
+            `  (could not launch browser: ${(err as Error).message ?? String(err)})\n`
+          )
+        );
+      }
+    }
+    return "approve";
+  };
+}
+
+// openInBrowser launches `url` in the user's default browser. The
+// command is forked-and-forgotten (detached + stdio piped) so a slow
+// browser launch never blocks the OAuth polling loop. Exported so
+// tests can spy on the platform-aware dispatch.
+export function openInBrowser(url: string): void {
+  const platform = process.platform;
+  let cmd: string;
+  let args: string[];
+  if (platform === "darwin") {
+    cmd = "open";
+    args = [url];
+  } else if (platform === "win32") {
+    cmd = "cmd";
+    args = ["/c", "start", "", url];
+  } else {
+    cmd = "xdg-open";
+    args = [url];
+  }
+  try {
+    const child = spawn(cmd, args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    child.on("error", () => {
+      // Swallow ENOENT/ENOEXEC etc. The onPrompt handler logs a
+      // user-visible hint and falls back to the printed URL.
+    });
+    child.unref?.();
+  } catch {
+    // Spawn is synchronous-but-throws only for argument validation
+    // errors we already guard against; nothing else to do here.
+  }
+}
+
+function formatAgentLoginResult(r: AgentBindResult): string {
+  const lines: string[] = [];
+  lines.push(`${chalk.bold("Bound agent via device flow")}  ${chalk.cyan(r.apiUrl)}`);
+  lines.push("");
+  const table = new Table({
+    head: [chalk.bold("Field"), chalk.bold("Value")],
+    style: { head: [], border: [] },
+  });
+  table.push(
+    ["ID", r.agent.id ?? chalk.gray("(unknown)")],
+    ["Nickname", r.agent.nickname ?? chalk.gray("(unnamed)")],
+    ["Type", r.agent.type ?? "AGENT"],
+    ["Bound", r.bound ? chalk.green("yes") : chalk.red("no")]
+  );
+  lines.push(table.toString());
+  return lines.join("\n");
 }
 
 function resolveBindToken(opts: RunAgentBindOptions): string | null {

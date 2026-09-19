@@ -115,6 +115,15 @@ kanban tasks complete <id>      # advances to the next column
 > from the selector — picking "Myself" would leave you unable to claim
 > tasks at `/api/v1/runs/claim`. The end-to-end walkthrough lives in
 > [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to).
+>
+> Prefer a single command? `kanban auth agent login` runs the same
+> device flow, launches the verification URL in your default browser,
+> and binds the resulting token to whichever Agent identity you pick
+> on the approval page (existing or freshly created). If the bound
+> user is HUMAN, the command refuses to overwrite your credentials and
+> tells you to retry — so it is safe to run on top of an existing
+> `kanban auth login` session. Add `--no-open` to skip the browser
+> launch on headless / CI runners.
 
 The CLI stores the issued tokens at
 `$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json` (mode `0600`). The

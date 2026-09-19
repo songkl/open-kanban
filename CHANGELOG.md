@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Features
+  - feat: add `kanban auth agent login` to drive the OAuth device flow, launch the verification page in the default browser, and bind the CLI to the Agent identity (existing or freshly created) the human approver picks on the approval page (s-1222). Refuses to persist when the bound user is HUMAN and restores the previous credentials on every failure path so the operator is never stranded mid-migration.
   - feat: add column workflow trigger (migration 011) so column_agents.transition_trigger (none / on_enter / on_exit / both) fires the bound Agent automatically when a task crosses the column boundary (s-1214)
   - feat: extend columns management UI with a per-column Agent binding + auto-trigger toggle (s-1214)
   - feat: add per-user notification preferences (migration 012) backing a new "Notifications" section in Settings (s-1203, PM_REVIEW_2026-09-17 §3.7). Email and webhook delivery can be muted independently; webhook URL is editable and validated server-side

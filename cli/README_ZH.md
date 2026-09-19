@@ -100,6 +100,13 @@ kanban tasks complete <id>      # 推进到下一列
 > 一个 Agent——选 "Myself" 会让 `/api/v1/runs/claim` 抢不到任务。
 > 端到端教程见
 > [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to)。
+>
+> 如果你想一步搞定，可以直接用 `kanban auth agent login`：它执行
+> 相同的 device flow，会在系统默认浏览器里自动打开授权页面，并在
+> 你选好"绑定已有 Agent / 新建 Agent"之后把 token 以 Agent 身份
+> 持久化。如果绑定到的是 HUMAN 账号，命令会拒绝覆盖你现有的
+> 凭据并提示重试——所以在已有的 `kanban auth login` 会话上叠加
+> 运行是安全的。无头 / CI 环境可加 `--no-open` 跳过浏览器调用。
 
 CLI 将签发的 token 存储于
 `$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json`（权限 `0600`）。

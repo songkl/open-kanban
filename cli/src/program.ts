@@ -131,6 +131,7 @@ import {
   runAgentCreate,
   runAgentBind,
   runAgentDelete,
+  runAgentLogin,
 } from "./commands/agents.js";
 
 const DEFAULT_APP_NAME = "kanban-cli";
@@ -358,6 +359,35 @@ export function createProgram(
               validate: (v: string) =>
                 v && v.trim().length > 0 ? true : "Token is required",
             }),
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(exitCodeForError(err));
+      }
+    });
+
+  // `kanban auth agent login` opens the OAuth device authorization
+  // page so the human approver can pick "bind existing Agent" or
+  // "create new Agent" on the approval screen, then validates the
+  // resulting token is bound to a type='AGENT' user before persisting
+  // it under the agent-token marker. Complements `auth login` (which
+  // binds the human approver) and `auth agent {create,bind}` (which
+  // require admin or a pre-issued token).
+  agentCmd
+    .command("login")
+    .description(
+      "start the OAuth device flow and bind the CLI to an Agent identity chosen on the approval page"
+    )
+    .option("--no-open", "do not launch the verification URL in the default browser")
+    .action(async (cmdOpts: { open?: boolean }) => {
+      const o = program.opts<{ output?: string }>();
+      try {
+        await runAgentLogin({
+          apiUrl: opts.apiUrl,
+          format: resolveOutputFormat(o.output),
+          http,
+          oauth,
+          openBrowser: cmdOpts.open !== false,
         });
       } catch (err) {
         process.stderr.write(`${(err as Error).message}\n`);
