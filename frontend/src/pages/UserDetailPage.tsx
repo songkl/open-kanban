@@ -54,7 +54,9 @@ export function UserDetailPage() {
         authApi.getUsers(),
       ]);
       setCurrentUser(meData.user);
-      const foundUser = usersData.find((u: User) => u.id === userId);
+      const byId = usersData.find((u: User) => u.id === userId);
+      const byNickname = usersData.find((u: User) => u.nickname === userId);
+      const foundUser = byId ?? byNickname ?? null;
       if (!foundUser) {
         navigate('/settings?tab=users');
         return;

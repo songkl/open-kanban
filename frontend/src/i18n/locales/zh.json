@@ -122,6 +122,7 @@
     "lastActive": "最近活动",
     "taskCount_one": "{{count}} 个任务",
     "taskCount_other": "{{count}} 个任务",
+    "taskCountLabel": "任务",
     "owner": "所有者",
     "noOwner": "暂无所有者",
     "searchPlaceholder": "搜索看板...",

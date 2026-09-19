@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,36 @@ import (
 // lockTimeoutMs (matching runner.lockTimeoutMs in
 // .kanban-runner.yaml); this default is only the safety net.
 const DefaultRunLockTimeoutMs = 120000
+
+// ansiEscapePattern matches the seven-bit C1 control codes that
+// shells emit to colourise output (CSI, OSC, and the two-byte
+// single-character sequences). Stripping them at the persistence
+// boundary keeps the activity log + history page readable; without
+// this the row's `error` field shows literal `[0m\n> build · …`
+// sequences in tooltips.
+var ansiEscapePattern = regexp.MustCompile(`\x1b(?:\[[0-9;]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])`)
+
+// sanitizeRunText strips ANSI escape sequences from agent-supplied
+// text (s-1244 / PM review s-1243 P2-2). It also collapses
+// consecutive newlines so a long stack-trace doesn't blow past
+// the column's display budget when rendered inside a tooltip.
+func sanitizeRunText(s string) string {
+	if s == "" {
+		return s
+	}
+	cleaned := ansiEscapePattern.ReplaceAllString(s, "")
+	cleaned = regexp.MustCompile(`\n{3,}`).ReplaceAllString(cleaned, "\n\n")
+	return cleaned
+}
+
+// SanitizeRunTextForTest exposes the stripper to the unit tests in
+// the same package. Production callers should call sanitizeRunText
+// via the FinishRun handler — this wrapper exists only so the
+// table-driven test in tasks_run_test.go can pin the regex without
+// the handler needing to expose a hook.
+func SanitizeRunTextForTest(s string) string {
+	return sanitizeRunText(s)
+}
 
 // ClaimRunRequest is the wire shape for POST /api/v1/runs/claim.
 // See devDoc/CLI_RUNNER_OPENAPI_2026-09-12.yaml `ClaimRunRequest`
@@ -563,8 +594,23 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 		repo := repositories.NewRunRepository(db)
 		taskSvc := services.NewTaskService(db)
 
+		// s-1244 (PM review s-1243 P2-2): agent-supplied stderr often
+		// includes ANSI colour codes (`[0m`, `[31m`, …) that the
+		// activity log would otherwise display verbatim in tooltips.
+		// Strip them at the persistence boundary.
+		var cleanError *string
+		if req.Error != nil {
+			s := sanitizeRunText(*req.Error)
+			cleanError = &s
+		}
+		var cleanOutput *string
+		if req.Output != nil {
+			s := sanitizeRunText(*req.Output)
+			cleanOutput = &s
+		}
+
 		var advanced bool
-		err = repo.FinishRun(taskID, req.RunnerID, status, req.ExitCode, req.Error, req.Output,
+		err = repo.FinishRun(taskID, req.RunnerID, status, req.ExitCode, cleanError, cleanOutput,
 			func(taskID string) error {
 				if _, err := taskSvc.CompleteTask(taskID); err != nil {
 					return err
@@ -681,14 +727,19 @@ func GetRun(db *sql.DB) gin.HandlerFunc {
 		run, err := repo.GetRun(taskID)
 		if err != nil {
 			if err == repositories.ErrNoRunRow {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Run not found"})
+				// s-1244 (PM review s-1243 P1-2): a task that has
+				// never been claimed is a normal state, not an
+				// error. Return 200 + hasRun=false so the browser
+				// doesn't log the missing row as a console error on
+				// every board page load.
+				c.JSON(http.StatusOK, gin.H{"run": nil, "hasRun": false})
 				return
 			}
 			ServerError(c, "Failed to load run", err)
 			return
 		}
 
-		c.JSON(http.StatusOK, run)
+		c.JSON(http.StatusOK, gin.H{"run": run, "hasRun": true})
 	}
 }
 

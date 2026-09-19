@@ -145,7 +145,12 @@ describe('Column', () => {
           <Column {...defaultProps} onSelectAllTasks={vi.fn()} />
         </BrowserRouter>
       );
-      const checkbox = screen.getByLabelText(/column\.selectAll/i);
+      // s-1244 (PM review s-1243 P0-1): the column select-all label
+      // resolves to common.selectAll instead of the legacy
+      // column.selectAll key. The test harness mocks t(key) → key
+      // (see src/test/setup.ts), so the aria-label literal is the
+      // dotted key.
+      const checkbox = screen.getByLabelText('common.selectAll');
       const wrapper = checkbox.parentElement;
       expect(wrapper?.className).toContain('min-h-[32px]');
       expect(wrapper?.className).toContain('min-w-[32px]');

@@ -1,4 +1,4 @@
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { LoadingScreen } from './components/LoadingScreen';
 import { AppShell } from './components/AppShell';
@@ -91,6 +91,7 @@ function App() {
         <Route path="/runs" element={<ShellWrapper><RunsPage /></ShellWrapper>} />
         <Route path="/search" element={<ShellWrapper><SearchPage /></ShellWrapper>} />
         <Route path="/templates/marketplace" element={<ShellWrapper><TemplateMarketplacePage /></ShellWrapper>} />
+        <Route path="/templates" element={<Navigate to="/templates/marketplace" replace />} />
         <Route path="/onboarding" element={<ShellWrapper><OnboardingWizardPage /></ShellWrapper>} />
         <Route path="/public/b/:token" element={<PublicBoardPage />} />
         <Route path="/status" element={<StatusPage />} />

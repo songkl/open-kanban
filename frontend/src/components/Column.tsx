@@ -246,7 +246,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
           <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-500 flex items-center gap-1 flex-shrink-0">
             {onSelectAllTasks && tasks.length > 0 && (
               <label className="sr-only" htmlFor={`select-all-${column.id}`}>
-                {t('column.selectAll')}
+                {t('common.selectAll')}
               </label>
             )}
             {onSelectAllTasks && tasks.length > 0 && (
@@ -271,7 +271,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                       onSelectAllTasks(column.id, tasks.map(t => t.id));
                     }
                   }}
-                  aria-label={t('column.selectAll')}
+                  aria-label={t('common.selectAll')}
                 />
               </span>
             )}

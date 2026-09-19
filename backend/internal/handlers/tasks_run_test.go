@@ -1172,10 +1172,13 @@ func TestGetRun_ReturnsOutputField(t *testing.T) {
 		t.Fatalf("get: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var run models.TaskRun
-	if err := json.Unmarshal(w.Body.Bytes(), &run); err != nil {
+	var env struct {
+		Run models.TaskRun `json:"run"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	run := env.Run
 	if run.Output == nil {
 		t.Fatalf("expected output to be present in JSON response, got %s", w.Body.String())
 	}
@@ -1295,10 +1298,26 @@ func TestGetRun_NotFound(t *testing.T) {
 	db := setupTaskRunsDB(t)
 	defer db.Close()
 
+	// `t-1` is seeded by setupTaskRunsDB but has never been claimed, so
+	// the run row is intentionally absent — exactly the case the
+	// PM review (s-1243 P1-2) flagged as a noisy console error.
 	router := runsRouter(db)
-	w := doRequest(router, "GET", "/api/v1/runs/no-such", "admin-token", nil)
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	w := doRequest(router, "GET", "/api/v1/runs/t-1", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var env struct {
+		Run    *models.TaskRun `json:"run"`
+		HasRun bool            `json:"hasRun"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if env.Run != nil {
+		t.Errorf("expected run=nil, got %+v", env.Run)
+	}
+	if env.HasRun {
+		t.Errorf("expected hasRun=false, got true")
 	}
 }
 
@@ -1320,12 +1339,18 @@ func TestGetRun_ReturnsRow(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var run models.TaskRun
-	if err := json.Unmarshal(w.Body.Bytes(), &run); err != nil {
+	var env struct {
+		Run    models.TaskRun `json:"run"`
+		HasRun bool           `json:"hasRun"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if run.TaskID != "t-get" || run.Status != models.RunStatusClaimed {
-		t.Errorf("unexpected run row: %+v", run)
+	if !env.HasRun {
+		t.Errorf("expected hasRun=true, got false")
+	}
+	if env.Run.TaskID != "t-get" || env.Run.Status != models.RunStatusClaimed {
+		t.Errorf("unexpected run row: %+v", env.Run)
 	}
 }
 
@@ -1625,12 +1650,17 @@ func TestGetRun_JSONShapeMatchesTaskRunModel(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var raw map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+	var env struct {
+		Run map[string]any `json:"run"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	if env.Run == nil {
+		t.Fatalf("response missing run envelope: %s", w.Body.String())
+	}
 	for _, key := range []string{"taskId", "runnerId", "agentId", "boardId", "columnId", "status", "claimedAt", "lastHeartbeatAt", "expiresAt"} {
-		if _, ok := raw[key]; !ok {
+		if _, ok := env.Run[key]; !ok {
 			t.Errorf("response missing required key %q: %s", key, w.Body.String())
 		}
 	}
@@ -2492,4 +2522,105 @@ func newBidirectionalWebSocket(t *testing.T) (*websocket.Conn, *websocket.Conn, 
 	}
 
 	return clientConn, serverConn, cleanup
+}
+
+// TestSanitizeRunText exercises the ANSI stripper that the FinishRun
+// handler now applies at the persistence boundary. s-1244 / PM review
+// s-1243 P2-2 — without this the activity log surfaces raw "[0m"
+// sequences in the row's `error` tooltip.
+func TestSanitizeRunText(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "empty stays empty",
+			in:   "",
+			want: "",
+		},
+		{
+			name: "plain text untouched",
+			in:   "build failed at step 3",
+			want: "build failed at step 3",
+		},
+		{
+			name: "csi colour stripped",
+			in:   "\x1b[31mfail\x1b[0m at step 3",
+			want: "fail at step 3",
+		},
+		{
+			name: "multiple csi sequences stripped",
+			in:   "\x1b[1;33m> build · opencode\x1b[0m\n\x1b[31merror\x1b[0m",
+			want: "> build · opencode\nerror",
+		},
+		{
+			name: "osc title stripped",
+			in:   "\x1b]0;long title\x07actual error",
+			want: "actual error",
+		},
+		{
+			name: "trailing newlines collapsed",
+			in:   "stack frame 1\n\n\n\n\nstack frame 2",
+			want: "stack frame 1\n\nstack frame 2",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := handlers.SanitizeRunTextForTest(tc.in)
+			if got != tc.want {
+				t.Errorf("sanitizeRunText(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestFinishRun_StripsAnsiFromError is the integration guard for the
+// PM review s-1243 P2-2 finding. The activity log used to render
+// literal "[0m\n> build · opencode" sequences inside the row's
+// `error` tooltip; the FinishRun handler must strip them before
+// persisting the row.
+func TestFinishRun_StripsAnsiFromError(t *testing.T) {
+	db := setupTaskRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-ansi', 'ansi', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-ansi", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+
+	dirtyError := "\x1b[0m\n> build · opencode\x1b[0m\n\x1b[31mfailed\x1b[0m"
+	dirtyOutput := "\x1b[32mpatched\x1b[0m the file"
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-ansi/finish", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "completed",
+		"exitCode": 0,
+		"output":   dirtyOutput,
+		"error":    dirtyError,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var output, errMsg sql.NullString
+	if err := db.QueryRow("SELECT output, error FROM task_runs WHERE task_id='t-ansi'").Scan(&output, &errMsg); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if strings.Contains(output.String, "\x1b[") {
+		t.Errorf("output still contains ANSI sequences: %q", output.String)
+	}
+	if !strings.Contains(output.String, "patched the file") {
+		t.Errorf("output lost non-ANSI text: %q", output.String)
+	}
+	if strings.Contains(errMsg.String, "\x1b[") {
+		t.Errorf("error still contains ANSI sequences: %q", errMsg.String)
+	}
+	if strings.Contains(errMsg.String, "[0m") {
+		t.Errorf("error still contains literal [0m token: %q", errMsg.String)
+	}
 }

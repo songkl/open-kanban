@@ -89,6 +89,17 @@ export function BoardPage() {
   const boardDropdownRef = useRef<HTMLDivElement>(null);
   const reconnectAttemptRef = useRef(0);
 
+  // s-1244 (PM review s-1243 P0-4): the legacy `/board/public` slug was
+  // never a real board id — it was the historical landing-page route
+  // before public-share tokens moved to `/public/b/:token`. Treating it
+  // as a board id causes the page to silently fall back to the user's
+  // first board. Redirect to the real public-share entry instead.
+  useEffect(() => {
+    if (boardIdFromUrl === 'public') {
+      navigate('/public/b/public', { replace: true });
+    }
+  }, [boardIdFromUrl, navigate]);
+
   const {
     boards,
     currentBoard,

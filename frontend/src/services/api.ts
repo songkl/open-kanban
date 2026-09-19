@@ -997,7 +997,15 @@ export const runsApi = {
         }
         throw new ApiError(data?.error || i18n.t('app.error.requestFailed', { status: response.status }), response.status);
       }
+      // s-1244 (PM review s-1243 P1-2): the server now returns
+      // `{ run: null, hasRun: false }` on the empty case instead of
+      // a 404, so the browser doesn't log a red error on every
+      // board page load. Accept both the new envelope and the legacy
+      // bare-run shape.
       if (data === null || data === undefined) return null;
+      if (data && typeof data === 'object' && 'hasRun' in data) {
+        return (data.run ?? null) as TaskRun | null;
+      }
       return data as TaskRun;
     } catch (error) {
       if (isAbortError(error)) {

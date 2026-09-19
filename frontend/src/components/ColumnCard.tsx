@@ -84,7 +84,7 @@ export function ColumnCard({
         {canManagePermission && (
           <button
             onClick={() => onPermission(column)}
-            className="rounded-lg bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-100 transition-colors"
+            className="rounded-lg bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-100 dark:bg-violet-900/30 dark:text-violet-300 dark:hover:bg-violet-900/50 transition-colors"
           >
             {t('column.permissions')}
           </button>
@@ -92,7 +92,7 @@ export function ColumnCard({
         {canEdit && (
           <button
             onClick={() => onEdit(column)}
-            className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-100 transition-colors"
+            className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 transition-colors"
           >
             {t('column.edit')}
           </button>
@@ -100,7 +100,7 @@ export function ColumnCard({
         {canDelete && (
           <button
             onClick={() => onDelete(column.id)}
-            className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors"
+            className="rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 transition-colors"
           >
             {t('column.delete')}
           </button>

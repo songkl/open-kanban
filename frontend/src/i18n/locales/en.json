@@ -122,6 +122,7 @@
     "lastActive": "Last active",
     "taskCount_one": "{{count}} task",
     "taskCount_other": "{{count}} tasks",
+    "taskCountLabel": "Tasks",
     "owner": "Owner",
     "noOwner": "No owner",
     "searchPlaceholder": "Search boards...",
