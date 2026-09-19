@@ -33,7 +33,14 @@ export function OAuthDevicePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const initialCode = (params.get('user_code') || '').trim();
+  // Prefer the modern `code` parameter (e.g. `/oauth/device?code=ABCD-1234`)
+  // that matches verification_uri_complete emitted by /oauth/device/code,
+  // but keep `user_code` as a fallback so older deep links still resolve.
+  const initialCode = (
+    params.get('code') ||
+    params.get('user_code') ||
+    ''
+  ).trim();
   const [code, setCode] = useState(initialCode);
   const [lookup, setLookup] = useState<DeviceLookup | null>(null);
   const [error, setError] = useState<string>('');
