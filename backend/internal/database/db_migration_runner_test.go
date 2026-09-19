@@ -344,6 +344,136 @@ func TestSQLiteSchemaDrift_DetectsMissingColumn(t *testing.T) {
 	}
 }
 
+// TestSQLiteSchemaDrift_DetectsMissingNotificationsTable covers the
+// s-1219 regression: when the notifications table is missing but
+// boards.is_public is still present, the drift helper must STILL
+// report drift=true so the runner can re-apply migration 009. The
+// pre-s-1219 implementation only probed boards.is_public, so a DB
+// that had is_public but lost the notifications table would have
+// short-circuited m.Up() with ErrNoChange and left the API
+// returning 500 on /api/v1/notifications?limit=50 with
+// {"error":"Failed to query notifications"}.
+func TestSQLiteSchemaDrift_DetectsMissingNotificationsTable(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "drift-notifications.db")
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	// Bring the DB up to the latest migration so every canary is
+	// present and the baseline is healthy.
+	if err := runSQLiteMigrations(db); err != nil {
+		t.Fatalf("seed runSQLiteMigrations: %v", err)
+	}
+
+	// Sanity: every canary is present, no drift.
+	drift, err := sqliteSchemaDrift(db)
+	if err != nil {
+		t.Fatalf("sqliteSchemaDrift on healthy DB: %v", err)
+	}
+	if drift {
+		t.Fatalf("expected no drift on a healthy post-migration DB")
+	}
+
+	// Drop ONLY the notifications table — leave boards.is_public
+	// intact. The pre-s-1219 drift detector would NOT have caught
+	// this (it only looked at is_public), and the API would 500.
+	driftSimulateDropNotifications(t, db)
+
+	drift, err = sqliteSchemaDrift(db)
+	if err != nil {
+		t.Fatalf("sqliteSchemaDrift on notifications-less DB: %v", err)
+	}
+	if !drift {
+		t.Errorf("expected drift=true after dropping notifications table; got false (s-1219)")
+	}
+}
+
+// TestRunSQLiteMigrations_RecoversFromNotificationsMissing is the
+// end-to-end s-1219 counterpart to
+// TestRunSQLiteMigrations_RecoversFromDrift: simulates the exact
+// drift state that took down GET /api/v1/notifications on
+// production kanban.db (notifications table missing while
+// boards.is_public is still present) and confirms the runner
+// re-creates the missing table on the next startup.
+//
+// The test drops notifications together with the post-014
+// ALTER TABLE ADD COLUMN side effect (tasks.due_at) so the replay
+// path is clean — mirroring the s-1217 test's pattern of dropping
+// every post-rollback schema element rather than just one.
+func TestRunSQLiteMigrations_RecoversFromNotificationsMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "kanban.db")
+	t.Setenv("DB_TYPE", "sqlite")
+	t.Setenv("DATABASE_URL", dbPath)
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	// First pass: bring the DB up to the latest migration.
+	if err := runSQLiteMigrations(db); err != nil {
+		t.Fatalf("first runSQLiteMigrations: %v", err)
+	}
+	if !hasIsPublic(t, db) {
+		t.Fatalf("precondition: boards.is_public missing after first run")
+	}
+
+	// Simulate the s-1219 drift state: drop the notifications
+	// table (migration 009) and tasks.due_at (migration 014).
+	// due_at is dropped together with notifications because
+	// migration 014's ALTER TABLE ADD COLUMN is non-idempotent;
+	// a partial-drift replay that stops at migration 014 would
+	// fail with "duplicate column name: due_at". The production
+	// kanban.db missed every post-004 element, so this
+	// combined-drop pattern mirrors the actual drift the
+	// operator reported.
+	driftSimulateDropNotifications(t, db)
+	driftSimulateDropDueAt(t, db)
+
+	has, err := sqliteTableExists(db, "notifications")
+	if err != nil {
+		t.Fatalf("sqliteTableExists(notifications): %v", err)
+	}
+	if has {
+		t.Fatalf("drift precondition: notifications table should be gone after drop")
+	}
+	if hasColumn(t, db, "tasks", "due_at") {
+		t.Fatalf("drift precondition: tasks.due_at should be gone after drop")
+	}
+
+	// Second pass: the restart that triggers the drift repair.
+	// The runner must detect the missing notifications canary
+	// (s-1219) and re-create both the notifications table and
+	// tasks.due_at so GET /api/v1/notifications stops returning
+	// 500 with "Failed to query notifications".
+	if err := runSQLiteMigrations(db); err != nil {
+		t.Fatalf("second runSQLiteMigrations (drift repair): %v", err)
+	}
+
+	has, err = sqliteTableExists(db, "notifications")
+	if err != nil {
+		t.Fatalf("sqliteTableExists(notifications) after repair: %v", err)
+	}
+	if !has {
+		t.Errorf("drift repair failed: notifications table still missing after re-running migrations (s-1219)")
+	}
+	if !hasColumn(t, db, "tasks", "due_at") {
+		t.Errorf("drift repair regressed: tasks.due_at disappeared")
+	}
+	// boards.is_public must still be present — the drift repair
+	// re-applies every migration, but only re-runs statements
+	// that aren't already in effect; is_public was never dropped.
+	if !hasIsPublic(t, db) {
+		t.Errorf("drift repair regressed: boards.is_public disappeared")
+	}
+}
+
 // driftSimulateDropIsPublic rebuilds the boards table without the
 // is_public column to mirror the s-1217 production drift state.
 // SQLite does not support DROP COLUMN on the build of go-sqlite3
@@ -410,6 +540,19 @@ func driftSimulateDropDueAt(t *testing.T, db *sql.DB) {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatalf("driftSimulateDropDueAt step %q: %v", stmt, err)
 		}
+	}
+}
+
+// driftSimulateDropNotifications drops the notifications table
+// introduced by migration 009. Used by the s-1219 regression tests
+// to simulate the exact drift state the operator saw:
+// notifications table missing while boards.is_public is still
+// present (so the pre-s-1219 drift detector would have missed it
+// and the API would 500 on GET /api/v1/notifications).
+func driftSimulateDropNotifications(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec(`DROP TABLE IF EXISTS notifications`); err != nil {
+		t.Fatalf("driftSimulateDropNotifications: %v", err)
 	}
 }
 

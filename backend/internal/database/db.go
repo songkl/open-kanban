@@ -229,7 +229,7 @@ func runSQLiteMigrations(db *sql.DB) error {
 		if forceTarget <= 0 {
 			forceTarget = -1
 		}
-		log.Printf("[SQLite] schema drift detected (recorded version claims migration >= 4 but boards.is_public is missing); rewinding recorded version to %d so m.Up() replays only the missing migrations", forceTarget)
+		log.Printf("[SQLite] schema drift detected (recorded version >= 4 but at least one post-004 canary is missing); rewinding recorded version to %d so m.Up() replays only the missing migrations", forceTarget)
 		if err := m.Force(forceTarget); err != nil {
 			return fmt.Errorf("failed to force migration state after drift detection: %w", err)
 		}

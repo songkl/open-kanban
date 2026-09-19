@@ -223,6 +223,74 @@ func TestGetNotifications(t *testing.T) {
 	})
 }
 
+// TestGetNotificationsLimit50 is the s-1219 regression test. The
+// operator reported GET /api/v1/notifications?limit=50 returning
+// 500 with `{"error":"Failed to query notifications"}` against a
+// drifted production kanban.db (the notifications table was
+// missing from schema even though schema_migrations.version=16).
+// This test seeds enough rows to push the default page size and
+// confirms the endpoint handles the limit=50 query path the
+// frontend bell-badge uses without falling over — both with the
+// default-bounded limit and with the user-supplied value.
+func TestGetNotificationsLimit50(t *testing.T) {
+	db := setupNotificationsDB(t)
+	defer db.Close()
+
+	// Seed 60 rows so the default page (50) is fully filled and
+	// the response proves the LIMIT clause is honoured.
+	for i := 0; i < 60; i++ {
+		if err := handlers.InsertNotification(db, "u1", handlers.NotificationSourceTaskAssigned, "t", "b", "TASK", "x"); err != nil {
+			t.Fatalf("seed %d: %v", i, err)
+		}
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.GET("/api/notifications", handlers.GetNotifications(db))
+
+	t.Run("explicit limit=50 returns at most 50", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/notifications?limit=50", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "token-u1"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Notifications []map[string]interface{} `json:"notifications"`
+			UnreadCount   int                     `json:"unreadCount"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if len(resp.Notifications) != 50 {
+			t.Errorf("expected 50 rows for limit=50, got %d", len(resp.Notifications))
+		}
+		if resp.UnreadCount != 60 {
+			t.Errorf("expected unreadCount=60, got %d", resp.UnreadCount)
+		}
+	})
+
+	t.Run("default limit falls back to 50", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/notifications", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "token-u1"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Notifications []map[string]interface{} `json:"notifications"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if len(resp.Notifications) != 50 {
+			t.Errorf("expected default page size 50, got %d", len(resp.Notifications))
+		}
+	})
+}
+
 func TestMarkNotificationRead(t *testing.T) {
 	db := setupNotificationsDB(t)
 	defer db.Close()

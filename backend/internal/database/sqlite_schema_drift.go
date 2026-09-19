@@ -7,18 +7,20 @@ import (
 
 // sqliteSchemaDrift reports whether the recorded schema_migrations
 // version is out of sync with the actual schema. It returns true
-// when the recorded version claims migration 4 (boards.is_public)
-// or later was applied but the column is missing — meaning the
-// recorded version is untrustworthy and the runner should force a
-// reset before calling m.Up(). On a fresh DB the schema_migrations
-// table does not exist yet; that case is treated as "no drift" so
-// the runner still applies the migrations normally.
+// when the recorded version claims migration 4 or later was applied
+// but ANY post-004 canary schema element is missing — meaning the
+// recorded version is untrustworthy and the runner should rewind
+// before calling m.Up(). On a fresh DB the schema_migrations table
+// does not exist yet; that case is treated as "no drift" so the
+// runner still applies the migrations normally.
 //
-// This check is intentionally narrow (one column). The full set of
-// post-004 schema elements is covered indirectly: every later
-// migration depends on the 001 base tables and 004 is the first
-// schema change to a base table, so a drift in 004 implies a drift
-// in every subsequent migration that also touches a base table.
+// The check walks every canary in sqliteSchemaCanaries rather than
+// only is_public: migrations 009 (notifications), 010
+// (preset_templates), 012 (user_notification_preferences), 013
+// (viewer_tokens), and 016 (frontend_events) introduce brand-new
+// tables that don't depend on boards.is_public, so an is_public-only
+// check would miss drift where, e.g., the notifications table was
+// dropped but the boards table is otherwise intact (s-1219).
 func sqliteSchemaDrift(db *sql.DB) (bool, error) {
 	recorded, err := sqliteRecordedMigrationVersion(db)
 	if err != nil {
@@ -27,11 +29,49 @@ func sqliteSchemaDrift(db *sql.DB) (bool, error) {
 	if recorded < 4 {
 		return false, nil
 	}
-	has, err := sqliteTableHasColumn(db, "boards", "is_public")
-	if err != nil {
-		return false, err
+	for _, c := range sqliteSchemaCanaries {
+		var present bool
+		if c.column == "" {
+			present, err = sqliteTableExists(db, c.table)
+		} else {
+			present, err = sqliteTableHasColumn(db, c.table, c.column)
+		}
+		if err != nil {
+			return false, err
+		}
+		if !present {
+			return true, nil
+		}
 	}
-	return !has, nil
+	return false, nil
+}
+
+// sqliteSchemaCanary describes a single schema element (table or
+// column) that the named migration is the FIRST to introduce. The
+// list is the source of truth for both sqliteSchemaDrift and
+// sqliteEffectiveMigrationVersion — keeping one definition ensures
+// the two checks stay in sync as new migrations are added.
+type sqliteSchemaCanary struct {
+	version int
+	table   string
+	column  string // empty means "table itself is the canary"
+}
+
+// sqliteSchemaCanaries is the ordered list of canary schema elements
+// covering every post-004 migration. Order is significant: each
+// entry's version must be strictly greater than the previous one,
+// and the effective-version walker stops at the first missing canary
+// to preserve the monotonicity assumption (migrations are applied
+// in order). When adding a new migration, append its canary here.
+var sqliteSchemaCanaries = []sqliteSchemaCanary{
+	{4, "boards", "is_public"},                  // 004
+	{9, "notifications", ""},                    // 009 (table)
+	{10, "preset_templates", ""},                // 010 (table)
+	{11, "column_agents", "transition_trigger"}, // 011
+	{12, "user_notification_preferences", ""},   // 012 (table)
+	{13, "viewer_tokens", ""},                   // 013 (table)
+	{14, "tasks", "due_at"},                     // 014
+	{16, "frontend_events", ""},                 // 016 (table)
 }
 
 // sqliteEffectiveMigrationVersion inspects the actual schema and
@@ -41,13 +81,11 @@ func sqliteSchemaDrift(db *sql.DB) (bool, error) {
 // version is ahead of the actual schema and m.Up() refuses to
 // re-apply anything.
 //
-// Each migration is mapped to a single canary schema element (a
-// table or column) that did not exist before that migration ran.
 // The effective version is the highest canary version V such that
 // every canary from migration 4 through V is present — this
 // preserves the monotonicity assumption (migrations are applied
 // in order) so a "canary missing below V" case rewinds all the
-// way to just before the gap, instead of trying to re-run past
+// way to just before that gap, instead of trying to re-run past
 // migrations that are already applied and would fail with
 // "duplicate column" from the ALTER TABLE ADD COLUMN steps in
 // migrations 004 and 014.
@@ -56,32 +94,13 @@ func sqliteSchemaDrift(db *sql.DB) (bool, error) {
 // version is 0. The runner treats 0 as "force NilVersion" so
 // m.Up() starts from the first embedded migration.
 func sqliteEffectiveMigrationVersion(db *sql.DB) (int, error) {
-	// Canary definitions. Each entry must point to a schema
-	// element that the named migration is the FIRST to introduce —
-	// checking later migrations' elements would let a partially
-	// applied state look fully applied and skip the repair.
-	canaries := []struct {
-		version int
-		table   string
-		column  string // empty means "table itself is the canary"
-	}{
-		{4, "boards", "is_public"},                          // 004
-		{9, "notifications", ""},                           // 009 (table)
-		{10, "preset_templates", ""},                       // 010 (table)
-		{11, "column_agents", "transition_trigger"},        // 011
-		{12, "user_notification_preferences", ""},          // 012 (table)
-		{13, "viewer_tokens", ""},                          // 013 (table)
-		{14, "tasks", "due_at"},                             // 014
-		{16, "frontend_events", ""},                        // 016 (table)
-	}
-
 	// Walk from the lowest canary up. The effective version is the
 	// last canary whose canary is present, BUT only as long as every
 	// preceding canary is also present. The moment we hit a missing
 	// canary the monotonicity assumption breaks and we rewind to
 	// just before that gap.
 	highest := 0
-	for _, c := range canaries {
+	for _, c := range sqliteSchemaCanaries {
 		var present bool
 		var err error
 		if c.column == "" {
