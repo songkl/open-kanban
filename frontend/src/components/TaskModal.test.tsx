@@ -737,6 +737,114 @@ describe('TaskModal', () => {
   });
 
   /**
+   * s-1239: a finished run that exited 0 must not surface its
+   * (possibly stale) `error` string in red. Non-zero exits keep the
+   * red treatment so genuine failures stay scannable.
+   */
+  describe('run error visibility (s-1239)', () => {
+    const liveRun = {
+      id: 'run-1',
+      taskId: 'task-1',
+      runnerId: 'runner-mac-66681-9abc',
+      agentId: 'agent-claude',
+      status: 'running',
+      claimedAt: '2026-09-17T10:00:00.000Z',
+      lastHeartbeatAt: '2026-09-17T10:00:30.000Z',
+      expiresAt: '2026-09-17T10:02:00.000Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    } as const;
+
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('hides the red error row when a completed run exited 0', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: {
+          ...liveRun,
+          status: 'completed',
+          finishedAt: '2026-09-17T10:01:00.000Z',
+          exitCode: 0,
+          error: 'transient stderr from a successful agent run',
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('taskModal.runError')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('transient stderr from a successful agent run')
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/text-red-600/)).not.toBeInTheDocument();
+    });
+
+    it('keeps the red error row visible when a failed run exited non-zero', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: {
+          ...liveRun,
+          status: 'failed',
+          finishedAt: '2026-09-17T10:01:00.000Z',
+          exitCode: 1,
+          error: 'agent crashed',
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      });
+      expect(screen.getByText('taskModal.runError')).toBeInTheDocument();
+      const errorRow = screen.getByText('agent crashed');
+      expect(errorRow).toHaveClass('text-red-600');
+    });
+
+    it('hides the red error row when a completed run exited 0 even with non-zero-looking stderr', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: {
+          ...liveRun,
+          status: 'completed',
+          finishedAt: '2026-09-17T10:01:00.000Z',
+          exitCode: 0,
+          error: 'warning: deprecated flag used',
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('taskModal.runError')).not.toBeInTheDocument();
+      expect(screen.queryByText('warning: deprecated flag used')).not.toBeInTheDocument();
+    });
+
+    it('keeps the red error row visible when the run is still live and has an error', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'running', error: 'pending failure marker' },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      });
+      // Live runs keep the existing behaviour: an in-progress run
+      // with a non-empty error string still surfaces the red row so
+      // operators see early failure signals.
+      expect(screen.getByText('taskModal.runError')).toBeInTheDocument();
+      const errorRow = screen.getByText('pending failure marker');
+      expect(errorRow).toHaveClass('text-red-600');
+    });
+  });
+
+  /**
    * s-1202 (PM_REVIEW §3.2 finding #3): the drawer must surface both
    * `tasks.assignee` and `task_runs.runner` explicitly in read-only mode
    * so operators can see who owns the task vs. who last ran it without

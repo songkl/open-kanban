@@ -197,7 +197,7 @@ function RunInfoSection({ run }: { run: TaskRun }) {
             <dd className="font-mono text-zinc-700 dark:text-zinc-200">{run.exitCode}</dd>
           </>
         )}
-        {run.error && (
+        {run.error && !(run.status === 'completed' && run.exitCode === 0) && (
           <>
             <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runError')}</dt>
             <dd className="text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{run.error}</dd>
