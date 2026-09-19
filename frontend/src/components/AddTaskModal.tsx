@@ -346,44 +346,46 @@ export function AddTaskModal({
             {t('task.publishHint')}
           </label>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('taskModal.priority')}</label>
-            <CustomDropdown
-              options={[
-                { value: 'low', label: t('taskModal.priorityLow') },
-                { value: 'medium', label: t('taskModal.priorityMedium') },
-                { value: 'high', label: t('taskModal.priorityHigh') },
-              ]}
-              value={priority}
-              onChange={setPriority}
-              className="w-full"
-            />
-          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('taskModal.priority')}</label>
+              <CustomDropdown
+                options={[
+                  { value: 'low', label: t('taskModal.priorityLow') },
+                  { value: 'medium', label: t('taskModal.priorityMedium') },
+                  { value: 'high', label: t('taskModal.priorityHigh') },
+                ]}
+                value={priority}
+                onChange={setPriority}
+                className="w-full"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="add-task-due-at" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-              {t('taskModal.dueDateFieldLabel')}
-            </label>
-            <input
-              id="add-task-due-at"
-              type="datetime-local"
-              value={toDateInputValue(dueAt)}
-              onChange={(e) => setDueAt(fromDateInputValue(e.target.value))}
-              aria-describedby="add-task-due-at-hint"
-              className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-            />
-            <p id="add-task-due-at-hint" className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {t('taskModal.dueDatePickerHint')}
-            </p>
-            {dueAt && (
-              <button
-                type="button"
-                onClick={() => setDueAt(null)}
-                className="mt-1 text-xs text-blue-500 hover:text-blue-600"
-              >
-                {t('taskModal.dueDateClear')}
-              </button>
-            )}
+            <div>
+              <label htmlFor="add-task-due-at" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">
+                {t('taskModal.dueDateFieldLabel')}
+              </label>
+              <input
+                id="add-task-due-at"
+                type="datetime-local"
+                value={toDateInputValue(dueAt)}
+                onChange={(e) => setDueAt(fromDateInputValue(e.target.value))}
+                aria-describedby="add-task-due-at-hint"
+                className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+              />
+              <p id="add-task-due-at-hint" className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {t('taskModal.dueDatePickerHint')}
+              </p>
+              {dueAt && (
+                <button
+                  type="button"
+                  onClick={() => setDueAt(null)}
+                  className="mt-1 text-xs text-blue-500 hover:text-blue-600"
+                >
+                  {t('taskModal.dueDateClear')}
+                </button>
+              )}
+            </div>
           </div>
 
           <div>

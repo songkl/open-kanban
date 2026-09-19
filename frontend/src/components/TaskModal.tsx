@@ -898,20 +898,6 @@ export function TaskModal({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.priority')}</label>
-                  <select
-                    ref={prioritySelectRef}
-                    value={editPriority}
-                    onChange={(e) => setEditPriority(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
-                  >
-                    <option value="low">{t('taskModal.priorityLow')}</option>
-                    <option value="medium">{t('taskModal.priorityMedium')}</option>
-                    <option value="high">{t('taskModal.priorityHigh')}</option>
-                  </select>
-                </div>
-
-                <div>
                   <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.assignee')}</label>
                   <select
                     ref={assigneeSelectRef}
@@ -925,6 +911,20 @@ export function TaskModal({
                         {agent.nickname}
                       </option>
                     ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.priority')}</label>
+                  <select
+                    ref={prioritySelectRef}
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
+                  >
+                    <option value="low">{t('taskModal.priorityLow')}</option>
+                    <option value="medium">{t('taskModal.priorityMedium')}</option>
+                    <option value="high">{t('taskModal.priorityHigh')}</option>
                   </select>
                 </div>
 

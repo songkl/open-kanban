@@ -835,7 +835,7 @@ describe('TaskModal', () => {
       expect(lastCall[0].dueAt.startsWith('2027-01-15')).toBe(true);
     });
 
-    it('exposes a Clear button that nulls the due date before save', async () => {
+it('exposes a Clear button that nulls the due date before save', async () => {
       const taskWithDue = { ...mockTask, dueAt: '2026-12-31T08:00:00.000Z' };
       const user = userEvent.setup();
       render(<TaskModal {...defaultProps} task={taskWithDue} startEditing={true} />);
@@ -848,6 +848,21 @@ describe('TaskModal', () => {
       await user.click(saveButton);
       const lastCall = defaultProps.onUpdate.mock.calls[defaultProps.onUpdate.mock.calls.length - 1];
       expect(lastCall[0].dueAt).toBeNull();
+    });
+
+    // s-1230: the edit grid must place priority + due date in the same
+    // row so the operator can scan them as a pair. Reordering the
+    // source order (Assignee before Priority) swaps the second row to
+    // [Priority, DueAt] inside the same 2-col grid.
+    it('keeps the priority and due-date fields in the same edit-grid row (s-1230)', () => {
+      render(<TaskModal {...defaultProps} task={mockTask} startEditing={true} />);
+      const priorityLabel = screen.getByText('taskModal.priority');
+      const dueDateLabel = screen.getByText('taskModal.dueDate');
+      const priorityContainer = priorityLabel.parentElement as HTMLElement;
+      const dueDateContainer = dueDateLabel.parentElement as HTMLElement;
+      // Both label wrappers must share a parent (the grid row) so the
+      // two fields sit side-by-side rather than stacking full-width.
+      expect(priorityContainer.parentElement).toBe(dueDateContainer.parentElement);
     });
   });
 });

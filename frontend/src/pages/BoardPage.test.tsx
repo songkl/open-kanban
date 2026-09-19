@@ -322,6 +322,10 @@ describe('BoardPage', () => {
   // button lives in the toolbar, so without right padding the toolbar
   // would slide under the floating overlay. Reserve enough right padding
   // on the header so the page-level controls stay clear of the overlay.
+  // s-1230: bumped mobile right padding from pr-20 (80px) to pr-24
+  // (96px) and desktop from sm:pr-24 (96px) to sm:pr-32 (128px) so the
+  // create button + right-side action group stop crowding the floating
+  // overlay (theme toggle + notification bell) above them.
   it('reserves right padding on the board header to clear the AppShell overlay (s-1226)', () => {
     renderBoardPage();
 
@@ -330,11 +334,11 @@ describe('BoardPage', () => {
     const className = banner.className;
     // Mobile (< 640px) — no AppShell sidebar, but the overlay is still
     // there, so we still need padding.
-    expect(className).toMatch(/\bpr-20\b/);
+    expect(className).toMatch(/\bpr-24\b/);
     // Desktop (>= 640px) — need a bit more room because the BoardToolbar
     // (search / filter / density / create button) also lives in the
     // header on the same row as the overlay.
-    expect(className).toMatch(/\bsm:pr-24\b/);
+    expect(className).toMatch(/\bsm:pr-32\b/);
   });
 
   it('invokes fetchBoards when retry button is clicked in loadError state', async () => {

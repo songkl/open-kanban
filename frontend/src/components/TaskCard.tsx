@@ -73,6 +73,36 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
+// s-1230: deadline chip. Renders the due date next to the priority
+// badge in the footer so the operator can see priority + deadline
+// side-by-side without opening the task. Color intensifies as the
+// deadline approaches (overdue → red, today → amber, future → zinc).
+function getDueDateMeta(dueAt: string): {
+  label: string;
+  state: 'overdue' | 'today' | 'tomorrow' | 'future';
+  full: string;
+} | null {
+  const due = new Date(dueAt);
+  if (Number.isNaN(due.getTime())) return null;
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(due) - startOfDay(now)) / (1000 * 60 * 60 * 24));
+  let state: 'overdue' | 'today' | 'tomorrow' | 'future';
+  if (diffDays < 0) state = 'overdue';
+  else if (diffDays === 0) state = 'today';
+  else if (diffDays === 1) state = 'tomorrow';
+  else state = 'future';
+  const label = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return { label, state, full: due.toLocaleString() };
+}
+
+const dueDateColors: Record<'overdue' | 'today' | 'tomorrow' | 'future', string> = {
+  overdue: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
+  today: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200',
+  tomorrow: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
+  future: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700/60 dark:text-zinc-300',
+};
+
 export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run, customFields, density = 'standard' }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
@@ -150,6 +180,12 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       minute: '2-digit',
     });
   }, [task.updatedAt]);
+
+  // s-1230: deadline chip metadata. Computed once per render so the
+  // priority + due-date row in the footer stays consistent for the
+  // same input — also avoids re-parsing the date on every scroll
+  // tick from the virtualised list.
+  const dueDateMeta = useMemo(() => (task.dueAt ? getDueDateMeta(task.dueAt) : null), [task.dueAt]);
 
   return (
     <div
@@ -410,6 +446,30 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           >
             {task.priority === 'high' ? t('task.priority.high') : task.priority === 'medium' ? t('task.priority.medium') : t('task.priority.low')}
           </span>
+          {/* s-1230: deadline chip — sits next to the priority badge so
+              the two stay readable as a pair. Skipped when the task has
+              no due date so we don't reserve space for an empty chip. */}
+          {dueDateMeta && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                dueDateColors[dueDateMeta.state]
+              }`}
+              title={dueDateMeta.full}
+              data-testid="task-card-due-date"
+              data-state={dueDateMeta.state}
+            >
+              <span aria-hidden className="text-[11px] leading-none">📅</span>
+              <span>
+                {dueDateMeta.state === 'overdue'
+                  ? t('taskModal.dueDateOverdue')
+                  : dueDateMeta.state === 'today'
+                  ? t('taskModal.dueDateDueToday')
+                  : dueDateMeta.state === 'tomorrow'
+                  ? t('taskModal.dueDateDueTomorrow')
+                  : dueDateMeta.label}
+              </span>
+            </span>
+          )}
           {task.subtasks && task.subtasks.length > 0 && (
             <span className="text-xs text-zinc-400 dark:text-zinc-400">
               ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}

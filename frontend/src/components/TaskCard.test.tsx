@@ -419,4 +419,69 @@ describe('TaskCard', () => {
       expect(screen.getByTestId('task-card-last-runner-badge')).toBeInTheDocument();
     });
   });
+
+  // s-1230: deadline chip is rendered next to the priority badge so the
+  // operator can see priority + due date as a pair in the footer. The
+  // state attribute lets CSS / accessibility tools distinguish overdue
+  // from future deadlines without parsing the label.
+  describe('due date chip (s-1230)', () => {
+    const isoFromOffset = (days: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      d.setHours(12, 0, 0, 0);
+      return d.toISOString();
+    };
+
+    it('renders the chip when dueAt is set and exposes the due state', () => {
+      const taskWithDue = { ...mockTask, dueAt: isoFromOffset(3) };
+      render(<TaskCard {...defaultProps} task={taskWithDue} />);
+      const chip = screen.getByTestId('task-card-due-date');
+      expect(chip).toBeInTheDocument();
+      expect(chip.dataset.state).toBe('future');
+    });
+
+    it('marks overdue deadlines with the overdue state and label', () => {
+      const taskOverdue = { ...mockTask, dueAt: isoFromOffset(-2) };
+      render(<TaskCard {...defaultProps} task={taskOverdue} />);
+      const chip = screen.getByTestId('task-card-due-date');
+      expect(chip.dataset.state).toBe('overdue');
+      expect(chip).toHaveTextContent('taskModal.dueDateOverdue');
+    });
+
+    it('uses today / tomorrow labels for near deadlines', () => {
+      const taskToday = { ...mockTask, dueAt: isoFromOffset(0) };
+      const { rerender } = render(<TaskCard {...defaultProps} task={taskToday} />);
+      expect(screen.getByTestId('task-card-due-date').dataset.state).toBe('today');
+      expect(screen.getByTestId('task-card-due-date')).toHaveTextContent('taskModal.dueDateDueToday');
+
+      const taskTomorrow = { ...mockTask, dueAt: isoFromOffset(1) };
+      rerender(<TaskCard {...defaultProps} task={taskTomorrow} />);
+      expect(screen.getByTestId('task-card-due-date').dataset.state).toBe('tomorrow');
+      expect(screen.getByTestId('task-card-due-date')).toHaveTextContent('taskModal.dueDateDueTomorrow');
+    });
+
+    it('hides the chip when dueAt is null so the footer does not reserve empty space', () => {
+      const taskNoDue = { ...mockTask, dueAt: null };
+      render(<TaskCard {...defaultProps} task={taskNoDue} />);
+      expect(screen.queryByTestId('task-card-due-date')).not.toBeInTheDocument();
+    });
+
+    it('renders the chip alongside the priority badge in the same footer row', () => {
+      const taskWithDue = { ...mockTask, dueAt: isoFromOffset(3) };
+      const { container } = render(<TaskCard {...defaultProps} task={taskWithDue} />);
+      const chip = screen.getByTestId('task-card-due-date');
+      const priority = screen.getByText('task.priority.medium');
+      // The chip and the priority badge live in the same flex container
+      // — the footer left group — so they read as a pair.
+      expect(chip.parentElement).toBe(priority.parentElement);
+      // sanity: the container is the left group of the footer
+      expect(container.querySelector('[data-testid="task-card-due-date"]')?.parentElement?.className).toMatch(/flex items-center gap-2\.5/);
+    });
+
+    it('compact density hides the due date chip alongside the priority badge', () => {
+      const taskWithDue = { ...mockTask, dueAt: isoFromOffset(3) };
+      render(<TaskCard {...defaultProps} task={taskWithDue} density="compact" />);
+      expect(screen.queryByTestId('task-card-due-date')).not.toBeInTheDocument();
+    });
+  });
 });

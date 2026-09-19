@@ -265,6 +265,23 @@ describe('AddTaskModal', () => {
     });
   });
 
+  // s-1230: priority + due date side-by-side. Mirrors the s-1223
+  // pattern so the two controls read as a pair instead of stacking
+  // full-width on top of each other.
+  describe('priority + due date row (s-1230)', () => {
+    it('renders priority and due date fields side-by-side in a 2-column grid on desktop', () => {
+      render(<AddTaskModal {...defaultProps} />);
+      const priorityLabel = screen.getByText('taskModal.priority');
+      const dueDateLabel = screen.getByText('taskModal.dueDateFieldLabel');
+      const priorityContainer = priorityLabel.parentElement as HTMLElement;
+      const dueDateContainer = dueDateLabel.parentElement as HTMLElement;
+      expect(priorityContainer.parentElement).toBe(dueDateContainer.parentElement);
+      const grid = priorityContainer.parentElement as HTMLElement;
+      expect(grid.className).toMatch(/grid-cols-1/);
+      expect(grid.className).toMatch(/sm:grid-cols-2/);
+    });
+  });
+
   describe('create-task permission gating (s-1053)', () => {
     const canCreateTaskInColumn = (columnId: string) => columnId !== 'col-2';
 
