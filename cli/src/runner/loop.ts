@@ -576,6 +576,16 @@ export class RunLoop {
       this.logger.warn(
         `task ${task.id} finish(failed) returned 409; comment was already posted`
       );
+    } else {
+      // s-1240: the server now restores the task to the column
+      // it was claimed from when the run reports `failed`, so
+      // a dead agent no longer strands the task in the
+      // in-progress column. Mirror that on the operator-facing
+      // log so tailing --debug matches the task detail page
+      // without them having to cross-reference HTTP traces.
+      this.logger.info(
+        `task ${task.id} failed; server restored column from snapshot`
+      );
     }
   }
 

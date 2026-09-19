@@ -497,8 +497,11 @@ func AttachRun(db *sql.DB) gin.HandlerFunc {
 // FinishRun handles POST /api/v1/runs/:taskId/finish.
 // When status='completed' the handler invokes
 // task_service.CompleteTask so the task advances to its next
-// column; on 'failed' the task stays in its current column
-// (typically in_progress) per requirement F8.
+// column; on 'failed' the task is restored to the snapshot
+// column_id captured at claim time so a crashed / non-zero-exit
+// agent doesn't leave the task pinned to the in-progress column
+// (see RunRepository.FinishRun for the restore SQL + fallback
+// rules).
 func FinishRun(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)

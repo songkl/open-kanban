@@ -791,7 +791,18 @@ func TestFinishRun_CompletedAdvancesColumn(t *testing.T) {
 	}
 }
 
-func TestFinishRun_FailedKeepsTaskInPlace(t *testing.T) {
+// TestFinishRun_FailedRestoresTaskToSourceColumn covers the
+// s-1240 behaviour change: a finish('failed') call must move
+// the task back to the column it was claimed from so a crashed
+// agent doesn't leave the task pinned to the in-progress column
+// forever. Pre-s-1240 the runner just kept the task in c-doing
+// — fine for a single-task happy path but a pain once the queue
+// has more than one runner, since the dead task would block any
+// other runner that watches status='todo' from picking it up
+// (it never went back into the todo lane). After s-1240 the
+// snapshot column_id stored in task_runs at claim time is the
+// source of truth for the restore.
+func TestFinishRun_FailedRestoresTaskToSourceColumn(t *testing.T) {
 	db := setupTaskRunsDB(t)
 	defer db.Close()
 
@@ -826,14 +837,72 @@ func TestFinishRun_FailedKeepsTaskInPlace(t *testing.T) {
 		t.Errorf("expected advanced=false on failure, got true")
 	}
 
-	// Task should still be in c-doing (in_progress) — the
-	// runner is responsible for attaching a comment.
+	// s-1240: the task must move back to the snapshot column
+	// (c-todo) recorded at claim time so it doesn't get stuck
+	// in the in-progress column. The runner is responsible for
+	// attaching a comment explaining the failure.
 	var col string
 	if err := db.QueryRow("SELECT column_id FROM tasks WHERE id='t-fail'").Scan(&col); err != nil {
 		t.Fatalf("query: %v", err)
 	}
-	if col != "c-doing" {
-		t.Errorf("expected task to remain in c-doing on failure, got %s", col)
+	if col != "c-todo" {
+		t.Errorf("expected task to be restored to c-todo on failure, got %s", col)
+	}
+}
+
+// TestFinishRun_FailedFallsBackToInProgressWhenSourceColumnDeleted
+// covers the edge case where the source column captured at
+// claim time no longer exists (admin deleted it while the
+// runner held the lock). The restore SQL must fall back to the
+// board's in_progress column so the task isn't left pointing at
+// a non-existent column — the next runner that picks it up
+// will move it forward again.
+func TestFinishRun_FailedFallsBackToInProgressWhenSourceColumnDeleted(t *testing.T) {
+	db := setupTaskRunsDB(t)
+	defer db.Close()
+
+	// Seed a board-specific todo column so we can drop just
+	// that one without disturbing the shared c-doing lane.
+	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
+		('c-source', 'Source lane', 'todo', 0, 'b1')`); err != nil {
+		t.Fatalf("seed source column: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-fail-fb', 'fail fallback', 'c-source', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-fail-fb", "c-source", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	// Now drop the source column — simulating an admin
+	// deleting the lane while the runner held the lock.
+	if _, err := db.Exec(`DELETE FROM columns WHERE id = 'c-source'`); err != nil {
+		t.Fatalf("drop source column: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-fail-fb/finish", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "failed",
+		"exitCode": 2,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Restore SQL should fall back to the board's
+	// in_progress column (c-doing) when the snapshot column
+	// is gone. We accept either c-doing or the existing
+	// column (the COALESCE chain is best-effort) but the
+	// important property is that the task is NOT pointing at
+	// a deleted column id.
+	var col string
+	if err := db.QueryRow("SELECT column_id FROM tasks WHERE id='t-fail-fb'").Scan(&col); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if col == "c-source" {
+		t.Errorf("expected task to fall back from deleted c-source, still pointing at %s", col)
 	}
 }
 

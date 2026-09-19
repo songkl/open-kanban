@@ -348,9 +348,16 @@ func (r *RunRepository) Heartbeat(taskID, runnerID string, lockTimeoutMs int) (t
 
 // FinishRun marks the run row as completed/failed and (when
 // status='completed') invokes CompleteTask to advance the
-// underlying task. On 'failed' the task stays in its current
-// column — the runner is expected to attach a failure comment via
-// POST /api/v1/comments before calling /finish.
+// underlying task. When status='failed' the task is restored to
+// the snapshot column_id captured at claim time so a crashed /
+// non-zero-exit agent doesn't leave the task stuck in the
+// in-progress column — the runner is expected to attach a
+// failure comment via POST /api/v1/comments before calling
+// /finish so operators can see what went wrong. When the
+// snapshot column no longer exists (deleted while the runner
+// held the lock) the task falls back to the in-progress column
+// on the same board; if neither exists we leave the task where
+// it is so the lock release is still observable.
 //
 // As of s-1106, the row is NOT deleted: it is stamped to its
 // terminal status (completed / failed) and left in place so the
@@ -418,6 +425,36 @@ func (r *RunRepository) FinishRun(taskID, runnerID string, status models.RunStat
 	`, string(status), now, exitCode, errMsg, output, taskID, runnerID); err != nil {
 		return err
 	}
+
+	// On failure, restore the task to the column the runner
+	// originally picked it up from so it doesn't stay pinned to
+	// the in-progress column forever. Mirrors the restore SQL in
+	// ReleaseRuns / ReapExpiredRuns so a failed finish behaves
+	// identically to a lock release: if the snapshot column is
+	// still around we use it; otherwise we fall back to the
+	// board's in-progress column; if even that is gone we leave
+	// the task where it is (the failure row in task_runs is still
+	// authoritative — operators can re-claim by hand).
+	if status == models.RunStatusFailed {
+		if _, err := tx.Exec(`
+			UPDATE tasks
+			SET column_id = COALESCE(
+				(SELECT c2.id FROM columns c2
+				  WHERE c2.id = (SELECT column_id FROM task_runs WHERE task_id = tasks.id)
+				  LIMIT 1),
+				(SELECT c3.id FROM columns c3
+				  WHERE c3.board_id = (SELECT board_id FROM task_runs WHERE task_id = tasks.id)
+				    AND c3.status = 'in_progress'
+				  ORDER BY c3.position ASC LIMIT 1),
+				column_id
+			),
+			updated_at = ?
+			WHERE id = ?
+		`, now, taskID); err != nil {
+			return err
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
