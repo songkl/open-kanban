@@ -40,7 +40,6 @@ import { EventEmitter } from "node:events";
 
 import {
   STDOUT_TRUNCATE_BYTES,
-  STDERR_TRUNCATE_BYTES,
 } from "./spawn.js";
 
 /**
@@ -638,6 +637,3 @@ function drainTextChunks(chunks: string[], truncated: boolean): string {
   }
   return chunks.join("") + (truncated ? "\n[truncated]" : "");
 }
-
-/** Maximum bytes we forward to `/finish` from the ACP stderr path. */
-export const ACP_STDERR_TRUNCATE_BYTES = STDERR_TRUNCATE_BYTES;
