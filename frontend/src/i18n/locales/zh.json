@@ -3,7 +3,7 @@
     "title": "Agent流水线",
     "subtitle": "AI 驱动的Agent流水线",
     "loading": "加载中...",
-"error": {
+    "error": {
       "loadFailed": "加载看板数据失败",
       "retry": "重试",
       "connectionFailed": "连接失败",
@@ -26,7 +26,9 @@
     "delete": "删除",
     "save": "保存",
     "enabled": "已启用",
-    "disabled": "已禁用"
+    "disabled": "已禁用",
+    "selectAll": "全选",
+    "deselectAll": "取消全选"
   },
   "upload": {
     "fileTooLarge": "文件过大，最大支持 10MB",
@@ -146,12 +148,11 @@
     "taskPublished": "任务已发布到 \"{{boardName}}\" 看板",
     "taskCreated": "任务已创建到 \"{{boardName}}\" 看板",
     "scrollHint": "← 横向滚动 →",
-    "noAccessHint": "当前无法访问任何看板，请联系管理员获取权限",
+    "noAccessHint": "请联系看板所有者为您授权后再访问。",
     "createNew": "创建新看板",
     "contactAdmin": "联系管理员",
     "contactOwner": "请联系看板 owner 邀请你",
     "noAccess": "无权访问该看板",
-    "noAccessHint": "请联系看板所有者为您授权后再访问。",
     "goBackToList": "返回看板列表",
     "loadFailedHint": "加载看板失败，请重试或联系管理员。",
     "descriptionPlaceholder": "Markdown格式的看板说明...",
@@ -173,8 +174,8 @@
     "add": "添加",
     "selectUser": "选择用户",
     "permissionAddFailed": "添加授权失败",
-    "bulkAddTitle": "批量授权",
-    "bulkAddHint": "一次为多个用户授予相同的访问权限。",
+    "bulkAddTitle": "批量分配权限",
+    "bulkAddHint": "选择多个用户并统一设置访问级别",
     "bulkAddRoleFilter": "角色",
     "bulkAddTypeFilter": "类型",
     "bulkAddAll": "全部",
@@ -183,16 +184,34 @@
     "bulkAddDeselectAll": "取消全选",
     "bulkAddEmpty": "没有符合筛选条件的用户。",
     "bulkAddAlreadyHasPermission": "已授权",
-    "bulkAddAccess": "访问权限",
-    "bulkAddSubmit": "授权",
-    "bulkAddSuccess": "已成功授予 {{count}} 个授权。",
-    "bulkAddPartialFailure": "部分用户未找到，已跳过：{{ids}}。",
-    "bulkAddTooMany": "单次请求用户过多，请分批授权。",
+    "bulkAddAccess": "访问级别",
+    "bulkAddSubmit": "批量授权",
+    "bulkAddSuccess": "已授权 {count} 个用户",
+    "bulkAddPartialFailure": "部分用户不存在: {ids}",
+    "bulkAddTooMany": "单次最多 200 个用户",
     "role": {
       "admin": "管理员",
       "member": "成员",
-      "viewer": "查看者"
-    }
+      "viewer": "查看者",
+      "owner": "所有者"
+    },
+    "public": "公开",
+    "private": "私有",
+    "publicHint": "所有人（包括未登录用户）都可以看到",
+    "privateHint": "只有被授权的用户才能看到此看板",
+    "privateBadge": "私有",
+    "currentOwner": "当前所有者",
+    "ownerBadge": "所有者",
+    "transferOwnership": "转移所有权",
+    "transferOwnershipTitle": "转移看板所有权",
+    "transferOwnershipMessage": "请选择一位已在该看板有权限的用户作为新所有者；不能转移给尚无权限的用户。",
+    "transferOwnershipSelect": "新所有者",
+    "transferOwnershipPickUser": "请选择新所有者",
+    "transferOwnershipConfirm": "转移",
+    "transferOwnershipNoCandidates": "暂无可选用户，请先为该看板授权。",
+    "transferOwnershipFailed": "转移所有权失败",
+    "transferOwnershipSuccess": "所有权已转移",
+    "bulkAddOwnerForbidden": "不能修改看板所有者的权限"
   },
   "task": {
     "addTask": "添加任务",
@@ -401,28 +420,16 @@
     "recover": "恢复"
   },
   "runs": {
-    "title": "运行历史",
-    "empty": "暂无已结束的运行。当 Runner 完成（completed / failed / released）后将显示在此处。",
-    "emptyFiltered": "没有匹配当前筛选条件的运行。",
-    "loading": "正在加载运行历史...",
-    "loadFailed": "加载运行历史失败",
-    "retry": "重试",
-    "refresh": "刷新",
-    "searchPlaceholder": "搜索任务标题 / ID / Runner",
-    "runner": "Runner",
-    "status": "状态",
-    "statusCompleted": "已完成",
-    "statusFailed": "失败",
-    "statusReleased": "已释放",
-    "count": "{{shown}} / {{total}} 条运行",
-    "column": {
-      "time": "时间",
-      "taskTitle": "任务标题",
-      "runner": "Runner",
-      "status": "状态",
-      "duration": "耗时",
-      "error": "标准错误 (stderr)"
-    }
+    "pageTitle": "运行大屏",
+    "subtitle": "实时显示当前正在运行以及最近完成的 Agent 任务。",
+    "liveTitle": "正在运行 ({{count}})",
+    "emptyLive": "当前没有正在运行的 Agent 任务。",
+    "recentTitle": "最近完成",
+    "emptyRecent": "暂无已完成的运行记录。",
+    "wsConnected": "WebSocket 实时",
+    "wsPolling": "轮询中（5秒）",
+    "enterFullscreen": "进入全屏",
+    "exitFullscreen": "退出全屏"
   },
   "completed": {
     "title": "已完成管理",
@@ -440,18 +447,6 @@
     "batchArchive": "批量归档",
     "batchDelete": "批量删除",
     "loading": "加载中..."
-  },
-  "runs": {
-    "pageTitle": "运行大屏",
-    "subtitle": "实时显示当前正在运行以及最近完成的 Agent 任务。",
-    "liveTitle": "正在运行 ({{count}})",
-    "emptyLive": "当前没有正在运行的 Agent 任务。",
-    "recentTitle": "最近完成",
-    "emptyRecent": "暂无已完成的运行记录。",
-    "wsConnected": "WebSocket 实时",
-    "wsPolling": "轮询中（5秒）",
-    "enterFullscreen": "进入全屏",
-    "exitFullscreen": "退出全屏"
   },
   "runComplete": {
     "toastTitle": "运行结束",
@@ -1003,10 +998,18 @@
     "viewComments": "查看评论",
     "selectTask": "选择任务",
     "runnerBadge": "🤖 {{runnerId}} · {{elapsed}}",
-    "runnerBadgeAria": "任务正由运行器 {{runnerId}} 处理，已运行 {{elapsed}}",
+    "runnerBadgeAria": "运行器 {{runnerId}} 正在处理此任务（已运行 {{elapsed}}）",
     "runnerElapsedSeconds": "{{count}}秒",
     "runnerElapsedMinutes": "{{count}}分",
-    "runnerElapsedHours": "{{count}}时"
+    "runnerElapsedHours": "{{count}}时",
+    "runnerLabel": "运行器：{{runnerId}}",
+    "assigneeBadgeTitle": "负责人：{{name}}",
+    "assigneeBadgeAria": "已分配给 {{name}}",
+    "lastRunnerBadgeTitle": "最近运行器：{{runnerId}}",
+    "lastRunnerBadgeAria": "此任务最近一次由 {{runnerId}} 运行",
+    "createdByTooltip": "由 {{name}} 创建",
+    "unassigned": "未分配",
+    "lastActivity": "{{when}} 更新"
   },
   "taskModal": {
     "justNow": "刚刚",
@@ -1077,24 +1080,34 @@
     "agentPromptPlaceholder": "给 Agent 的指令...",
     "publishedAt": "发布日期",
     "updatedAt": "更新日期",
-    "runInfo": "运行中",
-    "runRunner": "运行器",
+    "runInfo": "运行信息",
+    "runRunner": "Runner",
     "runAgent": "Agent",
     "runClaimedAt": "开始时间",
-    "runLastHeartbeat": "心跳时间",
+    "runLastHeartbeat": "最近心跳",
     "runExpiresAt": "过期时间",
     "runFinishedAt": "结束时间",
     "runExitCode": "退出码",
     "runOutput": "Agent 输出",
-    "runError": "标准错误 (stderr)",
-    "runElapsed": "已运行: {{elapsed}}",
+    "runError": "错误",
+    "runElapsed": "已运行 {{elapsed}}",
     "runStatus": {
-      "claimed": "已认领",
+      "claimed": "运行中",
       "running": "运行中",
       "completed": "已完成",
       "failed": "失败",
-      "released": "已释放"
-    }
+      "released": "排队中"
+    },
+    "createdBy": "创建者",
+    "retryRun": "重跑任务",
+    "retrying": "正在重跑…",
+    "runTimelineTitle": "运行时间线",
+    "runTimelineStepClaimed": "已认领",
+    "runTimelineStepRunning": "运行中",
+    "runTimelineStepFinished": "已完成",
+    "assigneeFieldLabel": "负责人",
+    "assigneeFieldUnassigned": "未分配",
+    "lastRunnerFieldLabel": "最近运行器"
   },
   "skeleton": {
     "loading": "加载中..."
@@ -1187,13 +1200,13 @@
       "disabledTitle": "设备授权已停用",
       "disabledBody": "管理员已停用 OAuth 设备授权流程。请联系管理员启用，或改用其他登录方式。",
       "identitySectionTitle": "授权身份",
-      "identityLabel": "身份",
+      "identityLabel": "授权身份",
       "identitySelf": "当前账号（{{name}}）",
-      "identityAsSelf": "按当前账号授权",
+      "identityAsSelf": "我的账户（当前登录用户）",
       "identityAgent": "Agent：{{name}}",
       "identityDefault": "请选择授权身份",
       "identityServerDefault": "服务器默认",
-      "identityEmpty": "暂无可用的 Agent 账号。你可以按当前账号授权，或联系管理员启用一个 Agent 以供无人值守的自动化使用。",
+      "identityEmpty": "暂无可用的 Agent，请联系管理员。",
       "identityHelper": "选择设备应获得授权的身份。如果是给无人值守的 CLI / MCP 使用，请选择一个 Agent。",
       "identityConfirmSelf": "确认按当前账号授权？",
       "identityConfirmAgent": "确认按 Agent 授权？",
@@ -1202,7 +1215,24 @@
       "identityConfirmAgentCta": "是的，按该 Agent 授权",
       "identityConfirmCancel": "重新选择身份",
       "requireAgentTitle": "必须选择 Agent 身份",
-      "requireAgentBody": "本服务器已关闭“按当前账号授权”。由于 kanban run CLI 仅供 Agent 使用，请在授权前选择一个 Agent 身份。"
+      "requireAgentBody": "本服务器已关闭“按当前账号授权”。由于 kanban run CLI 仅供 Agent 使用，请在授权前选择一个 Agent 身份。",
+      "identityRequired": "请先选择此设备需要绑定的身份再批准。",
+      "createAgentHeading": "没有合适的 Agent？",
+      "createAgentPrompt": "创建一个新的 Agent 并将本设备绑定到它。",
+      "createAgentButton": "新建 Agent",
+      "createAgentNicknameLabel": "Agent 名称",
+      "createAgentNicknamePlaceholder": "例如 kanban-runner",
+      "createAgentRoleLabel": "角色",
+      "createAgentSubmit": "创建并选中",
+      "createAgentSubmitting": "创建中…",
+      "createAgentCancel": "取消",
+      "createAgentError": "创建 Agent 失败，请重试或联系管理员。",
+      "createAgentForbidden": "只有管理员可以在此页面新建 Agent，请联系管理员创建后刷新本页。",
+      "createAgentSuccess": "Agent \"{{nickname}}\" 已创建并被选中。",
+      "createAgentBoardAccessHeading": "初始看板权限",
+      "createAgentBoardAccessHelp": "可选。勾选零个或多个看板；未勾选的看板表示新 Agent 无访问权限。",
+      "createAgentBoardAccessFor": "{{name}} 的权限",
+      "createAgentBoardAccessNone": "无权限"
     },
     "admin": {
       "title": "OAuth 2.1",
@@ -1224,7 +1254,9 @@
       "deviceEnabled": "设备授权流程",
       "deviceAgentBinding": "设备授权绑定的 Agent",
       "requireAgentSelection": "强制选择 Agent",
-      "requireAgentSelectionDescription": "开启后，以 HUMAN 身份发起的设备授权请求将被服务器拒绝，除非授权人本身已是 Agent。请在所有使用者都熟悉新的选择器后再启用。"
+      "requireAgentSelectionDescription": "开启后，以 HUMAN 身份发起的设备授权请求将被服务器拒绝，除非授权人本身已是 Agent。请在所有使用者都熟悉新的选择器后再启用。",
+      "dynamicRegistrationOn": "动态注册：已开启。",
+      "dynamicRegistrationOff": "动态注册：已关闭。"
     },
     "providers": {
       "title": "身份提供商",
@@ -1457,5 +1489,14 @@
     "setExpiry": "设置过期时间（可选）",
     "publicUrl": "公开链接",
     "createdBy": "创建者"
+  },
+  "boardToolbar": {
+    "densityLabel": "卡片密度",
+    "densityCompact": "紧凑",
+    "densityCompactAria": "紧凑卡片（ID、标题、优先级圆点）",
+    "densityStandard": "标准",
+    "densityStandardAria": "标准卡片（增加负责人和计数）",
+    "densityDetailed": "详细",
+    "densityDetailedAria": "详细卡片（增加描述预览、最后活动以及进行中的运行器徽章）"
   }
 }
