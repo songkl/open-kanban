@@ -869,6 +869,10 @@
     "agentDescription": "Agents are non-human users that access the system via API Tokens. Each Agent has its own Token.",
     "agentNamePlaceholder": "Enter Agent name",
     "createAgent": "Create Agent",
+    "agentBoardAccessHeading": "Initial board access",
+    "agentBoardAccessHelp": "Optional. Pick zero or more boards; omitted boards mean no access for the new agent.",
+    "agentBoardAccessFor": "Access for {{name}}",
+    "agentBoardAccessNone": "No access",
     "tokenCount": "Tokens: {{count}}",
     "lastActive": "Last active: {{time}}",
     "neverActive": "Never active",
@@ -1199,7 +1203,11 @@
       "createAgentCancel": "Cancel",
       "createAgentError": "Could not create the agent. Please retry or contact an administrator.",
       "createAgentForbidden": "Only admins can mint new agents from this page. Ask an administrator to create the agent, then refresh this page.",
-      "createAgentSuccess": "Agent \"{{nickname}}\" created and selected."
+      "createAgentSuccess": "Agent \"{{nickname}}\" created and selected.",
+      "createAgentBoardAccessHeading": "Initial board access",
+      "createAgentBoardAccessHelp": "Optional. Pick zero or more boards; omitted boards mean no access for the new agent.",
+      "createAgentBoardAccessFor": "Access for {{name}}",
+      "createAgentBoardAccessNone": "No access"
     },
     "admin": {
       "title": "OAuth 2.1",

@@ -869,6 +869,10 @@
     "agentDescription": "Agent 是非人类用户，通过 API Token 访问系统。每个 Agent 都有独立的 Token。",
     "agentNamePlaceholder": "输入 Agent 名称",
     "createAgent": "创建 Agent",
+    "agentBoardAccessHeading": "初始看板权限",
+    "agentBoardAccessHelp": "可选。勾选零个或多个看板；未勾选的看板表示新 Agent 无访问权限。",
+    "agentBoardAccessFor": "{{name}} 的权限",
+    "agentBoardAccessNone": "无权限",
     "tokenCount": "Token 数: {{count}}",
     "lastActive": "最后活跃: {{time}}",
     "neverActive": "从未活跃",
@@ -1199,7 +1203,11 @@
       "createAgentCancel": "取消",
       "createAgentError": "创建 Agent 失败，请重试或联系管理员。",
       "createAgentForbidden": "只有管理员可以在此页面新建 Agent，请联系管理员创建后刷新本页。",
-      "createAgentSuccess": "Agent \"{{nickname}}\" 已创建并被选中。"
+      "createAgentSuccess": "Agent \"{{nickname}}\" 已创建并被选中。",
+      "createAgentBoardAccessHeading": "初始看板权限",
+      "createAgentBoardAccessHelp": "可选。勾选零个或多个看板；未勾选的看板表示新 Agent 无访问权限。",
+      "createAgentBoardAccessFor": "{{name}} 的权限",
+      "createAgentBoardAccessNone": "无权限"
     },
     "admin": {
       "title": "OAuth 2.1",

@@ -680,16 +680,16 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify({ targetUserId: id, ...data }),
     }),
-  createUser: (data: { username: string; nickname?: string; password?: string; role?: 'ADMIN' | 'MEMBER' | 'VIEWER'; avatar?: string }) =>
-    fetchApi<{ user: User & { token?: string } }>('auth/users', {
+  createUser: (data: { username: string; nickname?: string; password?: string; role?: 'ADMIN' | 'MEMBER' | 'VIEWER'; avatar?: string; boardGrants?: Array<{ boardId: string; access: 'READ' | 'WRITE' | 'ADMIN' }> }) =>
+    fetchApi<{ user: User & { token?: string; grantedCount?: number } }>('auth/users', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   getAgents: () => fetchApi<{ agents: Agent[] }>('auth/agents').then(res => res.agents || []),
-  createAgent: (nickname: string, avatar?: string, role?: 'ADMIN' | 'MEMBER' | 'VIEWER') =>
-    fetchApi<{ agent: Agent & { token: string } }>('auth/agents', {
+  createAgent: (nickname: string, avatar?: string, role?: 'ADMIN' | 'MEMBER' | 'VIEWER', boardGrants?: Array<{ boardId: string; access: 'READ' | 'WRITE' | 'ADMIN' }>) =>
+    fetchApi<{ agent: Agent & { token: string; grantedCount?: number } }>('auth/agents', {
       method: 'POST',
-      body: JSON.stringify({ nickname, avatar, role }),
+      body: JSON.stringify({ nickname, avatar, role, boardGrants }),
     }),
   resetAgentToken: (id: string) =>
     fetchApi<{ token: string }>(`auth/agents/reset-token?id=${id}`, {

@@ -53,15 +53,23 @@ vi.mock('react-i18next', () => ({
 }));
 
 let mockMeResponse: { user: { id: string; role?: string } } = { user: { id: 'user-1', role: 'ADMIN' } };
+let mockBoardsResponse: Array<{ id: string; name: string }> = [];
 
 vi.mock('../services/api', () => ({
   authApi: {
     me: vi.fn(() => Promise.resolve(mockMeResponse))
+  },
+  boardsApi: {
+    getAll: vi.fn(() => Promise.resolve(mockBoardsResponse))
   }
 }));
 
 const setMockMe = (resp: { user: { id: string; role?: string } }) => {
   mockMeResponse = resp;
+};
+
+const setMockBoards = (resp: Array<{ id: string; name: string }>) => {
+  mockBoardsResponse = resp;
 };
 
 const renderPage = (search = '') =>
@@ -396,6 +404,7 @@ describe('OAuthDevicePage — inline create-agent (s-1248)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     setMockMe({ user: { id: 'admin-1', role: 'ADMIN' } });
+    setMockBoards([]);
   });
 
   const cliLookup = (overrides: Record<string, unknown> = {}) =>
@@ -493,7 +502,7 @@ describe('OAuthDevicePage — inline create-agent (s-1248)', () => {
         expect.objectContaining({
           method: 'POST',
           credentials: 'include',
-          body: JSON.stringify({ nickname: 'Inline Bot', role: 'MEMBER' })
+          body: JSON.stringify({ nickname: 'Inline Bot', role: 'MEMBER', boardGrants: [] })
         })
       );
     });
@@ -557,5 +566,61 @@ describe('OAuthDevicePage — inline create-agent (s-1248)', () => {
       expect(screen.getByText('kanban-web')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('create-agent-block')).not.toBeInTheDocument();
+  });
+
+  it('sends boardGrants picked on the inline picker (s-1253)', async () => {
+    setMockBoards([
+      { id: 'b1', name: 'Public board' },
+      { id: 'b2', name: 'Private board' }
+    ]);
+    const newAgent = { id: 'agent-new-2', nickname: 'Scoped Bot', role: 'MEMBER', type: 'AGENT', enabled: true };
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) return cliLookup();
+      if (url === '/oauth/device/create-agent') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ agent: newAgent })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ approved: true }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'SCPE-SCPE' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('create-agent-toggle')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('create-agent-toggle'));
+
+    const form = await screen.findByTestId('create-agent-form');
+    fireEvent.change(screen.getByTestId('inline-agent-nickname'), {
+      target: { value: 'Scoped Bot' }
+    });
+    fireEvent.change(screen.getByTestId('inline-agent-board-access-b1'), {
+      target: { value: 'READ' }
+    });
+    fireEvent.change(screen.getByTestId('inline-agent-board-access-b2'), {
+      target: { value: 'ADMIN' }
+    });
+    fireEvent.click(within(form).getByRole('button', { name: /Create and select/ }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/oauth/device/create-agent',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            nickname: 'Scoped Bot',
+            role: 'MEMBER',
+            boardGrants: [
+              { boardId: 'b1', access: 'READ' },
+              { boardId: 'b2', access: 'ADMIN' }
+            ]
+          })
+        })
+      );
+    });
   });
 });

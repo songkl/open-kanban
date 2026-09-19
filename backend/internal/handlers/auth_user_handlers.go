@@ -530,10 +530,134 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// BoardAccessGrant is one (boardId, access) pair that callers can
+// attach to CreateAgent / CreateUser so the freshly-minted user is
+// born with explicit per-board access instead of inheriting the
+// overly-broad default grants. Access must be one of {READ,
+// WRITE, ADMIN}; unknown values are rejected by the handler so a
+// typo in the client does not silently downscope a board to "".
+//
+// Used by the s-1253 "specify per-board roles at creation time"
+// affordance: prior to this, CreateAgent granted the new agent
+// ADMIN on every existing board (public + private), and CreateUser
+// always inserted a READ row on every public board. Both behaviours
+// were flagged as "permissions too broad" because there was no way
+// to (a) keep a brand-new agent off a private board or (b) hand
+// the new agent a non-default access on a single board.
+type BoardAccessGrant struct {
+	BoardID string `json:"boardId"`
+	Access  string `json:"access"`
+}
+
 type CreateAgentRequest struct {
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Role     string `json:"role"`
+	Nickname    string            `json:"nickname"`
+	Avatar      string            `json:"avatar"`
+	Role        string            `json:"role"`
+	BoardGrants []BoardAccessGrant `json:"boardGrants"`
+}
+
+// ResolveBoardGrants validates a CreateAgent/CreateUser BoardGrants
+// payload and writes one board_permissions row per entry. It is the
+// shared implementation behind the new s-1253 "specify per-board
+// roles at creation time" affordance — both endpoints funnel
+// through here so the validation contract (unknown access values
+// are an error, duplicates collapse, unknown board ids are an
+// error) stays identical.
+//
+// Returns the count of granted rows so the caller can include it
+// in the response. The granted_by_user_id is always the calling
+// admin; we do not propagate the request's "actor" because admin
+// creation happens under the admin's token, not a user-provided
+// field that could be spoofed.
+//
+// Exported so the OAuth device-flow inline-create endpoint
+// (POST /oauth/device/create-agent) can share the same validator
+// without forking the validation contract in two places.
+func ResolveBoardGrants(db *sql.DB, callerID, newUserID string, grants []BoardAccessGrant) (int, error) {
+	if len(grants) == 0 {
+		return 0, nil
+	}
+	// Validate access + dedupe by boardId so a malformed or
+	// duplicate payload is caught before any INSERT runs. The
+	// loop preserves the first occurrence's access value, which
+	// matches the dedupe contract used by BulkSetPermissions
+	// (see auth_permission_handlers.go).
+	seen := make(map[string]string, len(grants))
+	for _, g := range grants {
+		if g.BoardID == "" || g.Access == "" {
+			return 0, fmt.Errorf("invalid boardGrants entry: boardId and access are required")
+		}
+		switch g.Access {
+		case "READ", "WRITE", "ADMIN":
+		default:
+			return 0, fmt.Errorf("invalid access %q for board %q", g.Access, g.BoardID)
+		}
+		if _, dup := seen[g.BoardID]; dup {
+			continue
+		}
+		seen[g.BoardID] = g.Access
+	}
+	if len(seen) == 0 {
+		return 0, nil
+	}
+
+	// Existence-check every target boardId in one IN-list query so
+	// the caller gets a single 404 with every offending id
+	// surfaced at once (matching the unknown-user-id reporting in
+	// BulkSetPermissions).
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	existing, err := db.Query(
+		"SELECT id FROM boards WHERE deleted = false AND id IN ("+placeholders+")", args...,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to verify boards: %w", err)
+	}
+	found := make(map[string]struct{}, len(ids))
+	for existing.Next() {
+		var id string
+		if err := existing.Scan(&id); err == nil {
+			found[id] = struct{}{}
+		}
+	}
+	existing.Close()
+	var missing []string
+	for _, id := range ids {
+		if _, ok := found[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return 0, fmt.Errorf("unknown board ids: %v", missing)
+	}
+
+	// Stable iteration order: re-walk `ids` so the INSERT order
+	// matches the request order. The granted_by_user_id is the
+	// calling admin, mirroring SetPermission.
+	permArgs := make([]interface{}, 0, len(ids)*9)
+	placeholders = ""
+	for i, id := range ids {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "(?, ?, ?, ?, ?, NULL, NULL, NULL, '')"
+		permArgs = append(permArgs, generateID(), newUserID, id, seen[id], callerID)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES "+placeholders,
+		permArgs...,
+	); err != nil {
+		return 0, fmt.Errorf("failed to insert board_permissions: %w", err)
+	}
+	return len(ids), nil
 }
 
 func CreateAgent(db *sql.DB) gin.HandlerFunc {
@@ -592,37 +716,45 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		rows, err := db.Query("SELECT id FROM boards WHERE deleted = false")
-		if err == nil {
-			defer rows.Close()
-			var boardIDs []string
-			for rows.Next() {
-				var boardID string
-				if err := rows.Scan(&boardID); err == nil {
-					boardIDs = append(boardIDs, boardID)
+		// s-1253: per-board role selection at creation time.
+		// When the request carries boardGrants, grant exactly
+		// those (boardId, access) pairs and nothing else — the
+		// legacy "ADMIN on every existing board" fallback is
+		// gone because it leaked private boards to every new
+		// agent.
+		//
+		// When boardGrants is omitted, the new agent gets zero
+		// board_permissions rows. The admin grants explicit
+		// access afterwards via the BoardPermissionsModal, which
+		// keeps the s-1030 visibility contract intact (private
+		// boards stay private unless an owner/admin opts in).
+		var grantedCount int
+		if len(req.BoardGrants) > 0 {
+			grantedCount, err = ResolveBoardGrants(db, user.ID, agentID, req.BoardGrants)
+			if err != nil {
+				// Best-effort cleanup: if the grants failed
+				// after the agent row was created we want to
+				// roll the user back so the operator isn't
+				// left with an orphan agent. The token row
+				// cascades with the user FK.
+				if _, delErr := db.Exec("DELETE FROM users WHERE id = ?", agentID); delErr != nil {
+					log.Printf("[CreateAgent] failed to roll back orphan agent %s after grant error: %v", agentID, delErr)
 				}
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
 			}
-		if len(boardIDs) > 0 {
-			args := make([]interface{}, 0, len(boardIDs)*9)
-			placeholders := make([]string, len(boardIDs))
-			for i, boardID := range boardIDs {
-				permID := generateID()
-				placeholders[i] = "(?, ?, ?, ?, ?, NULL, NULL, NULL, '')"
-				args = append(args, permID, agentID, boardID, "ADMIN", user.ID)
-			}
-			query := "INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES " + strings.Join(placeholders, ", ")
-			db.Exec(query, args...)
-		}
+			permissionCache.InvalidateUser(agentID)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"agent": gin.H{
-				"id":        agentID,
-				"nickname":  req.Nickname,
-				"avatar":    avatar,
-				"type":      "AGENT",
-				"token":     tokenKey,
-				"createdAt": now,
+				"id":           agentID,
+				"nickname":     req.Nickname,
+				"avatar":       avatar,
+				"type":         "AGENT",
+				"token":        tokenKey,
+				"createdAt":    now,
+				"grantedCount": grantedCount,
 			},
 		})
 	}
@@ -728,11 +860,12 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 }
 
 type CreateUserRequest struct {
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
-	Avatar   string `json:"avatar"`
+	Username    string            `json:"username"`
+	Nickname    string            `json:"nickname"`
+	Password    string            `json:"password"`
+	Role        string            `json:"role"`
+	Avatar      string            `json:"avatar"`
+	BoardGrants []BoardAccessGrant `json:"boardGrants"`
 }
 
 func CreateUser(db *sql.DB) gin.HandlerFunc {
@@ -809,17 +942,40 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 
 		grantPublicBoardRead(db, userID)
 
+		// s-1253: per-board role selection at creation time. The
+		// public-board READ grant above stays the baseline (a
+		// freshly-minted user is still expected to see the same
+		// public boards anonymous callers see), and boardGrants
+		// only ADDS explicit rows — typically on private boards
+		// the admin wants the user to be able to access from
+		// day one. resolveBoardGrants de-dupes by boardId so a
+		// caller cannot grant themselves two competing access
+		// levels on the same board.
+		var explicitGranted int
+		if len(req.BoardGrants) > 0 {
+			explicitGranted, err = ResolveBoardGrants(db, currentUser.ID, userID, req.BoardGrants)
+			if err != nil {
+				if _, delErr := db.Exec("DELETE FROM users WHERE id = ?", userID); delErr != nil {
+					log.Printf("[CreateUser] failed to roll back orphan user %s after grant error: %v", userID, delErr)
+				}
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			permissionCache.InvalidateUser(userID)
+		}
+
 		LogActivity(db, currentUser.ID, "USER_CREATE", "USER", userID, req.Nickname, "", c.ClientIP(), getRequestSource(c))
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
-				"id":       userID,
-				"username": req.Username,
-				"nickname": req.Nickname,
-				"avatar":   avatar,
-				"role":     role,
-				"type":     "HUMAN",
-				"token":    tokenKey,
+				"id":            userID,
+				"username":      req.Username,
+				"nickname":      req.Nickname,
+				"avatar":        avatar,
+				"role":          role,
+				"type":          "HUMAN",
+				"token":         tokenKey,
+				"grantedCount":  explicitGranted,
 			},
 		})
 	}

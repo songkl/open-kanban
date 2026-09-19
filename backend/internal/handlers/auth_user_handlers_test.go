@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"open-kanban/internal/handlers"
@@ -304,16 +305,85 @@ func TestRegisterNewUser_PrivateBoardNoAccess(t *testing.T) {
 	}
 }
 
-// TestCreateAgent_StillGetsAdminAllBoards guards the explicit
-// "AGENT behavior unchanged" clause in s-1030: agents are
-// service accounts for the MCP server and need full reach across
-// every board — public and private alike — so CreateAgent keeps
-// the original "ADMIN on every board" loop untouched.
+// TestRegisterNewUser_BoardGrantsAddsExplicitAccess guards the
+// s-1253 contract for CreateUser: the public-board READ baseline
+// from s-1030 still runs, AND the admin can attach explicit
+// boardGrants — typically to grant the user WRITE on a private
+// board they need to start working in.
 //
-// If a future refactor accidentally narrows the agent grant to
-// public-only, this test will catch it before the MCP server
-// starts failing on private boards.
-func TestCreateAgent_StillGetsAdminAllBoards(t *testing.T) {
+// Without s-1253, an admin who wanted a brand-new user to have
+// WRITE on a private board had no choice but to (1) create the
+// user, (2) open the permissions modal, (3) grant WRITE. This
+// folds those three steps into one POST.
+func TestRegisterNewUser_BoardGrantsAddsExplicitAccess(t *testing.T) {
+	db := setupUserVisibilityDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/users", handlers.CreateUser(db))
+
+	body := map[string]interface{}{
+		"username": "carol",
+		"nickname": "Carol",
+		"password": "secret",
+		"role":     "MEMBER",
+		"boardGrants": []map[string]string{
+			{"boardId": "priv1", "access": "WRITE"},
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/users", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin1-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		User struct {
+			ID          string `json:"id"`
+			GrantedCount int   `json:"grantedCount"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.User.GrantedCount != 1 {
+		t.Errorf("expected grantedCount=1, got %d", resp.User.GrantedCount)
+	}
+
+	grants := countAccessRows(t, db, resp.User.ID)
+	// pub1 still gets the s-1030 public READ baseline.
+	if got := grants["pub1"]; got != "READ" {
+		t.Errorf("expected READ grant on pub1 (public baseline), got %q (full grants: %v)", got, grants)
+	}
+	// priv1 gets the explicit WRITE grant the admin asked for.
+	if got := grants["priv1"]; got != "WRITE" {
+		t.Errorf("expected WRITE grant on priv1, got %q (full grants: %v)", got, grants)
+	}
+	if len(grants) != 2 {
+		t.Errorf("expected 2 board_permissions rows (pub1 READ + priv1 WRITE), got %d: %v", len(grants), grants)
+	}
+}
+
+// TestCreateAgent_NoAutoGrants guards the s-1253 behaviour change:
+// when CreateAgent is called WITHOUT boardGrants, the new agent
+// must end up with zero board_permissions rows — neither the
+// public board at any access level nor the private board at ADMIN.
+//
+// This is the negative half of the s-1253 contract. Prior to s-1253
+// CreateAgent unconditionally inserted an ADMIN row on every
+// existing board (public + private), which leaked private boards
+// to every newly-minted agent. The new behaviour is "nothing by
+// default; admins attach explicit grants via boardGrants or via
+// the BoardPermissionsModal after the fact".
+func TestCreateAgent_NoAutoGrants(t *testing.T) {
 	db := setupUserVisibilityDB(t)
 	defer db.Close()
 
@@ -322,7 +392,7 @@ func TestCreateAgent_StillGetsAdminAllBoards(t *testing.T) {
 	router.POST("/api/agents", handlers.CreateAgent(db))
 
 	body := map[string]interface{}{
-		"nickname": "mcp-bot",
+		"nickname": "scoped-bot",
 		"avatar":   "🤖",
 		"role":     "ADMIN",
 	}
@@ -341,22 +411,163 @@ func TestCreateAgent_StillGetsAdminAllBoards(t *testing.T) {
 
 	var resp struct {
 		Agent struct {
-			ID string `json:"id"`
+			ID           string `json:"id"`
+			GrantedCount int    `json:"grantedCount"`
 		} `json:"agent"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
+	if resp.Agent.GrantedCount != 0 {
+		t.Errorf("expected grantedCount=0 when boardGrants omitted, got %d", resp.Agent.GrantedCount)
+	}
 
 	grants := countAccessRows(t, db, resp.Agent.ID)
+	if len(grants) != 0 {
+		t.Errorf("expected zero board_permissions rows when boardGrants omitted, got %d: %v", len(grants), grants)
+	}
+	if _, ok := grants["pub1"]; ok {
+		t.Errorf("expected no grant on pub1, but found one (full grants: %v)", grants)
+	}
+	if _, ok := grants["priv1"]; ok {
+		t.Errorf("expected no grant on priv1, but found one (full grants: %v)", grants)
+	}
+}
 
-	if got := grants["pub1"]; got != "ADMIN" {
-		t.Errorf("expected ADMIN grant on pub1, got %q (full grants: %v)", got, grants)
+// TestCreateAgent_ExplicitBoardGrants guards the positive half of
+// the s-1253 contract: when CreateAgent receives a boardGrants
+// array, only those exact (boardId, access) pairs are inserted.
+// The new agent must NOT receive auto-ADMIN on the omitted
+// private board, and the access levels must reflect what the
+// admin asked for (e.g. READ on pub1, ADMIN on priv1 — different
+// access on different boards for the same agent).
+//
+// This is what "Agent 和 用户管理" promised: per-board roles at
+// creation time, no implicit broad grants.
+func TestCreateAgent_ExplicitBoardGrants(t *testing.T) {
+	db := setupUserVisibilityDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/agents", handlers.CreateAgent(db))
+
+	body := map[string]interface{}{
+		"nickname": "scoped-bot",
+		"avatar":   "🤖",
+		"role":     "ADMIN",
+		"boardGrants": []map[string]string{
+			{"boardId": "pub1", "access": "READ"},
+			{"boardId": "priv1", "access": "ADMIN"},
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/agents", bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin1-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Agent struct {
+			ID           string `json:"id"`
+			GrantedCount int    `json:"grantedCount"`
+		} `json:"agent"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Agent.GrantedCount != 2 {
+		t.Errorf("expected grantedCount=2, got %d", resp.Agent.GrantedCount)
+	}
+
+	grants := countAccessRows(t, db, resp.Agent.ID)
+	if got := grants["pub1"]; got != "READ" {
+		t.Errorf("expected READ grant on pub1, got %q (full grants: %v)", got, grants)
 	}
 	if got := grants["priv1"]; got != "ADMIN" {
 		t.Errorf("expected ADMIN grant on priv1, got %q (full grants: %v)", got, grants)
 	}
 	if len(grants) != 2 {
-		t.Errorf("expected 2 board_permissions rows for new agent, got %d: %v", len(grants), grants)
+		t.Errorf("expected exactly 2 board_permissions rows, got %d: %v", len(grants), grants)
+	}
+}
+
+// TestCreateAgent_InvalidBoardGrant covers the validation half of
+// the s-1253 contract: malformed boardGrants entries (unknown
+// access, unknown boardId, empty values) are rejected before any
+// user row is inserted, so an admin typo never leaves a half-applied
+// grant behind.
+func TestCreateAgent_InvalidBoardGrant(t *testing.T) {
+	db := setupUserVisibilityDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/agents", handlers.CreateAgent(db))
+
+	cases := []struct {
+		name    string
+		grants  []map[string]string
+		wantSub string
+	}{
+		{
+			name:    "unknown access is rejected",
+			grants:  []map[string]string{{"boardId": "pub1", "access": "GOD"}},
+			wantSub: "invalid access",
+		},
+		{
+			name:    "unknown board is rejected",
+			grants:  []map[string]string{{"boardId": "ghost-board", "access": "READ"}},
+			wantSub: "unknown board ids",
+		},
+		{
+			name:    "empty access is rejected",
+			grants:  []map[string]string{{"boardId": "pub1", "access": ""}},
+			wantSub: "boardId and access are required",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := map[string]interface{}{
+				"nickname":    "bad-bot",
+				"role":        "ADMIN",
+				"boardGrants": tc.grants,
+			}
+			jsonBody, _ := json.Marshal(body)
+
+			req, _ := http.NewRequest("POST", "/api/agents", bytes.NewBuffer(jsonBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin1-token"})
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.wantSub) {
+				t.Errorf("expected error to contain %q, got %s", tc.wantSub, w.Body.String())
+			}
+
+			// The agent row must have been rolled back so the
+			// caller is not left with an orphan agent whose
+			// name+token works but cannot reach any board.
+			var orphanCount int
+			if err := db.QueryRow(
+				`SELECT COUNT(*) FROM users WHERE type='AGENT' AND nickname='bad-bot'`,
+			).Scan(&orphanCount); err != nil {
+				t.Fatalf("count orphan agents: %v", err)
+			}
+			if orphanCount != 0 {
+				t.Errorf("expected orphan agent to be rolled back, found %d row(s)", orphanCount)
+			}
+		})
 	}
 }

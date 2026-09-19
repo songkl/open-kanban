@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { authApi } from '../services/api';
+import { authApi, boardsApi } from '../services/api';
+import type { Board, PermissionAccess } from '../types/kanban';
 
 interface AvailableAgent {
   id: string;
@@ -49,6 +50,24 @@ export function OAuthDevicePage() {
   const [newAgentRole, setNewAgentRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
   const [creatingAgent, setCreatingAgent] = useState(false);
   const [createAgentError, setCreateAgentError] = useState<string>('');
+  // s-1253: per-board access picker for inline agent creation.
+  // The approver picks zero or more boards; omitted boards mean the
+  // new agent starts with no access on them, matching the new
+  // contract on POST /api/v1/auth/agents.
+  const [availableBoards, setAvailableBoards] = useState<Board[]>([]);
+  const [newAgentBoardAccess, setNewAgentBoardAccess] = useState<Record<string, PermissionAccess>>({});
+
+  const setBoardAccess = (boardID: string, access: PermissionAccess | '') => {
+    setNewAgentBoardAccess((prev) => {
+      const next = { ...prev };
+      if (access === '') {
+        delete next[boardID];
+      } else {
+        next[boardID] = access;
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     authApi
@@ -66,6 +85,13 @@ export function OAuthDevicePage() {
       })
       .catch(() => setNeedsLogin(true));
   }, [navigate]);
+
+  useEffect(() => {
+    boardsApi
+      .getAll()
+      .then((boards) => setAvailableBoards(boards || []))
+      .catch(() => setAvailableBoards([]));
+  }, []);
 
   useEffect(() => {
     if (!code) {
@@ -165,11 +191,12 @@ export function OAuthDevicePage() {
     setCreatingAgent(true);
     setCreateAgentError('');
     try {
+      const boardGrants = Object.entries(newAgentBoardAccess).map(([boardId, access]) => ({ boardId, access }));
       const res = await fetch('/oauth/device/create-agent', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nickname, role: newAgentRole })
+        body: JSON.stringify({ nickname, role: newAgentRole, boardGrants })
       });
       if (res.status === 401) {
         setNeedsLogin(true);
@@ -208,6 +235,7 @@ export function OAuthDevicePage() {
       setShowCreateForm(false);
       setNewAgentNickname('');
       setNewAgentRole('MEMBER');
+      setNewAgentBoardAccess({});
       // Re-pull the canonical row so the picker matches what the server
       // will return on the next approve.
       try {
@@ -418,6 +446,48 @@ export function OAuthDevicePage() {
                           <option value="ADMIN">ADMIN</option>
                           <option value="VIEWER">VIEWER</option>
                         </select>
+                        {availableBoards.length > 0 && (
+                          <div
+                            className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 p-2 space-y-1"
+                            data-testid="inline-agent-board-grants"
+                          >
+                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              {t('oauth.device.createAgentBoardAccessHeading', 'Initial board access')}
+                            </p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
+                              {t('oauth.device.createAgentBoardAccessHelp', 'Optional. Pick zero or more boards; omitted boards mean no access.')}
+                            </p>
+                            <div className="max-h-32 space-y-1 overflow-y-auto">
+                              {availableBoards.map((board) => {
+                                const value = newAgentBoardAccess[board.id] ?? '';
+                                return (
+                                  <div
+                                    key={board.id}
+                                    className="flex items-center gap-2 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 py-1"
+                                  >
+                                    <span className="flex-1 truncate text-xs text-zinc-800 dark:text-zinc-100" title={board.name}>
+                                      {board.name}
+                                    </span>
+                                    <select
+                                      aria-label={t('oauth.device.createAgentBoardAccessFor', { name: board.name })}
+                                      value={value}
+                                      onChange={(e) =>
+                                        setBoardAccess(board.id, e.target.value as PermissionAccess | '')
+                                      }
+                                      className="rounded-md border border-zinc-300 dark:border-zinc-600 px-1 py-0.5 text-xs focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                                      data-testid={`inline-agent-board-access-${board.id}`}
+                                    >
+                                      <option value="">{t('oauth.device.createAgentBoardAccessNone', 'No access')}</option>
+                                      <option value="READ">READ</option>
+                                      <option value="WRITE">WRITE</option>
+                                      <option value="ADMIN">ADMIN</option>
+                                    </select>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         {createAgentError && (
                           <p
                             className="rounded-md bg-red-50 p-2 text-xs text-red-600 dark:bg-red-900/30 dark:text-red-400"
@@ -444,6 +514,7 @@ export function OAuthDevicePage() {
                               setShowCreateForm(false);
                               setCreateAgentError('');
                               setNewAgentNickname('');
+                              setNewAgentBoardAccess({});
                             }}
                             disabled={creatingAgent}
                             className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600 disabled:opacity-50"
