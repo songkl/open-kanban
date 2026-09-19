@@ -1,18 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { Board } from '../types/kanban';
+import type { Board, BoardPermission } from '../types/kanban';
 import { authApi } from '@/services/api';
 import { BoardPermissionsModal } from './BoardPermissionsModal';
-
-interface BoardPermission {
-  id: string;
-  boardId: string;
-  boardName: string;
-  access: string;
-  userId: string;
-  userNickname: string;
-}
 
 interface BoardHeaderProps {
   boards: Board[];

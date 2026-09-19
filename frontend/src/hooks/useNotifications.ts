@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { notificationsApi, type Notification } from '../services/api';
+import { notificationsApi } from '../services/api';
+import type { Notification } from '../types/kanban';
 import { useNotificationStore } from '../store/notificationStore';
 
 interface UseNotificationsOptions {

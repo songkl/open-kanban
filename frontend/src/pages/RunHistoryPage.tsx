@@ -284,7 +284,17 @@ export function RunHistoryPage() {
   };
 
   const noopFiltersState: FilterState = useMemo(
-    () => ({ priority: '', assignee: '', searchQuery: '', dateRange: filters.dateRange, tag: '' }),
+    () => ({
+      priority: '',
+      assignee: '',
+      searchQuery: '',
+      dateRange: filters.dateRange as FilterState['dateRange'],
+      tag: '',
+      customField: { fieldId: '', value: '' },
+      runStatus: '',
+      hasComments: '',
+      hasSubtasks: '',
+    }),
     [filters.dateRange]
   );
 
@@ -355,6 +365,8 @@ export function RunHistoryPage() {
                   filters={noopFiltersState}
                   uniqueAssignees={[]}
                   uniqueTags={[]}
+                  uniqueCustomFieldValues={{}}
+                  customFields={[]}
                   filterPresets={[]}
                   showPresetDropdown={false}
                   onSetFilters={() => undefined}

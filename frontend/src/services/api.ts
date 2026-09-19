@@ -1,4 +1,4 @@
-import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, OAuthProvider, OAuthProviderCreate, OAuthProviderUpdate, TaskRun, Webhook, WebhookCreate, WebhookUpdate, WebhookEventCatalogueEntry, WebhookDelivery } from '@/types/kanban';
+import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, OAuthProvider, OAuthProviderCreate, OAuthProviderUpdate, TaskRun, Webhook, WebhookCreate, WebhookUpdate, WebhookEventCatalogueEntry, WebhookDelivery, BoardPermission, ColumnPermission, DashboardStats, NotificationPreferences, StatusReport } from '@/types/kanban';
 import i18n from '@/i18n';
 
 /**
@@ -973,11 +973,12 @@ interface UploadResult {
 export interface Notification {
   id: string;
   userId: string;
-  source: 'TASK_ASSIGNED' | 'TASK_MENTIONED' | 'RUN_COMPLETED' | 'WEBHOOK_FAILED';
+  source: string;
   title: string;
   body: string;
-  targetType: '' | 'TASK' | 'COMMENT' | 'RUN' | 'WEBHOOK';
-  targetId: string;
+  targetType?: string;
+  targetId?: string;
+  read?: boolean;
   readAt?: string;
   createdAt: string;
 }
@@ -1082,4 +1083,80 @@ export const webhooksApi = {
       hasMore: boolean;
     }>(`webhooks/${id}/deliveries${qs ? `?${qs}` : ''}`);
   },
+};
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; unreadOnly?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.unreadOnly) query.set('unreadOnly', 'true');
+    const qs = query.toString();
+    return fetchApi<{ notifications: Notification[]; count: number; unreadCount: number }>(
+      `notifications${qs ? `?${qs}` : ''}`
+    );
+  },
+  markRead: (id: string) =>
+    fetchApi<{ success: boolean }>(`notifications/${id}/read`, { method: 'POST' }),
+  markAllRead: () =>
+    fetchApi<{ success: boolean }>('notifications/read-all', { method: 'POST' }),
+};
+
+export const notificationPreferencesApi = {
+  get: () =>
+    fetchApi<NotificationPreferences>(
+      'auth/me/notification-preferences'
+    ),
+  update: (prefs: Partial<NotificationPreferences>) =>
+    fetchApi<NotificationPreferences>('auth/me/notification-preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    }),
+};
+
+export const frontendEventsApi = {
+  ingest: (event: { kind: string; message: string; stack?: string; meta?: Record<string, unknown> }) =>
+    fetchApi<{ id: string }>('frontend-events', {
+      method: 'POST',
+      body: JSON.stringify(event),
+    }),
+  list: () => fetchApi<{ events: Array<{ id: string; kind: string; message: string; createdAt: string }>; count: number }>('frontend-events'),
+  getEnabled: () =>
+    fetchApi<{ enabled: boolean }>('frontend-events/config'),
+  getConfig: () =>
+    fetchApi<{ enabled: boolean }>('frontend-events/config'),
+  setEnabled: (enabled: boolean) =>
+    fetchApi<{ enabled: boolean }>('frontend-events/config', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
+  setConfig: (next: { enabled: boolean }) =>
+    fetchApi<{ enabled: boolean }>('frontend-events/config', {
+      method: 'PUT',
+      body: JSON.stringify(next),
+    }),
+};
+
+export const statusApi = {
+  get: () => fetchApi<StatusReport>('status'),
+};
+
+export const oauthDeviceApi = {
+  lookup: (userCode: string) =>
+    fetchApi<{
+      clientId: string;
+      clientName: string;
+      scope: string;
+      expiresAt: string;
+      status: string;
+      agentSelectionRequired?: boolean;
+      agent_selection_required?: boolean;
+      availableAgents?: Array<{ id: string; nickname?: string; username?: string; role?: string }>;
+      available_agents?: Array<{ id: string; nickname?: string; username?: string; role?: string }>;
+      defaultAgentId?: string;
+    }>(`oauth/device/lookup?user_code=${encodeURIComponent(userCode)}`),
+  approve: (data: { userCode: string; decision: 'approve' | 'deny'; agentId?: string }) =>
+    fetchApi<{ approved?: boolean; denied?: boolean; boundTo?: string }>(
+      'oauth/device/approve',
+      { method: 'POST', body: JSON.stringify({ user_code: data.userCode, decision: data.decision, agent_id: data.agentId }) }
+    ),
 };

@@ -12,12 +12,14 @@ import { AgentsSettings } from '../components/settings/AgentsSettings';
 import { UsersSettings } from '../components/settings/UsersSettings';
 import { ShortcutsSettings } from '../components/settings/ShortcutsSettings';
 import { ThemeSettings } from '../components/settings/ThemeSettings';
+import { NotificationsSettings } from '../components/settings/NotificationsSettings';
+import { ErrorReportingSettings } from '../components/settings/ErrorReportingSettings';
 import { WebhooksList } from '../components/settings/WebhooksList';
 import { OAuthSettings } from '../components/OAuthSettings';
 import { useUIStore } from '../store/uiStore';
 import type { User } from '../types/kanban';
 
-type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth' | 'webhooks';
+type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth' | 'webhooks' | 'notifications' | 'errorReporting';
 
 const ALL_TABS: Tab[] = ['profile', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth', 'webhooks'];
 

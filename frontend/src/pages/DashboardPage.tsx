@@ -153,11 +153,11 @@ export function DashboardPage() {
             </div>
             {loading ? (
               <div className="text-sm text-zinc-400">{t('app.loading')}</div>
-            ) : stats.topAgentsByActivity.length === 0 ? (
+            ) : (stats.topAgentsByActivity ?? []).length === 0 ? (
               <div className="text-sm text-zinc-400">{t('dashboard.noAgentActivity')}</div>
             ) : (
               <ol className="space-y-3">
-                {stats.topAgentsByActivity.map((agent, idx) => (
+                {(stats.topAgentsByActivity ?? []).map((agent, idx) => (
                   <li
                     key={agent.userId}
                     data-testid={`dashboard-agent-${agent.userId}`}
@@ -202,11 +202,11 @@ export function DashboardPage() {
             </div>
             {loading ? (
               <div className="text-sm text-zinc-400">{t('app.loading')}</div>
-            ) : stats.longestBlockedCards.length === 0 ? (
+            ) : (stats.longestBlockedCards ?? []).length === 0 ? (
               <div className="text-sm text-zinc-400">{t('dashboard.noBlockedCards')}</div>
             ) : (
               <ul className="space-y-3">
-                {stats.longestBlockedCards.map((card) => (
+                {stats.longestBlockedCards?.map((card) => (
                   <li key={card.taskId}>
                     <Link
                       to={`/board/${card.boardId}/column/${card.columnId}`}

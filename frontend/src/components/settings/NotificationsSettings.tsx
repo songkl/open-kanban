@@ -1,9 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  notificationPreferencesApi,
-  type NotificationPreferences,
-} from '../../services/api';
+import { notificationPreferencesApi } from '../../services/api';
+import type { NotificationPreferences } from '../../types/kanban';
 
 interface ToggleProps {
   id: string;

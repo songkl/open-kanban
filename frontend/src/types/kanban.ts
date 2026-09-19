@@ -102,6 +102,7 @@ export interface Task {
  * successful run looked like a failure on the task detail page.
  */
 export interface TaskRun {
+  id?: string;
   taskId: string;
   runnerId: string;
   agentId: string;
@@ -218,8 +219,6 @@ export interface User {
   lastActiveAt?: string;
 }
 
-export type PermissionAccess = 'READ' | 'WRITE' | 'ADMIN';
-
 export interface Agent extends User {
   tokenCount: number;
   runsLast24h: number;
@@ -237,6 +236,151 @@ export interface Token {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface RunListItem {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  runnerId: string;
+  agentId: string;
+  boardId: string;
+  columnId: string;
+  status: 'claimed' | 'running' | 'completed' | 'failed' | 'released';
+  claimedAt: string;
+  lastHeartbeatAt: string;
+  expiresAt: string;
+  finishedAt?: string | null;
+  exitCode?: number | null;
+  error?: string | null;
+  output?: string | null;
+}
+
+export interface DashboardStats {
+  totalBoards?: number;
+  totalTasks?: number;
+  totalAgents?: number;
+  activeRuns?: number;
+  activeBoardCount?: number;
+  tasksCompletedLast7Days?: number;
+  publishedTasks?: number;
+  draftTasks?: number;
+  archivedTasks?: number;
+  totalColumns?: number;
+  totalUsers?: number;
+  tasksByStatus?: Record<string, number>;
+  tasksByPriority?: Record<string, number>;
+  topAgentsByActivity?: Array<{
+    id: string;
+    userId?: string;
+    nickname: string;
+    runs?: number;
+    activityCount?: number;
+    avatar?: string;
+  }>;
+  longestBlockedCards?: Array<{
+    id: string;
+    taskId?: string;
+    title: string;
+    columnId?: string;
+    columnName?: string;
+    boardId?: string;
+    boardName?: string;
+    priority?: string;
+    blockedDays?: number;
+    daysBlocked?: number;
+  }>;
+  recentActivity?: Array<{
+    id: string;
+    type: string;
+    title: string;
+    createdAt: string;
+  }>;
+  agentHealth?: Array<{
+    id: string;
+    nickname: string;
+    lastHeartbeatAt?: string;
+    runsLast24h: number;
+    failsLast24h: number;
+  }>;
+}
+
+export type DateRangeFilter = 'today' | 'thisWeek' | 'thisMonth' | 'all';
+
+export type FilterState = import('@/hooks/useFilters').FilterState;
+
+export interface CustomFieldsState {
+  [fieldId: string]: string | string[] | number | null;
+}
+
+export type CardDensity = 'compact' | 'standard' | 'detailed';
+
+export interface NotificationPreferences {
+  emailEnabled: boolean;
+  webhookEnabled: boolean;
+  webhookUrl: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  source: string;
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface StatusReport {
+  status: string;
+  version?: string;
+  uptime: string;
+  uptimeSeconds?: number;
+  startedAt: string;
+  migration?: {
+    current: number;
+    target: number;
+    pending: number;
+    lastVersion?: string;
+    lastAppliedAt?: string;
+  };
+  database?: {
+    type: string;
+    connected: boolean;
+    reachable?: boolean;
+    version?: string;
+    migration?: {
+      current: number;
+      target: number;
+      pending: number;
+    };
+  };
+  agents?: {
+    total: number;
+    enabled: number;
+    active?: number;
+  };
+  counts?: {
+    boards?: number;
+    tasks?: number;
+    agents?: number;
+    runs?: number;
+    notifications?: number;
+    activities?: number;
+    activitiesLast24h?: number;
+  };
+  webhooks?: {
+    enabled: boolean;
+    recentFailures: number;
+    lastFailureAt?: string | null;
+  };
+  webhook?: {
+    enabled: boolean;
+    recentFailures: number;
+    lastFailureAt?: string | null;
+  };
+}
+
+export type RunStatusFilter = 'all' | 'running' | 'completed' | 'failed';
 
 export interface OAuthClient {
   id: string;

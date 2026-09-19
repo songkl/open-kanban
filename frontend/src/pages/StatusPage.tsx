@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { statusApi, type StatusReport } from '../services/api';
+import { statusApi } from '../services/api';
+import type { StatusReport } from '../types/kanban';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -226,39 +227,39 @@ export function StatusPage() {
             <StatCard
               testId="status-card-db"
               label={t('statusPage.database', 'Database')}
-              value={report ? `${report.database.type} ${report.database.version}` : '—'}
+              value={report ? `${report.database?.type ?? ''} ${report.database?.version ?? ''}` : '—'}
               hint={report
-                ? report.database.reachable
+                ? report.database?.reachable
                   ? t('statusPage.dbReachable', 'Reachable')
                   : t('statusPage.dbUnreachable', 'Unreachable')
                 : undefined}
-              tone={report && !report.database.reachable ? 'danger' : 'default'}
+              tone={report && !report.database?.reachable ? 'danger' : 'default'}
             />
             <StatCard
               testId="status-card-migration"
               label={t('statusPage.lastMigration', 'Last migration')}
-              value={report?.migration.lastVersion || '—'}
-              hint={report?.migration.lastAppliedAt
+              value={report?.migration?.lastVersion || '—'}
+              hint={report?.migration?.lastAppliedAt
                 ? formatTimestamp(report.migration.lastAppliedAt)
                 : t('statusPage.noMigration', 'No migrations recorded yet')}
             />
             <StatCard
               testId="status-card-tasks"
               label={t('statusPage.totalTasks', 'Total tasks')}
-              value={report?.counts.tasks ?? 0}
+              value={report?.counts?.tasks ?? 0}
               hint={report
                 ? t('statusPage.runsLast24h', '{{count}} runs / 24h', {
-                    count: report.counts.activitiesLast24h,
+                    count: report.counts?.activitiesLast24h,
                   })
                 : undefined}
             />
             <StatCard
               testId="status-card-runs"
               label={t('statusPage.totalRuns', 'Total runs')}
-              value={report?.counts.activities ?? 0}
+              value={report?.counts?.activities ?? 0}
               hint={report
                 ? t('statusPage.totalRunsHint', '{{count}} lifetime activities', {
-                    count: report.counts.activities,
+                    count: report.counts?.activities,
                   })
                 : undefined}
             />
@@ -273,15 +274,15 @@ export function StatusPage() {
             <StatCard
               testId="status-card-agents-total"
               label={t('statusPage.agentsTotal', 'Registered agents')}
-              value={report?.agents.total ?? 0}
+              value={report?.agents?.total ?? 0}
             />
             <StatCard
               testId="status-card-agents-active"
               label={t('statusPage.agentsActive', 'Active (last 5 min)')}
-              value={report?.agents.active ?? 0}
-              tone={report && report.agents.total > 0 && report.agents.active === 0 ? 'warn' : 'default'}
+              value={report?.agents?.active ?? 0}
+              tone={report && (report.agents?.total ?? 0) > 0 && (report.agents?.active ?? 0) === 0 ? 'warn' : 'default'}
               hint={
-                report && report.agents.total > 0 && report.agents.active === 0
+                report && (report.agents?.total ?? 0) > 0 && (report.agents?.active ?? 0) === 0
                   ? t('statusPage.agentsIdle', 'No recent agent activity')
                   : undefined
               }
@@ -299,13 +300,13 @@ export function StatusPage() {
               label={t('statusPage.webhookState', 'Webhook')}
               value={
                 report
-                  ? report.webhook.enabled
+                  ? report.webhook?.enabled
                     ? t('statusPage.webhookEnabled', 'Enabled')
                     : t('statusPage.webhookDisabled', 'Disabled')
                   : '—'
               }
               hint={report
-                ? report.webhook.enabled
+                ? report.webhook?.enabled
                   ? t('statusPage.webhookConfigured', 'Outbound notifications are configured')
                   : t('statusPage.webhookNotConfigured', 'WEBHOOK_ENABLED is not set to true')
                 : undefined}
@@ -313,12 +314,12 @@ export function StatusPage() {
             <StatCard
               testId="status-card-webhook-failures"
               label={t('statusPage.webhookFailures', 'Failures (24h)')}
-              value={report?.webhook.recentFailures ?? 0}
-              hint={report?.webhook.lastFailureAt
+              value={report?.webhook?.recentFailures ?? 0}
+              hint={report?.webhook?.lastFailureAt
                 ? `${t('statusPage.lastFailure', 'Last failure')}: ${formatTimestamp(report.webhook.lastFailureAt)}`
                 : t('statusPage.noFailures', 'No recent failures')}
               tone={
-                report && report.webhook.enabled && report.webhook.recentFailures > 0
+                report && report.webhook?.enabled && (report.webhook?.recentFailures ?? 0) > 0
                   ? 'warn'
                   : 'default'
               }

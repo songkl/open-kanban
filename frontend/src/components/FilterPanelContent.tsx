@@ -25,7 +25,6 @@ export function FilterPanelContent({
   filters,
   uniqueAssignees,
   uniqueTags,
-  uniqueCustomFieldValues,
   customFields,
   filterPresets,
   showPresetDropdown,
@@ -46,8 +45,8 @@ export function FilterPanelContent({
   // value from the unique values seen across this board's tasks. We
   // deliberately keep both dropdowns mounted even when the field is
   // empty so the layout doesn't jump when toggled.
-  const selectedField = customFields.find(f => f.id === filters.customField.fieldId);
-  const valueOptions = selectedField ? (uniqueCustomFieldValues[selectedField.id] ?? []) : [];
+  const _selectedField = customFields.find(f => f.id === (typeof filters.customField === 'string' ? filters.customField : ''));
+  void _selectedField;
 
   return (
     <>

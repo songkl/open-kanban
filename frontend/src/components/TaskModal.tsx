@@ -3,13 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { UserAvatar } from './UserAvatar';
 import { useTaskRun } from '../hooks/useTaskRun';
-import type { TaskRun } from '@/types/kanban';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useCustomFields } from '../hooks/useCustomFields';
+import type { TaskRun, CustomField } from '@/types/kanban';
 import type { Task, Attachment, Column, Agent, Subtask, Comment } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
-import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi, tasksApi } from '@/services/api';
+import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
+import { RunTimeline } from './RunTimeline';
+import { CustomFieldEditor } from './CustomFieldEditor';
 
 const STORAGE_KEY = 'kanban-username';
 

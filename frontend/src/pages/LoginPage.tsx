@@ -45,8 +45,11 @@ function generateStateNonce(): string {
 }
 
 export function LoginPage() {
-  const { t, i18n } = useTranslation();
+  const { t, i18n: i18nInstance } = useTranslation();
   const navigate = useNavigate();
+  const handleLanguageToggle = useCallback(() => {
+    void i18nInstance.changeLanguage(i18nInstance.language === 'zh' ? 'en' : 'zh');
+  }, [i18nInstance]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -234,7 +237,7 @@ export function LoginPage() {
             aria-label={t('nav.language')}
             className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
           >
-            {i18n.language === 'zh' ? t('language.en') : t('language.zh')}
+            {i18nInstance.language === 'zh' ? t('language.en') : t('language.zh')}
           </button>
         </div>
 

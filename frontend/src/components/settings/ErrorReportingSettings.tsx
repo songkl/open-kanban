@@ -132,7 +132,7 @@ export function ErrorReportingSettings({ isAdmin = false }: { isAdmin?: boolean 
       setSaving(true);
       setError(null);
       try {
-        const cfg = await frontendEventsApi.setConfig(next);
+        const cfg = await frontendEventsApi.setConfig({ enabled: next });
         setAdminEnabled(cfg.enabled);
         flashSuccess(t('settings.errorReporting.saved'));
       } catch (err) {

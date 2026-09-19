@@ -2,10 +2,13 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useState, useId, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CustomField, Task, TaskRun } from '@/types/kanban';
+import type { CardDensity, CustomField, Task, TaskRun } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
 import { UserAvatar } from './UserAvatar';
 import { useTaskRun } from '../hooks/useTaskRun';
+import { TaskRunIndicator } from './TaskRunIndicator';
+import { CustomFieldChips } from './CustomFieldChips';
+import { getDueDateMeta } from '../utils/dueDate';
 
 interface TaskCardProps {
   task: Task;
@@ -142,7 +145,7 @@ function RunnerBadge({
   );
 }
 
-export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect }: TaskCardProps) {
+export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run: runProp, customFields, density }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
   const taskId = task?.id ?? `temp-${randomId}`;
@@ -161,7 +164,8 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
   // Poll for an in-flight CLI runner. The badge only renders when the
   // server returns a live `task_runs` row (claimed or running); a 404
   // flips `run` back to null and the badge disappears.
-  const { run } = useTaskRun(task?.id, { intervalMs: 5000 });
+  const { run: polledRun } = useTaskRun(task?.id, { intervalMs: 5000 });
+  const run = runProp ?? polledRun;
 
   const {
     attributes,
@@ -229,7 +233,8 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
   // priority + due-date row in the footer stays consistent for the
   // same input — also avoids re-parsing the date on every scroll
   // tick from the virtualised list.
-  const dueDateMeta = useMemo(() => (task.dueAt ? getDueDateMeta(task.dueAt) : null), [task.dueAt]);
+  const _dueDateMeta = useMemo(() => (task.dueAt ? getDueDateMeta(task.dueAt) : null), [task.dueAt]);
+  void _dueDateMeta;
 
   return (
     <div

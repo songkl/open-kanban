@@ -11,7 +11,6 @@ export { BoardActionsMenu } from './BoardActionsMenu';
 export { BoardCard } from './BoardCard';
 export { BoardColumnPermissionsModal } from './BoardColumnPermissionsModal';
 export { BoardPermissionsModal } from './BoardPermissionsModal';
-export { BulkBoardPermissionForm } from './BulkBoardPermissionForm';
 export { BoardSelector } from './BoardSelector';
 export { BoardToolbar } from './BoardToolbar';
 export { Column } from './Column';
@@ -43,3 +42,9 @@ export { TemplateList } from './TemplateList';
 export { TemplateNameModal } from './TemplateNameModal';
 export { UserAvatar } from './UserAvatar';
 export { WsWarning } from './WsWarning';
+
+export { TaskRunIndicator } from './TaskRunIndicator';
+export { RunTimeline } from './RunTimeline';
+export { CustomFieldChips } from './CustomFieldChips';
+export { CustomFieldEditor } from './CustomFieldEditor';
+export { NotificationCenter } from './NotificationCenter';
