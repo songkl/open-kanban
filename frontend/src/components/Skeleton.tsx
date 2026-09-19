@@ -85,7 +85,7 @@ export function TaskModalSkeleton() {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 overflow-y-auto"
       data-testid="task-modal-skeleton"
     >
-      <div className="relative z-10 flex flex-col bg-white dark:bg-zinc-800 rounded-xl shadow-xl overflow-hidden h-full max-h-[calc(100vh-4rem)] my-8 mx-auto max-w-7xl w-full">
+      <div className="relative z-10 flex flex-col bg-white dark:bg-zinc-800 rounded-xl shadow-xl outline-none overflow-hidden h-full max-h-[calc(100vh-4rem)] my-8 mx-auto max-w-7xl">
         {/* Header skeleton */}
         <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-700 px-6 py-4">
           <div className="flex items-center gap-3 flex-wrap">
