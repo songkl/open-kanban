@@ -43,6 +43,19 @@ export function useFocusTrap<T extends HTMLElement>(
   const containerRef = useRef<T>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
+  // Keep the latest callback / initial-focus target in refs so the trap
+  // setup below only depends on `enabled` / `restoreFocus`. Callers
+  // routinely pass inline `onClose` / `onEscape` closures that get a new
+  // identity on every parent render (WebSocket ticks, polling, board
+  // re-renders). If the effect depended on them it would re-run
+  // `focusInitial()` mid-edit and steal focus back to the first field
+  // while the user is typing in a later field (the description-jumps-to-
+  // title bug).
+  const onEscapeRef = useRef(onEscape);
+  const initialFocusRef = useRef(initialFocus);
+  onEscapeRef.current = onEscape;
+  initialFocusRef.current = initialFocus;
+
   useEffect(() => {
     if (!enabled) return undefined;
 
@@ -52,11 +65,12 @@ export function useFocusTrap<T extends HTMLElement>(
     restoreRef.current = (document.activeElement as HTMLElement | null) ?? null;
 
     const focusInitial = () => {
-      if (initialFocus instanceof HTMLElement) {
-        initialFocus.focus();
+      const target = initialFocusRef.current;
+      if (target instanceof HTMLElement) {
+        target.focus();
         return;
       }
-      if (initialFocus === 'container') {
+      if (target === 'container') {
         container.focus();
         return;
       }
@@ -71,9 +85,10 @@ export function useFocusTrap<T extends HTMLElement>(
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && onEscape) {
+      const escape = onEscapeRef.current;
+      if (event.key === 'Escape' && escape) {
         event.stopPropagation();
-        onEscape();
+        escape();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -108,7 +123,7 @@ export function useFocusTrap<T extends HTMLElement>(
         restoreRef.current.focus();
       }
     };
-  }, [enabled, initialFocus, onEscape, restoreFocus]);
+  }, [enabled, restoreFocus]);
 
   return containerRef as React.RefObject<T>;
 }

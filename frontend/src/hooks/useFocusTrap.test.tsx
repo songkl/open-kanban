@@ -153,4 +153,22 @@ describe('useFocusTrap', () => {
     render(<DynamicHarness />);
     expect(screen.getByTestId('dynamic')).toBeInTheDocument();
   });
+
+  it('does not steal focus back when onEscape changes identity mid-session', () => {
+    // Regression: callers pass inline onClose / onEscape closures, so
+    // every parent re-render (WebSocket tick, polling) gave onEscape a
+    // new identity. The trap used to re-run focusInitial() on that
+    // change and yank focus from the field the user was typing in back
+    // to the first focusable (title). Re-rendering with a fresh
+    // onEscape must leave the active element alone.
+    const { rerender } = render(<TrapHarness onEscape={() => {}} />);
+    const input = screen.getByRole('textbox');
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    // Simulate the parent re-rendering with a brand-new callback.
+    rerender(<TrapHarness onEscape={() => {}} />);
+
+    expect(document.activeElement).toBe(input);
+  });
 });
