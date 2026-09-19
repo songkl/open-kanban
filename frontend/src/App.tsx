@@ -23,6 +23,7 @@ const RunsPage = lazy(() => import('./pages/RunsPage').then(m => ({ default: m.R
 const SearchPage = lazy(() => import('./pages/SearchPage').then(m => ({ default: m.SearchPage })));
 const TemplateMarketplacePage = lazy(() => import('./pages/TemplateMarketplacePage').then(m => ({ default: m.TemplateMarketplacePage })));
 const OnboardingWizardPage = lazy(() => import('./pages/OnboardingWizardPage').then(m => ({ default: m.OnboardingWizardPage })));
+const AgentConfigWizardPage = lazy(() => import('./pages/AgentConfigWizardPage').then(m => ({ default: m.AgentConfigWizardPage })));
 const PublicBoardPage = lazy(() => import('./pages/PublicBoardPage').then(m => ({ default: m.PublicBoardPage })));
 const StatusPage = lazy(() => import('./pages/StatusPage').then(m => ({ default: m.StatusPage })));
 
@@ -93,6 +94,7 @@ function App() {
         <Route path="/templates/marketplace" element={<ShellWrapper><TemplateMarketplacePage /></ShellWrapper>} />
         <Route path="/templates" element={<Navigate to="/templates/marketplace" replace />} />
         <Route path="/onboarding" element={<ShellWrapper><OnboardingWizardPage /></ShellWrapper>} />
+        <Route path="/onboarding/agent-config" element={<ShellWrapper><AgentConfigWizardPage /></ShellWrapper>} />
         <Route path="/public/b/:token" element={<PublicBoardPage />} />
         <Route path="/status" element={<StatusPage />} />
       </Routes>

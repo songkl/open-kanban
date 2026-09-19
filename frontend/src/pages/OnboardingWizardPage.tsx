@@ -73,6 +73,17 @@ export function OnboardingWizardPage() {
     demoTaskId?: string;
   } | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
+  const [cmdCopied, setCmdCopied] = useState<null | 'login' | 'init' | 'run'>(null);
+
+  const copyText = useCallback(async (text: string, slot: 'login' | 'init' | 'run') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCmdCopied(slot);
+      setTimeout(() => setCmdCopied((current) => (current === slot ? null : current)), 2000);
+    } catch {
+      setSubmitError(t('onboarding.copyFailed'));
+    }
+  }, [t]);
 
   const fetchPresets = useCallback(async () => {
     setLoadingPresets(true);
@@ -378,6 +389,7 @@ export function OnboardingWizardPage() {
                   <button
                     type="button"
                     onClick={handleCopyToken}
+                    data-testid="copy-agent-token"
                     className="shrink-0 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white hover:bg-purple-600 transition-colors"
                   >
                     {tokenCopied ? t('onboarding.copied') : t('onboarding.copy')}
@@ -386,6 +398,92 @@ export function OnboardingWizardPage() {
                 <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                   {t('onboarding.agentTokenHint')}
                 </p>
+              </div>
+            )}
+
+            {result.agentToken && (
+              <div className="mb-6 rounded-xl border border-blue-200 dark:border-blue-700/60 bg-blue-50 dark:bg-blue-900/20 p-4 text-left">
+                <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-1">
+                  {t('onboarding.runAgentSectionTitle')}
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+                  {t('onboarding.runAgentSectionHint')}
+                </p>
+                <ul className="space-y-3">
+                  <li>
+                    <p className="mb-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      {t('onboarding.runAgentStep1Label')}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code
+                        data-testid="cmd-login"
+                        className="flex-1 break-all rounded-md bg-zinc-900 px-3 py-2 text-xs font-mono text-emerald-300"
+                      >
+                        kanban auth login
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText('kanban auth login', 'login')}
+                        className="shrink-0 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                      >
+                        {cmdCopied === 'login' ? t('onboarding.copied') : t('onboarding.copy')}
+                      </button>
+                    </div>
+                  </li>
+                  <li>
+                    <p className="mb-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      {t('onboarding.runAgentStep2Label')}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code
+                        data-testid="cmd-init"
+                        className="flex-1 break-all rounded-md bg-zinc-900 px-3 py-2 text-xs font-mono text-emerald-300"
+                      >
+                        kanban run init
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText('kanban run init', 'init')}
+                        className="shrink-0 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                      >
+                        {cmdCopied === 'init' ? t('onboarding.copied') : t('onboarding.copy')}
+                      </button>
+                    </div>
+                  </li>
+                  <li>
+                    <p className="mb-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      {t('onboarding.runAgentStep3Label')}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code
+                        data-testid="cmd-run"
+                        className="flex-1 break-all rounded-md bg-zinc-900 px-3 py-2 text-xs font-mono text-emerald-300"
+                      >
+                        kanban run --mine
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText('kanban run --mine', 'run')}
+                        className="shrink-0 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                      >
+                        {cmdCopied === 'run' ? t('onboarding.copied') : t('onboarding.copy')}
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => navigate('/onboarding/agent-config', { state: { agentToken: result.agentToken } })}
+                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {t('onboarding.runAgentStep4Action')}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+                <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  {t('onboarding.runAgentStep4Label')}
+                </span>
               </div>
             )}
 

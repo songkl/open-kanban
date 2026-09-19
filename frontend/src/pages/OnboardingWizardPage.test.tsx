@@ -196,4 +196,48 @@ describe('OnboardingWizardPage', () => {
       expect(screen.getByTestId('location')).toHaveTextContent('/board/new-board-id');
     });
   });
+
+  it('surfaces the run-the-agent CLI commands with copy buttons on the done screen (s-1245)', async () => {
+    mockedGetAll.mockResolvedValue([
+      makePreset({ slug: 'alpha', name: 'Alpha preset' }),
+    ]);
+    mockedQuickstart.mockResolvedValue({
+      boardId: 'new-board-id',
+      boardName: 'Alpha preset',
+      agentId: 'a',
+      agentToken: 'agent-secret-token',
+      demoTaskId: 'task',
+    });
+
+    if (!navigator.clipboard) {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: vi.fn() },
+        configurable: true,
+      });
+    }
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    (navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText = writeText;
+
+    renderWizard(['/onboarding?preset=alpha']);
+
+    await waitFor(() => {
+      expect(screen.getByText('onboarding.step2Title')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /onboarding.create/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cmd-login')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('cmd-login')).toHaveTextContent('kanban auth login');
+    expect(screen.getByTestId('cmd-init')).toHaveTextContent('kanban run init');
+    expect(screen.getByTestId('cmd-run')).toHaveTextContent('kanban run --mine');
+
+    const loginCopy = screen.getAllByRole('button', { name: /onboarding.copy/ }).filter(
+      (btn) => btn.parentElement?.querySelector('[data-testid="cmd-login"]'),
+    );
+    fireEvent.click(loginCopy[0]);
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('kanban auth login');
+    });
+  });
 });
