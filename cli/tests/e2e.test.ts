@@ -533,7 +533,10 @@ describe("CLI end-to-end (auth login → boards list → tasks list → task com
       const oauth = new OAuthClient(API_URL, METADATA, provider);
       const capLogin = makeCapture();
       const loginResult = await runLogin(
-        { apiUrl: API_URL, profile: "default" },
+        // s-1231: default `kanban auth login` now binds to an Agent.
+        // This Phase 1 happy-path walks the legacy human-binding flow
+        // so the underlying OAuth plumbing is exercised end-to-end.
+        { apiUrl: API_URL, profile: "default", mode: "human" },
         { oauth, io: capLogin.io }
       );
       expect(loginResult.credentials?.accessToken).toBe("at-journey-1");

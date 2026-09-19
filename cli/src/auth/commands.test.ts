@@ -162,7 +162,7 @@ describe("runLogin", () => {
     void onPrompt;
     const cap = makeCapture();
     const result = await runLogin(
-      { apiUrl: "http://localhost:8080" },
+      { apiUrl: "http://localhost:8080", mode: "human" },
       { oauth, io: cap.io }
     );
     const { stderr } = cap.read();
@@ -189,7 +189,10 @@ describe("runLogin", () => {
       }),
     });
     const cap = makeCapture();
-    await runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io });
+    await runLogin(
+      { apiUrl: "http://localhost:8080", mode: "human" },
+      { oauth, io: cap.io }
+    );
     const { stderr } = cap.read();
     expect(stderr).toMatch(/Identity selection/);
     expect(stderr).toMatch(/Agent/);
@@ -224,7 +227,10 @@ describe("runLogin", () => {
       clientName: "kanban-webapp",
       accessToken: "stale",
     });
-    await runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io });
+    await runLogin(
+      { apiUrl: "http://localhost:8080", mode: "human" },
+      { oauth, io: cap.io }
+    );
     const { stderr } = cap.read();
     expect(stderr).not.toMatch(/Identity selection/);
   });
@@ -237,7 +243,10 @@ describe("runLogin", () => {
     });
     const cap = makeCapture();
     await expect(
-      runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io })
+      runLogin(
+        { apiUrl: "http://localhost:8080", mode: "human" },
+        { oauth, io: cap.io }
+      )
     ).rejects.toBeInstanceOf(DeniedAuthorizationError);
     expect(authExitCodeForError(new DeniedAuthorizationError("user denied"))).toBe(3);
   });
@@ -250,7 +259,10 @@ describe("runLogin", () => {
     });
     const cap = makeCapture();
     await expect(
-      runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io })
+      runLogin(
+        { apiUrl: "http://localhost:8080", mode: "human" },
+        { oauth, io: cap.io }
+      )
     ).rejects.toBeInstanceOf(DeniedAuthorizationError);
     expect(authExitCodeForError(new DeniedAuthorizationError("device code expired", "expired_token"))).toBe(3);
   });
@@ -263,7 +275,10 @@ describe("runLogin", () => {
     });
     const cap = makeCapture();
     await expect(
-      runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io })
+      runLogin(
+        { apiUrl: "http://localhost:8080", mode: "human" },
+        { oauth, io: cap.io }
+      )
     ).rejects.toBeInstanceOf(NetworkError);
     expect(authExitCodeForError(new NetworkError("boom"))).toBe(6);
   });
@@ -293,7 +308,7 @@ describe("runLogin", () => {
     });
     const cap = makeCapture();
     const result = await runLogin(
-      { apiUrl: "http://localhost:8080" },
+      { apiUrl: "http://localhost:8080", mode: "human" },
       { oauth, io: cap.io }
     );
     expect(authorize).toHaveBeenCalledTimes(2);
@@ -319,11 +334,198 @@ describe("runLogin", () => {
     });
     const cap = makeCapture();
     await expect(
-      runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io })
+      runLogin(
+        { apiUrl: "http://localhost:8080", mode: "human" },
+        { oauth, io: cap.io }
+      )
     ).rejects.toThrow(/server unavailable/);
     expect(authorize).toHaveBeenCalledTimes(2);
     const { stderr } = cap.read();
     expect(stderr).toMatch(/Login failed/);
+  });
+});
+
+// s-1231: `kanban auth login` defaults to binding the CLI to an
+// Agent identity (since the CLI is almost always wired to an
+// unattended runner). The legacy human-binding behaviour is
+// available via `mode: 'human'` and exercised by the tests above.
+describe("runLogin (agent mode)", () => {
+  beforeEach(() => {
+    delete process.env.KANBAN_API_URL;
+    delete process.env.KANBAN_CLI_PROFILE;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Stub the OAuthClient so the device flow resolves to a canned
+  // token, and let the test fake /api/v1/users/me via scriptFetch
+  // (see commands/agents.test.ts for the established pattern).
+  function makeAgentReadyOAuth() {
+    const oauth = makeFakeOAuth({
+      authorize: vi.fn(async (params: { onPrompt?: (p: TrackedPoll) => Promise<"approve" | "deny"> }) => {
+        await params.onPrompt?.(makePoll());
+        return {
+          access_token: "at-agent",
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "kanban:read",
+        };
+      }),
+    });
+    return oauth;
+  }
+
+  it("throws a configuration error when deps.http is missing", async () => {
+    const oauth = makeAgentReadyOAuth();
+    const cap = makeCapture();
+    await expect(
+      runLogin({ apiUrl: "http://localhost:8080" }, { oauth, io: cap.io })
+    ).rejects.toThrow(/requires the HTTP client/);
+  });
+
+  it("defaults to agent mode and binds under the agent-token marker when the bound user is AGENT", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(
+        JSON.stringify({ user: { id: "agent-1", type: "AGENT", nickname: "ci-runner" } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const oauth = makeAgentReadyOAuth();
+    const cap = makeCapture();
+    const result = await runLogin(
+      { apiUrl: "http://localhost:8080" },
+      { oauth, http: new HttpClient({ apiUrl: "http://localhost:8080" }), io: cap.io }
+    );
+    expect(result.agent?.id).toBe("agent-1");
+    expect(result.agent?.type).toBe("AGENT");
+    const stored = oauth.loadCredentials();
+    expect(stored?.clientId).toBe("agent:agent-1");
+    expect(stored?.clientName).toBe("kanban-cli/agent-token");
+    expect(stored?.accessToken).toBe("at-agent");
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/agent authorization/i);
+    expect(stderr).toMatch(/bind existing agent|create new agent/i);
+    expect(stderr).toMatch(/Logged in to/);
+  });
+
+  it("skips the browser launch when openBrowser=false", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(
+        JSON.stringify({ user: { id: "agent-1", type: "AGENT", nickname: "x" } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const oauth = makeAgentReadyOAuth();
+    const cap = makeCapture();
+    const openSpy = vi.fn();
+    await runLogin(
+      { apiUrl: "http://localhost:8080", openBrowser: false },
+      {
+        oauth,
+        http: new HttpClient({ apiUrl: "http://localhost:8080" }),
+        io: cap.io,
+      }
+    );
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it("invokes the injected openBrowserImpl with the deep-link verification URL", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(
+        JSON.stringify({ user: { id: "agent-1", type: "AGENT", nickname: "x" } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const oauth = makeAgentReadyOAuth();
+    const openSpy = vi.fn();
+    await runLogin(
+      { apiUrl: "http://localhost:8080" },
+      {
+        oauth,
+        http: new HttpClient({ apiUrl: "http://localhost:8080" }),
+        openBrowserImpl: openSpy,
+      }
+    );
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(
+      "http://localhost:8080/oauth/device?code=ABCD-EFGH"
+    );
+  });
+
+  it("refuses to bind and restores previous credentials when the bound user is HUMAN", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          user: { id: "admin-1", type: "HUMAN", nickname: "Alice" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const oauth = makeAgentReadyOAuth();
+    // Pre-seed a valid previous credential so we can verify the
+    // failure path restores it instead of clearing the store.
+    oauth.secretProvider.write({
+      apiUrl: "http://localhost:8080",
+      clientId: "agent:old-runner",
+      clientName: "kanban-cli/agent-token",
+      accessToken: "at-old",
+    });
+    const cap = makeCapture();
+    await expect(
+      runLogin(
+        { apiUrl: "http://localhost:8080" },
+        {
+          oauth,
+          http: new HttpClient({ apiUrl: "http://localhost:8080" }),
+          io: cap.io,
+        }
+      )
+    ).rejects.toThrow(/requires an Agent token/);
+    const stored = oauth.loadCredentials();
+    expect(stored?.clientId).toBe("agent:old-runner");
+    expect(stored?.accessToken).toBe("at-old");
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Refusing to bind/);
+  });
+
+  it("maps user denial to DeniedAuthorizationError (exit 3) in agent mode", async () => {
+    const oauth = makeFakeOAuth({
+      authorize: vi.fn(async () => {
+        throw new Error("user denied authorization");
+      }),
+    });
+    const cap = makeCapture();
+    await expect(
+      runLogin(
+        { apiUrl: "http://localhost:8080" },
+        {
+          oauth,
+          http: new HttpClient({ apiUrl: "http://localhost:8080" }),
+          io: cap.io,
+        }
+      )
+    ).rejects.toBeInstanceOf(DeniedAuthorizationError);
+  });
+
+  it("maps network failures during /api/v1/users/me to a typed error", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      throw new Error("fetch failed: ECONNREFUSED");
+    });
+    const oauth = makeAgentReadyOAuth();
+    const cap = makeCapture();
+    await expect(
+      runLogin(
+        { apiUrl: "http://localhost:8080" },
+        {
+          oauth,
+          http: new HttpClient({ apiUrl: "http://localhost:8080" }),
+          io: cap.io,
+        }
+      )
+    ).rejects.toThrow(/network error/);
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Network error/);
   });
 });
 

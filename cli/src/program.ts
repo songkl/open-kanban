@@ -212,12 +212,27 @@ export function createProgram(
 
   authCmd
     .command("login")
-    .description("start OAuth 2.1 device flow and persist credentials")
-    .action(async () => {
+    .description(
+      "start the OAuth device flow and bind the CLI to an Agent identity by default (s-1231); pass --as-human to bind to your own account"
+    )
+    .option(
+      "--as-human",
+      "bind the token to the human approver's account instead of the default Agent identity (s-1231)"
+    )
+    .option(
+      "--no-open",
+      "do not launch the verification URL in the default browser (agent mode only)"
+    )
+    .action(async (cmdOpts: { asHuman?: boolean; open?: boolean }) => {
       try {
         await runLogin(
-          { apiUrl: opts.apiUrl, profile: opts.profile },
-          { oauth }
+          {
+            apiUrl: opts.apiUrl,
+            profile: opts.profile,
+            mode: cmdOpts.asHuman ? "human" : "agent",
+            openBrowser: cmdOpts.open !== false,
+          },
+          { oauth, http }
         );
       } catch (err) {
         process.stderr.write(`${(err as Error).message}\n`);

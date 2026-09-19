@@ -90,10 +90,10 @@ export KANBAN_API_URL="https://kanban.example.com"
 # 2. Log in via the OAuth 2.1 device flow
 kanban auth login
 #   → follow the printed URL, paste the user code, approve in your browser
-#   → if the server detects a CLI / MCP client it will show an
-#     "Authorise as" selector — pick **Myself** to bind the token to
-#     your own account, or pick an enabled Agent (the default if
-#     `oauth_device_agent_id` is pinned globally). See
+#   → since s-1231 the CLI defaults to Agent binding, so pick **Bind existing agent**
+#     or **Create new agent** on the approval page; picking "Myself" makes
+#     the CLI refuse to persist the token. Pass `--as-human` to opt back
+#     into the legacy human-binding flow. See
 #     [Device-flow Agent selection](../docs/CLI_COMMANDS.md#device-flow-agent-selection).
 
 # 3. Inspect the workspace
@@ -109,21 +109,27 @@ kanban tasks move <id> --status in_progress
 kanban tasks complete <id>      # advances to the next column
 ```
 
-> **Heads-up for `kanban run` operators:** every `kanban run`
-> deployment *must* end up holding a bearer whose
-> `users.type='AGENT'`. When approving the device flow, pick an Agent
-> from the selector — picking "Myself" would leave you unable to claim
-> tasks at `/api/v1/runs/claim`. The end-to-end walkthrough lives in
-> [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to).
+> **Heads-up for `kanban run` operators:** since s-1231, the default
+> `kanban auth login` already binds the CLI to an Agent identity —
+> the device flow runs, the verification URL is launched in your
+> default browser, and the resulting token is verified against
+> `/api/v1/users/me`. If you accidentally approve as "Myself" the
+> command refuses to overwrite your credentials and tells you to
+> retry, so it is safe to run on top of an existing session. Add
+> `--no-open` to skip the browser launch on headless / CI runners.
 >
-> Prefer a single command? `kanban auth agent login` runs the same
-> device flow, launches the verification URL in your default browser,
-> and binds the resulting token to whichever Agent identity you pick
-> on the approval page (existing or freshly created). If the bound
-> user is HUMAN, the command refuses to overwrite your credentials and
-> tells you to retry — so it is safe to run on top of an existing
-> `kanban auth login` session. Add `--no-open` to skip the browser
-> launch on headless / CI runners.
+> Need the legacy human-binding behaviour instead (e.g. you are
+> driving the dashboard from the terminal and want to authorise as
+> your own account)? Pass `--as-human`:
+>
+> ```bash
+> kanban auth login --as-human
+> ```
+>
+> The end-to-end walkthrough lives in
+> [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to).
+> `kanban auth agent login` remains available as an explicit alias
+> for the agent-binding flow.
 
 The CLI stores the issued tokens at
 `$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json` (mode `0600`). The

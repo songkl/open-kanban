@@ -76,10 +76,10 @@ export KANBAN_API_URL="https://kanban.example.com"
 # 2. 通过 OAuth 2.1 device flow 登录
 kanban auth login
 #   → 按提示访问 URL、输入用户码、在浏览器中确认授权
-#   → 如果 server 检测到是 CLI / MCP client，会额外展示一个
-#     "Authorise as" 选择器——选 **Myself** 表示把 token 绑到你
-#     自己的账号，选一个已启用的 Agent（如果 admin 在
-#     `oauth_device_agent_id` 里配了全局默认，就会被预选中）。
+#   → 自 s-1231 起 CLI 默认以 Agent 身份绑定，授权页请选择
+#     **Bind existing agent** 或 **Create new agent**；选 "Myself"
+#     会让 CLI 拒绝持久化 token。如果想要旧的"以人账号绑定"
+#     行为，加 `--as-human` 即可。
 #     详见 [Device-flow Agent 选择](../docs/CLI_COMMANDS.md#device-flow-agent-selection)。
 
 # 3. 检查工作区
@@ -95,18 +95,22 @@ kanban tasks move <id> --status in_progress
 kanban tasks complete <id>      # 推进到下一列
 ```
 
-> **给 `kanban run` 运维者的提示：** 每个 `kanban run` 部署**必须**
-> 持有 `users.type='AGENT'` 的 bearer。在 device flow 授权页请选择
-> 一个 Agent——选 "Myself" 会让 `/api/v1/runs/claim` 抢不到任务。
+> **给 `kanban run` 运维者的提示：** 自 s-1231 起，`kanban auth login`
+> 已经默认以 Agent 身份绑定——device flow 跑完之后会用
+> `/api/v1/users/me` 校验返回的 token 类型，如果不小心选成
+> "Myself" 命令会拒绝持久化并提示重试，所以叠加在已有 session
+> 上运行是安全的。无头 / CI 环境可加 `--no-open` 跳过浏览器调用。
+>
+> 如果你需要旧的"以个人账号登录"行为（比如想在终端里直接驱动
+> 看板），加 `--as-human` 即可：
+>
+> ```bash
+> kanban auth login --as-human
+> ```
+>
 > 端到端教程见
 > [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to)。
->
-> 如果你想一步搞定，可以直接用 `kanban auth agent login`：它执行
-> 相同的 device flow，会在系统默认浏览器里自动打开授权页面，并在
-> 你选好"绑定已有 Agent / 新建 Agent"之后把 token 以 Agent 身份
-> 持久化。如果绑定到的是 HUMAN 账号，命令会拒绝覆盖你现有的
-> 凭据并提示重试——所以在已有的 `kanban auth login` 会话上叠加
-> 运行是安全的。无头 / CI 环境可加 `--no-open` 跳过浏览器调用。
+> `kanban auth agent login` 仍保留为显式的 Agent 绑定别名。
 
 CLI 将签发的 token 存储于
 `$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json`（权限 `0600`）。
