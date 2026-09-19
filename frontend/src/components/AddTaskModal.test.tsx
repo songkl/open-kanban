@@ -240,6 +240,31 @@ describe('AddTaskModal', () => {
     });
   });
 
+  describe('board and column selector layout (s-1223)', () => {
+    it('renders board and column selectors side-by-side in a single grid row', async () => {
+      const boards = [
+        { id: 'board-1', name: 'Board One' },
+        { id: 'board-2', name: 'Board Two' },
+      ];
+      render(<AddTaskModal {...defaultProps} boards={boards} currentBoardId="board-1" />);
+      const boardLabel = await screen.findByText('task.selectBoard');
+      const columnLabel = await screen.findByText('task.selectColumn');
+      const boardContainer = boardLabel.parentElement as HTMLElement;
+      const columnContainer = columnLabel.parentElement as HTMLElement;
+      expect(boardContainer).toBeTruthy();
+      expect(columnContainer).toBeTruthy();
+      expect(boardContainer.parentElement).toBe(columnContainer.parentElement);
+      const grid = boardContainer.parentElement as HTMLElement;
+      expect(grid.className).toMatch(/grid-cols-2/);
+    });
+
+    it('hides the selector row entirely when no boards and no columns are available', () => {
+      render(<AddTaskModal {...defaultProps} />);
+      expect(screen.queryByText('task.selectBoard')).not.toBeInTheDocument();
+      expect(screen.queryByText('task.selectColumn')).not.toBeInTheDocument();
+    });
+  });
+
   describe('create-task permission gating (s-1053)', () => {
     const canCreateTaskInColumn = (columnId: string) => columnId !== 'col-2';
 

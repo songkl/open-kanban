@@ -303,31 +303,35 @@ export function AddTaskModal({
             </div>
           </div>
 
-          {boards.length > 0 && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('task.selectBoard')}</label>
-              <CustomDropdown
-                options={boards.map(board => ({ value: board.id, label: board.name }))}
-                value={selectedBoardId}
-                onChange={setSelectedBoardId}
-                className="w-full"
-              />
-            </div>
-          )}
+          {(boards.length > 0 || columns.length > 0) && (
+            <div className="grid grid-cols-2 gap-4">
+              {boards.length > 0 && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('task.selectBoard')}</label>
+                  <CustomDropdown
+                    options={boards.map(board => ({ value: board.id, label: board.name }))}
+                    value={selectedBoardId}
+                    onChange={setSelectedBoardId}
+                    className="w-full"
+                  />
+                </div>
+              )}
 
-          {columns.length > 0 && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('task.selectColumn')}</label>
-              <CustomDropdown
-                options={columns.map(col => ({ value: col.id, label: col.name }))}
-                value={selectedColumnId}
-                onChange={setSelectedColumnId}
-                className="w-full"
-              />
-              {!selectedColumnAllowed && (
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  {t('column.noAddPermission')}
-                </p>
+              {columns.length > 0 && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('task.selectColumn')}</label>
+                  <CustomDropdown
+                    options={columns.map(col => ({ value: col.id, label: col.name }))}
+                    value={selectedColumnId}
+                    onChange={setSelectedColumnId}
+                    className="w-full"
+                  />
+                  {!selectedColumnAllowed && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      {t('column.noAddPermission')}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
