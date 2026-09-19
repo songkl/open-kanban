@@ -534,6 +534,48 @@ describe("runLogin (agent mode)", () => {
     expect(stderr).toMatch(/Refusing to bind/);
   });
 
+  // s-1247: when the device flow resolves to a HUMAN user (the
+  // approver picked "Myself" / their personal account on the
+  // approval page) the CLI refuses to bind. The error must spell
+  // out both the wrong radio-button choice and the right one so an
+  // operator can recover with a single re-run, plus mention the
+  // `--as-human` opt-in for operators who genuinely wanted a
+  // personal-account binding. Lock all three lines down so a
+  // future tweak doesn't accidentally drop the actionable hint.
+  it("surfaces an actionable remediation hint when the bound user is HUMAN (s-1247)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(
+        JSON.stringify({
+          user: { id: "admin-1", type: "HUMAN", nickname: "Alice" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const oauth = makeAgentReadyOAuth();
+    const cap = makeCapture();
+    await expect(
+      runLogin(
+        { apiUrl: "http://localhost:8080" },
+        {
+          oauth,
+          http: new HttpClient({ apiUrl: "http://localhost:8080" }),
+          io: cap.io,
+        }
+      )
+    ).rejects.toThrow(/requires an Agent token/);
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Refusing to bind/);
+    // Tells the operator which radio button is wrong.
+    expect(stderr).toMatch(/do NOT pick .Myself./i);
+    // Tells the operator which radio button is right.
+    expect(stderr).toMatch(/Bind existing agent.*Create new agent/);
+    // Tells the operator about the --as-human escape hatch.
+    expect(stderr).toMatch(/--as-human/);
+    // Confirms the previous credential snapshot was left intact so
+    // the operator doesn't have to `auth logout` before re-running.
+    expect(stderr).toMatch(/previous credentials were left unchanged/i);
+  });
+
   it("maps user denial to DeniedAuthorizationError (exit 3) in agent mode", async () => {
     const oauth = makeFakeOAuth({
       authorize: vi.fn(async () => {

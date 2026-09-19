@@ -541,10 +541,31 @@ async function verifyAgentToken(
     throw new Error("kanban auth login: server returned no user");
   }
   if (u.type && u.type !== "AGENT") {
+    // s-1247: the device flow resolved to a HUMAN user because the
+    // approver picked "Myself" / their personal account on the
+    // approval page. The legacy one-line message ("re-run and pick
+    // ...") left operators guessing which radio button was the right
+    // one and didn't tell them they could opt into a Human binding
+    // with --as-human. Spell out both the wrong action and the
+    // right one (so a single re-run succeeds) and confirm the
+    // pre-login credential snapshot is intact (so the operator
+    // knows they don't need to log out before re-running).
     stderr.write(
-      chalk.red(
-        `Token resolved to a ${u.type} user, not an AGENT. Refusing to bind — re-run and pick \"Bind existing agent\" or \"Create new agent\" on the approval page.\n`
-      )
+      [
+        chalk.red(
+          `Token resolved to a ${u.type} user, not an AGENT. Refusing to bind.`
+        ),
+        chalk.yellow(
+          `  On the approval page, pick \"Bind existing agent\" or \"Create new agent\" — do NOT pick \"Myself\" / your personal account for a CLI / MCP runner.`
+        ),
+        chalk.yellow(
+          `  If you actually wanted to bind to your personal account, re-run with --as-human.`
+        ),
+        chalk.gray(
+          `  Your previous credentials were left unchanged; run \`kanban auth status\` to inspect them.`
+        ),
+        "",
+      ].join("\n") + "\n"
     );
     throw new Error(
       `kanban auth login requires an Agent token (got type=${u.type})`

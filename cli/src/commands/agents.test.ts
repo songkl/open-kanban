@@ -957,6 +957,36 @@ describe("runAgentLogin", () => {
     expect(stderr).toMatch(/Refusing to bind/);
   });
 
+  // s-1247: mirror the `auth login` (agent mode) remediation hint on
+  // the `auth agent bind` path so operators hit the same actionable
+  // guidance no matter which command they ran.
+  it("surfaces the same actionable remediation hint as auth login (s-1247)", async () => {
+    const oauth = makeOAuth();
+    const http = new HttpClient({ apiUrl: "http://kanban.example.com" });
+    scriptFetch([
+      {
+        status: 200,
+        body: { user: { id: "u-1", type: "HUMAN", nickname: "Alice" } },
+      },
+    ]);
+    const cap = makeCapture();
+    await expect(
+      runAgentLogin({
+        apiUrl: "http://kanban.example.com",
+        http,
+        oauth,
+        io: cap.io,
+        openBrowser: false,
+        authorizeImpl: makeLoginStub(oauth, "human-token"),
+      })
+    ).rejects.toBeInstanceOf(InvalidUsageError);
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Refusing to bind/);
+    expect(stderr).toMatch(/do NOT pick .Myself./i);
+    expect(stderr).toMatch(/Bind existing agent.*Create new agent/);
+    expect(stderr).toMatch(/kanban auth login --as-human/);
+  });
+
   it("clears the credential store on failure when there were no prior credentials", async () => {
     const oauth = makeOAuth();
     const http = new HttpClient({ apiUrl: "http://kanban.example.com" });

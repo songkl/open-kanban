@@ -467,10 +467,24 @@ async function verifyAgentToken(
     );
   }
   if (u.type && u.type !== "AGENT") {
+    // s-1247: mirror the `auth login` (agent mode) hint so a
+    // HUMAN-bound device flow on the `auth agent bind` path also
+    // surfaces the actionable remediation (which radio button to
+    // pick, and the existence of `kanban auth login --as-human` for
+    // operators who actually wanted to bind a personal account).
     stderr.write(
-      chalk.red(
-        `Token resolved to a ${u.type} user, not an AGENT. Refusing to bind.\n`
-      )
+      [
+        chalk.red(
+          `Token resolved to a ${u.type} user, not an AGENT. Refusing to bind.`
+        ),
+        chalk.yellow(
+          `  On the approval page, pick \"Bind existing agent\" or \"Create new agent\" — do NOT pick \"Myself\" / your personal account for a CLI / MCP runner.`
+        ),
+        chalk.yellow(
+          `  If you actually wanted to bind to your personal account, re-run \`kanban auth login --as-human\`.`
+        ),
+        "",
+      ].join("\n") + "\n"
     );
     throw new InvalidUsageError(
       `kanban auth agent bind requires an Agent token (got type=${u.type})`

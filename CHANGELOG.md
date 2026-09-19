@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
   - fix: fall back to the profile tab when a non-admin lands on `?tab=oauth` via a shared link (s-1203)
   - fix: tokenise `agent.args` with POSIX shell-style quoting so a YAML scalar like `--auto true run "do-kanban $taskId"` lands as multiple argv entries instead of one opaque flag the agent binary cannot parse (s-1238). Operators can now write each flag-value group as a single string and rely on the runner to split on whitespace, honour single/double quotes, and apply `$name` substitution / `{prompt}` replacement on the tokenised list
+  - fix: rewrite the `kanban auth login` (agent mode) HUMAN-bound error to spell out the wrong / right radio-button choice on the approval page, surface the `kanban auth login --as-human` escape hatch for operators who genuinely wanted a personal-account binding, and confirm the previous credential snapshot is intact so the operator doesn't need to `auth logout` before re-running (s-1247). The same actionable hint is mirrored on `kanban auth agent bind` so the two paths give the operator a single, consistent recovery story
 
 ### Improvements
   - i18n: add settings.notifications.* keys (en + zh) for the new Notifications section
