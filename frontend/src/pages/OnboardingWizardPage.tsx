@@ -73,17 +73,20 @@ export function OnboardingWizardPage() {
     demoTaskId?: string;
   } | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
-  const [cmdCopied, setCmdCopied] = useState<null | 'login' | 'init' | 'run'>(null);
+  const [cmdCopied, setCmdCopied] = useState<null | 'install' | 'login' | 'init' | 'run'>(null);
 
-  const copyText = useCallback(async (text: string, slot: 'login' | 'init' | 'run') => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCmdCopied(slot);
-      setTimeout(() => setCmdCopied((current) => (current === slot ? null : current)), 2000);
-    } catch {
-      setSubmitError(t('onboarding.copyFailed'));
-    }
-  }, [t]);
+  const copyText = useCallback(
+    async (text: string, slot: 'install' | 'login' | 'init' | 'run') => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCmdCopied(slot);
+        setTimeout(() => setCmdCopied((current) => (current === slot ? null : current)), 2000);
+      } catch {
+        setSubmitError(t('onboarding.copyFailed'));
+      }
+    },
+    [t],
+  );
 
   const fetchPresets = useCallback(async () => {
     setLoadingPresets(true);
@@ -410,6 +413,32 @@ export function OnboardingWizardPage() {
                   {t('onboarding.runAgentSectionHint')}
                 </p>
                 <ul className="space-y-3">
+                  <li>
+                    <p className="mb-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      {t('onboarding.runAgentInstallLabel')}
+                    </p>
+                    <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      {t('onboarding.runAgentInstallHint')}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code
+                        data-testid="cmd-install"
+                        className="flex-1 break-all rounded-md bg-zinc-900 px-3 py-2 text-xs font-mono text-emerald-300"
+                      >
+                        npm install -g open-kanban-cli
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText('npm install -g open-kanban-cli', 'install')}
+                        className="shrink-0 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-600 transition-colors"
+                      >
+                        {cmdCopied === 'install' ? t('onboarding.copied') : t('onboarding.copy')}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      {t('onboarding.runAgentInstallNote')}
+                    </p>
+                  </li>
                   <li>
                     <p className="mb-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       {t('onboarding.runAgentStep1Label')}

@@ -240,4 +240,79 @@ describe('OnboardingWizardPage', () => {
       expect(writeText).toHaveBeenCalledWith('kanban auth login');
     });
   });
+
+  it('shows the open-kanban-cli install snippet on the done screen (s-1251)', async () => {
+    mockedGetAll.mockResolvedValue([
+      makePreset({ slug: 'alpha', name: 'Alpha preset' }),
+    ]);
+    mockedQuickstart.mockResolvedValue({
+      boardId: 'new-board-id',
+      boardName: 'Alpha preset',
+      agentId: 'a',
+      agentToken: 'agent-secret-token',
+      demoTaskId: 'task',
+    });
+
+    if (!navigator.clipboard) {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: vi.fn() },
+        configurable: true,
+      });
+    }
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    (navigator.clipboard as { writeText: ReturnType<typeof vi.fn> }).writeText = writeText;
+
+    renderWizard(['/onboarding?preset=alpha']);
+
+    await waitFor(() => {
+      expect(screen.getByText('onboarding.step2Title')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /onboarding.create/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('cmd-install')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('cmd-install')).toHaveTextContent('npm install -g open-kanban-cli');
+    expect(screen.getByText('onboarding.runAgentInstallLabel')).toBeInTheDocument();
+    expect(screen.getByText('onboarding.runAgentInstallHint')).toBeInTheDocument();
+    expect(screen.getByText('onboarding.runAgentInstallNote')).toBeInTheDocument();
+
+    // Install snippet must appear before the existing login step.
+    const installEl = screen.getByTestId('cmd-install');
+    const loginEl = screen.getByTestId('cmd-login');
+    expect(
+      installEl.compareDocumentPosition(loginEl) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const installCopy = screen.getAllByRole('button', { name: /onboarding.copy/ }).filter(
+      (btn) => btn.parentElement?.querySelector('[data-testid="cmd-install"]'),
+    );
+    fireEvent.click(installCopy[0]);
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('npm install -g open-kanban-cli');
+    });
+  });
+
+  it('does not show the install snippet when no agent token is returned', async () => {
+    mockedGetAll.mockResolvedValue([
+      makePreset({ slug: 'alpha', name: 'Alpha preset' }),
+    ]);
+    mockedQuickstart.mockResolvedValue({
+      boardId: 'new-board-id',
+      boardName: 'Alpha preset',
+      // No agentToken -> the run-agent section is hidden entirely.
+    });
+
+    renderWizard(['/onboarding?preset=alpha']);
+
+    await waitFor(() => {
+      expect(screen.getByText('onboarding.step2Title')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /onboarding.create/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('onboarding.doneTitle')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('cmd-install')).not.toBeInTheDocument();
+  });
 });
