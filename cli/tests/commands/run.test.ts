@@ -27,6 +27,7 @@ import {
 } from "../../src/commands/run.js";
 import { RunnerConfigError } from "../../src/runner/config.js";
 import { RunLoop } from "../../src/runner/loop.js";
+import { RunClaimClient } from "../../src/runner/claim.js";
 import type { RunnerConfig } from "../../src/runner/types.js";
 import type { OAuthMetadata } from "../../src/auth/types.js";
 import { HttpClient } from "../../src/http/client.js";
@@ -667,6 +668,72 @@ describe("defaultBuildLoop", () => {
       failed: 0,
       shutdown: false,
     });
+  });
+
+  // s-1229: the runner used to give up on the first 401 from a
+  // /runs/* endpoint because the RunClaimClient had no refresh hook.
+  // defaultBuildLoop must wire one so a stale-but-logged-in runner
+  // can recover without operator intervention.
+  it("wires the OAuth refresh hook into the claim client when oauth is supplied", () => {
+    const { http, oauth } = makeAuthedClient();
+    const cfg: RunnerConfig = {
+      version: 1,
+      boardId: "sys",
+      status: "todo",
+      agent: { bin: "opencode", cwd: ".", timeoutMs: 1000 },
+      runner: { heartbeatIntervalMs: 1000, lockTimeoutMs: 5_000 },
+    };
+    const refreshSpy = vi
+      .spyOn(oauth, "refreshTokens")
+      .mockResolvedValue({
+        access_token: "at-rotated",
+        token_type: "Bearer",
+        expires_in: 3600,
+        refresh_token: "rt-rotated",
+      });
+    const setRefreshAuthSpy = vi.spyOn(
+      RunClaimClient.prototype,
+      "setRefreshAuth"
+    );
+    defaultBuildLoop({
+      config: cfg,
+      runnerId: "r-1",
+      agentType: "opencode",
+      http,
+      oauth,
+    });
+    // defaultBuildLoop must have called setRefreshAuth with a hook
+    // that delegates to oauth.refreshTokens(). The hook is invoked
+    // by the spy below to confirm the wiring is functional.
+    expect(setRefreshAuthSpy).toHaveBeenCalledOnce();
+    const hook = setRefreshAuthSpy.mock.calls[0][0];
+    void hook();
+    expect(refreshSpy).toHaveBeenCalledOnce();
+    refreshSpy.mockRestore();
+    setRefreshAuthSpy.mockRestore();
+  });
+
+  it("does not wire the refresh hook when oauth is omitted", () => {
+    const { http } = makeAuthedClient();
+    const cfg: RunnerConfig = {
+      version: 1,
+      boardId: "sys",
+      status: "todo",
+      agent: { bin: "opencode", cwd: ".", timeoutMs: 1000 },
+      runner: { heartbeatIntervalMs: 1000, lockTimeoutMs: 5_000 },
+    };
+    const setRefreshAuthSpy = vi.spyOn(
+      RunClaimClient.prototype,
+      "setRefreshAuth"
+    );
+    defaultBuildLoop({
+      config: cfg,
+      runnerId: "r-1",
+      agentType: "opencode",
+      http,
+    });
+    expect(setRefreshAuthSpy).not.toHaveBeenCalled();
+    setRefreshAuthSpy.mockRestore();
   });
 });
 

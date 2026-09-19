@@ -241,20 +241,52 @@ export class HttpRunTransport implements RunTransport {
 }
 
 /**
+ * Callback that attempts to refresh the OAuth access token. Returns
+ * `true` when a fresh token is now available on the credential store,
+ * `false` when no refresh token exists or the refresh failed (network
+ * down, refresh token revoked, etc.). The runner calls this whenever
+ * a `/api/v1/runs/*` request returns 401 so a stale-but-logged-in
+ * session doesn't have to drop out and re-authenticate.
+ */
+export type RefreshAuthFn = () => Promise<boolean>;
+
+export interface RunClaimClientOptions {
+  /**
+   * Refresh hook invoked on a 401 response. The default is a no-op so
+   * the existing test suite (which uses fake transports) keeps passing;
+   * production callers wire this to `oauth.refreshTokens()` via
+   * `defaultBuildLoop` so the runner mirrors the regular HttpClient's
+   * retry-on-401 semantics.
+   */
+  refreshAuth?: RefreshAuthFn;
+}
+
+/**
  * Thin façade that turns the raw transport into typed outcomes. The
  * four public methods (`claim`, `heartbeat`, `finish`, `release`) are
  * the only surface the loop module imports.
  */
 export class RunClaimClient {
   private readonly transport: RunTransport;
+  private refreshAuth: RefreshAuthFn;
 
-  constructor(transport: RunTransport) {
+  constructor(transport: RunTransport, opts: RunClaimClientOptions = {}) {
     this.transport = transport;
+    this.refreshAuth = opts.refreshAuth ?? noopRefresh;
   }
 
   /** Convenience constructor that wires an `HttpRunTransport`. */
   static fromHttpClient(client: HttpClient): RunClaimClient {
     return new RunClaimClient(new HttpRunTransport(client));
+  }
+
+  /**
+   * Replace the refresh hook. Used by `defaultBuildLoop` after the
+   * OAuthClient is wired up, so the loop factory can construct the
+   * RunClaimClient first and inject auth dependencies lazily.
+   */
+  setRefreshAuth(refreshAuth: RefreshAuthFn): void {
+    this.refreshAuth = refreshAuth;
   }
 
   /**
@@ -274,108 +306,165 @@ export class RunClaimClient {
    */
   async claim(req: ClaimRequest): Promise<ClaimOutcome> {
     const path = "/runs/claim";
-    try {
-      const { status, body } = await this.transport.postJson<
-        ClaimSuccessResponse | null
-      >(path, {
-        boardId: req.boardId,
-        status: req.status,
-        agentType: req.agentType,
-        runnerId: req.runnerId,
-        mode: req.mode,
-      });
-      if (status === 204) return { kind: "none" };
-      if (status >= 200 && status < 300) {
-        const task = body?.task ?? {};
-        const run = body?.run ?? {};
-        return { kind: "claimed", task, run };
+    const body = {
+      boardId: req.boardId,
+      status: req.status,
+      agentType: req.agentType,
+      runnerId: req.runnerId,
+      mode: req.mode,
+    };
+    return this.executeWithAuthRetry<ClaimSuccessResponse, ClaimOutcome>(
+      path,
+      body,
+      (status, body) => {
+        if (status === 204) return { kind: "none" };
+        if (status >= 200 && status < 300) {
+          const task = body?.task ?? {};
+          const run = body?.run ?? {};
+          return { kind: "claimed", task, run };
+        }
+        throw new RunnerHttpError(`unexpected claim response status ${status}`, {
+          retryable: status >= 500,
+          status,
+          path,
+        });
       }
-      throw new RunnerHttpError(`unexpected claim response status ${status}`, {
-        retryable: status >= 500,
-        status,
-        path,
-      });
-    } catch (err) {
-      throw normaliseError(err, path);
-    }
+    );
   }
 
   async heartbeat(taskId: string, runnerId: string): Promise<HeartbeatOutcome> {
     const path = `/runs/${encodeURIComponent(taskId)}/heartbeat`;
-    try {
-      const { status, body } = await this.transport.postJson<HeartbeatSuccessResponse | null>(
-        path,
-        { runnerId }
-      );
-      if (status === 409) return { kind: "lost" };
-      if (status >= 200 && status < 300) {
-        const expiresAt = body?.expiresAt ?? "";
-        return { kind: "ok", expiresAt };
+    return this.executeWithAuthRetry<HeartbeatSuccessResponse, HeartbeatOutcome>(
+      path,
+      { runnerId },
+      (status, body) => {
+        if (status === 409) return { kind: "lost" };
+        if (status >= 200 && status < 300) {
+          const expiresAt = body?.expiresAt ?? "";
+          return { kind: "ok", expiresAt };
+        }
+        throw new RunnerHttpError(`unexpected heartbeat response status ${status}`, {
+          retryable: status >= 500,
+          status,
+          path,
+        });
       }
-      throw new RunnerHttpError(`unexpected heartbeat response status ${status}`, {
-        retryable: status >= 500,
-        status,
-        path,
-      });
-    } catch (err) {
-      if (err instanceof RunnerHttpError && err.status === 409) {
-        return { kind: "lost" };
-      }
-      throw normaliseError(err, path);
-    }
+    );
   }
 
   async finish(taskId: string, req: FinishRequest): Promise<FinishOutcome> {
     const path = `/runs/${encodeURIComponent(taskId)}/finish`;
-    try {
-      const { status, body } = await this.transport.postJson<FinishSuccessResponse | null>(
-        path,
-        {
-          runnerId: req.runnerId,
-          status: req.status,
-          exitCode: req.exitCode ?? null,
-          error: req.error ?? null,
-          output: req.output ?? null,
+    return this.executeWithAuthRetry<FinishSuccessResponse, FinishOutcome>(
+      path,
+      {
+        runnerId: req.runnerId,
+        status: req.status,
+        exitCode: req.exitCode ?? null,
+        error: req.error ?? null,
+        output: req.output ?? null,
+      },
+      (status, body) => {
+        if (status === 409) return { kind: "conflict" };
+        if (status >= 200 && status < 300) {
+          const advanced = body?.advanced === true;
+          return { kind: "ok", advanced };
         }
-      );
-      if (status === 409) return { kind: "conflict" };
-      if (status >= 200 && status < 300) {
-        const advanced = body?.advanced === true;
-        return { kind: "ok", advanced };
+        throw new RunnerHttpError(`unexpected finish response status ${status}`, {
+          retryable: status >= 500,
+          status,
+          path,
+        });
       }
-      throw new RunnerHttpError(`unexpected finish response status ${status}`, {
-        retryable: status >= 500,
-        status,
-        path,
-      });
-    } catch (err) {
-      if (err instanceof RunnerHttpError && err.status === 409) {
-        return { kind: "conflict" };
-      }
-      throw normaliseError(err, path);
-    }
+    );
   }
 
   async release(req: ReleaseRequest): Promise<ReleaseOutcome> {
     const path = "/runs/release";
-    try {
-      const { status, body } = await this.transport.postJson<ReleaseSuccessResponse | null>(
-        path,
-        { runnerId: req.runnerId, taskIds: req.taskIds ?? null }
-      );
-      if (status >= 200 && status < 300) {
-        const released = typeof body?.released === "number" ? body.released : 0;
-        return { kind: "ok", released };
+    return this.executeWithAuthRetry<ReleaseSuccessResponse, ReleaseOutcome>(
+      path,
+      { runnerId: req.runnerId, taskIds: req.taskIds ?? null },
+      (status, body) => {
+        if (status >= 200 && status < 300) {
+          const released = typeof body?.released === "number" ? body.released : 0;
+          return { kind: "ok", released };
+        }
+        throw new RunnerHttpError(`unexpected release response status ${status}`, {
+          retryable: status >= 500,
+          status,
+          path,
+        });
       }
-      throw new RunnerHttpError(`unexpected release response status ${status}`, {
-        retryable: status >= 500,
-        status,
-        path,
-      });
+    );
+  }
+
+  /**
+   * Shared request helper used by claim / heartbeat / finish / release.
+   *
+   * When the server returns 401 we attempt one token refresh and retry
+   * exactly once. This mirrors the regular HttpClient's retry-on-401
+   * behaviour so the runner doesn't shut down with an opaque "API
+   * error 401" the moment the access token ages out — the OAuthClient
+   * still holds a valid refresh token in most cases, so a single
+   * round-trip to the token endpoint resolves the staleness.
+   *
+   * Failure modes:
+   *
+   *   * refresh hook returns false (no refresh token / refresh call
+   *     failed)  → surface `RunnerHttpError` with `retryable: false`
+   *     and a "session expired" message so the loop can call
+   *     `requestShutdown()` and the operator sees a clear "Run
+   *     `kanban auth login` again" hint rather than an opaque 401.
+   *   * refresh succeeded but the retried request still 401s
+   *     → same outcome (the refresh token itself is invalid; the
+   *     operator must re-authenticate from scratch).
+   */
+  private async executeWithAuthRetry<B, T>(
+    path: string,
+    body: unknown,
+    parse: (status: number, body: B | null) => T
+  ): Promise<T> {
+    let attempt = 0;
+    let res: { status: number; body: B | null };
+    try {
+      res = await this.transport.postJson<B>(path, body);
     } catch (err) {
       throw normaliseError(err, path);
     }
+    if (res.status === 401 && attempt === 0) {
+      attempt += 1;
+      const refreshed = await this.safeRefresh();
+      if (!refreshed) {
+        throw new RunnerHttpError(
+          `authentication required: session expired (refresh failed); run \`kanban auth login\` to re-authenticate`,
+          { retryable: false, status: 401, path }
+        );
+      }
+      try {
+        res = await this.transport.postJson<B>(path, body);
+      } catch (err) {
+        throw normaliseError(err, path);
+      }
+      if (res.status === 401) {
+        throw new RunnerHttpError(
+          `authentication required: session expired even after refresh; run \`kanban auth login\` to re-authenticate`,
+          { retryable: false, status: 401, path }
+        );
+      }
+    }
+    return parse(res.status, res.body);
   }
+
+  private async safeRefresh(): Promise<boolean> {
+    try {
+      return await this.refreshAuth();
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function noopRefresh(): Promise<boolean> {
+  return false;
 }
 
 interface ClaimSuccessResponse {

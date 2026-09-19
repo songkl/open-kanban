@@ -854,6 +854,39 @@ describe("RunLoop — claim semantics", () => {
     expect(h.spawner.calls).toHaveLength(0);
     expect(h.logs.some((l) => l.level === "error")).toBe(true);
   });
+
+  // s-1229: when a 401 propagates out of the RunClaimClient (i.e.
+  // the OAuth refresh on retry also failed), the loop must still
+  // shut down cleanly AND emit a human-friendly hint so the operator
+  // knows to re-authenticate instead of guessing what "API error
+  // 401" means.
+  it("surfaces a re-authenticate hint when a 401 claim fails after refresh", async () => {
+    const h = makeHarness({
+      scripts: [
+        {
+          request: {
+            boardId: "sys",
+            status: "todo",
+            agentType: "opencoder",
+            runnerId: "runner-1",
+          },
+          outcome: {
+            status: 401,
+            body: { error: "expired" },
+          },
+        },
+      ],
+    });
+    const summary = await h.loop.run();
+    expect(summary.processed).toBe(0);
+    expect(h.spawner.calls).toHaveLength(0);
+    const authErrors = h.logs.filter(
+      (l) =>
+        l.level === "error" &&
+        /session expired|auth login/i.test(l.message)
+    );
+    expect(authErrors.length).toBeGreaterThan(0);
+  });
 });
 
 describe("RunLoop — graceful shutdown", () => {

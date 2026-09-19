@@ -393,13 +393,25 @@ export class RunLoop {
         mode: this.config.mode === "mine" ? "mine" : "board",
       });
     } catch (err) {
-      const retryable = (err as RunnerHttpError).retryable;
+      const runnerErr = err as RunnerHttpError;
+      const retryable = runnerErr.retryable;
+      const status = runnerErr.status;
       this.logger.error(
         `claim failed: ${(err as Error).message} (retryable=${retryable})`
       );
       this.logger.debug(
         `claim error stack: ${(err as Error).stack ?? "(no stack)"}`
       );
+      if (status === 401) {
+        // The RunClaimClient already attempted an OAuth refresh on a
+        // 401; reaching this branch means the refresh failed (no
+        // refresh token, or the server rejected the refresh). Surface
+        // a human-friendly hint so the operator knows to re-auth,
+        // rather than just an opaque "API error 401 on /runs/claim".
+        this.logger.error(
+          `runner session expired; run \`kanban auth login\` to refresh credentials and restart the runner`
+        );
+      }
       if (!retryable) {
         this.requestShutdown();
         return;
