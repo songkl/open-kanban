@@ -94,6 +94,7 @@ func (s *TaskService) GetTasks(userID, role, columnID, boardID, status string, p
 			"published":         task.Published,
 			"archived":          task.Archived,
 			"archivedAt":        task.ArchivedAt,
+			"dueAt":             task.DueAt,
 			"agentId":           task.AgentID,
 			"agentPrompt":       task.AgentPrompt,
 			"createdBy":         task.CreatedBy,
@@ -147,6 +148,11 @@ type CreateTaskInput struct {
 	ColumnID    string
 	Position    int
 	Published   bool
+	// DueAt is the optional deadline the create-task modal
+	// forwards (T-1207 / s-1207, PM_REVIEW §3.12). The service
+	// passes it through to the repository; nil means "no due
+	// date" and round-trips as NULL.
+	DueAt       *time.Time
 	AgentID     *string
 	AgentPrompt *string
 	CreatedBy   string
@@ -190,6 +196,7 @@ func (s *TaskService) CreateTask(input CreateTaskInput) (*models.Task, error) {
 		Position:    position,
 		Published:   input.Published,
 		Archived:    false,
+		DueAt:       input.DueAt,
 		AgentID:     input.AgentID,
 		AgentPrompt: input.AgentPrompt,
 		CreatedBy:   input.CreatedBy,
@@ -213,6 +220,9 @@ type UpdateTaskInput struct {
 	ColumnID    string
 	Position    *int
 	Published   *bool
+	// DueAt is the optional deadline the TaskModal saves (see
+	// CreateTaskInput for the rationale behind nullable).
+	DueAt       *time.Time
 	AgentID     *string
 	AgentPrompt *string
 }
@@ -251,6 +261,19 @@ func (s *TaskService) UpdateTask(taskID string, userID, role string, input Updat
 		}
 		if *input.Assignee != oldAssignee {
 			changes = append(changes, fmt.Sprintf("负责人: '%s' → '%s'", oldAssignee, *input.Assignee))
+		}
+	}
+	if input.DueAt != nil {
+		oldDue := ""
+		if oldTask.DueAt != nil {
+			oldDue = oldTask.DueAt.Format(time.RFC3339)
+		}
+		newDue := ""
+		if input.DueAt != nil {
+			newDue = input.DueAt.Format(time.RFC3339)
+		}
+		if newDue != oldDue {
+			changes = append(changes, fmt.Sprintf("截止时间: '%s' → '%s'", oldDue, newDue))
 		}
 	}
 	if input.Meta != nil {
@@ -351,6 +374,9 @@ func (s *TaskService) UpdateTask(taskID string, userID, role string, input Updat
 	}
 	if input.Assignee != nil {
 		oldTask.Assignee = input.Assignee
+	}
+	if input.DueAt != nil {
+		oldTask.DueAt = input.DueAt
 	}
 	if input.Meta != nil {
 		metaJSON, _ := json.Marshal(input.Meta)
@@ -785,6 +811,7 @@ func (s *TaskService) SearchTasks(input SearchTasksInput) (*TaskListResult, erro
 			"published":         task.Published,
 			"archived":          task.Archived,
 			"archivedAt":        task.ArchivedAt,
+			"dueAt":             task.DueAt,
 			"agentId":           task.AgentID,
 			"agentPrompt":       task.AgentPrompt,
 			"createdBy":         task.CreatedBy,

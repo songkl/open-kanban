@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,7 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		agent_id TEXT,
 		agent_prompt TEXT,
 		created_by TEXT,
@@ -138,6 +140,23 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
+	CREATE TABLE attachments (
+		id TEXT PRIMARY KEY,
+		filename TEXT NOT NULL,
+		storage_path TEXT NOT NULL,
+		storage_type TEXT DEFAULT 'local',
+		mime_type TEXT,
+		size INTEGER,
+		uploader_id TEXT,
+		task_id TEXT,
+		comment_id TEXT,
+		access_token TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+		FOREIGN KEY (uploader_id) REFERENCES users(id) ON DELETE SET NULL
 	);
 	CREATE TABLE app_config (
 		key TEXT PRIMARY KEY,
@@ -389,6 +408,157 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &resp)
 		if int(resp["position"].(float64)) != 500 {
 			t.Errorf("expected position 500, got %v", resp["position"])
+		}
+	})
+}
+
+// TestCreateTaskHandlerWithDueDateAndAttachments (T-1207 / s-1207)
+// pins the two newest columns on the create-task payload:
+//   - dueAt round-trips through the handler into the DB and back
+//     via the response body.
+//   - attachmentIds re-links pre-uploaded (task_id IS NULL) rows
+//     to the freshly minted task. Rows uploaded by another user
+//     and rows already linked to a task must be left untouched.
+func TestCreateTaskHandlerWithDueDateAndAttachments(t *testing.T) {
+	handlers.ResetRateLimitMapForTest()
+	handlers.ResetGlobalRateLimitMapForTest()
+	handlers.ResetTokenCacheForTest()
+	db := setupTasksDB(t)
+	defer db.Close()
+	// Pin to a single open connection so the handler always
+	// sees the schema we set up in setupTasksDB — without this,
+	// the goroutine spawned by the broadcast handler (and any
+	// subsequent SELECT the test does through the same pool)
+	// can land on a second ":memory:" connection that has its
+	// own empty database.
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id) VALUES ('att-self-1', 'spec.pdf', '/tmp/spec.pdf', 'u1')`); err != nil {
+		t.Fatalf("failed to insert self attachment: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id) VALUES ('att-self-2', 'mock.png', '/tmp/mock.png', 'u1')`); err != nil {
+		t.Fatalf("failed to insert self attachment #2: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id) VALUES ('att-other', 'foreign.txt', '/tmp/foreign.txt', 'someone-else')`); err != nil {
+		t.Fatalf("failed to insert foreign attachment: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id) VALUES ('t-pre', 'pre-existing task', 'c1')`); err != nil {
+		t.Fatalf("failed to insert pre-existing task: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id, task_id) VALUES ('att-already', 'linked.png', '/tmp/linked.png', 'u1', 't-pre')`); err != nil {
+		t.Fatalf("failed to insert already-linked attachment: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/tasks", handlers.CreateTask(db))
+
+	t.Run("dueAt persists and attachmentIds re-link pre-uploaded rows", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		handlers.ResetGlobalRateLimitMapForTest()
+		dueAt := "2026-12-31T08:00:00Z"
+		body := map[string]interface{}{
+			"title":         "Task with due date and attachments",
+			"columnId":      "c1",
+			"priority":      "high",
+			"dueAt":         dueAt,
+			"attachmentIds": []string{"att-self-1", "att-self-2"},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		dueAtOut, ok := resp["dueAt"].(string)
+		if !ok || dueAtOut == "" {
+			t.Errorf("expected response.dueAt to be a non-empty string, got %v", resp["dueAt"])
+		} else if !strings.HasPrefix(dueAtOut, "2026-12-31") {
+			t.Errorf("expected response.dueAt to keep the date prefix, got %q", dueAtOut)
+		}
+
+		newTaskID, _ := resp["id"].(string)
+		if newTaskID == "" {
+			t.Fatalf("expected non-empty task id in response, got %v", resp["id"])
+		}
+
+		var storedDueAt sql.NullString
+		if err := db.QueryRow(`SELECT due_at FROM tasks WHERE id = ?`, newTaskID).Scan(&storedDueAt); err != nil {
+			t.Fatalf("query stored due_at: %v", err)
+		}
+		if !storedDueAt.Valid {
+			t.Errorf("expected tasks.due_at to be populated, got NULL")
+		} else if !strings.HasPrefix(storedDueAt.String, "2026-12-31") {
+			t.Errorf("expected stored due_at to start with 2026-12-31, got %q", storedDueAt.String)
+		}
+
+		var selfTaskID, otherTaskID, alreadyTaskID sql.NullString
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-self-1'`).Scan(&selfTaskID); err != nil {
+			t.Fatalf("query att-self-1 task_id: %v", err)
+		}
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-self-2'`).Scan(&selfTaskID); err == nil {
+			_ = selfTaskID
+		} else {
+			t.Fatalf("query att-self-2 task_id: %v", err)
+		}
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-other'`).Scan(&otherTaskID); err != nil {
+			t.Fatalf("query att-other task_id: %v", err)
+		}
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-already'`).Scan(&alreadyTaskID); err != nil {
+			t.Fatalf("query att-already task_id: %v", err)
+		}
+
+		var linkedCount int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM attachments WHERE task_id = ? AND id IN ('att-self-1','att-self-2')`, newTaskID).Scan(&linkedCount); err != nil {
+			t.Fatalf("count linked attachments: %v", err)
+		}
+		if linkedCount != 2 {
+			t.Errorf("expected both att-self-* rows linked to the new task, got %d", linkedCount)
+		}
+
+		if otherTaskID.Valid {
+			t.Errorf("expected att-other to remain unlinked (NULL task_id), got %q", otherTaskID.String)
+		}
+		if !alreadyTaskID.Valid || alreadyTaskID.String != "t-pre" {
+			t.Errorf("expected att-already to remain linked to t-pre, got %v", alreadyTaskID)
+		}
+	})
+
+	t.Run("dueAt omitted round-trips as null in response and DB", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		handlers.ResetGlobalRateLimitMapForTest()
+		body := map[string]interface{}{
+			"title":    "Task without due date",
+			"columnId": "c1",
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if v, present := resp["dueAt"]; present && v != nil {
+			t.Errorf("expected response.dueAt to be omitted/null, got %v", v)
 		}
 	})
 }

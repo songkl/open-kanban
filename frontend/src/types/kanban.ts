@@ -58,6 +58,11 @@ export interface Task {
   columnId: string;
   archived: boolean;
   archivedAt: string | null;
+  // T-1207 / s-1207: optional deadline surfaced by the
+  // create-task modal and stored on tasks.due_at. Null means
+  // "no due date" and the UI renders an "Add due date" affordance
+  // instead of a date.
+  dueAt: string | null;
   published: boolean;
   agentId: string | null;
   agentPrompt: string | null;

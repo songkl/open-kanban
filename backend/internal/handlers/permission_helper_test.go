@@ -100,6 +100,7 @@ func setupPermissionTestDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		created_by TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

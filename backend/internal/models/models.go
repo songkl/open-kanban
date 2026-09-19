@@ -79,6 +79,12 @@ type Task struct {
 	Published         bool       `json:"published"`
 	Archived          bool       `json:"archived"`
 	ArchivedAt        *time.Time `json:"archivedAt,omitempty"`
+	// DueAt is the optional deadline the create-task modal sets
+	// (T-1207 / s-1207, PM_REVIEW_2026-09-17 §3.12). It is a
+	// nullable timestamp so tasks without a deadline round-trip as
+	// `null` in JSON; the Go zero-value *time.Time is treated as
+	// "no due date" by the storage layer and the API responses.
+	DueAt             *time.Time `json:"dueAt,omitempty"`
 	AgentID           *string    `json:"agentId,omitempty"`
 	AgentPrompt       *string    `json:"agentPrompt,omitempty"`
 	CreatedBy         string     `json:"createdBy"`

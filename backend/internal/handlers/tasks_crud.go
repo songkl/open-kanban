@@ -50,6 +50,7 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			ColumnID:    req.ColumnID,
 			Position:    req.Position,
 			Published:   req.Published,
+			DueAt:       req.DueAt,
 			AgentID:     req.AgentID,
 			AgentPrompt: req.AgentPrompt,
 			CreatedBy:   user.ID,
@@ -58,6 +59,22 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 		if err != nil {
 			ServerError(c, "Failed to create task", err)
 			return
+		}
+
+		// T-1207 / s-1207: re-link the attachments the modal
+		// pre-uploaded (via POST /api/v1/upload before submit)
+		// to the freshly minted task. The attachments table has
+		// a nullable FK on tasks(id) so rows land there with
+		// task_id = NULL while the task doesn't exist yet. The
+		// update is constrained to "uploader_id = me AND
+		// task_id IS NULL AND id IN (...)" so a malicious
+		// client can't grab another user's attachment, and the
+		// uploader check matches the modal flow because every
+		// upload is attributed to the cookie's token user.
+		if len(req.AttachmentIDs) > 0 {
+			if _, err := attachUploadedFilesToTask(db, user.ID, task.ID, req.AttachmentIDs); err != nil {
+				slog.Error("CreateTask: failed to attach uploaded files", "error", err, "task_id", task.ID)
+			}
 		}
 
 		LogActivity(db, user.ID, "CREATE_TASK", "TASK", task.ID, task.Title, "", c.ClientIP(), getRequestSource(c))
@@ -100,6 +117,7 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			"position":    task.Position,
 			"published":   task.Published,
 			"archived":    false,
+			"dueAt":       task.DueAt,
 			"agentId":     task.AgentID,
 			"agentPrompt": task.AgentPrompt,
 			"createdBy":   user.ID,
@@ -108,6 +126,42 @@ func CreateTask(db *sql.DB) gin.HandlerFunc {
 			"comments":    []gin.H{},
 		})
 	}
+}
+
+// attachUploadedFilesToTask re-links pre-uploaded attachment rows
+// (created by POST /api/v1/upload before the task existed) to the
+// freshly created task. The update is scoped to the uploader so a
+// caller cannot attach another user's orphan row, and to task_id
+// IS NULL so an already-attached attachment is not silently
+// re-parented. Returns the number of rows updated so the handler
+// can log a useful warning when zero rows matched (e.g. the upload
+// was rejected at MIME-check time but the client still forwarded
+// the id).
+//
+// T-1207 / s-1207, PM_REVIEW_2026-09-17 §3.12.
+func attachUploadedFilesToTask(db *sql.DB, userID, taskID string, attachmentIDs []string) (int64, error) {
+	if len(attachmentIDs) == 0 {
+		return 0, nil
+	}
+	// Args must follow the placeholder order in the SQL
+	// statement: task_id, uploader_id, attachment ids.
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(attachmentIDs)), ",")
+	args := make([]interface{}, 0, len(attachmentIDs)+2)
+	args = append(args, taskID, userID)
+	for _, id := range attachmentIDs {
+		args = append(args, id)
+	}
+	query := fmt.Sprintf(
+		`UPDATE attachments SET task_id = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE task_id IS NULL AND uploader_id = ? AND id IN (%s)`,
+		placeholders,
+	)
+	res, err := db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	rows, _ := res.RowsAffected()
+	return rows, nil
 }
 
 func UpdateTask(db *sql.DB) gin.HandlerFunc {
@@ -178,6 +232,7 @@ func UpdateTask(db *sql.DB) gin.HandlerFunc {
 			ColumnID:    req.ColumnID,
 			Position:    req.Position,
 			Published:   req.Published,
+			DueAt:       req.DueAt,
 			AgentID:     req.AgentID,
 			AgentPrompt: req.AgentPrompt,
 		})

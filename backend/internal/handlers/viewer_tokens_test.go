@@ -107,6 +107,7 @@ func setupViewerTokensDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		agent_id TEXT,
 		agent_prompt TEXT,
 		created_by TEXT,

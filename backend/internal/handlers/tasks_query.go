@@ -116,6 +116,7 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			"published":         task.Published,
 			"archived":          task.Archived,
 			"archivedAt":        task.ArchivedAt,
+			"dueAt":             task.DueAt,
 			"agentId":           task.AgentID,
 			"agentPrompt":       task.AgentPrompt,
 			"createdBy":         task.CreatedBy,

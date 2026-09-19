@@ -298,6 +298,7 @@ func BatchCreateTasks(db *sql.DB) gin.HandlerFunc {
 				ColumnID:    taskReq.ColumnID,
 				Position:    taskReq.Position,
 				Published:   taskReq.Published,
+				DueAt:       taskReq.DueAt,
 				AgentID:     taskReq.AgentID,
 				AgentPrompt: taskReq.AgentPrompt,
 				CreatedBy:   user.ID,
