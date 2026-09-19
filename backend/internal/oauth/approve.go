@@ -3,6 +3,8 @@ package oauth
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -268,7 +270,12 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 			// clients. False when the client row can't be read so we
 			// don't accidentally hide the picker on a transient DB
 			// blip.
+			//
+			// Both the snake_case wire name and the camelCase alias
+			// are emitted: the worktree SPA reads the camelCase key,
+			// older / external callers read the snake_case one.
 			"agent_selection_required": IsAgentSelectionRequired(client),
+			"agentSelectionRequired":   IsAgentSelectionRequired(client),
 		}
 
 		// Surface the configured global binding (if any) so the UI can
@@ -302,6 +309,9 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 		resp["available_agents"] = availableAgents
+		// camelCase alias consumed by the worktree SPA's identity
+		// picker (see the agentSelectionRequired comment above).
+		resp["availableAgents"] = availableAgents
 
 		c.JSON(http.StatusOK, resp)
 	}
@@ -545,4 +555,221 @@ func currentUserOrUnauthorized(c *gin.Context, db *sql.DB) *models.User {
 		}
 	}
 	return nil
+}
+// DeviceCreateAgentRequest is the body submitted by the verification page
+// when the approver (ADMIN) wants to create a fresh Agent identity inline
+// instead of picking from the existing list. The new Agent is inserted into
+// the users table (type='AGENT') and immediately selected as the device-code
+// binding target on the page.
+//
+// BoardGrants is the s-1253 extension that lets the approver attach
+// explicit (boardId, access) rows at creation time — without it the inline
+// create would mint an agent with zero board access, leaving the runner
+// useless until somebody opens the settings page to grant access manually.
+// When omitted the handler inserts no board permissions, matching the new
+// "no implicit broad grants" contract introduced for the
+// /api/v1/auth/agents endpoint.
+type DeviceCreateAgentRequest struct {
+	Nickname    string             `json:"nickname"`
+	Role        string             `json:"role"`
+	BoardGrants []BoardAccessGrant `json:"boardGrants"`
+}
+
+// BoardAccessGrant is the local mirror of the type the handlers package
+// uses for the same field; the two definitions stay in sync (same field
+// names, same access enum) so a UI that targets either endpoint can reuse
+// the same JSON shape. We duplicate the type because handlers already
+// imports oauth (for the signer), so we cannot import handlers from here
+// without an import cycle.
+type BoardAccessGrant struct {
+	BoardID string `json:"boardId"`
+	Access  string `json:"access"`
+}
+
+// resolveDeviceCreateAgentBoardGrants is the device-flow mirror of
+// handlers.ResolveBoardGrants. The contract is identical (unknown access →
+// 400, unknown board → 400, dupes collapse by boardId, first occurrence
+// wins) so the UI can reuse the same payload shape on both endpoints; the
+// implementation is duplicated rather than imported because handlers
+// already imports oauth (for the signer used inside auth_handlers.go), and
+// the reverse import would create a cycle.
+func resolveDeviceCreateAgentBoardGrants(db *sql.DB, callerID, newAgentID string, grants []BoardAccessGrant) (int, error) {
+	if len(grants) == 0 {
+		return 0, nil
+	}
+	seen := make(map[string]string, len(grants))
+	for _, g := range grants {
+		if g.BoardID == "" || g.Access == "" {
+			return 0, fmt.Errorf("invalid boardGrants entry: boardId and access are required")
+		}
+		switch g.Access {
+		case "READ", "WRITE", "ADMIN":
+		default:
+			return 0, fmt.Errorf("invalid access %q for board %q", g.Access, g.BoardID)
+		}
+		if _, dup := seen[g.BoardID]; dup {
+			continue
+		}
+		seen[g.BoardID] = g.Access
+	}
+	if len(seen) == 0 {
+		return 0, nil
+	}
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	existing, err := db.Query(
+		"SELECT id FROM boards WHERE deleted = false AND id IN ("+placeholders+")", args...,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to verify boards: %w", err)
+	}
+	found := make(map[string]struct{}, len(ids))
+	for existing.Next() {
+		var id string
+		if err := existing.Scan(&id); err == nil {
+			found[id] = struct{}{}
+		}
+	}
+	existing.Close()
+	var missing []string
+	for _, id := range ids {
+		if _, ok := found[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return 0, fmt.Errorf("unknown board ids: %v", missing)
+	}
+	permArgs := make([]interface{}, 0, len(ids)*9)
+	placeholders = ""
+	for i, id := range ids {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "(?, ?, ?, ?, ?, NULL, NULL, NULL, '')"
+		permArgs = append(permArgs, generateOpaqueID(), newAgentID, id, seen[id], callerID)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES "+placeholders,
+		permArgs...,
+	); err != nil {
+		return 0, fmt.Errorf("failed to insert board_permissions: %w", err)
+	}
+	return len(ids), nil
+}
+
+// DeviceCreateAgentHandler serves POST /oauth/device/create-agent. It lets
+// an authenticated ADMIN approver spawn a new Agent identity directly from
+// the device-flow approval page (so a CLI / MCP runner that resolved to a
+// HUMAN user because the approver had no Agents yet can still finish the
+// binding in one click instead of bouncing through the admin settings).
+//
+// The new Agent is created as enabled=true with the supplied nickname and
+// role (defaulting to MEMBER). It is returned to the caller with id /
+// nickname / role / type so the SPA can re-render the picker and pre-select
+// the freshly minted Agent before the approver presses Approve.
+//
+// Non-ADMIN approvers get 403; anonymous visitors get 401; invalid input
+// (missing nickname) gets 400 — mirroring the shape of the existing
+// /api/v1/auth/agents endpoint so the UI can reuse the same error handling.
+func DeviceCreateAgentHandler(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := currentUserOrUnauthorized(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":             "unauthenticated",
+				"error_description": "You must be logged in to create an Agent",
+			})
+			return
+		}
+		if user.Role != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":             "forbidden",
+				"error_description": "Only admin approvers can create Agent identities from the device-flow page",
+			})
+			return
+		}
+
+		var req DeviceCreateAgentRequest
+		if err := c.ShouldBind(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":             "invalid_request",
+				"error_description": "request body must be JSON with a non-empty nickname",
+			})
+			return
+		}
+		nickname := strings.TrimSpace(req.Nickname)
+		if nickname == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":             "invalid_request",
+				"error_description": "nickname is required",
+			})
+			return
+		}
+
+		role := strings.ToUpper(strings.TrimSpace(req.Role))
+		if role == "" {
+			role = "MEMBER"
+		}
+		if role != "ADMIN" && role != "MEMBER" && role != "VIEWER" {
+			role = "MEMBER"
+		}
+
+		agentID := generateOpaqueID()
+		now := time.Now()
+		if _, err := db.Exec(
+			`INSERT INTO users (id, username, nickname, avatar, type, role, enabled, created_at, updated_at, last_active_at)
+			 VALUES (?, ?, ?, '', 'AGENT', ?, 1, ?, ?, ?)`,
+			agentID, nickname, nickname, role, now, now, now,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":             "server_error",
+				"error_description": err.Error(),
+			})
+			return
+		}
+
+		// s-1253: per-board role selection at creation time. The local
+		// resolveDeviceCreateAgentBoardGrants helper mirrors
+		// handlers.ResolveBoardGrants (see the comment on that function
+		// for why the duplication exists). On failure the user row is
+		// rolled back so the approver does not end up with an orphan
+		// agent whose name+id is shown in the picker but cannot reach
+		// any board.
+		var grantedCount int
+		if len(req.BoardGrants) > 0 {
+			var gErr error
+			grantedCount, gErr = resolveDeviceCreateAgentBoardGrants(db, user.ID, agentID, req.BoardGrants)
+			if gErr != nil {
+				if _, delErr := db.Exec(`DELETE FROM users WHERE id = ?`, agentID); delErr != nil {
+					log.Printf("[DeviceCreateAgent] failed to roll back orphan agent %s: %v", agentID, delErr)
+				}
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error":             "invalid_request",
+					"error_description": gErr.Error(),
+				})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"agent": gin.H{
+				"id":           agentID,
+				"nickname":     nickname,
+				"role":         role,
+				"type":         "AGENT",
+				"enabled":      true,
+				"createdAt":    now,
+				"grantedCount": grantedCount,
+			},
+		})
+	}
 }

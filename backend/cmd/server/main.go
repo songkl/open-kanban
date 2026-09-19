@@ -324,10 +324,7 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	// request (s-1248). Both /device/approve and /device/create-agent
 	// require an authenticated session so anonymous visitors cannot
 	// burn through the quota.
-	// (Handler TODO: add oauth.DeviceCreateAgentHandler in a
-	// follow-up — endpoint registration commented out until the
-	// function lands in internal/oauth/.)
-	// oauthGroup.POST("/device/create-agent", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceCreateAgentHandler(db))
+	oauthGroup.POST("/device/create-agent", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceCreateAgentHandler(db))
 	// External IdP login + callback (s-1144 + s-1145).
 	//
 	// /oauth/external/:slug/login mints the CSRF state and
