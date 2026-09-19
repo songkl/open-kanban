@@ -20,12 +20,28 @@ export interface TrackedPoll {
   intervalSeconds: number;
   scope: string;
   clientId: string;
+  // audienceType is the resolved audience_type the server echoed back.
+  // Surfaced so the CLI / MCP server can decide how to interpret the
+  // binding (s-1233) — empty string means "no hint, fall back to
+  // client-name heuristic".
+  audienceType?: string;
+}
+
+// DeviceCodeRequestOpts controls optional extensions on the device-code
+// request. AudienceType ("agent" | "human") hints to the server which
+// identity the resulting token should be bound to; the server applies its
+// own client-name heuristic on top and may surface an identity picker on
+// the approval page. Unrecognised values are coerced to "human" so callers
+// never need to special-case the absence of the field.
+export interface DeviceCodeRequestOpts {
+  audienceType?: "agent" | "human";
 }
 
 export async function requestDeviceCode(
   metadata: OAuthMetadata,
   clientId: string,
-  scope: string
+  scope: string,
+  opts: DeviceCodeRequestOpts = {}
 ): Promise<TrackedPoll> {
   if (!metadata.device_authorization_endpoint) {
     throw new DeviceFlowError("server_error", "AS does not advertise a device_authorization_endpoint");
@@ -34,6 +50,9 @@ export async function requestDeviceCode(
     client_id: clientId,
     scope
   });
+  if (opts.audienceType) {
+    body.set("audience_type", opts.audienceType);
+  }
   const res = await fetch(metadata.device_authorization_endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -52,7 +71,8 @@ export async function requestDeviceCode(
     expiresAt: Date.now() + data.expires_in * 1000,
     intervalSeconds: data.interval,
     scope,
-    clientId
+    clientId,
+    audienceType: data.audience_type
   };
 }
 

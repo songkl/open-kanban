@@ -19,6 +19,7 @@ interface TaskState {
   updateTask: (task: Task) => Promise<Task>;
   deleteTask: (taskId: string) => Promise<void>;
   archiveTask: (taskId: string) => Promise<void>;
+  reorderTasks: (tasks: { id: string; columnId: string; position: number }[]) => Promise<void>;
   addComment: (taskId: string, content: string, author: string) => Promise<Comment>;
 }
 
@@ -75,6 +76,10 @@ export const useTaskStore = create<TaskState>((set) => ({
 
   archiveTask: async (taskId) => {
     await tasksApi.archive(taskId, true);
+  },
+
+  reorderTasks: async (tasks) => {
+    await tasksApi.reorder(tasks);
   },
 
   addComment: async (taskId, content, author) => {

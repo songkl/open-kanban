@@ -46,6 +46,9 @@ const mockTask: Task = {
   agentId: null,
   agentPrompt: null,
   createdBy: 'user-1',
+  createdByUsername: 'creatorlogin',
+  createdByNickname: 'Creator Nick',
+  createdByAvatar: 'https://example.com/avatar.png',
   createdAt: '2024-01-01',
   updatedAt: '2024-01-01',
   comments: [],
@@ -81,9 +84,81 @@ describe('TaskCard', () => {
     expect(screen.getByText('task.priority.medium')).toBeInTheDocument();
   });
 
+  // s-1206: medium-priority yellow chip needs WCAG-AA contrast on dark
+  // theme; we move from yellow-400 text on yellow-900/50 to yellow-200
+  // text on yellow-900/70 and tighten the light-mode text shade to
+  // yellow-800 so both modes pass contrast.
+  it('renders the medium-priority chip with WCAG-AA contrast classes', () => {
+    const { container } = render(<TaskCard {...defaultProps} />);
+    const badge = screen.getByText('task.priority.medium');
+    expect(badge.className).toContain('bg-yellow-100');
+    expect(badge.className).toContain('text-yellow-800');
+    expect(badge.className).toContain('dark:bg-yellow-900/70');
+    expect(badge.className).toContain('dark:text-yellow-200');
+    // sanity check: the badge is the chip element, not the root card
+    expect(container).toBeInTheDocument();
+  });
+
+  // s-1206: card surface needs to be a step darker on dark theme so it
+  // doesn't outshine the column background. Was dark:bg-zinc-800/95,
+  // now dark:bg-zinc-800/80.
+  it('uses a lower-opacity zinc surface on dark mode for the card', () => {
+    const { container } = render(<TaskCard {...defaultProps} />);
+    const card = container.firstChild as HTMLElement | null;
+    expect(card?.className).toContain('dark:bg-zinc-800/80');
+    expect(card?.className).not.toContain('dark:bg-zinc-800/95');
+  });
+
   it('renders assignee', () => {
     render(<TaskCard {...defaultProps} />);
     expect(screen.getByText('John Doe')).toBeInTheDocument();
+  });
+
+  // s-1202: assignee badge carries an explicit tooltip and aria-label so
+  // it cannot be confused with the runner chip (PM_REVIEW_2026-09-17
+  // §3.2 finding #1). We assert the badge container via its data-testid
+  // and the human/agent icon prefix that the previous plain text didn't
+  // have.
+  it('renders assignee badge with explicit Assignee tooltip', () => {
+    render(<TaskCard {...defaultProps} />);
+    const badge = screen.getByTestId('task-card-assignee-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute('title', 'taskCard.assigneeBadgeTitle');
+    expect(badge).toHaveAttribute('aria-label', 'taskCard.assigneeBadgeAria');
+  });
+
+  it('renders last-runner badge with explicit Runner tooltip when run is provided', () => {
+    const run = {
+      id: 'run-1',
+      taskId: 'task-1',
+      runnerId: 'Mac-66681-9af0',
+      agentId: null,
+      status: 'running' as const,
+      claimedAt: '2024-01-01T00:00:00Z',
+      lastHeartbeatAt: '2024-01-01T00:00:00Z',
+      expiresAt: '2024-01-01T00:10:00Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    };
+    render(<TaskCard {...defaultProps} run={run} />);
+    const badge = screen.getByTestId('task-card-last-runner-badge');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute('title', 'taskCard.lastRunnerBadgeTitle');
+    expect(badge).toHaveAttribute('aria-label', 'taskCard.lastRunnerBadgeAria');
+    expect(badge.textContent).toContain('Mac-66681-9');
+  });
+
+  it('omits the last-runner badge when no run is provided', () => {
+    render(<TaskCard {...defaultProps} />);
+    expect(screen.queryByTestId('task-card-last-runner-badge')).not.toBeInTheDocument();
+  });
+
+  it('labels the creator avatar with an explicit Created-by tooltip', () => {
+    render(<TaskCard {...defaultProps} />);
+    const createdBy = screen.getByTestId('task-card-created-by');
+    expect(createdBy).toHaveAttribute('title', 'taskCard.createdByTooltip');
+    expect(createdBy).toHaveAttribute('aria-label', 'taskCard.createdByTooltip');
   });
 
   it('calls onClick when view details button is clicked', () => {

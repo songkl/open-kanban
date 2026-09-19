@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import type { Agent, Column } from '@/types/kanban';
 
+export type ColumnTransitionTrigger = 'none' | 'on_enter' | 'on_exit' | 'both';
+
 interface EditColumnModalProps {
   isOpen: boolean;
   column: Column | null;
@@ -10,6 +12,8 @@ interface EditColumnModalProps {
   description: string;
   ownerAgent: string;
   agents: Agent[];
+  boundAgentTypes: string[];
+  transitionTrigger: ColumnTransitionTrigger;
   onClose: () => void;
   onSave: () => void;
   onNameChange: (name: string) => void;
@@ -17,6 +21,8 @@ interface EditColumnModalProps {
   onStatusChange: (status: string) => void;
   onDescriptionChange: (description: string) => void;
   onOwnerAgentChange: (ownerAgent: string) => void;
+  onBoundAgentTypesChange: (ids: string[]) => void;
+  onTransitionTriggerChange: (trigger: ColumnTransitionTrigger) => void;
 }
 
 export function EditColumnModal({
@@ -28,6 +34,8 @@ export function EditColumnModal({
   description,
   ownerAgent,
   agents,
+  boundAgentTypes,
+  transitionTrigger,
   onClose,
   onSave,
   onNameChange,
@@ -35,10 +43,21 @@ export function EditColumnModal({
   onStatusChange,
   onDescriptionChange,
   onOwnerAgentChange,
+  onBoundAgentTypesChange,
+  onTransitionTriggerChange,
 }: EditColumnModalProps) {
   const { t } = useTranslation();
 
   if (!isOpen || !column) return null;
+
+  const agentList = agents.filter(a => a.type === 'AGENT');
+  const toggleAgentBinding = (id: string) => {
+    if (boundAgentTypes.includes(id)) {
+      onBoundAgentTypesChange(boundAgentTypes.filter(x => x !== id));
+    } else {
+      onBoundAgentTypesChange([...boundAgentTypes, id]);
+    }
+  };
 
   return (
     <div
@@ -46,7 +65,7 @@ export function EditColumnModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100"
+        className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -139,13 +158,135 @@ export function EditColumnModal({
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 px-4 py-3 text-zinc-800 dark:text-zinc-100 transition-all focus:border-blue-500 focus:bg-white dark:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
               <option value="">{t('column.noOwnerAgent')}</option>
-              {agents.filter(a => a.type === 'AGENT').map((agent) => (
+              {agentList.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.nickname}
                 </option>
               ))}
             </select>
             <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{t('column.ownerAgentHint')}</p>
+          </div>
+
+          {/*
+            s-1214: column workflow trigger. Binds one or more Agents
+            to the column edge and toggles whether the Agent run fires
+            when a task enters / exits / either.
+          */}
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
+              {t('column.boundAgents')}
+            </label>
+            {agentList.length === 0 ? (
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">{t('column.noAgentsAvailable')}</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {agentList.map((agent) => {
+                  const active = boundAgentTypes.includes(agent.id);
+                  return (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      onClick={() => toggleAgentBinding(agent.id)}
+                      data-testid={`edit-column-agent-${agent.id}`}
+                      aria-pressed={active}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                        active
+                          ? 'bg-blue-500 text-white shadow-sm hover:bg-blue-600'
+                          : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600'
+                      }`}
+                    >
+                      {active ? '✓ ' : ''}{agent.nickname}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{t('column.boundAgentsHint')}</p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
+              {t('column.transitionTrigger')}
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={transitionTrigger !== 'none'}
+                data-testid="edit-column-trigger-toggle"
+                onClick={() =>
+                  onTransitionTriggerChange(transitionTrigger === 'none' ? 'on_enter' : 'none')
+                }
+                disabled={boundAgentTypes.length === 0}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  transitionTrigger !== 'none' ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-600'
+                } ${boundAgentTypes.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    transitionTrigger !== 'none' ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-sm text-zinc-600 dark:text-zinc-300">
+                {transitionTrigger !== 'none'
+                  ? t('column.transitionEnabled')
+                  : t('column.transitionDisabled')}
+              </span>
+            </div>
+            {boundAgentTypes.length === 0 && (
+              <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                {t('column.transitionRequiresAgents')}
+              </p>
+            )}
+            {boundAgentTypes.length > 0 && transitionTrigger !== 'none' && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'on_enter' as ColumnTransitionTrigger, label: t('column.triggerOnEnter') },
+                    { value: 'on_exit' as ColumnTransitionTrigger, label: t('column.triggerOnExit') },
+                  ]).map((opt) => {
+                    const other = opt.value === 'on_enter' ? 'on_exit' : 'on_enter';
+                    const wasChecked = transitionTrigger === opt.value || transitionTrigger === 'both';
+                    const handleToggle = () => {
+                      if (wasChecked) {
+                        // Toggle off this edge
+                        if (transitionTrigger === 'both') {
+                          onTransitionTriggerChange(other);
+                        } else {
+                          onTransitionTriggerChange('none');
+                        }
+                      } else {
+                        // Toggle on this edge
+                        if (transitionTrigger === other) {
+                          onTransitionTriggerChange('both');
+                        } else {
+                          onTransitionTriggerChange(opt.value);
+                        }
+                      }
+                    };
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
+                          wasChecked
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                            : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-blue-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 rounded border-zinc-300 text-blue-500 focus:ring-blue-500"
+                          checked={wasChecked}
+                          onChange={handleToggle}
+                          data-testid={`edit-column-trigger-${opt.value}`}
+                        />
+                        {opt.label}
+                      </label>
+                    );
+                  })}
+              </div>
+            )}
+            <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{t('column.transitionTriggerHint')}</p>
           </div>
         </div>
 

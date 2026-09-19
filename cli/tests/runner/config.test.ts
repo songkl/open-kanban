@@ -594,6 +594,75 @@ describe("validate — §4.6 strict checks", () => {
     expect(validate(cfg)).toBe(cfg);
   });
 
+  // s-1191: positional-arg delivery for agents like `opencode run`.
+  // The runner now treats `promptMode: argv` as a first-class mode so
+  // `opencode run <prompt>` no longer ends up as
+  // `opencode run --prompt <tmp-file>` (which opencode's `run`
+  // subcommand rejects with its help banner).
+  it("accepts promptMode=argv as a valid mode", () => {
+    const cfg = baseConfig({
+      agent: { promptMode: "argv", args: ["run"] },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("accepts promptMode=argv with promptPosition=replace + {prompt}", () => {
+    const cfg = baseConfig({
+      agent: {
+        promptMode: "argv",
+        promptPosition: "replace",
+        args: ["run", "{prompt}"],
+      },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("accepts promptMode=argv with promptPosition=prepend + extra args", () => {
+    const cfg = baseConfig({
+      agent: {
+        promptMode: "argv",
+        promptPosition: "prepend",
+        args: ["--non-interactive", "run"],
+      },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("rejects unknown promptMode values", () => {
+    const cfg = baseConfig({
+      agent: { promptMode: "nope" as unknown as "argv" },
+    });
+    try {
+      validate(cfg);
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(RunnerConfigError);
+      expect((err as RunnerConfigError).field).toBe("agent.promptMode");
+      expect((err as Error).message).toContain("must be one of");
+    }
+  });
+
+  // s-1235: promptMode=acp opts the agent into the Agent Client
+  // Protocol handshake. The validator must accept it as a first-
+  // class mode alongside arg/stdin/file/argv.
+  it("accepts promptMode=acp as a valid mode", () => {
+    const cfg = baseConfig({
+      agent: { promptMode: "acp", args: [] },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("accepts promptMode=acp with a custom acpFlag override", () => {
+    const cfg = baseConfig({
+      agent: {
+        promptMode: "acp",
+        acpFlag: "--agent-client-protocol",
+        args: [],
+      },
+    });
+    expect(validate(cfg).agent.acpFlag).toBe("--agent-client-protocol");
+  });
+
   it("rejects promptPosition=replace when {prompt} is missing", () => {
     const cfg = baseConfig({
       agent: {

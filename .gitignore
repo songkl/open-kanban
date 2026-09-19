@@ -74,8 +74,8 @@ test/
 
 .claude/
 backend/web/
-devDoc/
 opencode.json
+devDoc/
 
 # Local debug / smoke artifacts
 e2e-debug/

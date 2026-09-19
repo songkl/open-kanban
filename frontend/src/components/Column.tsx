@@ -8,7 +8,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { TaskCard } from './TaskCard';
-import type { Column as ColumnType, Task } from '@/types/kanban';
+import type { Column as ColumnType, CustomField, Task, TaskRun } from '@/types/kanban';
+import type { CardDensity } from '../hooks/useCardDensity';
 
 const LARGE_COLUMN_THRESHOLD = 50;
 
@@ -33,6 +34,40 @@ interface ColumnProps {
   onLoadMore?: (columnId: string) => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  canCreateTask?: boolean;
+  /**
+   * s-1212: column-header ⋯ menu (s-1188 finding #4). Surfacing the
+   * menu items is the Column component's job; the parent owns the
+   * confirmation dialog and the actual API call. We pass the menu
+   * callbacks through instead of pulling them in via context so the
+   * existing ColumnBoard / BoardPage wiring stays untouched.
+   *
+   * The three handlers are optional so the existing mobile menu
+   * (which does not surface these actions today) keeps working
+   * without changes — when none of the handlers are wired up the
+   * ⋯ button hides itself entirely.
+   */
+  onColumnMarkAllCompleted?: (column: ColumnType) => void;
+  onColumnArchiveAll?: (column: ColumnType) => void;
+  onColumnExportCsv?: (column: ColumnType) => void;
+  /**
+   * s-1193: lookup of in-flight `task_runs` rows by taskId. Read from
+   * `useRunStore` at the BoardPage level and threaded through so each
+   * TaskCard can subscribe without firing its own polling request.
+   */
+  runs?: Record<string, TaskRun>;
+  /**
+   * s-1197: per-board custom field definitions. Threaded from BoardPage
+   * so each card renders matching chips without re-reading localStorage.
+   */
+  customFields?: CustomField[];
+  /**
+   * s-1213: per-user card density preference. Threaded from
+   * BoardPage → ColumnBoard → Column → TaskCard. Defaults to
+   * 'standard' so existing call sites that haven't been wired up
+   * yet keep rendering the legacy card layout.
+   */
+  density?: CardDensity;
 }
 
 interface Board {
@@ -40,7 +75,7 @@ interface Board {
   name: string;
 }
 
-export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore }: ColumnProps) {
+export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClick, onTaskArchive, onTaskDelete, onTaskMoveToColumn, allColumns, onOpenAddTask, onColumnRename, isMobileView, searchQuery, selectedTasks, onSelectTask, onSelectAllTasks, onLoadMore, hasMore, isLoadingMore, canCreateTask = true, onColumnMarkAllCompleted, onColumnArchiveAll, onColumnExportCsv, runs, customFields, density = 'standard' }: ColumnProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { setNodeRef, isOver } = useDroppable({
@@ -51,8 +86,25 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
   const [editName, setEditName] = useState(column.name);
   const [showDescription, setShowDescription] = useState(false);
   const [showCopied, setShowCopied] = useState(false);
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
+
+  // s-1212 — close the column ⋯ menu on outside-click so the
+  // existing mousedown pattern in CustomDropdown stays consistent.
+  // The menu is small enough that we don't pull in a popover
+  // library; a click-outside handler is enough.
+  useEffect(() => {
+    if (!showColumnMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target as Node)) {
+        setShowColumnMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showColumnMenu]);
 
   const handleCopyStatus = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -90,6 +142,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
   }, [isEditing]);
 
   const handleOpenAddTask = () => {
+    if (!canCreateTask) return;
     if (onOpenAddTask && column.id) {
       onOpenAddTask(column.id);
     }
@@ -133,14 +186,14 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
         ref={setNodeRef}
         className={`relative flex flex-col rounded-lg bg-zinc-200/50 dark:bg-zinc-800/50 h-full ${
           isOver ? 'ring-2 ring-blue-400 z-10' : ''
-        } ${isMobileView ? 'w-72 min-h-0 flex-shrink-0' : 'w-80 flex-shrink-0'}`}
+        } ${isMobileView ? 'w-full min-h-0 flex-shrink-0' : 'w-80 flex-shrink-0'}`}
       >
         <div
-          className="flex items-center gap-2 rounded-t-lg px-4 py-3"
+          className="flex items-center gap-2 rounded-t-lg px-4 py-3 min-h-[56px]"
           style={{ backgroundColor: column.color + '20' }}
         >
           <div
-            className="h-3 w-3 rounded-full"
+            className="h-3 w-3 rounded-full flex-shrink-0"
             style={{ backgroundColor: column.color }}
           />
           {isEditing ? (
@@ -153,15 +206,15 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
               onChange={(e) => setEditName(e.target.value)}
               onBlur={handleSaveEdit}
               onKeyDown={handleKeyDown}
-              className="flex-1 px-1 py-0.5 text-sm font-semibold bg-white dark:bg-zinc-700 border border-blue-400 rounded text-zinc-700 dark:text-zinc-400 outline-none"
+              className="flex-1 min-h-[32px] px-2 py-1 text-sm font-semibold bg-white dark:bg-zinc-700 border border-blue-400 rounded text-zinc-700 dark:text-zinc-400 outline-none"
             />
           ) : (
             <h2
-              className="flex-1 font-semibold text-zinc-700 dark:text-zinc-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group flex items-center gap-1"
+              className="flex-1 min-h-[32px] flex items-center font-semibold text-zinc-700 dark:text-zinc-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors group gap-1"
               onClick={handleStartEdit}
               title={onColumnRename ? t('column.clickToRename') : undefined}
             >
-              <span>{column.name}</span>
+              <span className="truncate">{column.name}</span>
               {onColumnRename && (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -173,7 +226,7 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 dark:text-zinc-500 hover:text-blue-500"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 dark:text-zinc-500 hover:text-blue-500 flex-shrink-0"
                 >
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -184,33 +237,43 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
           {column.status && (
             <span
               onClick={handleCopyStatus}
-              className="ml-2 rounded-full bg-zinc-100 dark:bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-600 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors relative"
+              className="ml-2 flex items-center min-h-[32px] min-w-[32px] rounded-full bg-zinc-100 dark:bg-zinc-700 px-3 text-xs font-medium text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-600 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors relative flex-shrink-0"
               title={t('column.clickToCopyStatus')}
             >
               {showCopied ? t('column.copied') : column.status}
             </span>
           )}
-          <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-500 flex items-center gap-2">
+          <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-500 flex items-center gap-1 flex-shrink-0">
             {onSelectAllTasks && tasks.length > 0 && (
               <label className="sr-only" htmlFor={`select-all-${column.id}`}>
-                {t('column.selectAll')}
+                {t('common.selectAll')}
               </label>
             )}
             {onSelectAllTasks && tasks.length > 0 && (
-              <input
-                id={`select-all-${column.id}`}
-                name={`select-all-${column.id}`}
-                type="checkbox"
-                className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-blue-500 focus:ring-blue-500 cursor-pointer"
-                checked={selectedTasks && tasks.length > 0 && tasks.every(t => selectedTasks.has(t.id))}
-                onChange={(e) => {
+              <span
+                className="flex items-center justify-center min-h-[32px] min-w-[32px] cursor-pointer"
+                onClick={(e) => {
                   e.stopPropagation();
                   if (onSelectAllTasks) {
                     onSelectAllTasks(column.id, tasks.map(t => t.id));
                   }
                 }}
-                aria-label={t('column.selectAll')}
-              />
+              >
+                <input
+                  id={`select-all-${column.id}`}
+                  name={`select-all-${column.id}`}
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-blue-500 focus:ring-blue-500 cursor-pointer pointer-events-none"
+                  checked={selectedTasks && tasks.length > 0 && tasks.every(t => selectedTasks.has(t.id))}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    if (onSelectAllTasks) {
+                      onSelectAllTasks(column.id, tasks.map(t => t.id));
+                    }
+                  }}
+                  aria-label={t('common.selectAll')}
+                />
+              </span>
             )}
             <button
               onClick={(e) => {
@@ -219,11 +282,103 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   navigate(`/board/${currentBoardId}/column/${column.id}`);
                 }
               }}
-              className="hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer transition-colors"
+              className="flex items-center justify-center min-h-[32px] min-w-[32px] px-2 hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer transition-colors"
               title={t('column.viewColumnDetail')}
+              aria-label={t('column.viewColumnDetail')}
             >
               {tasks.length}
             </button>
+            {(onColumnMarkAllCompleted || onColumnArchiveAll || onColumnExportCsv) && (
+              <div ref={columnMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowColumnMenu((prev) => !prev);
+                  }}
+                  className="flex items-center justify-center min-h-[32px] min-w-[32px] px-2 rounded-md text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                  title={t('column.menu.open')}
+                  aria-label={t('column.menu.open')}
+                  aria-haspopup="menu"
+                  aria-expanded={showColumnMenu}
+                  data-testid={`column-menu-button-${column.id}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="5" r="1.4" />
+                    <circle cx="12" cy="12" r="1.4" />
+                    <circle cx="12" cy="19" r="1.4" />
+                  </svg>
+                </button>
+                {showColumnMenu && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50"
+                  >
+                    {onColumnMarkAllCompleted && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasks.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowColumnMenu(false);
+                          onColumnMarkAllCompleted(column);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid={`column-menu-complete-${column.id}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        {t('column.menu.markAllCompleted')}
+                      </button>
+                    )}
+                    {onColumnArchiveAll && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasks.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowColumnMenu(false);
+                          onColumnArchiveAll(column);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid={`column-menu-archive-${column.id}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="4" width="20" height="5" rx="1" />
+                          <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+                          <path d="M10 13h4" />
+                        </svg>
+                        {t('column.menu.archiveAll')}
+                      </button>
+                    )}
+                    {onColumnExportCsv && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasks.length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowColumnMenu(false);
+                          onColumnExportCsv(column);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid={`column-menu-export-${column.id}`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        {t('column.menu.exportCsv')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </span>
         </div>
 
@@ -254,7 +409,12 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
             {tasks.length === 0 ? (
               <div
                 onClick={handleOpenAddTask}
-                className="py-12 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600/50 dark:hover:bg-zinc-700/30 rounded-lg transition-colors"
+                title={canCreateTask ? undefined : t('column.noAddPermission')}
+                className={`py-12 flex flex-col items-center justify-center text-center rounded-lg transition-colors ${
+                  canCreateTask
+                    ? 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-600/50 dark:hover:bg-zinc-700/30'
+                    : 'cursor-not-allowed opacity-60'
+                }`}
               >
                 <div className="mb-3 rounded-full bg-zinc-100 dark:bg-zinc-700 p-4">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-400 dark:text-zinc-500">
@@ -264,7 +424,9 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   </svg>
                 </div>
                 <p className="text-sm font-medium text-zinc-500 dark:text-zinc-500">{t('column.noTasks')}</p>
-                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{t('column.clickToAddTask')}</p>
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                  {canCreateTask ? t('column.clickToAddTask') : t('column.noAddPermission')}
+                </p>
               </div>
             ) : (
               tasks.map((task) => (
@@ -281,6 +443,9 @@ export function Column({ column, currentBoardId, onTaskClick, onTaskCommentsClic
                   searchQuery={searchQuery}
                   isSelected={selectedTasks?.has(task.id)}
                   onSelect={onSelectTask ? (id, e) => onSelectTask(id, task, e as unknown as React.MouseEvent) : undefined}
+                  run={runs ? runs[task.id] ?? null : undefined}
+                  customFields={customFields}
+                  density={density}
                 />
               ))
             )}

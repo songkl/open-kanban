@@ -113,9 +113,19 @@ CREATE TABLE IF NOT EXISTS tasks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Comments table
+--
+-- content is LONGTEXT (max 4 GiB) rather than TEXT (max 64 KiB) so
+-- the API can accept arbitrarily long comment bodies without the
+-- INSERT failing at the storage layer. The handler (see
+-- internal/handlers/comments.go CreateComment) intentionally applies
+-- no application-level max-length validation either — the only 400
+-- cases for POST /api/v1/comments are missing/empty content, missing
+-- taskId, and an unknown taskId. Any other "comment too long" class
+-- of failure would have surfaced as 500 from the DB driver before
+-- this column was widened, which is why s-1018 widened it.
 CREATE TABLE IF NOT EXISTS comments (
     id VARCHAR(255) PRIMARY KEY,
-    content TEXT NOT NULL,
+    content LONGTEXT NOT NULL,
     author VARCHAR(255) DEFAULT 'Anonymous',
     task_id VARCHAR(255) NOT NULL,
     user_id VARCHAR(255),

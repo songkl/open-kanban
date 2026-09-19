@@ -179,6 +179,16 @@ All notable changes to this project will be documented in this file.
     avoids a late re-enqueue on a draining worker pool.
 
 ### Features
+  - feat: add interactive identity picker to `kanban auth login` (s-1246). When run from a TTY with no `--as-human` / `--as-agent` flag, the CLI now prompts the operator to bind the token to an Agent (default, recommended for unattended runners) or to their own account (Human). Non-TTY callers (CI, e2e suites, piped scripts) keep the historical default of 'agent' so existing automation is untouched. Adds the symmetric `--as-agent` flag and surfaces a richer post-login success block (host / profile / identity / client id / scope + next-step hints) so the operator immediately sees what they bound to.
+  - feat: add `agent.promptMode: "acp"` so `kanban run` drives mainstream agents over the [Agent Client Protocol](https://agentclientprotocol.com/) (s-1235). The runner appends `agent.acpFlag` (default `--acp`) to argv, opens the child's stdio as pipe/pipe/pipe, and runs the full `initialize` → `session/new` → `session/prompt` handshake over line-delimited JSON-RPC. Streamed `session/update` text chunks are aggregated into `result.stdout` and forwarded to `/api/v1/runs/:taskId/finish` so the existing task detail page picks up the agent's reply without any UI work. Pick this for `claude --acp`, `opencode acp`, `gemini --acp`, and any other ACP-compatible binary; override `agent.acpFlag` when the agent uses a different opt-in.
+  - feat: add `kanban auth agent login` to drive the OAuth device flow, launch the verification page in the default browser, and bind the CLI to the Agent identity (existing or freshly created) the human approver picks on the approval page (s-1222). Refuses to persist when the bound user is HUMAN and restores the previous credentials on every failure path so the operator is never stranded mid-migration.
+  - feat: add column workflow trigger (migration 011) so column_agents.transition_trigger (none / on_enter / on_exit / both) fires the bound Agent automatically when a task crosses the column boundary (s-1214)
+  - feat: extend columns management UI with a per-column Agent binding + auto-trigger toggle (s-1214)
+  - feat: add per-user notification preferences (migration 012) backing a new "Notifications" section in Settings (s-1203, PM_REVIEW_2026-09-17 §3.7). Email and webhook delivery can be muted independently; webhook URL is editable and validated server-side
+  - feat: add `GET` / `PUT /api/v1/auth/me/notification-preferences` endpoints with partial-PUT semantics (omitted fields preserved) so the Settings tab can flip one switch at a time
+  - feat: move the Theme toggle into the top-right header (one click from any route) for s-1203, de-duping the toggle that used to live only in Settings → Theme
+  - feat: hide the OAuth admin tab (client management + signing secret) from non-admin accounts (s-1203)
+  - feat: add public read-only share link + iframe embed for boards (s-1204, PM_REVIEW_2026-09-17 §6): board owners mint a viewer token (migration 013, sha256-hashed at rest, plaintext returned exactly once) and get a sanitized `/public/b/:token` view that anonymous visitors can browse without logging in; mutation endpoints stay auth-gated so a leaked link never escalates into a write surface
 
 - s-1187: per-task variable substitution in `kanban run`'s
   `agent.args`. Operators can now embed tokens like `$taskId`,
@@ -403,6 +413,10 @@ All notable changes to this project will be documented in this file.
   man page were updated to reflect the new ordering.
 
 ### Bug Fixes
+  - fix: fall back to the profile tab when a non-admin lands on `?tab=oauth` via a shared link (s-1203)
+  - fix: tokenise `agent.args` with POSIX shell-style quoting so a YAML scalar like `--auto true run "do-kanban $taskId"` lands as multiple argv entries instead of one opaque flag the agent binary cannot parse (s-1238). Operators can now write each flag-value group as a single string and rely on the runner to split on whitespace, honour single/double quotes, and apply `$name` substitution / `{prompt}` replacement on the tokenised list
+  - fix: rewrite the `kanban auth login` (agent mode) HUMAN-bound error to spell out the wrong / right radio-button choice on the approval page, surface the `kanban auth login --as-human` escape hatch for operators who genuinely wanted a personal-account binding, and confirm the previous credential snapshot is intact so the operator doesn't need to `auth logout` before re-running (s-1247). The same actionable hint is mirrored on `kanban auth agent bind` so the two paths give the operator a single, consistent recovery story
+  - fix: render the Agent identity picker on `/oauth/device` for `kanban auth login` (s-1249). The CLI / MCP server registers via DCR as `open-kanban-mcp`, which the server's CLI-detection heuristic did not match, so the approval page opened without the picker and the human approver silently bound the token to their own account. The heuristic now also matches `open-kanban-mcp` and any `-mcp`-suffixed client, and the CLI's `ensureRegistered` honours the `clientName` supplied via `authorizeInteractive` so the CLI registers as `open-kanban-cli` (the canonical CLI name) when the operator / test asks for it. The CLI-side `isCliLikeClientName` mirror is updated in lock-step so the device-flow prompt warns operators before they hit the page
 
 - s-1186: fix the device-flow approval page (`/oauth/device`) disabling
   the Approve button when the server asked for an Agent identity but
@@ -727,6 +741,21 @@ All notable changes to this project will be documented in this file.
   expired JWT, tampered signature, kanban-token fallback).
 
 ### Improvements
+  - i18n: add settings.notifications.* keys (en + zh) for the new Notifications section
+  - test: cover the new ACP runner path (s-1235) — JSON-RPC framing, the `initialize` → `session/new` → `session/prompt` handshake, streamed text-chunk aggregation, byte-cap truncation, error-frame forwarding, abort-signal propagation, and the `prepareSpawn` argv shape for `promptMode: "acp"` with default and custom `acpFlag`
+  - test: cover the new notifications-preferences endpoints (handler + migration), the admin-gated OAuth tab, the Notifications tab visibility, the theme toggle, and the partial-PUT contract
+  - test: cover the new `agent.args` shell-style tokeniser (s-1238) — fast-path passthrough, whitespace / quote / backslash handling, `$name` and `{prompt}` round-trips, unterminated-quote errors, and the `prepareSpawn` argv shape for `promptMode: "argv"` with multi-token operator entries
+  - feat: make board header wrap and hide secondary buttons on mobile so the action bar fits at 375px (s-1192)
+  - feat: add mobile icon-only filter and create buttons with 36px tap targets (s-1192)
+  - feat: give mobile tab bar and column header 32px+ tap targets for counters, select-all and status badges (s-1192)
+  - feat: add full-width mobile SearchBar with leading icon and 32px clear button (s-1192)
+  - i18n: add filter.clearSearch key (s-1192)
+  - test: add mobile layout tests for SearchBar, BoardToolbar, Column and a new ColumnBoard.test.tsx (s-1192)
+  - feat: split task card assignee and last-runner semantics — the footer now renders a 👤 assignee chip and a separate 🤖 last-runner chip with explicit tooltips, and the task detail drawer surfaces both fields in their own labelled rows so operators can no longer mistake a Runner device name for the real owner (s-1202)
+  - feat: add explicit "Created by" tooltip to the creator avatar on the task card so the previously unexplained avatar now reads as the task author (s-1202)
+  - i18n: add taskCard.{assigneeBadgeTitle,assigneeBadgeAria,lastRunnerBadgeTitle,lastRunnerBadgeAria,createdByTooltip,unassigned} and taskModal.{assigneeFieldLabel,assigneeFieldUnassigned,lastRunnerFieldLabel} (s-1202)
+  - test: cover the new task-card assignee/last-runner chips and the drawer people section (s-1202)
+  - test: cover the Agent identity picker surfacing for `open-kanban-mcp` device flows (s-1249) — `AgentSelectionRequired` helper expansion (now matches `open-kanban-mcp` and any `-mcp` suffix), `DeviceLookupHandler` happy path for MCP-shaped clients, the symmetric CLI prompt hint for `open-kanban-mcp`, and the CLI DCR honouring `AuthorizeOptions.clientName` so the CLI registers as `open-kanban-cli` when the operator / test asks for it
 
 ### Documentation
 
@@ -761,6 +790,8 @@ All notable changes to this project will be documented in this file.
     input. Adds `cli/.test-results/` to `cli/.gitignore` so future
     test sweeps do not pollute the repo; raw logs stay under
     `cli/.test-results/` for follow-up debugging.
+  - feat: widen comments.content to LONGTEXT (migration 007) and document every 400 reason on POST /api/v1/comments (s-1018)
+  - test: add migration_007_test.go covering long-content round-trip and up/down non-destructiveness
 
 #### Fixed
   - fix: tone down borders + the VIEWER badge in dark mode

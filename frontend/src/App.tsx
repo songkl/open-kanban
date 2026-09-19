@@ -1,10 +1,12 @@
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { LoadingScreen } from './components/LoadingScreen';
+import { AppShell } from './components/AppShell';
 import { authApi } from './services/api';
 
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const SetupPage = lazy(() => import('./pages/SetupPage').then(m => ({ default: m.SetupPage })));
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const BoardsPage = lazy(() => import('./pages/BoardsPage').then(m => ({ default: m.BoardsPage })));
 const BoardPage = lazy(() => import('./pages/BoardPage').then(m => ({ default: m.BoardPage })));
 const DraftsPage = lazy(() => import('./pages/DraftsPage').then(m => ({ default: m.DraftsPage })));
@@ -18,6 +20,13 @@ const UserDetailPage = lazy(() => import('./pages/UserDetailPage').then(m => ({ 
 const ColumnDetailPage = lazy(() => import('./pages/ColumnDetailPage').then(m => ({ default: m.ColumnDetailPage })));
 const OAuthDevicePage = lazy(() => import('./pages/OAuthDevicePage').then(m => ({ default: m.OAuthDevicePage })));
 const RunHistoryPage = lazy(() => import('./pages/RunHistoryPage').then(m => ({ default: m.RunHistoryPage })));
+const RunsPage = lazy(() => import('./pages/RunsPage').then(m => ({ default: m.RunsPage })));
+const SearchPage = lazy(() => import('./pages/SearchPage').then(m => ({ default: m.SearchPage })));
+const TemplateMarketplacePage = lazy(() => import('./pages/TemplateMarketplacePage').then(m => ({ default: m.TemplateMarketplacePage })));
+const OnboardingWizardPage = lazy(() => import('./pages/OnboardingWizardPage').then(m => ({ default: m.OnboardingWizardPage })));
+const AgentConfigWizardPage = lazy(() => import('./pages/AgentConfigWizardPage').then(m => ({ default: m.AgentConfigWizardPage })));
+const PublicBoardPage = lazy(() => import('./pages/PublicBoardPage').then(m => ({ default: m.PublicBoardPage })));
+const StatusPage = lazy(() => import('./pages/StatusPage').then(m => ({ default: m.StatusPage })));
 
 function HomeRedirect() {
   const navigate = useNavigate();
@@ -32,7 +41,7 @@ function HomeRedirect() {
         if (data.needsSetup) {
           navigate('/setup', { replace: true });
         } else if (data.user) {
-          navigate('/boards', { replace: true });
+          navigate('/dashboard', { replace: true });
         } else {
           navigate('/login', { replace: true });
         }
@@ -52,6 +61,14 @@ function HomeRedirect() {
   return null;
 }
 
+interface ShellWrapperProps {
+  children: React.ReactNode;
+}
+
+function ShellWrapper({ children }: ShellWrapperProps) {
+  return <AppShell>{children}</AppShell>;
+}
+
 function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
@@ -59,20 +76,29 @@ function App() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup" element={<SetupPage />} />
-        <Route path="/board/:boardId" element={<BoardPage />} />
-        <Route path="/board/:boardId/column/:columnId" element={<ColumnDetailPage />} />
-        <Route path="/boards" element={<BoardsPage />} />
-        <Route path="/drafts" element={<DraftsPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/columns" element={<ColumnsPage />} />
-        <Route path="/completed" element={<CompletedPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/activities" element={<ActivityLogPage />} />
-        <Route path="/activity" element={<ActivityLogPage />} />
-        <Route path="/agent-activity" element={<AgentActivityPage />} />
-        <Route path="/user/:userId" element={<UserDetailPage />} />
+        <Route path="/board/:boardId" element={<ShellWrapper><BoardPage /></ShellWrapper>} />
+        <Route path="/board/:boardId/column/:columnId" element={<ShellWrapper><ColumnDetailPage /></ShellWrapper>} />
+        <Route path="/dashboard" element={<ShellWrapper><DashboardPage /></ShellWrapper>} />
+        <Route path="/boards" element={<ShellWrapper><BoardsPage /></ShellWrapper>} />
+        <Route path="/drafts" element={<ShellWrapper><DraftsPage /></ShellWrapper>} />
+        <Route path="/history" element={<ShellWrapper><HistoryPage /></ShellWrapper>} />
+        <Route path="/columns" element={<ShellWrapper><ColumnsPage /></ShellWrapper>} />
+        <Route path="/completed" element={<ShellWrapper><CompletedPage /></ShellWrapper>} />
+        <Route path="/settings" element={<ShellWrapper><SettingsPage /></ShellWrapper>} />
+        <Route path="/activities" element={<ShellWrapper><ActivityLogPage /></ShellWrapper>} />
+        <Route path="/activity" element={<ShellWrapper><ActivityLogPage /></ShellWrapper>} />
+        <Route path="/agent-activity" element={<ShellWrapper><AgentActivityPage /></ShellWrapper>} />
+        <Route path="/user/:userId" element={<ShellWrapper><UserDetailPage /></ShellWrapper>} />
         <Route path="/oauth/device" element={<OAuthDevicePage />} />
         <Route path="/runs" element={<RunHistoryPage />} />
+        <Route path="/runs-list" element={<ShellWrapper><RunsPage /></ShellWrapper>} />
+        <Route path="/search" element={<ShellWrapper><SearchPage /></ShellWrapper>} />
+        <Route path="/templates/marketplace" element={<ShellWrapper><TemplateMarketplacePage /></ShellWrapper>} />
+        <Route path="/templates" element={<Navigate to="/templates/marketplace" replace />} />
+        <Route path="/onboarding" element={<ShellWrapper><OnboardingWizardPage /></ShellWrapper>} />
+        <Route path="/onboarding/agent-config" element={<ShellWrapper><AgentConfigWizardPage /></ShellWrapper>} />
+        <Route path="/public/b/:token" element={<PublicBoardPage />} />
+        <Route path="/status" element={<StatusPage />} />
       </Routes>
     </Suspense>
   );

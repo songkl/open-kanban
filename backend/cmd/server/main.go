@@ -318,6 +318,16 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	// rule per role lives in DeviceAgentsHandler (plan §4.1.3).
 	oauthGroup.GET("/device/agents", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceAgentsHandler(db))
 	oauthGroup.POST("/device/approve", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
+	// Device flow: /oauth/device/create-agent lets the human
+	// approver mint a fresh Agent identity from the OAuthDevicePage
+	// when none of the existing accounts match the device-flow
+	// request (s-1248). Both /device/approve and /device/create-agent
+	// require an authenticated session so anonymous visitors cannot
+	// burn through the quota.
+	// (Handler TODO: add oauth.DeviceCreateAgentHandler in a
+	// follow-up — endpoint registration commented out until the
+	// function lands in internal/oauth/.)
+	// oauthGroup.POST("/device/create-agent", oauth.DeviceFlowGate(db), handlers.RequireAuth(db), oauth.DeviceCreateAgentHandler(db))
 	// External IdP login + callback (s-1144 + s-1145).
 	//
 	// /oauth/external/:slug/login mints the CSRF state and
@@ -365,21 +375,28 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.PUT("/token", handlers.UpdateToken(db))
 		authProtected.DELETE("/token", handlers.DeleteToken(db))
 		authProtected.GET("/activities", handlers.GetActivities(db))
+		authProtected.GET("/activities/export", handlers.ExportActivities(db))
 		authProtected.GET("/agents", handlers.GetAgents(db))
 		authProtected.POST("/agents", handlers.CreateAgent(db))
 		authProtected.POST("/agents/reset-token", handlers.ResetAgentToken(db))
 		authProtected.DELETE("/agents", handlers.DeleteAgent(db))
 		authProtected.GET("/users", handlers.GetUsers(db))
+		authProtected.GET("/users-visible", handlers.GetUsersVisible(db))
 		authProtected.PUT("/users", handlers.UpdateUser(db))
 		authProtected.POST("/users", handlers.CreateUser(db))
 		authProtected.POST("/users/enabled", handlers.SetUserEnabled(db))
 		authProtected.GET("/permissions", handlers.GetPermissions(db))
 		authProtected.POST("/permissions", handlers.SetPermission(db))
 		authProtected.DELETE("/permissions", handlers.DeletePermission(db))
+		authProtected.POST("/permissions/bulk", handlers.BulkSetPermissions(db))
+		authProtected.POST("/permissions/bulk-grant", handlers.BulkGrantPermissions(db))
+		authProtected.POST("/permissions/transfer-ownership", handlers.TransferOwnership(db))
 		authProtected.GET("/permissions/columns", handlers.GetColumnPermissions(db))
 		authProtected.POST("/permissions/columns", handlers.SetColumnPermission(db))
 		authProtected.DELETE("/permissions/columns", handlers.DeleteColumnPermission(db))
 		authProtected.PUT("/config", handlers.UpdateAppConfig(db))
+		authProtected.GET("/me/board-permissions", handlers.GetMyBoardPermissions(db))
+		authProtected.GET("/me/column-access", handlers.GetMyColumnAccess(db))
 		// OAuth 2.1 admin endpoints
 		authProtected.GET("/oauth/clients", oauth.ListAdminClientsHandler(db))
 		authProtected.DELETE("/oauth/clients", oauth.DeleteAdminClientHandler(db))
@@ -397,6 +414,17 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.DELETE("/oauth/providers/:id", oauth.DeleteAdminProviderHandler(db))
 	}
 
+	// Permission audit log endpoint: surfaces PERMISSION_GRANT /
+	// REVOKE / TRANSFER rows to global admins and board owners.
+	// Lives at /api/v1/activities (not under /api/v1/auth) so the
+	// audit surface area is independent from the per-user activity
+	// feed at /api/v1/auth/activities.
+	r.GET("/api/v1/activities",
+		handlers.RequireSignatureVerification(),
+		handlers.RequireAuth(db),
+		handlers.GetPermissionActivities(db),
+	)
+
 	boards := r.Group("/api/v1/boards")
 	{
 		boards.GET("", handlers.GetBoards(db))
@@ -410,7 +438,23 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		boards.POST("/:id/copy", handlers.CopyBoard(db))
 		boards.POST("/:id/reset", handlers.ResetBoard(db))
 		boards.POST("/import", handlers.ImportBoard(db))
+		// Public read-only share link + iframe embed surface
+		// (s-1204, PM_REVIEW_2026-09-17 §6). Mint / list /
+		// revoke are gated by canManageBoardPermissions (owner +
+		// global admin only — same meta-capability as
+		// SetPermission).
+		boards.POST("/:id/viewer-tokens", handlers.MintViewerToken(db))
+		boards.GET("/:id/viewer-tokens", handlers.ListViewerTokens(db))
+		boards.GET("/:id/viewer-tokens/embed", handlers.GetPublicBoardEmbedSnippet(db))
+		boards.DELETE("/:id/viewer-tokens/:tokenId", handlers.RevokeViewerToken(db))
 	}
+
+	// Public viewer board read endpoint. Intentionally
+	// unauthenticated — gating is done by the URL secret alone
+	// (s-1204, PM_REVIEW_2026-09-17 §6). The mutation endpoints
+	// above stay RequireAuth-protected, so a leaked share link
+	// never escalates into a write surface.
+	r.GET("/api/v1/public/boards/:token", handlers.GetPublicBoard(db))
 
 	templates := r.Group("/api/v1/templates")
 	templates.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
@@ -418,6 +462,26 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		templates.GET("", handlers.GetTemplates(db))
 		templates.POST("", handlers.SaveTemplate(db))
 		templates.DELETE("/:id", handlers.DeleteTemplate(db))
+	}
+
+	// Preset templates power the public template marketplace and the
+	// first-login wizard (PM_REVIEW_2026-09-17 §5.4 ROI #4 / §6). The
+	// GET is intentionally unauthenticated so unauthenticated visitors
+	// can browse the marketplace from the landing page; the admin
+	// toggle (marketplaceEnabled app_config key) hides the catalog
+	// wholesale when a self-hosted host wants to lock it down. See
+	// internal/handlers/preset_templates.go for the gating logic.
+	r.GET("/api/v1/preset-templates", handlers.GetPresetTemplates(db))
+
+	// Onboarding quickstart is the wizard's single-call escape hatch:
+	// pick preset → create board → install sample Agent → trigger demo
+	// run, all atomically. Requires auth because it materialises a
+	// board + sample agent on behalf of the caller. See
+	// internal/handlers/onboarding.go for the contract.
+	onboarding := r.Group("/api/v1/onboarding")
+	onboarding.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		onboarding.POST("/quickstart", handlers.QuickstartOnboarding(db))
 	}
 
 	columns := r.Group("/api/v1/columns")
@@ -443,7 +507,9 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		tasks.POST("", handlers.CreateTask(db))
 		tasks.POST("/batch", handlers.BatchCreateTasks(db))
 		tasks.PUT("/batch", handlers.BatchUpdateTasks(db))
+		tasks.PUT("/reorder", handlers.ReorderTasks(db))
 		tasks.DELETE("/batch", handlers.BatchDeleteTasks(db))
+		tasks.POST("/bulk/column-action", handlers.BulkColumnAction(db))
 		tasks.PUT("/:id", handlers.UpdateTask(db))
 		tasks.DELETE("/:id", handlers.DeleteTask(db))
 		tasks.POST("/:id/archive", handlers.ArchiveTask(db))
@@ -522,6 +588,41 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		webhooks.GET("/events", handlers.WebhookEventCatalogue(db))
 	}
 
+	// In-app notification center (s-1194). The GET is intentionally
+	// outside the signature-verification group so the WebSocket-driven
+	// bell badge can hydrate on first paint without waiting for the
+	// signature round-trip; the mutating endpoints stay behind
+	// RequireAuth to match the rest of the kanban surface.
+	notifications := r.Group("/api/v1/notifications")
+	notifications.Use(handlers.RequireAuth(db))
+	{
+		notifications.GET("", handlers.GetNotifications(db))
+		notifications.POST("/:id/read", handlers.MarkNotificationRead(db))
+		notifications.POST("/read-all", handlers.MarkAllNotificationsRead(db))
+	}
+
+	// Per-user notification preferences (s-1203,
+	// PM_REVIEW_2026-09-17 §3.7). Backs the new "Notifications"
+	// section in Settings — every authenticated user (admin or
+	// non-admin) can read/write their own row.
+	notificationPrefs := r.Group("/api/v1/auth/me/notification-preferences")
+	notificationPrefs.Use(handlers.RequireAuth(db))
+	{
+		notificationPrefs.GET("", handlers.GetMyNotificationPreferences(db))
+		notificationPrefs.PUT("", handlers.UpdateMyNotificationPreferences(db))
+	}
+
+	// Run completion stub — Agent runners POST here when a task run
+	// reaches a terminal status. The handler fans out a RUN_COMPLETED
+	// notification to the task owner (see internal/handlers/runs.go).
+	r.POST("/api/v1/runs/:taskId/complete",
+		handlers.RequireSignatureVerification(),
+		handlers.RequireAuth(db),
+		handlers.MarkRunComplete(db),
+	)
+
+	setupRunsRoutes(r, db)
+
 	r.POST("/api/v1/upload", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.UploadFile(db))
 	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
 	r.DELETE("/api/v1/attachments/:id", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))
@@ -538,20 +639,65 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	}
 
 	r.GET("/ws", handlers.WebSocketHandler(db))
+
+	// Frontend error reporting sink (s-1210, PM_REVIEW_2026-09-17 §7).
+	// The POST endpoint sits OUTSIDE the auth-protected group so an
+	// unhandled exception during the pre-login setup flow still has
+	// a place to land; the row simply carries a NULL user_id. The
+	// OptionalAuth helper probes the session opportunistically so
+	// logged-in users get their id stamped onto the row.
+	frontendEvents := r.Group("/api/v1/frontend-events")
+	{
+		frontendEvents.POST("", handlers.OptionalAuth(db), handlers.IngestFrontendEvent(db))
+		frontendEvents.GET("", handlers.RequireAuth(db), handlers.ListFrontendEvents(db))
+		frontendEvents.GET("/config", handlers.RequireAuth(db), handlers.GetFrontendEventsEnabled(db))
+	}
+	authProtected.PUT("/frontend-events/config", handlers.SetFrontendEventsEnabled(db))
+}
+
+// setupRunsRoutes wires the CLI runner surface under /api/v1/runs:
+// claim / heartbeat / finish / release / attach for the write path
+// (s-1086), GET /:taskId for the per-task card surface, and
+// GET /history for the terminal-run list the `kanban runs list`
+// command hits. Signature verification + auth are enforced at the
+// group level; per-handler WRITE permission checks live inside
+// tasks_run.go so a VIEWER token gets a clean 403 from
+// userHasBoardStatusWrite / HasColumnWrite rather than a generic
+// auth-middleware rejection.
+//
+// Pulled out of setupAPIRoutes so the route table can be asserted
+// directly in cmd/server/main_test.go without standing up a full
+// database — this is the regression guard for s-1234 ("cli runs
+// list error: API error 404 on /api/v1/runs/history"), where the
+// history endpoint shipped in tasks_run.go but was never mounted
+// on the live router, so every CLI `runs list` call 404'd.
+func setupRunsRoutes(r *gin.Engine, db *sql.DB) {
+	runs := r.Group("/api/v1/runs")
+	runs.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		runs.POST("/claim", handlers.ClaimRun(db))
+		runs.POST("/release", handlers.ReleaseRuns(db))
+		runs.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
+		runs.POST("/:taskId/finish", handlers.FinishRun(db))
+		runs.POST("/:taskId/attach", handlers.AttachRun(db))
+		runs.GET("/:taskId", handlers.GetRun(db))
+		runs.GET("/history", handlers.ListRunsHistory(db))
+	}
 }
 
 func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 	mimeTypes := map[string]string{
-		".js":    "application/javascript",
-		".css":   "text/css",
-		".html":  "text/html",
-		".json":  "application/json",
-		".png":   "image/png",
-		".jpg":   "image/jpeg",
-		".svg":   "image/svg+xml",
-		".ico":   "image/x-icon",
-		".woff":  "font/woff",
-		".woff2": "font/woff2",
+		".js":          "application/javascript",
+		".css":         "text/css",
+		".html":        "text/html",
+		".json":        "application/json",
+		".webmanifest": "application/manifest+json",
+		".png":         "image/png",
+		".jpg":         "image/jpeg",
+		".svg":         "image/svg+xml",
+		".ico":         "image/x-icon",
+		".woff":        "font/woff",
+		".woff2":       "font/woff2",
 	}
 
 	getMimeType := func(path string) string {
@@ -569,7 +715,7 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 		".js": true, ".css": true, ".png": true, ".jpg": true, ".jpeg": true,
 		".svg": true, ".ico": true, ".woff": true, ".woff2": true, ".ttf": true,
 		".eot": true, ".otf": true, ".webp": true, ".gif": true, ".webm": true,
-		".mp4": true, ".wav": true, ".mp3": true,
+		".mp4": true, ".wav": true, ".mp3": true, ".webmanifest": true,
 	}
 
 	isValidAsset := func(ext string) bool {
@@ -618,6 +764,47 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 			}
 		})
 
+		// PWA / mobile shell assets that live at the root of the embedded
+		// `web/` directory (manifest, service worker, icons, offline page).
+		// Keep this list aligned with frontend/public/ — anything not listed
+		// here will fall through to the SPA NoRoute handler, which is fine
+		// for navigation routes but wrong for binary / manifest files.
+		rootStaticFiles := map[string]string{
+			"/manifest.webmanifest":  "manifest.webmanifest",
+			"/sw.js":                 "sw.js",
+			"/offline.html":          "offline.html",
+			"/icon.svg":              "icon.svg",
+			"/icon-192.png":          "icon-192.png",
+			"/icon-512.png":          "icon-512.png",
+			"/icon-maskable-512.png": "icon-maskable-512.png",
+			"/apple-touch-icon.png":  "apple-touch-icon.png",
+		}
+		for route, asset := range rootStaticFiles {
+			asset := asset
+			handle := func(c *gin.Context) {
+				f, err := subFS.Open(asset)
+				if err != nil {
+					c.String(404, "file not found")
+					return
+				}
+				defer f.Close()
+				c.Header("Content-Type", getMimeType(asset))
+				// Service workers must be served with this header for the
+				// browser to accept the registration.
+				if asset == "sw.js" {
+					c.Header("Service-Worker-Allowed", "/")
+				}
+				if _, err := io.Copy(c.Writer, f); err != nil {
+					c.String(500, "Failed to serve file")
+				}
+			}
+			// Register GET and HEAD separately so HEAD probes (`curl -I`,
+			// `wget --spider`, link-checkers) don't fall through to the
+			// SPA NoRoute handler and report a fake `text/html` body.
+			r.GET(route, handle)
+			r.HEAD(route, handle)
+		}
+
 		r.NoRoute(func(c *gin.Context) {
 			path := c.Request.URL.Path
 			if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws") {
@@ -654,6 +841,36 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 			}
 			c.File(webDir + "/assets/" + path)
 		})
+
+		// PWA shell assets served from the on-disk web directory. We
+		// read the file ourselves instead of using c.File() so we can
+		// pin the Content-Type — c.File() lets http.ServeFile's extension
+		// lookup choose, and Go does not know about .webmanifest, so it
+		// would reply "text/plain" and break the install prompt.
+		rootStaticFiles := []string{
+			"/manifest.webmanifest",
+			"/sw.js",
+			"/offline.html",
+			"/icon.svg",
+			"/icon-192.png",
+			"/icon-512.png",
+			"/icon-maskable-512.png",
+			"/apple-touch-icon.png",
+		}
+		for _, route := range rootStaticFiles {
+			route := route
+			handle := func(c *gin.Context) {
+				filename := filepath.Base(route)
+				fullPath := filepath.Join(webDir, filename)
+				if strings.HasSuffix(route, ".js") {
+					c.Header("Service-Worker-Allowed", "/")
+				}
+				c.Header("Content-Type", getMimeType(filename))
+				c.File(fullPath)
+			}
+			r.GET(route, handle)
+			r.HEAD(route, handle)
+		}
 
 		r.NoRoute(func(c *gin.Context) {
 			path := c.Request.URL.Path
@@ -809,6 +1026,12 @@ func main() {
 		retrySwp = services.NewRetrySweeper(db, eventBus, eventCtr, services.RetrySweepInterval)
 		retrySwp.Start()
 
+		// Background task_runs reaper (s-1086 §3.5). Scans every 30s
+		// for task_runs rows whose expires_at has elapsed and
+		// releases them back to the originating column so the next
+		// claim cycle can pick them up. Started here (before the
+		// router) so a slow boot doesn't strand an expired lock —
+		// the reaper is idempotent against an empty task_runs table.
 		runReaper = services.NewRunReaper(db)
 		runReaper.Start(context.Background())
 	}
@@ -828,9 +1051,17 @@ func main() {
 	// CORS middleware
 	r.Use(corsMiddleware())
 
-	// Health check endpoint (public, no auth required)
+	// Health check endpoints (public, no auth required).
+	// /api/v1/health returns the legacy minimal shape so existing
+	// load balancer probes keep working; /api/v1/status returns
+	// the rich payload used by the public /status page.
 	r.GET("/api/v1/health", handlers.HealthCheck)
-	r.GET("/api/v1/status", handlers.HealthCheck)
+	if db != nil {
+		r.GET("/api/v1/status", func(c *gin.Context) {
+			c.Set(handlers.StatusDBKey, db)
+			handlers.StatusCheck(c)
+		})
+	}
 
 	// Setup API routes. The init endpoint can request a self-restart once the
 	// setup wizard finishes writing kanban.env, so we forward a callback that
@@ -888,6 +1119,21 @@ func main() {
 	fmt.Println("")
 	fmt.Println("")
 	log.Printf("Server starting on port %s", port)
+
+	// Surface the active gin mode in the startup banner so operators can
+	// tell at a glance whether they're on a default (release) build, an
+	// explicit `-tags debug` build, or a `-tags release` build. The
+	// default build also force-pins gin to release mode regardless of any
+	// GIN_MODE the operator exported in their shell (s-1225).
+	log.Printf("Gin mode: %s", gin.Mode())
+
+	// Stamp the process start time so the /api/v1/status endpoint
+	// can report an accurate uptime figure (and so the diagnostic
+	// payload distinguishes a process that just restarted from one
+	// that has been up for hours). We record the moment right
+	// before ListenAndServe so the counter starts as the listener
+	// binds the port, not as main() entered.
+	handlers.SetServerStartTime(time.Now())
 
 	httpServer := &http.Server{
 		Addr:    ":" + port,

@@ -224,7 +224,7 @@ export function CompletedPage() {
           {tasks.map((task) => (
             <div
               key={task.id}
-              className={`flex items-center gap-4 rounded-lg bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800 ${
+              className={`flex items-center gap-4 rounded-lg bg-white dark:bg-zinc-800 p-4 shadow ${
                 selectedTasks.has(task.id) ? 'ring-2 ring-blue-500' : ''
               }`}
             >

@@ -412,6 +412,17 @@ func Init(db *sql.DB, onConfigPersisted func(path string)) gin.HandlerFunc {
 			return
 		}
 
+		// Pre-seed READ on every public board so the freshly
+		// minted admin sees the same public board list an
+		// anonymous caller would (and any subsequent HUMAN users
+		// they create inherit the visibility contract). Admin
+		// short-circuits to ADMIN access in the effectiveAccess
+		// computation, so the explicit rows are mostly cosmetic
+		// for the first user — but the data stays consistent for
+		// the rest of the visibility contract (s-1022) and the
+		// new-user default visibility policy (s-1030).
+		grantPublicBoardRead(db, userID)
+
 		isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
 		c.SetCookie("kanban-token", tokenKey, 60*60*24*30, "/", "", isSecure, true)
 		c.SetSameSite(http.SameSiteLaxMode)
@@ -555,12 +566,24 @@ func Login(db *sql.DB) gin.HandlerFunc {
 						if err := rows.Scan(&boardID); err == nil {
 							permID := generateID()
 							db.Exec(
-								"INSERT INTO board_permissions (id, user_id, board_id, access) VALUES (?, ?, ?, ?)",
-								permID, userID, boardID, "ADMIN",
+								"INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, '')",
+								permID, userID, boardID, "ADMIN", userID,
 							)
 						}
 					}
 				}
+			} else {
+				// Auto-registered (non-first) HUMAN users get
+				// READ on every public board so they land on
+				// the same visibility contract the rest of the
+				// codebase honors: see public boards by
+				// default, opt in to private boards via an
+				// explicit grant. AGENT users go through
+				// CreateAgent (auth_user_handlers.go) which
+				// keeps its ADMIN-on-everything policy because
+				// AGENT tokens are designed for the MCP server
+				// and need full reach across the system.
+				grantPublicBoardRead(db, userID)
 			}
 
 			isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"

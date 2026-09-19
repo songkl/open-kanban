@@ -33,6 +33,7 @@ type Board struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
+	IsPublic    bool      `json:"isPublic"`
 	Deleted     bool      `json:"deleted"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -78,10 +79,18 @@ type Task struct {
 	Published         bool       `json:"published"`
 	Archived          bool       `json:"archived"`
 	ArchivedAt        *time.Time `json:"archivedAt,omitempty"`
+	// DueAt is the optional deadline the create-task modal sets
+	// (T-1207 / s-1207, PM_REVIEW_2026-09-17 §3.12). It is a
+	// nullable timestamp so tasks without a deadline round-trip as
+	// `null` in JSON; the Go zero-value *time.Time is treated as
+	// "no due date" by the storage layer and the API responses.
+	DueAt             *time.Time `json:"dueAt,omitempty"`
 	AgentID           *string    `json:"agentId,omitempty"`
 	AgentPrompt       *string    `json:"agentPrompt,omitempty"`
 	CreatedBy         string     `json:"createdBy"`
 	CreatedByUsername string     `json:"createdByUsername,omitempty"`
+	CreatedByNickname string     `json:"createdByNickname,omitempty"`
+	CreatedByAvatar   string     `json:"createdByAvatar,omitempty"`
 	CreatedAt         time.Time  `json:"createdAt"`
 	UpdatedAt         time.Time  `json:"updatedAt"`
 	Comments          []Comment  `json:"comments,omitempty"`
@@ -110,24 +119,50 @@ type Subtask struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// ViewerToken represents a public, read-only share token for a
+// board (s-1204, PM_REVIEW_2026-09-17 §6). The secret value is
+// never returned by the API after the mint call — only the hash is
+// stored, the same way /api/v1/auth/token behaves. PlaintextToken
+// is populated only on the mint response so the caller can copy it
+// out of the dialog exactly once.
+type ViewerToken struct {
+	ID            string     `json:"id"`
+	BoardID       string     `json:"boardId"`
+	Label         string     `json:"label"`
+	CreatedBy     *string    `json:"createdBy,omitempty"`
+	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt     *time.Time `json:"revokedAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	PlaintextToken string    `json:"token,omitempty"`
+}
+
 // BoardPermission represents user permissions for a board
 type BoardPermission struct {
-	ID      string `json:"id"`
-	UserID  string `json:"userId"`
-	BoardID string `json:"boardId"`
-	Access  string `json:"access"` // READ, WRITE, ADMIN
-	Board   *Board `json:"board,omitempty"`
-	User    *User  `json:"user,omitempty"`
+	ID              string     `json:"id"`
+	UserID          string     `json:"userId"`
+	BoardID         string     `json:"boardId"`
+	Access          string     `json:"access"` // READ, WRITE, ADMIN
+	GrantedByUserID *string    `json:"grantedByUserId,omitempty"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt       *time.Time `json:"revokedAt,omitempty"`
+	RevokedByUserID *string    `json:"revokedByUserId,omitempty"`
+	Notes           string     `json:"notes,omitempty"`
+	Board           *Board     `json:"board,omitempty"`
+	User            *User      `json:"user,omitempty"`
 }
 
 // ColumnPermission represents user permissions for a column
 type ColumnPermission struct {
-	ID       string  `json:"id"`
-	UserID   string  `json:"userId"`
-	ColumnID string  `json:"columnId"`
-	Access   string  `json:"access"` // READ, WRITE, ADMIN
-	Column   *Column `json:"column,omitempty"`
-	User     *User   `json:"user,omitempty"`
+	ID              string     `json:"id"`
+	UserID          string     `json:"userId"`
+	ColumnID        string     `json:"columnId"`
+	Access          string     `json:"access"` // READ, WRITE, ADMIN
+	GrantedByUserID *string    `json:"grantedByUserId,omitempty"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt       *time.Time `json:"revokedAt,omitempty"`
+	RevokedByUserID *string    `json:"revokedByUserId,omitempty"`
+	Column          *Column    `json:"column,omitempty"`
+	User            *User      `json:"user,omitempty"`
 }
 
 // Attachment represents a file attachment
@@ -243,7 +278,10 @@ type OAuthErrorResponse struct {
 	ErrorURI         string `json:"error_uri,omitempty"`
 }
 
-// DeviceAuthorizationResponse is what RFC 8628 §3.2 returns.
+// DeviceAuthorizationResponse is what RFC 8628 §3.2 returns. AudienceType
+// is an extension field that echoes the resolved audience_type the server
+// applied to the device code; an empty string means the server fell back
+// to its client-name heuristic.
 type DeviceAuthorizationResponse struct {
 	DeviceCode              string `json:"device_code"`
 	UserCode                string `json:"user_code"`
@@ -251,4 +289,5 @@ type DeviceAuthorizationResponse struct {
 	VerificationURIComplete string `json:"verification_uri_complete,omitempty"`
 	ExpiresIn               int64  `json:"expires_in"`
 	Interval                int    `json:"interval"`
+	AudienceType            string `json:"audience_type,omitempty"`
 }

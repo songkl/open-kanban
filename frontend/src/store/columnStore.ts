@@ -141,7 +141,9 @@ export const useColumnStore = create<ColumnState>((set, get) => ({
       )
     }));
 
-    await tasksApi.update(reorderedTasks[newIndex].id, { position: newIndex });
+    await tasksApi.reorder(
+      reorderedTasks.map((t, i) => ({ id: t.id, columnId, position: i }))
+    );
   },
 
   loadMoreTasks: async (columnId) => {

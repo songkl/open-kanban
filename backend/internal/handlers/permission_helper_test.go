@@ -39,6 +39,7 @@ func setupPermissionTestDB(t *testing.T) *sql.DB {
 		short_alias TEXT UNIQUE,
 		task_counter INTEGER DEFAULT 1000,
 		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		description TEXT DEFAULT ''
@@ -62,6 +63,11 @@ func setupPermissionTestDB(t *testing.T) *sql.DB {
 		board_id TEXT NOT NULL,
 		owner_agent_id TEXT,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
+		notes TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -72,6 +78,10 @@ func setupPermissionTestDB(t *testing.T) *sql.DB {
 		user_id TEXT NOT NULL,
 		column_id TEXT NOT NULL,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -90,6 +100,7 @@ func setupPermissionTestDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		created_by TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -798,6 +809,91 @@ func TestCanModifyTask(t *testing.T) {
 		defer db.Close()
 
 		allowed, err := canModifyTask(db, nil, "task1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if allowed {
+			t.Error("expected nil user to be denied modification")
+		}
+	})
+}
+
+func TestCheckTaskModifyAccess(t *testing.T) {
+	t.Run("ADMIN 任意任务通过", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		admin := &models.User{ID: "u1", Role: "ADMIN"}
+		allowed, err := CheckTaskModifyAccess(db, admin, "task1", "c1", "WRITE")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !allowed {
+			t.Error("expected ADMIN to be allowed to modify any task")
+		}
+	})
+
+	t.Run("VIEWER 任意任务拒绝", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		viewer := &models.User{ID: "u3", Role: "VIEWER"}
+		allowed, err := CheckTaskModifyAccess(db, viewer, "task1", "c1", "WRITE")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if allowed {
+			t.Error("expected VIEWER to be denied modification")
+		}
+	})
+
+	t.Run("MEMBER 自己创建 通过", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		member := &models.User{ID: "u2", Role: "MEMBER"}
+		allowed, err := CheckTaskModifyAccess(db, member, "task1", "c1", "WRITE")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !allowed {
+			t.Error("expected MEMBER to be allowed to modify own task")
+		}
+	})
+
+	t.Run("MEMBER 他人创建 拒绝", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		member := &models.User{ID: "u2", Role: "MEMBER"}
+		allowed, err := CheckTaskModifyAccess(db, member, "task2", "c1", "WRITE")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if allowed {
+			t.Error("expected MEMBER to be denied modification of someone else's task")
+		}
+	})
+
+	t.Run("任务不存在 返回错误", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		member := &models.User{ID: "u2", Role: "MEMBER"}
+		_, err := CheckTaskModifyAccess(db, member, "nonexistent", "c1", "WRITE")
+		if err == nil {
+			t.Error("expected error for nonexistent task")
+		}
+		if err != sql.ErrNoRows {
+			t.Errorf("expected sql.ErrNoRows, got %v", err)
+		}
+	})
+
+	t.Run("nil 用户拒绝", func(t *testing.T) {
+		db := setupPermissionTestDB(t)
+		defer db.Close()
+
+		allowed, err := CheckTaskModifyAccess(db, nil, "task1", "c1", "WRITE")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

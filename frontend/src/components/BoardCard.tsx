@@ -13,6 +13,25 @@ interface BoardCardProps {
   onDelete: (id: string, name: string) => void;
 }
 
+// formatLastActive mirrors the existing relative-time helpers
+// (see NotificationCenter / ActivityLogPage) so the boards page
+// stays consistent with the rest of the app. Falls back to the
+// absolute date when the value is older than a week.
+function formatLastActive(iso: string | undefined, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diff = Date.now() - then;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diff < minute) return t('taskModal.justNow');
+  if (diff < hour) return t('taskModal.minutesAgo', { count: Math.round(diff / minute) });
+  if (diff < day) return t('taskModal.hoursAgo', { count: Math.round(diff / hour) });
+  if (diff < 7 * day) return t('taskModal.daysAgo', { count: Math.round(diff / day) });
+  return new Date(iso).toLocaleDateString();
+}
+
 export function BoardCard({
   board,
   onEdit,
@@ -25,8 +44,13 @@ export function BoardCard({
   const { t } = useTranslation();
   const navigate = useNavigate();
 
+  const lastActiveLabel = formatLastActive(board.lastActiveAt, t);
+  const lastActiveISO = board.lastActiveAt ?? '';
+  const taskCount = typeof board.taskCount === 'number' ? board.taskCount : null;
+  const ownerLabel = board.ownerNickname?.trim() || (board.isOwner ? t('board.ownerBadge') : '');
+
   return (
-    <div className="group rounded-2xl bg-white dark:bg-zinc-700 p-5 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:shadow-xl dark:hover:border-zinc-600 transition-all duration-300">
+    <div className="group rounded-2xl bg-white dark:bg-zinc-800 p-5 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:shadow-xl dark:hover:border-zinc-600 transition-all duration-300">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 text-blue-600">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -34,13 +58,73 @@ export function BoardCard({
           </svg>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-zinc-800 dark:text-zinc-100 truncate">{board.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-zinc-800 dark:text-zinc-100 truncate">{board.name}</h3>
+            {board.isOwner === true && (
+              <span
+                title={t('board.ownerBadge')}
+                aria-label={t('board.ownerBadge')}
+                data-testid="board-owner-crown"
+                className="inline-flex shrink-0 items-center justify-center text-amber-500 dark:text-amber-400"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+                  <path d="M3 18l1.5-7.5L9 13l3-6 3 6 4.5-2.5L21 18H3z"/>
+                </svg>
+              </span>
+            )}
+            {board.isPublic === false && (
+              <span
+                title={t('board.private')}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                {t('board.privateBadge')}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">ID: {board.id}</p>
         </div>
       </div>
-      <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-5">
-        {t('board.createdAt')}: {new Date(board.createdAt).toLocaleDateString()}
-      </p>
+      <div
+        className="grid grid-cols-3 gap-2 mb-4 text-xs text-zinc-500 dark:text-zinc-400"
+        data-testid="board-card-meta"
+      >
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            {t('board.createdAt')}
+          </span>
+          <span className="truncate">{new Date(board.createdAt).toLocaleDateString()}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            {t('board.lastActive')}
+          </span>
+          <span
+            className="truncate"
+            data-testid="board-last-active"
+            title={lastActiveISO ? new Date(lastActiveISO).toLocaleString() : ''}
+          >
+            {lastActiveLabel || '—'}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            {t('board.taskCountLabel')}
+          </span>
+          <span className="truncate" data-testid="board-task-count">
+            {taskCount === null ? '—' : t('board.taskCount_other', { count: taskCount })}
+          </span>
+        </div>
+      </div>
+      {ownerLabel && (
+        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4" data-testid="board-owner-nickname">
+          <span className="text-zinc-400 dark:text-zinc-500">{t('board.owner')}: </span>
+          <span className="text-zinc-600 dark:text-zinc-300">{ownerLabel}</span>
+        </p>
+      )}
       {board.description && (
         <p className="text-xs text-zinc-500 dark:text-zinc-500 mb-4 line-clamp-2">{board.description}</p>
       )}
@@ -114,11 +198,13 @@ export function BoardCard({
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
           </svg>
-          Import
+          {t('task.import')}
         </button>
         <button
           onClick={() => onDelete(board.id, board.name)}
           className="flex items-center justify-center rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-600 border border-red-100 hover:bg-red-100 hover:border-red-200 transition-all"
+          title={t('board.deleteBoardTitle')}
+          aria-label={t('board.deleteBoardTitle')}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>

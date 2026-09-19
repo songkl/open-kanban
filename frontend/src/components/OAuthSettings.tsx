@@ -135,7 +135,9 @@ export function OAuthSettings({ currentUser }: Props) {
       {tab === 'clients' && isAdmin && (
         <div className="space-y-3" data-testid="oauth-clients-list">
           <p className="text-xs text-zinc-500 dark:text-zinc-500">
-            {t('oauth.admin.dynamicRegistration', { enabled: dynamicEnabled })}
+            {dynamicEnabled
+              ? t('oauth.admin.dynamicRegistrationOn')
+              : t('oauth.admin.dynamicRegistrationOff')}
           </p>
           {clients.length === 0 && !loading && (
             <div className="rounded-md border border-zinc-200 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500 dark:text-zinc-500">

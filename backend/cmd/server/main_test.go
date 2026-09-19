@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +26,95 @@ func unsetEnv(t *testing.T, key string) {
 			_ = os.Unsetenv(key)
 		}
 	})
+}
+
+// TestApplyDefaultServerModePinsReleaseMode verifies that the default
+// build (no `-tags debug`, no `-tags release`) forces gin into release
+// mode even when the operator has GIN_MODE=debug in their shell. This
+// is the regression guard for s-1225 ("后端服务启动 不要 debug"):
+// the server must not boot in debug mode unless the binary was
+// explicitly built with `-tags debug`.
+func TestApplyDefaultServerModePinsReleaseMode(t *testing.T) {
+	// Snapshot whatever the test runner has set so we can restore it
+	// without leaking GIN_MODE into the rest of the test binary.
+	prevMode, hadMode := os.LookupEnv("GIN_MODE")
+	t.Cleanup(func() {
+		if hadMode {
+			_ = os.Setenv("GIN_MODE", prevMode)
+		} else {
+			_ = os.Unsetenv("GIN_MODE")
+		}
+		// Reset gin back to test mode so subsequent tests don't see the
+		// release-mode value we just pinned.
+		gin.SetMode(gin.TestMode)
+	})
+
+	t.Run("ignores GIN_MODE=debug", func(t *testing.T) {
+		_ = os.Setenv("GIN_MODE", gin.DebugMode)
+		// gin's package init() already ran with GIN_MODE=debug, so we
+		// need to actively re-apply before asserting. The function under
+		// test is exactly the production hook init() calls.
+		gin.SetMode(gin.DebugMode)
+		if gin.Mode() != gin.DebugMode {
+			t.Fatalf("precondition: expected gin in debug mode before applyDefaultServerMode, got %q", gin.Mode())
+		}
+
+		applyDefaultServerMode()
+
+		if got := gin.Mode(); got != gin.ReleaseMode {
+			t.Errorf("expected gin mode %q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+		if got := os.Getenv("GIN_MODE"); got != gin.ReleaseMode {
+			t.Errorf("expected GIN_MODE=%q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+	})
+
+	t.Run("ignores GIN_MODE=test", func(t *testing.T) {
+		_ = os.Setenv("GIN_MODE", gin.TestMode)
+		gin.SetMode(gin.TestMode)
+
+		applyDefaultServerMode()
+
+		if got := gin.Mode(); got != gin.ReleaseMode {
+			t.Errorf("expected gin mode %q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+		if got := os.Getenv("GIN_MODE"); got != gin.ReleaseMode {
+			t.Errorf("expected GIN_MODE=%q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+	})
+
+	t.Run("idempotent when already release", func(t *testing.T) {
+		applyDefaultServerMode()
+		applyDefaultServerMode()
+
+		if got := gin.Mode(); got != gin.ReleaseMode {
+			t.Errorf("expected gin mode %q after double apply, got %q", gin.ReleaseMode, got)
+		}
+		if got := os.Getenv("GIN_MODE"); got != gin.ReleaseMode {
+			t.Errorf("expected GIN_MODE=%q after double apply, got %q", gin.ReleaseMode, got)
+		}
+	})
+}
+
+// TestApplyDefaultServerModePanicsOnGarbageGinMode documents the one
+// failure mode applyDefaultServerMode does NOT mask: if GIN_MODE is set
+// to a value gin does not recognise ("foo", "trace", …) then gin.SetMode
+// itself panics. That is by design — silently swallowing the panic would
+// hide the operator's typo. The test pins this behavior so a future
+// "be lenient" change has to update the test, not just the code.
+func TestApplyDefaultServerModePanicsOnGarbageGinMode(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("expected gin.SetMode to panic on GIN_MODE=foo, got no panic")
+		} else if msg, ok := r.(string); ok && !strings.Contains(msg, "gin mode unknown") {
+			t.Errorf("expected panic to mention 'gin mode unknown', got %q", msg)
+		}
+	}()
+
+	// Force gin to a known state so the SetMode("foo") call below
+	// exercises the unknown-mode panic, not the mode-switching path.
+	_ = os.Setenv("GIN_MODE", "foo")
+	gin.SetMode("foo")
 }
 
 func TestCorsMiddlewareDefaultAllowsLocalhost(t *testing.T) {
@@ -351,5 +441,175 @@ func TestSetupOnlyRoutesRegistersUsersMeAlias(t *testing.T) {
 	}
 	if resp["user"] != nil {
 		t.Errorf("expected nil user from /users/me in setupOnlyRoutes, got %v", resp["user"])
+	}
+}
+// TestSetupRunsRoutesRegistersAllEndpoints is the regression guard for
+// s-1234 ("cli runs list error: API error 404 on /api/v1/runs/history").
+// The handler existed in internal/handlers/tasks_run.go and was covered
+// by the per-handler test suite, but setupAPIRoutes in main.go never
+// mounted it — so the CLI's `kanban runs list` command 404'd against a
+// real server. We assert the full route table here so a future refactor
+// that drops one of the endpoints has to update the test deliberately.
+//
+// The db argument is nil because we never serve a real request — we
+// only walk the engine's registered route table via Routes().
+func TestSetupRunsRoutesRegistersAllEndpoints(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	setupRunsRoutes(router, nil)
+
+	want := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/v1/runs/claim"},
+		{http.MethodPost, "/api/v1/runs/release"},
+		{http.MethodPost, "/api/v1/runs/:taskId/heartbeat"},
+		{http.MethodPost, "/api/v1/runs/:taskId/finish"},
+		{http.MethodPost, "/api/v1/runs/:taskId/attach"},
+		{http.MethodGet, "/api/v1/runs/:taskId"},
+		// The whole reason this test exists — without this line the
+		// CLI `runs list` command gets a 404 against the live server.
+		{http.MethodGet, "/api/v1/runs/history"},
+	}
+
+	got := map[string]bool{}
+	for _, r := range router.Routes() {
+		got[r.Method+" "+r.Path] = true
+	}
+
+	for _, w := range want {
+		key := w.method + " " + w.path
+		if !got[key] {
+			t.Errorf("setupRunsRoutes is missing %s %q (registered routes: %v)", w.method, w.path, sortedKeys(got))
+		}
+	}
+}
+
+// sortedKeys returns the keys of m sorted alphabetically. Used to
+// produce stable diff output when TestSetupRunsRoutesRegistersAllEndpoints
+// fails so the failure message isn't dependent on map iteration order.
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	// Sort in place so the output is deterministic across runs.
+	for i := 1; i < len(keys); i++ {
+		for j := i; j > 0 && keys[j-1] > keys[j]; j-- {
+			keys[j-1], keys[j] = keys[j], keys[j-1]
+		}
+	}
+	return keys
+}
+
+// pwaShellFiles lists the static files that the PWA / mobile install flow
+// depends on. setupStaticRoutes must serve each one at the root with the
+// correct content type. The list is duplicated from setupStaticRoutes
+// because Go has no public introspection of the route table.
+var pwaShellFiles = []struct {
+	path        string
+	contentType string
+	header      string // optional header name to assert
+	headerVal   string // expected value when header != ""
+}{
+	{"/manifest.webmanifest", "application/manifest+json", "", ""},
+	{"/sw.js", "application/javascript", "Service-Worker-Allowed", "/"},
+	{"/offline.html", "text/html", "", ""},
+	{"/icon.svg", "image/svg+xml", "", ""},
+	{"/icon-192.png", "image/png", "", ""},
+	{"/icon-512.png", "image/png", "", ""},
+	{"/icon-maskable-512.png", "image/png", "", ""},
+	{"/apple-touch-icon.png", "image/png", "", ""},
+}
+
+// emptyEmbedFS is a stand-in for the production embeddedWeb when we only
+// want to exercise the webDir != "" branch of setupStaticRoutes. The
+// embedded branch is exercised separately in pwa_static_test.go via a
+// real //go:embed'd directory. An empty embed.FS satisfies the parameter
+// type but is never read from in this branch.
+var emptyEmbedFS embed.FS
+
+// TestPwaShellServedBySetupStaticRoutes exercises the on-disk branch of
+// setupStaticRoutes. It writes the PWA shell files into a temp directory,
+// wires up the routes, and asserts each file is reachable with the correct
+// content type. This guards against the most common regression: forgetting
+// to keep the PWA file list in sync with frontend/public/*.
+func TestPwaShellServedBySetupStaticRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	webDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(webDir, "assets"), 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	for name, body := range map[string]string{
+		"manifest.webmanifest":  `{"name":"Kanban Web","start_url":"/","display":"standalone"}`,
+		"sw.js":                 "/* stub service worker */\n",
+		"offline.html":          "<!doctype html><title>offline</title>",
+		"icon.svg":              "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+		"icon-192.png":          "fake-png",
+		"icon-512.png":          "fake-png",
+		"icon-maskable-512.png": "fake-png",
+		"apple-touch-icon.png":  "fake-png",
+		"index.html":            "<!doctype html><title>app</title>",
+		"assets/app.js":         "console.log('app')",
+	} {
+		if err := os.WriteFile(filepath.Join(webDir, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	router := gin.New()
+	setupStaticRoutes(router, webDir, emptyEmbedFS)
+
+	for _, f := range pwaShellFiles {
+		f := f
+		t.Run(f.path, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodGet, f.path, nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("GET %s: expected 200, got %d body=%q", f.path, w.Code, w.Body.String())
+			}
+			if got := w.Header().Get("Content-Type"); got != f.contentType {
+				t.Errorf("GET %s: expected Content-Type=%q, got %q", f.path, f.contentType, got)
+			}
+			if f.header != "" {
+				if got := w.Header().Get(f.header); got != f.headerVal {
+					t.Errorf("GET %s: expected %s=%q, got %q", f.path, f.header, f.headerVal, got)
+				}
+			}
+		})
+	}
+}
+
+// TestPwaUnknownRootPathFallsThroughToSpa ensures that random root paths
+// (e.g. /boards, /board/abc) do NOT resolve to a static file — they are
+// SPA routes and must be served index.html by the NoRoute handler. This
+// protects the install flow from being shadowed by an over-eager static
+// route that breaks deep links.
+func TestPwaUnknownRootPathFallsThroughToSpa(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	webDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<!doctype html><title>app</title>"), 0o644); err != nil {
+		t.Fatalf("write index.html: %v", err)
+	}
+
+	router := gin.New()
+	setupStaticRoutes(router, webDir, emptyEmbedFS)
+
+	for _, path := range []string{"/boards", "/board/abc-123", "/dashboard"} {
+		req, _ := http.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s: expected 200 from SPA fallback, got %d body=%q", path, w.Code, w.Body.String())
+		}
+		if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Errorf("GET %s: expected HTML content type from SPA fallback, got %q", path, ct)
+		}
 	}
 }

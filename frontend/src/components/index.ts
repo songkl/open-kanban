@@ -1,5 +1,6 @@
 export { ActivityTicker } from './ActivityTicker';
 export { AddBoardPermissionForm } from './AddBoardPermissionForm';
+export { BulkBoardPermissionForm } from './BulkBoardPermissionForm';
 export { AddColumnModal } from './AddColumnModal';
 export { AddColumnPermissionForm } from './AddColumnPermissionForm';
 export { AddSubtaskModal } from './AddSubtaskModal';
@@ -8,7 +9,7 @@ export { AttachmentList } from './AttachmentList';
 export { BatchOperationBar } from './BatchOperationBar';
 export { BoardActionsMenu } from './BoardActionsMenu';
 export { BoardCard } from './BoardCard';
-export { BoardHeader } from './BoardHeader';
+export { BoardColumnPermissionsModal } from './BoardColumnPermissionsModal';
 export { BoardPermissionsModal } from './BoardPermissionsModal';
 export { BulkBoardPermissionForm } from './BulkBoardPermissionForm';
 export { BoardSelector } from './BoardSelector';

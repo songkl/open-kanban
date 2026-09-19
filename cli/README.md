@@ -90,10 +90,10 @@ export KANBAN_API_URL="https://kanban.example.com"
 # 2. Log in via the OAuth 2.1 device flow
 kanban auth login
 #   → follow the printed URL, paste the user code, approve in your browser
-#   → if the server detects a CLI / MCP client it will show an
-#     "Authorise as" selector — pick **Myself** to bind the token to
-#     your own account, or pick an enabled Agent (the default if
-#     `oauth_device_agent_id` is pinned globally). See
+#   → since s-1231 the CLI defaults to Agent binding, so pick **Bind existing agent**
+#     or **Create new agent** on the approval page; picking "Myself" makes
+#     the CLI refuse to persist the token. Pass `--as-human` to opt back
+#     into the legacy human-binding flow. See
 #     [Device-flow Agent selection](../docs/CLI_COMMANDS.md#device-flow-agent-selection).
 
 # 3. Inspect the workspace
@@ -109,12 +109,37 @@ kanban tasks move <id> --status in_progress
 kanban tasks complete <id>      # advances to the next column
 ```
 
-> **Heads-up for `kanban run` operators:** every `kanban run`
-> deployment *must* end up holding a bearer whose
-> `users.type='AGENT'`. When approving the device flow, pick an Agent
-> from the selector — picking "Myself" would leave you unable to claim
-> tasks at `/api/v1/runs/claim`. The end-to-end walkthrough lives in
+> **Heads-up for `kanban run` operators:** since s-1231, the default
+> `kanban auth login` already binds the CLI to an Agent identity —
+> the device flow runs, the verification URL is launched in your
+> default browser, and the resulting token is verified against
+> `/api/v1/users/me`. If you accidentally approve as "Myself" the
+> command refuses to overwrite your credentials and tells you to
+> retry, so it is safe to run on top of an existing session. Add
+> `--no-open` to skip the browser launch on headless / CI runners.
+>
+> Need the legacy human-binding behaviour instead (e.g. you are
+> driving the dashboard from the terminal and want to authorise as
+> your own account)? Pass `--as-human`:
+>
+> ```bash
+> kanban auth login --as-human
+> ```
+>
+> Since s-1246, running `kanban auth login` from a TTY with no
+> `--as-human` / `--as-agent` flag opens an interactive identity
+> picker so the operator can pick between binding to an Agent
+> (recommended for unattended runners) or to their own account
+> (Human). The Agent option is the default to keep the unattended
+> runner UX one keystroke away from the previous behaviour. CI /
+> e2e callers (stdin not a TTY) skip the picker and stay on the
+> historical default of Agent, so existing automation is untouched.
+> Add `--as-agent` to suppress the picker even when stdin is a TTY.
+>
+> The end-to-end walkthrough lives in
 > [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to).
+> `kanban auth agent login` remains available as an explicit alias
+> for the agent-binding flow.
 
 The CLI stores the issued tokens at
 `$XDG_CONFIG_HOME/kanban-cli/credentials-<api>.json` (mode `0600`). The
@@ -519,6 +544,30 @@ stable across heterogeneous tasks. Only the narrow `$name` form is
 recognised — `${HOME}`, `$1`, `$$`, `$?` pass through unchanged.
 See [`cli/man/kanban-run.1.md`](./man/kanban-run.1.md) §"Variable
 substitution in agent.args" for the full token list and edge cases.
+
+### Shell-style tokenisation of `agent.args` (s-1238)
+
+Each entry in `agent.args` is run through a POSIX shell-style
+tokeniser before variable substitution and the prompt splice, so an
+operator can write a multi-token CLI invocation as a single YAML
+scalar instead of one entry per flag:
+
+```yaml
+agent:
+  args:
+    - --auto true run "do-kanban $taskId"
+```
+
+renders as the four argv entries `--auto`, `true`, `run`,
+`do-kanban <taskId>` at spawn time. Single quotes are fully literal
+(no escape sequences inside), double quotes honour `\"` and `\\`
+escapes, and a backslash outside quotes escapes the next character
+(so `--key=a\ b` lands as one argv slot). Entries with no whitespace
+and no quoting are returned untouched, so the common
+`args: ["--flag", "value"]` shape has zero behaviour change.
+Unterminated quotes fail loudly at spawn time with a
+`RunnerConfigError` pointing at `agent.args` rather than silently
+handing a malformed string to the agent binary.
 
 ### Signals
 

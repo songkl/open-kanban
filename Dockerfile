@@ -4,16 +4,17 @@ WORKDIR /app
 
 RUN apk add --no-cache nodejs npm
 
-COPY frontend/package*.json ./
-RUN npm install
+COPY frontend/package*.json ./frontend/
+RUN cd frontend && npm install
 
-COPY frontend ./
-RUN npm run build
+COPY frontend ./frontend/
+RUN cd frontend && npm run build
 
-COPY backend .
-RUN mkdir -p cmd/server/web && cp -r dist/* cmd/server/web/ || true
-
+COPY backend ./backend/
 WORKDIR /app/backend
+
+RUN mkdir -p cmd/server/web && cp -r /app/frontend/dist/. cmd/server/web/
+
 RUN go mod download
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o /app/kanban-server ./cmd/server
 

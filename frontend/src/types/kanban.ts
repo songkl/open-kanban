@@ -28,6 +28,25 @@ export interface Subtask {
   updatedAt: string;
 }
 
+/**
+ * Custom field definition (s-1197). Stored per board on the client in
+ * localStorage under `customFields:<boardId>` because the backend's
+ * `tasks.meta` JSON already accepts arbitrary K-V — the definitions are
+ * UI metadata (type, color, options) rather than data, so they live with
+ * the column settings rather than as another migration. Type controls the
+ * editor surface in the modal; `color` is the chip background on the
+ * card; `options` is required for single-/multi-select.
+ */
+export type CustomFieldType = 'text' | 'number' | 'date' | 'single-select' | 'multi-select';
+
+export interface CustomField {
+  id: string;
+  name: string;
+  type: CustomFieldType;
+  color: string;
+  options?: string[];
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -39,11 +58,18 @@ export interface Task {
   columnId: string;
   archived: boolean;
   archivedAt: string | null;
+  // T-1207 / s-1207: optional deadline surfaced by the
+  // create-task modal and stored on tasks.due_at. Null means
+  // "no due date" and the UI renders an "Add due date" affordance
+  // instead of a date.
+  dueAt: string | null;
   published: boolean;
   agentId: string | null;
   agentPrompt: string | null;
   createdBy: string;
   createdByUsername?: string;
+  createdByNickname?: string;
+  createdByAvatar?: string;
   createdAt: string;
   updatedAt: string;
   comments: Comment[];
@@ -105,10 +131,77 @@ export interface Column {
   updatedAt: string;
 }
 
+/**
+ * ColumnAgentBinding is the per-column Agent trigger configuration
+ * returned by GET /api/v1/columns (s-1214). When a column carries an
+ * `agentConfig`, the bound agent types fire automatically whenever a
+ * task crosses the column edge that matches `transitionTrigger` —
+ * 'on_enter' on entry, 'on_exit' on exit, 'both' on either edge, and
+ * 'none' (the legacy default) for purely-declarative bindings.
+ */
+export interface ColumnAgentBinding {
+  agentTypes: string[];
+  transitionTrigger: 'none' | 'on_enter' | 'on_exit' | 'both';
+}
+
+export type PermissionAccess = 'READ' | 'WRITE' | 'ADMIN';
+export type UserType = 'HUMAN' | 'AGENT';
+
+export interface BoardPermission {
+  id: string;
+  userId: string;
+  userNickname: string;
+  username?: string;
+  userType: UserType;
+  userRole?: 'ADMIN' | 'MEMBER' | 'VIEWER';
+  boardId: string;
+  boardName: string;
+  access: PermissionAccess;
+  ownerAgentId?: string | null;
+  grantedByUserId?: string | null;
+  grantedByUsername?: string | null;
+  grantedByNickname?: string | null;
+  grantedAt?: string | null;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+}
+
+export interface ColumnPermission {
+  id: string;
+  userId: string;
+  userNickname: string;
+  username?: string;
+  userType: UserType;
+  userRole?: 'ADMIN' | 'MEMBER' | 'VIEWER';
+  columnId: string;
+  columnName: string;
+  access: PermissionAccess;
+  grantedByUserId?: string | null;
+  grantedByUsername?: string | null;
+  grantedByNickname?: string | null;
+  grantedAt?: string | null;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+}
+
+export interface BoardBulkGrantResult {
+  success: boolean;
+  boardId: string;
+  granted: Array<{ userId: string; access: string }>;
+  count: number;
+}
+
 export interface Board {
   id: string;
   name: string;
   description?: string;
+  isPublic?: boolean;
+  ownerAgentId?: string | null;
+  ownerNickname?: string;
+  effectiveAccess?: string;
+  isOwner?: boolean;
+  taskCount?: number;
+  lastActiveAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -129,6 +222,10 @@ export type PermissionAccess = 'READ' | 'WRITE' | 'ADMIN';
 
 export interface Agent extends User {
   tokenCount: number;
+  runsLast24h: number;
+  failsLast24h: number;
+  totalRuns: number;
+  lastHeartbeatAt?: string;
 }
 
 export interface Token {

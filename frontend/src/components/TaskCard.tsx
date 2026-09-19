@@ -1,8 +1,8 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState, useId, useEffect, useRef } from 'react';
+import { useState, useId, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Task } from '@/types/kanban';
+import type { CustomField, Task, TaskRun } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
 import { UserAvatar } from './UserAvatar';
 import { useTaskRun } from '../hooks/useTaskRun';
@@ -19,11 +19,39 @@ interface TaskCardProps {
   searchQuery?: string;
   isSelected?: boolean;
   onSelect?: (taskId: string, e?: React.ChangeEvent<HTMLInputElement>) => void;
+  /**
+   * Live `task_runs` row for this card. Surfaced as a runner badge /
+   * progress block so the user can see in-flight Agent runs on the
+   * board without opening the drawer (s-1193,
+   * PM_REVIEW_2026-09-17 §5.1). When absent (no run, or polling
+   * disabled) the card renders unchanged.
+   */
+  run?: TaskRun | null;
+  /**
+   * s-1197: per-board custom field definitions. When provided, any
+   * matching values from `task.meta` render as colored chips between
+   * the description and the footer. Threaded from BoardPage → ColumnBoard
+   * → Column → TaskCard (same plumbing as `run`) so the chip rendering
+   * doesn't need its own localStorage hook.
+   */
+  customFields?: CustomField[];
+  /**
+   * s-1213: per-user card density preference (PM-s1188 §3.3).
+   *   - 'compact'  → only the ID, title, and priority dot render
+   *   - 'standard' → current behaviour (assignee + counts)
+   *   - 'detailed' → + description preview + last activity + live Run
+   *                 badge when a task_runs row exists for this task
+   *
+   * Defaults to 'standard' to match the existing rendering for any
+   * caller that hasn't been threaded through yet (tests, column
+   * detail drawer, etc.).
+   */
+  density?: CardDensity;
 }
 
   const priorityColors: Record<string, string> = {
   high: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400',
-  medium: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400',
+  medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/70 dark:text-yellow-200',
   low: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400',
 };
 
@@ -177,6 +205,32 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
     }
   };
 
+  // s-1213: density gating (PM-s1188 §3.3). Compact shows just the
+  // top header strip; detailed layers on a description preview, a
+  // last-activity timestamp, and a run badge that only fires when a
+  // live run row exists. Standard mirrors the legacy rendering so
+  // existing snapshots / tests stay green.
+  const isCompact = density === 'compact';
+  const isDetailed = density === 'detailed';
+  const isLiveRun = Boolean(run && (run.status === 'claimed' || run.status === 'running'));
+  const lastActivityLabel = useMemo(() => {
+    if (!task.updatedAt) return null;
+    const updated = new Date(task.updatedAt);
+    if (Number.isNaN(updated.getTime())) return null;
+    return updated.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, [task.updatedAt]);
+
+  // s-1230: deadline chip metadata. Computed once per render so the
+  // priority + due-date row in the footer stays consistent for the
+  // same input — also avoids re-parsing the date on every scroll
+  // tick from the virtualised list.
+  const dueDateMeta = useMemo(() => (task.dueAt ? getDueDateMeta(task.dueAt) : null), [task.dueAt]);
+
   return (
     <div
       ref={setNodeRef}
@@ -184,7 +238,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       {...attributes}
       {...listeners}
       onClick={handleCardClick}
-      className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/95 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:border-zinc-700 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
+      className={`group relative cursor-grab rounded-xl bg-white dark:bg-zinc-800/80 p-4 shadow-sm border border-zinc-100 dark:border-zinc-700/50 transition-all hover:shadow-lg hover:border-zinc-200 dark:border-zinc-700 dark:hover:border-zinc-600 active:cursor-grabbing max-w-full ${
         isDragging ? 'opacity-60 ring-2 ring-blue-400 scale-105 z-50 shadow-blue-200 dark:shadow-blue-900/50' : ''
       } ${priorityBorderColors[task.priority] || priorityBorderColors.medium} ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
     >
@@ -244,7 +298,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           </h3>
         </div>
         <div className="flex items-center gap-1 relative">
-          {(onArchive || onDelete || onMoveToColumn) && (
+          {!isCompact && (onArchive || onDelete || onMoveToColumn) && (
             <button
               type="button"
               onMouseDown={(e) => e.stopPropagation()}
@@ -339,6 +393,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               )}
             </div>
           )}
+          {!isCompact && (
           <button
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
@@ -357,9 +412,22 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               <path d="M12 8h.01"/>
             </svg>
           </button>
+          )}
         </div>
       </div>
-      {task.description && typeof task.description === 'string' && (
+      {/* s-1193: live Runner badge / progress block — surfaces the
+          in-flight Agent run directly on the board (PM_REVIEW_2026-09-17
+          §5.1). Rendered only when a `task_runs` row exists so the card
+          footprint is unchanged for tasks without a runner.
+          s-1213: hidden in compact density; in detailed mode we only
+          surface live runs (claimed/running) so the badge stays a
+          signal rather than a stale footer. */}
+      {!isCompact && run && (!isDetailed || isLiveRun) && (
+        <div className={`mt-2 ${onSelect ? 'pl-6' : 'pl-3'} pr-1`}>
+          <TaskRunIndicator run={run} />
+        </div>
+      )}
+      {!isCompact && task.description && typeof task.description === 'string' && (
         <div className="mb-3 pl-3">
           <p
             className={`text-sm text-zinc-500 dark:text-zinc-500 cursor-pointer hover:text-zinc-600 dark:text-zinc-300 dark:hover:text-zinc-300 transition-all leading-relaxed ${
@@ -386,8 +454,15 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
       )}
+      {/* s-1197: custom field chips. Render only when at least one
+          defined field has a non-empty value on the task meta; otherwise
+          the component returns null so the layout stays identical for
+          boards without custom fields defined. */}
+      {!isCompact && customFields && customFields.length > 0 && (
+        <CustomFieldChips meta={task.meta} customFields={customFields} />
+      )}
       {/* Subtasks preview */}
-      {task.subtasks && task.subtasks.length > 0 && (
+      {!isCompact && task.subtasks && task.subtasks.length > 0 && (
         <div className="mb-3 pl-3 space-y-1.5">
           {task.subtasks.slice(0, 3).map((subtask) => (
             <div key={subtask.id} className="flex items-center gap-2 text-xs">
@@ -402,6 +477,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
       )}
+      {!isCompact && (
       <div className="flex items-center justify-between pl-3 pt-1 border-t border-zinc-100 dark:border-zinc-700/50">
         <div className="flex items-center gap-2.5 flex-wrap">
           {columnName === t('task.status.done') && (
@@ -426,13 +502,75 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
               ✓ {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
             </span>
           )}
+          {/* s-1213: last-activity stamp surfaces in detailed density
+              so the triage operator can spot stale cards at a glance. */}
+          {isDetailed && lastActivityLabel && (
+            <span
+              className="text-xs text-zinc-400 dark:text-zinc-500"
+              data-testid="task-card-last-activity"
+              title={task.updatedAt}
+            >
+              {t('taskCard.lastActivity', { when: lastActivityLabel })}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          {task.createdByUsername && (
-            <UserAvatar username={task.createdByUsername} size="sm" />
-          )}
+          {/* s-1202: assign distinct icons to assignee vs last runner so
+              the user can no longer mistake a Runner device name for the
+              task's real owner. The "Created by" tooltip explicitly
+              spells out what the red avatar represents — previously it
+              carried no explanation (PM_REVIEW_2026-09-17 §3.2). */}
           {task.assignee && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-400">{task.assignee}</span>
+            <span
+              className="flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300 max-w-[9rem]"
+              title={t('taskCard.assigneeBadgeTitle', { name: task.assignee })}
+              aria-label={t('taskCard.assigneeBadgeAria', { name: task.assignee })}
+              data-testid="task-card-assignee-badge"
+            >
+              <span aria-hidden className="text-[11px] leading-none">👤</span>
+              <span className="truncate">{task.assignee}</span>
+            </span>
+          )}
+          {/* s-1213: detailed density keeps the last-runner chip only
+              while the run is actually live. Once the runner settles
+              into a terminal status the chip drops out so it stops
+              reading as "currently being worked on". */}
+          {run && (!isDetailed || isLiveRun) && (
+            <span
+              className="flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300 max-w-[9rem]"
+              title={t('taskCard.lastRunnerBadgeTitle', { runnerId: run.runnerId })}
+              aria-label={t('taskCard.lastRunnerBadgeAria', { runnerId: run.runnerId })}
+              data-testid="task-card-last-runner-badge"
+            >
+              <span aria-hidden className="text-[11px] leading-none">🤖</span>
+              <span className="truncate font-mono">
+                {run.runnerId.length > 14 ? `${run.runnerId.slice(0, 11)}…` : run.runnerId}
+              </span>
+            </span>
+          )}
+          {(task.createdByNickname || task.createdByUsername) && (
+            <div
+              className="flex items-center gap-1.5"
+              title={t('taskCard.createdByTooltip', {
+                name: task.createdByNickname || task.createdByUsername || '',
+              })}
+              aria-label={t('taskCard.createdByTooltip', {
+                name: task.createdByNickname || task.createdByUsername || '',
+              })}
+              data-testid="task-card-created-by"
+            >
+              <UserAvatar
+                username={task.createdByNickname || task.createdByUsername || ''}
+                avatar={task.createdByAvatar}
+                size="sm"
+                title={t('taskCard.createdByTooltip', {
+                  name: task.createdByNickname || task.createdByUsername || '',
+                })}
+              />
+              <span className="text-xs text-zinc-500 dark:text-zinc-500 truncate max-w-[8rem]">
+                {task.createdByNickname || task.createdByUsername}
+              </span>
+            </div>
           )}
           {((task._count?.comments ?? 0) > 0 || (task.comments && task.comments.length > 0)) && (
             <span
@@ -455,6 +593,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           )}
         </div>
       </div>
+      )}
       {confirmDialog.isOpen && (
         <ConfirmDialog
           isOpen={confirmDialog.isOpen}

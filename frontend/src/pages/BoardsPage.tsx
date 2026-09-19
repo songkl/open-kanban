@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { boardsApi, templatesApi } from '../services/api';
+import { boardsApi, templatesApi, authApi, presetTemplatesApi } from '../services/api';
 import { useSetupGuard } from '../hooks/useSetupGuard';
 import { ErrorToastContainer } from '../components/ErrorToast';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -12,7 +12,7 @@ import { ImportConflictConfirm } from '../components/ImportModal';
 import { TemplateNameModal } from '../components/TemplateNameModal';
 import { TemplateList } from '../components/TemplateList';
 
-import type { Board } from '../types/kanban';
+import type { Board, User } from '../types/kanban';
 
 interface Template {
   id: string;
@@ -23,11 +23,15 @@ interface Template {
   createdAt: string;
 }
 
+type BoardSortKey = 'lastActive' | 'createdAt' | 'taskCount' | 'owner' | 'name';
+
 export function BoardsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   useSetupGuard();
   const [boards, setBoards] = useState<Board[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [presetCount, setPresetCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingBoard, setEditingBoard] = useState<Board | null>(null);
@@ -35,6 +39,7 @@ export function BoardsPage() {
   const [showImportConflictConfirm, setShowImportConflictConfirm] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingImportData, setPendingImportData] = useState<{ data: unknown; boardId?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -50,12 +55,25 @@ export function BoardsPage() {
     boardName: string;
   }>({ isOpen: false, boardId: '', boardName: '' });
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<BoardSortKey>('lastActive');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
   const fetchTemplates = useCallback(async () => {
     try {
       const data = await templatesApi.getAll();
       setTemplates(data || []);
     } catch (error) {
       console.error('Failed to fetch templates:', error);
+    }
+  }, []);
+
+  const fetchPresetCount = useCallback(async () => {
+    try {
+      const data = await presetTemplatesApi.getAll();
+      setPresetCount((data || []).length);
+    } catch (error) {
+      console.error('Failed to fetch preset count:', error);
     }
   }, []);
 
@@ -73,11 +91,28 @@ export function BoardsPage() {
   useEffect(() => {
     fetchBoards();
     fetchTemplates();
-  }, [fetchBoards, fetchTemplates]);
+    fetchPresetCount();
+    authApi
+      .me()
+      .then((data) => {
+        if (data.user) setCurrentUser(data.user);
+      })
+      .catch(console.error);
+  }, [fetchBoards, fetchTemplates, fetchPresetCount]);
 
   const showToastMessage = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(null), 2000);
+  };
+
+  const handleContactAdmin = () => {
+    if (currentUser?.role === 'ADMIN') {
+      navigate('/settings?tab=users');
+      return;
+    }
+
+    showToastMessage(t('board.contactOwner'));
+    navigate('/boards');
   };
 
   const handleBoardSubmit = async (data: {
@@ -85,10 +120,15 @@ export function BoardsPage() {
     description?: string;
     boardId?: string;
     templateId?: string;
+    isPublic?: boolean;
   }) => {
     try {
       if (editingBoard) {
-        await boardsApi.update(editingBoard.id, { name: data.name, description: data.description });
+        await boardsApi.update(editingBoard.id, {
+          name: data.name,
+          description: data.description,
+          isPublic: data.isPublic,
+        });
         showToastMessage(t('toast.boardUpdated'));
       } else {
         if (data.templateId) {
@@ -101,6 +141,7 @@ export function BoardsPage() {
           await boardsApi.create({
             name: data.name,
             id: data.boardId,
+            isPublic: data.isPublic,
           });
         }
         showToastMessage(t('toast.boardCreated'));
@@ -205,6 +246,62 @@ export function BoardsPage() {
     setShowImportModal(true);
   };
 
+  const accessibleBoards = boards.filter(
+    (b) => b.effectiveAccess !== '' && b.effectiveAccess !== undefined,
+  );
+  const canCreateBoard = currentUser?.role !== 'VIEWER';
+
+  const filteredSortedBoards = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const matched = query
+      ? accessibleBoards.filter((b) => {
+          const haystack = [b.name, b.id, b.description ?? '', b.ownerNickname ?? '']
+            .join(' ')
+            .toLowerCase();
+          return haystack.includes(query);
+        })
+      : accessibleBoards;
+
+    const getTime = (b: Board, key: 'lastActive' | 'createdAt'): number => {
+      const raw = key === 'lastActive' ? b.lastActiveAt : b.createdAt;
+      const t = raw ? new Date(raw).getTime() : 0;
+      return Number.isNaN(t) ? 0 : t;
+    };
+
+    const ownerKey = (b: Board): string => {
+      if (b.ownerNickname && b.ownerNickname.trim()) return b.ownerNickname.trim().toLowerCase();
+      if (b.isOwner) return '\x00';
+      return '\xff';
+    };
+
+    return [...matched].sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case 'lastActive':
+          cmp = getTime(a, 'lastActive') - getTime(b, 'lastActive');
+          break;
+        case 'createdAt':
+          cmp = getTime(a, 'createdAt') - getTime(b, 'createdAt');
+          break;
+        case 'taskCount':
+          cmp = (a.taskCount ?? 0) - (b.taskCount ?? 0);
+          break;
+        case 'owner':
+          cmp = ownerKey(a).localeCompare(ownerKey(b));
+          break;
+        case 'name':
+          cmp = (a.name || '').localeCompare(b.name || '');
+          break;
+      }
+      if (cmp === 0) {
+        cmp = getTime(a, 'createdAt') - getTime(b, 'createdAt');
+      }
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [accessibleBoards, searchQuery, sortBy, sortOrder]);
+
+  const isFiltering = searchQuery.trim().length > 0;
+
   const closeImportModal = () => {
     setShowImportModal(false);
     setShowImportConflictConfirm(false);
@@ -282,10 +379,94 @@ export function BoardsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('nav.boardManagement')}</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.count', { count: boards.length })}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.count_other', { count: accessibleBoards.length })}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              className="relative"
+              data-testid="boards-search-wrapper"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('board.searchPlaceholder')}
+                aria-label={t('board.searchPlaceholder')}
+                data-testid="boards-search-input"
+                className="w-56 rounded-xl border border-zinc-100 dark:border-zinc-700 bg-white dark:bg-zinc-800 pl-9 pr-9 py-2 text-sm text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label={t('board.clearSearch')}
+                  data-testid="boards-search-clear"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1" data-testid="boards-sort-wrapper">
+              <label
+                htmlFor="boards-sort-select"
+                className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              >
+                {t('board.sortBy')}:
+              </label>
+              <select
+                id="boards-sort-select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as BoardSortKey)}
+                data-testid="boards-sort-select"
+                className="rounded-xl border border-zinc-100 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              >
+                <option value="lastActive">{t('board.sortLastActive')}</option>
+                <option value="createdAt">{t('board.sortCreatedAt')}</option>
+                <option value="taskCount">{t('board.sortTaskCount')}</option>
+                <option value="owner">{t('board.sortOwner')}</option>
+                <option value="name">{t('board.sortName')}</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                aria-label={sortOrder === 'asc' ? t('common.sortAsc') : t('common.sortDesc')}
+                title={sortOrder === 'asc' ? t('common.sortAsc') : t('common.sortDesc')}
+                data-testid="boards-sort-order"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-100 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+            <Link
+              to="/dashboard"
+              className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-500 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:hover:border-zinc-600 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" />
+              </svg>
+              {t('nav.dashboard')}
+            </Link>
             <Link
               to="/columns"
               className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-500 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-200 dark:hover:border-zinc-600 transition-all"
@@ -295,15 +476,31 @@ export function BoardsPage() {
               </svg>
               {t('nav.columnManagement')}
             </Link>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              {t('modal.newBoard')}
-            </button>
+            {presetCount > 0 && canCreateBoard && (
+              <Link
+                to="/templates/marketplace"
+                className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-medium text-purple-600 dark:text-purple-300 shadow-sm border border-purple-200 dark:border-purple-700 hover:bg-purple-50 dark:hover:bg-zinc-700 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+                {t('nav.templateMarketplace')}
+              </Link>
+            )}
+            {canCreateBoard && (
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                {t('modal.newBoard')}
+              </button>
+            )}
           </div>
         </div>
 
@@ -318,16 +515,18 @@ export function BoardsPage() {
             </div>
             <p className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('app.error.loadFailed')}</p>
             <div className="flex flex-col gap-3 items-center">
-              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.noAccessHint')}</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('board.loadFailedHint')}</p>
               <div className="flex gap-3">
+                {canCreateBoard && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+                  >
+                    {t('board.createNew')}
+                  </button>
+                )}
                 <button
-                  onClick={() => setShowModal(true)}
-                  className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
-                >
-                  {t('board.createNew')}
-                </button>
-                <button
-                  onClick={() => window.location.href = '/settings?tab=permissions'}
+                  onClick={handleContactAdmin}
                   className="rounded-xl bg-zinc-100 dark:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
                 >
                   {t('board.contactAdmin')}
@@ -344,27 +543,77 @@ export function BoardsPage() {
               </button>
             </div>
           </div>
-        ) : boards.length === 0 ? (
+        ) : accessibleBoards.length === 0 ? (
           <div className="rounded-2xl bg-white dark:bg-zinc-800 p-12 text-center shadow-sm border border-zinc-100 dark:border-zinc-700">
             <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-400">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               </svg>
             </div>
-            <p className="text-lg font-medium text-zinc-500 dark:text-zinc-500">{t('board.noBoards')}</p>
-            <button
-              onClick={openAddModal}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14M5 12h14"/>
+            <p className="text-lg font-medium text-zinc-500 dark:text-zinc-500">
+              {canCreateBoard ? t('board.noBoardsYet') : t('board.noAccessibleBoards')}
+            </p>
+            <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">
+              {t('board.emptyStateHint')}
+            </p>
+            {canCreateBoard && (
+              <div className="mt-6 flex flex-col gap-3 items-center sm:flex-row sm:justify-center">
+                {presetCount > 0 && (
+                  <button
+                    onClick={() => navigate('/onboarding')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-purple-500/30 hover:from-purple-600 hover:to-purple-700 transition-all"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                    </svg>
+                    {t('board.importFromTemplate')}
+                  </button>
+                )}
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 hover:from-blue-600 hover:to-blue-700 transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12h14"/>
+                  </svg>
+                  {t('modal.newBoard')}
+                </button>
+                {presetCount > 1 && (
+                  <Link
+                    to="/templates/marketplace"
+                    className="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-800 px-5 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all"
+                  >
+                    {t('board.browseMarketplace')}
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        ) : isFiltering && filteredSortedBoards.length === 0 ? (
+          <div
+            className="rounded-2xl bg-white dark:bg-zinc-800 p-12 text-center shadow-sm border border-zinc-100 dark:border-zinc-700"
+            data-testid="boards-empty-filter"
+          >
+            <div className="mb-4 flex h-20 w-20 mx-auto items-center justify-center rounded-full bg-zinc-50 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-400">
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
-              {t('modal.newBoard')}
+            </div>
+            <p className="text-lg font-medium text-zinc-700 dark:text-zinc-200">
+              {t('board.noResultsForFilter', { query: searchQuery })}
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
+            >
+              {t('board.clearSearch')}
             </button>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {boards.map((board) => (
+            {filteredSortedBoards.map((board) => (
               <BoardCard
                 key={board.id}
                 board={board}

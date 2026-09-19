@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { OAuthDevicePage } from './OAuthDevicePage';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: Record<string, unknown>) => {
       const map: Record<string, string> = {
         'oauth.device.title': 'Authorize device',
         'oauth.device.subtitle': 'Enter the code',
@@ -38,17 +38,37 @@ vi.mock('react-i18next', () => ({
         'oauth.device.identityConfirmAgentCta': 'Yes, authorise as this Agent',
         'oauth.device.identityConfirmCancel': 'Pick a different identity'
       };
-      return map[key] || key;
+      let out = map[key] || key;
+      if (params && typeof out === 'string') {
+        for (const [k, v] of Object.entries(params)) {
+          out = out.replace(`{{${k}}}`, String(v));
+        }
+      }
+      return out;
     },
     i18n: { language: 'en' }
   })
 }));
 
+let mockMeResponse: { user: { id: string; role?: string } } = { user: { id: 'user-1', role: 'ADMIN' } };
+let mockBoardsResponse: Array<{ id: string; name: string }> = [];
+
 vi.mock('../services/api', () => ({
   authApi: {
-    me: vi.fn().mockResolvedValue({ user: { id: 'user-1' } })
+    me: vi.fn(() => Promise.resolve(mockMeResponse))
+  },
+  boardsApi: {
+    getAll: vi.fn(() => Promise.resolve(mockBoardsResponse))
   }
 }));
+
+const setMockMe = (resp: { user: { id: string; role?: string } }) => {
+  mockMeResponse = resp;
+};
+
+const setMockBoards = (resp: Array<{ id: string; name: string }>) => {
+  mockBoardsResponse = resp;
+};
 
 const renderPage = (search = '') =>
   render(

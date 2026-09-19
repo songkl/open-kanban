@@ -727,6 +727,63 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /tasks/reorder:
+    put:
+      summary: Reorder tasks
+      description: |
+        Update the position of multiple tasks in one transaction.
+        Supports reordering within a column or moving tasks between columns.
+      operationId: reorderTasks
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+        - SignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tasks
+              properties:
+                tasks:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - columnId
+                      - position
+                    properties:
+                      id:
+                        type: string
+                      columnId:
+                        type: string
+                      position:
+                        type: integer
+      responses:
+        '200':
+          description: Tasks reordered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  details:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /tasks/{id}/archive:
     post:
       summary: Archive a task
@@ -1319,6 +1376,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me/notification-preferences:
+    get:
+      summary: Get current user's notification preferences
+      description: |
+        Returns the caller's per-user notification-delivery preferences.
+        If no row exists the documented defaults (email + webhook enabled,
+        empty webhook URL) are returned so the Settings tab can render
+        without a special-case for first-time visitors.
+      operationId: getMyNotificationPreferences
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      summary: Update current user's notification preferences
+      description: |
+        Partial update: omitted fields are preserved server-side so the
+        Settings tab can PATCH one switch at a time without resending
+        the whole row. webhookUrl must be empty or a valid http(s) URL
+        — non-http schemes are rejected with 400.
+      operationId: updateMyNotificationPreferences
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferencesPatch'
+      responses:
+        '200':
+          description: Updated notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '400':
+          description: Invalid webhook URL or malformed JSON body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -2167,6 +2280,53 @@ components:
         user:
           $ref: '#/components/schemas/User'
         token:
+          type: string
+
+    NotificationPreferences:
+      type: object
+      description: |
+        Per-user notification-delivery preferences (s-1203,
+        PM_REVIEW_2026-09-17 §3.7). The bell badge itself is always
+        on; these fields only gate the external email and webhook
+        transports.
+      properties:
+        userId:
+          type: string
+        emailEnabled:
+          type: boolean
+          description: When false the email delivery path is skipped.
+        webhookEnabled:
+          type: boolean
+          description: When false the outbound webhook delivery is skipped.
+        webhookUrl:
+          type: string
+          description: |
+            Destination URL for outbound webhook deliveries. Empty
+            (or null) means no destination; the webhook fan-out is
+            skipped even when webhookEnabled is true. Must be a
+            valid http(s) URL with a host.
+        updatedAt:
+          type: string
+          format: date-time
+
+    NotificationPreferencesPatch:
+      type: object
+      description: |
+        Partial-update document for the caller's notification
+        preferences. Omitted fields are preserved server-side so a
+        single-switch toggle does not require a full PUT body.
+      properties:
+        emailEnabled:
+          type: boolean
+        webhookEnabled:
+          type: boolean
+        webhookUrl:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
           type: string
 
     InitRequest:

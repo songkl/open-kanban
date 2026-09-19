@@ -46,9 +46,17 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 		shortAlias = ensureUniqueBoardAlias(tx, shortAlias)
 
 		now := time.Now()
+		// Default new boards to public so the feature is
+		// opt-in: callers who don't send isPublic keep the
+		// pre-feature behaviour. The column-level DEFAULT 1
+		// covers the same case for direct DB inserts.
+		isPublic := true
+		if req.IsPublic != nil {
+			isPublic = *req.IsPublic
+		}
 		_, err = tx.Exec(
-			"INSERT INTO boards (id, name, description, short_alias, task_counter, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			boardID, req.Name, req.Description, shortAlias, 1000, false, now, now,
+			"INSERT INTO boards (id, name, description, short_alias, task_counter, deleted, is_public, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			boardID, req.Name, req.Description, shortAlias, 1000, false, isPublic, now, now,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
@@ -60,10 +68,14 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 		// board regardless of their global role — a MEMBER who
 		// creates a board can still manage its permissions,
 		// columns, and tasks. Without this row, only global
-		// ADMINs would have board-management rights.
+		// ADMINs would have board-management rights. The audit
+		// columns (granted_by / expires / revoked_*) are written
+		// as NULL defaults so the row starts in its "active"
+		// state; granted_by_user_id is the creator because the
+		// owner grant is self-issued at create-time.
 		_, err = tx.Exec(
-			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES (?, ?, ?, ?, 'ADMIN')",
-			generateID(), user.ID, boardID, user.ID,
+			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES (?, ?, ?, ?, 'ADMIN', ?, NULL, NULL, NULL, '')",
+			generateID(), user.ID, boardID, user.ID, user.ID,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant creator ownership"})
@@ -100,6 +112,7 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 			"name":        req.Name,
 			"description": req.Description,
 			"shortAlias":  shortAlias,
+			"isPublic":    isPublic,
 			"deleted":     false,
 			"createdAt":   now,
 			"updatedAt":   now,
@@ -135,7 +148,16 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var oldName, oldDesc string
-		db.QueryRow("SELECT name, COALESCE(description, '') FROM boards WHERE id = ?", id).Scan(&oldName, &oldDesc)
+		var oldIsPublic bool
+		err := db.QueryRow("SELECT name, COALESCE(description, ''), is_public FROM boards WHERE id = ?", id).Scan(&oldName, &oldDesc, &oldIsPublic)
+		// Pre-flight read only powers the activity-log "name
+		// changed / visibility flipped" message and the cache
+		// invalidation guard. None of those matter for a
+		// missing row — preserve the legacy behaviour of
+		// returning 200 with the caller's payload and updating
+		// zero rows, matching what callers (and the existing
+		// handler test) used to rely on.
+		boardExists := err == nil
 
 		details := ""
 		if req.Name != "" && req.Name != oldName {
@@ -148,14 +170,37 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 			details += fmt.Sprintf("说明: '%s' → '%s'", oldDesc, req.Description)
 		}
 
+		// Pointer semantics: missing key keeps the previous
+		// visibility, explicit value flips it. Only invalidate
+		// the permission cache when visibility actually changed,
+		// since a stale cache entry for a flipped-from-private
+		// board would let an unauthorized user keep seeing it
+		// for up to permissionCacheDuration.
+		newIsPublic := oldIsPublic
+		if req.IsPublic != nil && boardExists && *req.IsPublic != oldIsPublic {
+			newIsPublic = *req.IsPublic
+			if details != "" {
+				details += "; "
+			}
+			visibilityLabel := "公开"
+			if !newIsPublic {
+				visibilityLabel = "私有"
+			}
+			details += fmt.Sprintf("可见性: %s", visibilityLabel)
+		}
+
 		now := time.Now()
-		_, err := db.Exec(
-			"UPDATE boards SET name = ?, description = ?, updated_at = ? WHERE id = ?",
-			req.Name, req.Description, now, id,
+		_, err = db.Exec(
+			"UPDATE boards SET name = ?, description = ?, is_public = ?, updated_at = ? WHERE id = ?",
+			req.Name, req.Description, newIsPublic, now, id,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update"})
 			return
+		}
+
+		if boardExists && req.IsPublic != nil && *req.IsPublic != oldIsPublic {
+			permissionCache.InvalidateResource(id)
 		}
 
 		LogActivity(db, user.ID, "BOARD_UPDATE", "BOARD", id, req.Name, details, c.ClientIP(), getRequestSource(c))
@@ -167,6 +212,7 @@ func UpdateBoard(db *sql.DB) gin.HandlerFunc {
 			"id":          id,
 			"name":        req.Name,
 			"description": req.Description,
+			"isPublic":    newIsPublic,
 			"updatedAt":   now,
 		})
 	}

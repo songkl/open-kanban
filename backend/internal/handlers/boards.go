@@ -74,11 +74,22 @@ type CreateBoardRequest struct {
 	ID          string `json:"id" validate:"omitempty,max=100"`
 	Name        string `json:"name" validate:"required,max=255"`
 	Description string `json:"description" validate:"max=1000"`
+	// IsPublic defaults to true when omitted (matches the column
+	// default) so existing API clients keep their current
+	// "everything is visible" behaviour. Board owners toggle this
+	// off to make the board hidden from the /api/boards list for
+	// anonymous and unauthorized users.
+	IsPublic *bool `json:"isPublic,omitempty"`
 }
 
 type UpdateBoardRequest struct {
 	Name        string `json:"name" validate:"required,max=255"`
 	Description string `json:"description" validate:"max=1000"`
+	// Pointer so a missing key is distinguishable from an
+	// explicit false: omitting isPublic leaves the existing
+	// visibility intact, sending false flips a public board
+	// private, and sending true flips it back.
+	IsPublic *bool `json:"isPublic,omitempty"`
 }
 
 type ExportBoardRequest struct {

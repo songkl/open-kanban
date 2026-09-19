@@ -1,11 +1,53 @@
 import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, OAuthProvider, OAuthProviderCreate, OAuthProviderUpdate, TaskRun, Webhook, WebhookCreate, WebhookUpdate, WebhookEventCatalogueEntry, WebhookDelivery } from '@/types/kanban';
 import i18n from '@/i18n';
 
-export interface Permission {
-  id: string;
-  boardId: string;
-  boardName: string;
-  access: string;
+/**
+ * @deprecated Use {@link BoardPermission} from `@/types/kanban` instead.
+ * Retained as an alias for backward compatibility.
+ */
+export type Permission = BoardPermission;
+
+/**
+ * Shape returned by GET /api/v1/auth/users-visible. The backend uses
+ * `userId` instead of `id` and omits avatar / enabled / timestamps
+ * because the endpoint is only used as a permission-management
+ * candidate list. We map it back to {@link User} via `toUser` so the
+ * existing form components keep working.
+ */
+interface VisibleUser {
+  userId: string;
+  username?: string;
+  nickname: string;
+  type: 'HUMAN' | 'AGENT';
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}
+
+/**
+ * A user that can still be invited to a board, as returned in the
+ * `candidates` array of GET /api/v1/auth/permissions?boardId=X. The
+ * backend emits the same shape as /api/v1/auth/users-visible, i.e.
+ * `userId` instead of `id`, so the field set mirrors {@link VisibleUser}.
+ * The array is only present when the request is scoped to a board.
+ */
+export interface PermissionCandidate {
+  userId: string;
+  username?: string;
+  nickname: string;
+  type: 'HUMAN' | 'AGENT';
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+}
+
+function toUser(u: VisibleUser): User {
+  return {
+    id: u.userId,
+    nickname: u.nickname,
+    avatar: null,
+    role: u.role,
+    type: u.type,
+    enabled: true,
+    createdAt: '',
+    updatedAt: '',
+  };
 }
 
 // Vite environment variables type declaration
@@ -188,7 +230,7 @@ export function createApiRequest<T>(
 // Boards API
 export const boardsApi = {
   getAll: () => fetchApi<Board[]>('boards'),
-  create: (data: { id?: string; name: string; description?: string }) =>
+  create: (data: { id?: string; name: string; description?: string; isPublic?: boolean }) =>
     fetchApi<Board>('boards', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -198,7 +240,7 @@ export const boardsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  update: (id: string, data: { name?: string; description?: string }) =>
+  update: (id: string, data: { name?: string; description?: string; isPublic?: boolean }) =>
     fetchApi<Board>(`boards/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -218,7 +260,80 @@ export const boardsApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // Public read-only share link + iframe embed surface
+  // (s-1204, PM_REVIEW_2026-09-17 §6). Mint is owner/admin only;
+  // the plaintext value is returned exactly once in the response.
+  listViewerTokens: (id: string) =>
+    fetchApi<{ tokens: ViewerToken[] }>(`boards/${id}/viewer-tokens`),
+  mintViewerToken: (id: string, data: { label?: string; expiresAt?: string | null }) =>
+    fetchApi<ViewerToken>(`boards/${id}/viewer-tokens`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  revokeViewerToken: (id: string, tokenId: string) =>
+    fetchApi<{ id: string; revoked: boolean }>(
+      `boards/${id}/viewer-tokens/${tokenId}`,
+      { method: 'DELETE' }
+    ),
+  getViewerEmbedSnippet: (id: string, token: string) =>
+    fetchApi<{ src: string; snippet: string; height: number; width: string }>(
+      `boards/${id}/viewer-tokens/embed?token=${encodeURIComponent(token)}`
+    ),
 };
+
+// Public read-only viewer board surface (s-1204). Anonymous: gated
+// by URL secret, returns a sanitized snapshot with no mutating
+// surface. Used by /public/b/:token.
+export const publicBoardApi = {
+  get: (token: string) =>
+    fetchApi<PublicBoard>(`public/boards/${encodeURIComponent(token)}`, {
+      skip401Handling: true,
+    }),
+};
+
+export interface ViewerToken {
+  id: string;
+  boardId: string;
+  label: string;
+  createdBy?: string;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+  // Only present on the mint response — never returned by list /
+  // lookup paths.
+  token?: string;
+}
+
+export interface PublicBoard {
+  id: string;
+  name: string;
+  description: string;
+  readOnly: true;
+  columns: PublicColumn[];
+}
+
+export interface PublicColumn {
+  id: string;
+  name: string;
+  status?: string;
+  position: number;
+  color: string;
+  description: string;
+  tasks: PublicTask[];
+}
+
+export interface PublicTask {
+  id: string;
+  title: string;
+  description: string;
+  priority: string;
+  assignee: string;
+  meta: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+  _count: { comments: number; subtasks: number };
+}
 
 // Templates API
 interface Template {
@@ -241,6 +356,65 @@ export const templatesApi = {
     }),
   delete: (id: string) =>
     fetchApi<void>(`templates/${id}`, { method: 'DELETE' }),
+};
+
+// Preset templates API (s-1196, PM_REVIEW_2026-09-17 §5.4 ROI #4).
+// Powers the public template marketplace and the first-login wizard.
+// The GET endpoint is intentionally unauthenticated so the marketplace
+// can be browsed from the landing page; admins can disable the entire
+// marketplace via the marketplaceEnabled app_config toggle (the server
+// returns 404 in that case, which this client surfaces by collapsing
+// the result to an empty list).
+export interface PresetTemplate {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  columnsConfig: string;
+  sampleTasks: string;
+  sampleAgent: string;
+  position: number;
+}
+
+export interface QuickstartResult {
+  boardId: string;
+  boardName: string;
+  agentId?: string;
+  agentToken?: string;
+  demoTaskId?: string;
+}
+
+export const presetTemplatesApi = {
+  // getAll returns the curated marketplace. We swallow 404s (the disable
+  // signal) so callers don't have to special-case a locked-down host.
+  getAll: async (): Promise<PresetTemplate[]> => {
+    try {
+      return await fetchApi<PresetTemplate[]>('preset-templates');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        return [];
+      }
+      throw err;
+    }
+  },
+};
+
+export const onboardingApi = {
+  // quickstart materialises a board + sample Agent + demo task in one
+  // shot. The InstallAgent / TriggerDemoRun fields use pointer types on
+  // the server so an unspecified field keeps the wizard's default
+  // (true); the caller opts out explicitly by setting them to false.
+  quickstart: (data: {
+    presetSlug: string;
+    boardName?: string;
+    installAgent?: boolean;
+    triggerDemoRun?: boolean;
+  }) =>
+    fetchApi<QuickstartResult>('onboarding/quickstart', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 // Columns API
@@ -267,6 +441,30 @@ export const columnsApi = {
       method: 'PUT',
       body: JSON.stringify({ boardId, columns }),
     }),
+  /**
+   * setAgent replaces the Agent binding for a column (s-1214). When
+   * `agentTypes` is empty the row is removed so the column drops out
+   * of the auto-trigger fan-out entirely. `transitionTrigger` is one
+   * of "none" / "on_enter" / "on_exit" / "both" — see the column
+   * workflow triggers spec (PM_REVIEW §3.5).
+   */
+  setAgent: (
+    columnId: string,
+    data: { agentTypes: string[]; transitionTrigger: 'none' | 'on_enter' | 'on_exit' | 'both' },
+  ) =>
+    fetchApi<{ agentTypes: string[]; transitionTrigger: string }>(
+      `columns/${columnId}/agent`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    ),
+  getAgent: (columnId: string) =>
+    fetchApi<{ agentTypes: string[]; transitionTrigger: string }>(
+      `columns/${columnId}/agent`,
+    ),
+  deleteAgent: (columnId: string) =>
+    fetchApi<void>(`columns/${columnId}/agent`, { method: 'DELETE' }),
 };
 
 // Tasks API
@@ -288,6 +486,16 @@ export const tasksApi = {
     published?: boolean;
     agentId?: string;
     agentPrompt?: string;
+    // T-1207 / s-1207, PM_REVIEW_2026-09-17 §3.12: the
+    // create-task modal lets the operator pick a due date /
+    // assignee / attachment set without leaving the modal. The
+    // backend round-trips DueAt as RFC3339 and stores it in
+    // tasks.due_at; Assignee is the user/agent id; AttachmentIDs
+    // are the rows pre-uploaded via /api/v1/upload that the
+    // server re-links to the freshly minted task.
+    assignee?: string | null;
+    dueAt?: string | null;
+    attachmentIds?: string[];
   }) =>
     fetchApi<Task>('tasks', {
       method: 'POST',
@@ -304,6 +512,36 @@ export const tasksApi = {
     fetchApi<Task>(`tasks/${id}/archive`, {
       method: 'POST',
       body: JSON.stringify({ archived }),
+    }),
+  /**
+   * bulkColumnAction powers the column-header ⋯ menu introduced in
+   * s-1212. A single click sends a POST to
+   * /api/v1/tasks/bulk/column-action with the column id and the
+   * chosen action — the server resolves every live task in the
+   * column, applies the action, and writes one audit row per
+   * request. `affectedIds` is optional and only used to keep the
+   * client preview in sync; the server re-queries the column so a
+   * stale client cannot trick it into skipping rows.
+   */
+  bulkColumnAction: (
+    columnId: string,
+    action: 'archive' | 'complete',
+    affectedIds?: string[],
+  ) =>
+    fetchApi<{
+      action: string;
+      columnId: string;
+      affected: string[];
+      count: number;
+      skipped: number;
+    }>('tasks/bulk/column-action', {
+      method: 'POST',
+      body: JSON.stringify({ columnId, action, affectedIds }),
+    }),
+  reorder: (tasks: { id: string; columnId: string; position: number }[]) =>
+    fetchApi<{ success: boolean; count: number; details?: string }>('tasks/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ tasks }),
     }),
 };
 
@@ -450,21 +688,27 @@ export const authApi = {
   deleteToken: (id: string) =>
     fetchApi<void>(`auth/token?id=${id}`, { method: 'DELETE' }),
   getUsers: () => fetchApi<{ users: User[] }>('auth/users').then(res => res.users),
+  listVisibleUsers: (boardId?: string) => {
+    const query = boardId ? `?boardId=${encodeURIComponent(boardId)}` : '';
+    return fetchApi<{ users: VisibleUser[] }>(`auth/users-visible${query}`).then((res) =>
+      (res.users || []).map(toUser)
+    );
+  },
   updateUser: (id: string, data: { nickname?: string; avatar?: string | null; role?: 'ADMIN' | 'MEMBER' | 'VIEWER' }) =>
     fetchApi<User>('auth/users', {
       method: 'PUT',
       body: JSON.stringify({ targetUserId: id, ...data }),
     }),
-  createUser: (data: { username: string; nickname?: string; password?: string; role?: 'ADMIN' | 'MEMBER' | 'VIEWER'; avatar?: string }) =>
-    fetchApi<{ user: User & { token?: string } }>('auth/users', {
+  createUser: (data: { username: string; nickname?: string; password?: string; role?: 'ADMIN' | 'MEMBER' | 'VIEWER'; avatar?: string; boardGrants?: Array<{ boardId: string; access: 'READ' | 'WRITE' | 'ADMIN' }> }) =>
+    fetchApi<{ user: User & { token?: string; grantedCount?: number } }>('auth/users', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   getAgents: () => fetchApi<{ agents: Agent[] }>('auth/agents').then(res => res.agents || []),
-  createAgent: (nickname: string, avatar?: string, role?: 'ADMIN' | 'MEMBER' | 'VIEWER') =>
-    fetchApi<{ agent: Agent & { token: string } }>('auth/agents', {
+  createAgent: (nickname: string, avatar?: string, role?: 'ADMIN' | 'MEMBER' | 'VIEWER', boardGrants?: Array<{ boardId: string; access: 'READ' | 'WRITE' | 'ADMIN' }>) =>
+    fetchApi<{ agent: Agent & { token: string; grantedCount?: number } }>('auth/agents', {
       method: 'POST',
-      body: JSON.stringify({ nickname, avatar, role }),
+      body: JSON.stringify({ nickname, avatar, role, boardGrants }),
     }),
   resetAgentToken: (id: string) =>
     fetchApi<{ token: string }>(`auth/agents/reset-token?id=${id}`, {
@@ -526,11 +770,36 @@ export const authApi = {
     fetchApi<{ deleted: string }>(`auth/oauth/providers/${id}`, { method: 'DELETE' }),
   getBoards: () => fetchApi<Board[]>('boards'),
   getPermissions: (userId: string) =>
-    fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string }> }>(`auth/permissions?userId=${userId}`),
+    fetchApi<{ permissions: BoardPermission[] }>(`auth/permissions?userId=${userId}`),
   getBoardPermissions: (boardId: string) =>
-    fetchApi<{ permissions: Array<{ id: string; boardId: string; boardName: string; access: string; userId: string; userNickname: string }> }>(`auth/permissions?boardId=${boardId}`),
+    fetchApi<{ permissions: BoardPermission[]; candidates?: PermissionCandidate[] }>(
+      `auth/permissions?boardId=${encodeURIComponent(boardId)}`
+    ),
+  getMyBoardPermissions: (boardId: string) =>
+    fetchApi<{
+      boardId: string;
+      effectiveAccess: string;
+      isOwner: boolean;
+      canManageBoardPermissions: boolean;
+      canManageColumnPermissions: boolean;
+    }>(`auth/me/board-permissions?boardId=${encodeURIComponent(boardId)}`),
+  getMyColumnAccess: (boardId: string) =>
+    fetchApi<{
+      boardId: string;
+      boardAccess: string;
+      isOwner: boolean;
+      columns: Record<
+        string,
+        {
+          effectiveAccess: string;
+          canCreateTask: boolean;
+          canModify: boolean;
+          canDelete: boolean;
+        }
+      >;
+    }>(`auth/me/column-access?boardId=${encodeURIComponent(boardId)}`),
   setPermission: (userId: string, boardId: string, access: string) =>
-    fetchApi<{ permission: { id: string; userId: string; boardId: string; boardName: string; access: string } }>('auth/permissions', {
+    fetchApi<{ permission: BoardPermission }>('auth/permissions', {
       method: 'POST',
       body: JSON.stringify({ userId, boardId, access }),
     }),
@@ -544,12 +813,20 @@ export const authApi = {
     ),
   deletePermission: (id: string) =>
     fetchApi<void>(`auth/permissions?id=${id}`, { method: 'DELETE' }),
+  transferOwnership: (boardId: string, newOwnerUserId: string) =>
+    fetchApi<{ success: boolean; boardId: string; newOwnerUserId: string }>(
+      'auth/permissions/transfer-ownership',
+      {
+        method: 'POST',
+        body: JSON.stringify({ boardId, newOwnerUserId }),
+      }
+    ),
   getColumnPermissions: (userId?: string, columnId?: string) =>
-    fetchApi<{ permissions: Array<{ id: string; columnId: string; columnName: string; access: string; userId: string; userNickname: string }> }>(
+    fetchApi<{ permissions: ColumnPermission[] }>(
       `auth/permissions/columns${userId ? `?userId=${userId}` : columnId ? `?columnId=${columnId}` : ''}`
     ),
   setColumnPermission: (userId: string, columnId: string, access: string) =>
-    fetchApi<{ permission: { id: string; userId: string; columnId: string; columnName: string; access: string } }>('auth/permissions/columns', {
+    fetchApi<{ permission: ColumnPermission }>('auth/permissions/columns', {
       method: 'POST',
       body: JSON.stringify({ userId, columnId, access }),
     }),
@@ -577,12 +854,27 @@ interface Activity {
 }
 
 export const activitiesApi = {
-  getAll: (filters?: { action?: string; startTime?: string; endTime?: string; pageSize?: number }) => {
+  getAll: (filters?: {
+    action?: string;
+    startTime?: string;
+    endTime?: string;
+    pageSize?: number;
+    boardId?: string;
+    columnId?: string;
+    taskId?: string;
+  }) => {
     const params = new URLSearchParams();
     if (filters?.action) params.append('action', filters.action);
     if (filters?.startTime) params.append('startTime', filters.startTime);
     if (filters?.endTime) params.append('endTime', filters.endTime);
     if (filters?.pageSize) params.append('pageSize', String(filters.pageSize));
+    // s-1208 (PM-s1188 §3.8): scope filters. Each is independently
+    // optional and combines with the existing actor/type/time filters
+    // — a single GET can ask for, say, `CREATE_TASK` events on a
+    // single board in a given time window.
+    if (filters?.boardId) params.append('boardId', filters.boardId);
+    if (filters?.columnId) params.append('columnId', filters.columnId);
+    if (filters?.taskId) params.append('taskId', filters.taskId);
     const queryString = params.toString();
     return fetchApi<{ activities: Activity[]; hasMore?: boolean; total?: number }>(
       `auth/activities${queryString ? '?' + queryString : ''}`,
@@ -610,6 +902,42 @@ export const activitiesApi = {
       { skip401Handling: true }
     );
   },
+  /**
+   * s-1208: download the same slice the on-screen list would render,
+   * as a CSV stream produced server-side. Returns the raw `Response`
+   * so the caller can read `Content-Disposition` and stream the blob
+   * to a file. Throws ApiError on non-2xx.
+   */
+  exportCsv: async (filters: {
+    action?: string;
+    startTime?: string;
+    endTime?: string;
+    boardId?: string;
+    columnId?: string;
+    taskId?: string;
+  } = {}): Promise<Response> => {
+    const params = new URLSearchParams();
+    params.append('format', 'csv');
+    if (filters.action) params.append('action', filters.action);
+    if (filters.startTime) params.append('startTime', filters.startTime);
+    if (filters.endTime) params.append('endTime', filters.endTime);
+    if (filters.boardId) params.append('boardId', filters.boardId);
+    if (filters.columnId) params.append('columnId', filters.columnId);
+    if (filters.taskId) params.append('taskId', filters.taskId);
+    const url = `${API_BASE}auth/activities/export?${params.toString()}`;
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) {
+      let message = i18n.t('app.error.requestFailed', { status: response.status });
+      try {
+        const data = await response.json();
+        if (data?.error) message = data.error;
+      } catch {
+        // not JSON; fall through with the default
+      }
+      throw new ApiError(message, response.status);
+    }
+    return response;
+  },
 };
 
 // Archived & Drafts API
@@ -617,6 +945,14 @@ export const archivedApi = {
   getByBoard: (boardId: string) =>
     fetchApi<Task[]>(`archived?boardId=${boardId}`),
   getAll: () => fetchApi<Task[]>('archived'),
+};
+
+// Dashboard API (s-1195, PM_REVIEW_2026-09-17 §5.3 ROI #3).
+// Surfaces the four headline tiles the dashboard page renders:
+// active board count, tasks completed in the last 7 days, top
+// 3 agents by recent activity, and the 3 longest-blocked cards.
+export const dashboardApi = {
+  getStats: () => fetchApi<DashboardStats>('dashboard/stats'),
 };
 
 export const draftsApi = {
@@ -628,6 +964,22 @@ export const draftsApi = {
 interface UploadResult {
   promise: Promise<Attachment>;
   abort: () => void;
+}
+
+// Notification wire-shape returned by GET /api/v1/notifications.
+// The `readAt` field is omitted by the backend when the row hasn't
+// been read yet (so the bell list can use `Boolean(n.readAt)` as
+// the unread predicate without a separate flag).
+export interface Notification {
+  id: string;
+  userId: string;
+  source: 'TASK_ASSIGNED' | 'TASK_MENTIONED' | 'RUN_COMPLETED' | 'WEBHOOK_FAILED';
+  title: string;
+  body: string;
+  targetType: '' | 'TASK' | 'COMMENT' | 'RUN' | 'WEBHOOK';
+  targetId: string;
+  readAt?: string;
+  createdAt: string;
 }
 
 export const attachmentsApi = {

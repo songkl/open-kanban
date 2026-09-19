@@ -147,6 +147,7 @@ func setupRunsDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 1,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		agent_id TEXT,
 		agent_prompt TEXT,
 		created_by TEXT,

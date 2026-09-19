@@ -49,6 +49,7 @@ func setupBatchTasksDB(t *testing.T) *sql.DB {
 		short_alias TEXT UNIQUE,
 		task_counter INTEGER DEFAULT 1000,
 		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		description TEXT DEFAULT ''
@@ -99,6 +100,7 @@ func setupBatchTasksDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		agent_id TEXT,
 		agent_prompt TEXT,
 		created_by TEXT,
@@ -731,6 +733,7 @@ func setupCrossBoardDB(t *testing.T) *sql.DB {
 		short_alias TEXT UNIQUE,
 		task_counter INTEGER DEFAULT 1000,
 		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		description TEXT DEFAULT ''
@@ -781,6 +784,7 @@ func setupCrossBoardDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		agent_id TEXT,
 		agent_prompt TEXT,
 		created_by TEXT,

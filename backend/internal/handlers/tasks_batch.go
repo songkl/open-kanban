@@ -25,8 +25,7 @@ func BatchUpdateTasks(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot modify tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -100,17 +99,15 @@ func BatchUpdateTasks(db *sql.DB) gin.HandlerFunc {
 				continue
 			}
 
-			if user.Role == "MEMBER" {
-				var createdBy string
-				err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", taskID).Scan(&createdBy)
-				if err != nil || createdBy != user.ID {
-					failed++
-					errors = append(errors, "task "+taskID+": can only modify tasks you created")
-					continue
-				}
-			} else if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
+			allowed, err := CheckTaskModifyAccess(db, user, taskID, columnID, "WRITE")
+			if err != nil {
 				failed++
-				errors = append(errors, "task "+taskID+": no permission")
+				errors = append(errors, "task "+taskID+": not found")
+				continue
+			}
+			if !allowed {
+				failed++
+				errors = append(errors, "task "+taskID+": can only modify tasks you created")
 				continue
 			}
 
@@ -187,8 +184,7 @@ func BatchDeleteTasks(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -215,17 +211,15 @@ func BatchDeleteTasks(db *sql.DB) gin.HandlerFunc {
 				continue
 			}
 
-			if user.Role == "MEMBER" {
-				var createdBy string
-				err := db.QueryRow("SELECT created_by FROM tasks WHERE id = ?", taskID).Scan(&createdBy)
-				if err != nil || createdBy != user.ID {
-					failed++
-					errors = append(errors, "task "+taskID+": can only delete tasks you created")
-					continue
-				}
-			} else if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
+			allowed, err := CheckTaskModifyAccess(db, user, taskID, columnID, "WRITE")
+			if err != nil {
 				failed++
-				errors = append(errors, "task "+taskID+": no permission")
+				errors = append(errors, "task "+taskID+": not found")
+				continue
+			}
+			if !allowed {
+				failed++
+				errors = append(errors, "task "+taskID+": can only delete tasks you created")
 				continue
 			}
 
@@ -266,8 +260,7 @@ func BatchCreateTasks(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot create tasks"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -305,6 +298,7 @@ func BatchCreateTasks(db *sql.DB) gin.HandlerFunc {
 				ColumnID:    taskReq.ColumnID,
 				Position:    taskReq.Position,
 				Published:   taskReq.Published,
+				DueAt:       taskReq.DueAt,
 				AgentID:     taskReq.AgentID,
 				AgentPrompt: taskReq.AgentPrompt,
 				CreatedBy:   user.ID,

@@ -16,7 +16,8 @@ import { Column } from './Column';
 import { DragLayer } from './DragLayer';
 import { AddTaskModal } from './AddTaskModal';
 import { TaskModalSkeleton } from './Skeleton';
-import type { Board, Column as ColumnType, Task } from '@/types/kanban';
+import type { Board, Column as ColumnType, CustomField, Task, TaskRun } from '@/types/kanban';
+import type { CardDensity } from '../hooks/useCardDensity';
 
 const TaskModal = lazy(() => import('./TaskModal').then(m => ({ default: m.TaskModal })));
 
@@ -34,7 +35,15 @@ interface ColumnBoardProps {
   showAddTaskModal: boolean;
   defaultColumnIdForNewTask: string | undefined;
   editTaskId: string | null;
-  onAddTask: (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => void;
+  onAddTask: (
+    columnId?: string,
+    title?: string,
+    description?: string,
+    published?: boolean,
+    boardId?: string,
+    priority?: string,
+    extra?: { dueAt?: string | null; assignee?: string | null; attachmentIds?: string[] },
+  ) => void;
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
@@ -44,6 +53,15 @@ interface ColumnBoardProps {
   onSelectAllTasks: (columnId: string, taskIds: string[]) => void;
   onLoadMoreTasks: (columnId: string) => void;
   onColumnRename: (columnId: string, newName: string) => void;
+  /**
+   * s-1212: column-header ⋯ menu callbacks. Surfacing the buttons
+   * is the Column component's job; the dialog + API call live at
+   * the BoardPage level so we can keep one confirmation surface
+   * for the whole page.
+   */
+  onColumnMarkAllCompleted?: (column: ColumnType) => void;
+  onColumnArchiveAll?: (column: ColumnType) => void;
+  onColumnExportCsv?: (column: ColumnType) => void;
   onSetSelectedTask: (task: Task | null) => void;
   onSetActiveTask: (task: Task | null) => void;
   onSetShowAddTaskModal: (show: boolean) => void;
@@ -51,6 +69,28 @@ interface ColumnBoardProps {
   onSetEditTaskId: (taskId: string | null) => void;
   getFilteredColumns: () => ColumnType[];
   updateTaskPosition: (activeId: string, overId: string, activeColumn: ColumnType, overColumn: ColumnType, activeTask: Task | null) => Promise<void>;
+  canCreateTaskInColumn?: (columnId: string) => boolean;
+  /**
+   * s-1193: lookup of in-flight `task_runs` rows by taskId, populated
+   * by `useBoardTaskRuns` at the board level. Threaded down to each
+   * Column → TaskCard so the runner badge can render without each
+   * card firing its own polling request.
+   */
+  runs?: Record<string, TaskRun>;
+  /**
+   * s-1197: per-board custom field definitions, populated by the
+   * `useCustomFields` hook in BoardPage. Threaded down to each Column
+   * → TaskCard so the chips can render without re-reading localStorage
+   * per-card (would also race with the modal save).
+   */
+  customFields?: CustomField[];
+  /**
+   * s-1213: per-user card density preference. Read from
+   * `useCardDensity` at the BoardPage level and threaded down so each
+   * card can render the right amount of metadata without re-reading
+   * localStorage per card.
+   */
+  density?: CardDensity;
 }
 
 export function ColumnBoard({
@@ -77,6 +117,9 @@ export function ColumnBoard({
   onSelectAllTasks,
   onLoadMoreTasks,
   onColumnRename,
+  onColumnMarkAllCompleted,
+  onColumnArchiveAll,
+  onColumnExportCsv,
   onSetSelectedTask,
   onSetActiveTask,
   onSetShowAddTaskModal,
@@ -84,6 +127,10 @@ export function ColumnBoard({
   onSetEditTaskId,
   getFilteredColumns,
   updateTaskPosition,
+  canCreateTaskInColumn,
+  runs,
+  customFields,
+  density = 'standard',
 }: ColumnBoardProps) {
   const { t } = useTranslation();
   const [activeMobileColumn, setActiveMobileColumn] = useState(0);
@@ -253,26 +300,28 @@ export function ColumnBoard({
         onDragEnd={handleDragEnd}
       >
         {isMobile ? (
-          <div className="flex flex-col h-[calc(100vh-120px)]">
-            <div className="flex items-center justify-between gap-2 p-2 border-b border-zinc-200 dark:border-zinc-700">
-              <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory flex-1">
+          <div className="flex flex-col h-[calc(100vh-180px)] sm:h-[calc(100vh-120px)]">
+            <div className="flex items-center justify-between gap-2 p-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur sticky top-0 z-10">
+              <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory flex-1 min-w-0 -mx-1 px-1">
                 {filteredColumns.filter(Boolean).map((column, idx) => (
                   <button
                     key={column.id}
                     onClick={() => setActiveMobileColumn(idx)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors snap-center ${
+                    aria-pressed={activeMobileColumn === idx}
+                    className={`flex-shrink-0 flex items-center justify-center min-h-[36px] min-w-[44px] px-3 py-2 rounded-full text-sm font-medium transition-colors snap-center ${
                       activeMobileColumn === idx
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+                        ? 'bg-blue-500 text-white shadow-sm'
+                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
                     }`}
                   >
-                    {column.name}
+                    <span className="truncate max-w-[120px]">{column.name}</span>
                   </button>
                 ))}
               </div>
               <button
                 onClick={() => setMobileViewMode(mobileViewMode === 'tabs' ? 'scroll' : 'tabs')}
-                className="flex-shrink-0 p-2 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                className="flex-shrink-0 flex items-center justify-center min-h-[36px] min-w-[36px] p-2 rounded-lg bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                aria-label={mobileViewMode === 'tabs' ? t('mobile.switchToSlideView') : t('mobile.switchToListView')}
                 title={mobileViewMode === 'tabs' ? t('mobile.switchToSlideView') : t('mobile.switchToListView')}
               >
                 {mobileViewMode === 'tabs' ? (
@@ -292,13 +341,14 @@ export function ColumnBoard({
               </button>
             </div>
             {mobileViewMode === 'tabs' ? (
-              <div id="mobile-column-container" className="flex-1 overflow-y-auto p-2">
+              <div id="mobile-column-container" className="flex-1 overflow-y-auto p-2 min-w-0">
                 {filteredColumns.filter(Boolean)[activeMobileColumn] && (
                   <Column
                     column={filteredColumns.filter(Boolean)[activeMobileColumn]}
                     currentBoardId={currentBoard?.id}
                     boards={boards}
                     isMobileView={true}
+                    canCreateTask={canCreateTaskInColumn ? canCreateTaskInColumn(filteredColumns.filter(Boolean)[activeMobileColumn].id) : true}
                     onAddTask={(colId, title, desc, pub) => onAddTask(colId, title, desc, pub)}
                     onTaskClick={onSetSelectedTask}
                     onTaskCommentsClick={onSetSelectedTask}
@@ -311,6 +361,9 @@ export function ColumnBoard({
                       onSetShowAddTaskModal(true);
                     }}
                     onColumnRename={onColumnRename}
+                    onColumnMarkAllCompleted={onColumnMarkAllCompleted}
+                    onColumnArchiveAll={onColumnArchiveAll}
+                    onColumnExportCsv={onColumnExportCsv}
                     searchQuery={filters.searchQuery}
                     selectedTasks={selectedTasks}
                     onSelectTask={onTaskSelect}
@@ -318,12 +371,15 @@ export function ColumnBoard({
                     onLoadMore={onLoadMoreTasks}
                     hasMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.hasMore}
                     isLoadingMore={columnPagination[filteredColumns.filter(Boolean)[activeMobileColumn]?.id]?.isLoadingMore}
+                    runs={runs}
+                    customFields={customFields}
+                    density={density}
                   />
                 )}
               </div>
             ) : (
               <div id="mobile-scroll-container" className="relative flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-4">
-                <div className="flex gap-3 p-2 h-full min-h-0">
+                <div className="flex gap-3 p-2 h-full min-h-0 min-w-min">
                   {filteredColumns.filter(Boolean).map((column) => (
                     <Column
                       key={column.id}
@@ -331,6 +387,7 @@ export function ColumnBoard({
                       currentBoardId={currentBoard?.id}
                       boards={boards}
                       isMobileView={true}
+                      canCreateTask={canCreateTaskInColumn ? canCreateTaskInColumn(column.id) : true}
                       onAddTask={(colId, title, desc, pub) => onAddTask(colId, title, desc, pub)}
                       onTaskClick={onSetSelectedTask}
                       onTaskCommentsClick={onSetSelectedTask}
@@ -343,6 +400,9 @@ export function ColumnBoard({
                         onSetShowAddTaskModal(true);
                       }}
                       onColumnRename={onColumnRename}
+                      onColumnMarkAllCompleted={onColumnMarkAllCompleted}
+                      onColumnArchiveAll={onColumnArchiveAll}
+                      onColumnExportCsv={onColumnExportCsv}
                       searchQuery={filters.searchQuery}
                       selectedTasks={selectedTasks}
                       onSelectTask={onTaskSelect}
@@ -350,6 +410,9 @@ export function ColumnBoard({
                       onLoadMore={onLoadMoreTasks}
                       hasMore={columnPagination[column.id]?.hasMore}
                       isLoadingMore={columnPagination[column.id]?.isLoadingMore}
+                      runs={runs}
+                      customFields={customFields}
+                      density={density}
                     />
                   ))}
                 </div>
@@ -370,6 +433,7 @@ export function ColumnBoard({
                   column={column}
                   currentBoardId={currentBoard?.id}
                   boards={boards}
+                  canCreateTask={canCreateTaskInColumn ? canCreateTaskInColumn(column.id) : true}
                   onAddTask={(colId, title, desc, pub) => onAddTask(colId, title, desc, pub)}
                   onTaskClick={onSetSelectedTask}
                   onTaskCommentsClick={onSetSelectedTask}
@@ -382,6 +446,9 @@ export function ColumnBoard({
                     onSetShowAddTaskModal(true);
                   }}
                   onColumnRename={onColumnRename}
+                  onColumnMarkAllCompleted={onColumnMarkAllCompleted}
+                  onColumnArchiveAll={onColumnArchiveAll}
+                  onColumnExportCsv={onColumnExportCsv}
                   searchQuery={filters.searchQuery}
                   selectedTasks={selectedTasks}
                   onSelectTask={onTaskSelect}
@@ -389,6 +456,9 @@ export function ColumnBoard({
                   onLoadMore={onLoadMoreTasks}
                   hasMore={columnPagination[column.id]?.hasMore}
                   isLoadingMore={columnPagination[column.id]?.isLoadingMore}
+                  runs={runs}
+                  customFields={customFields}
+                  density={density}
                 />
               ))}
             </div>
@@ -405,12 +475,13 @@ export function ColumnBoard({
           defaultColumnId={defaultColumnIdForNewTask}
           currentBoardId={currentBoard?.id}
           boards={boards}
+          canCreateTaskInColumn={canCreateTaskInColumn}
           onClose={() => {
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}
-          onSubmit={(title, description, published, columnId, boardId, priority) => {
-            onAddTask(columnId, title, description, published, boardId, priority);
+          onSubmit={(title, description, published, columnId, boardId, priority, extra) => {
+            onAddTask(columnId, title, description, published, boardId, priority, extra);
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}
@@ -427,6 +498,7 @@ export function ColumnBoard({
             columns={columns.map((c) => ({ id: c.id, name: c.name }))}
             boardId={boardIdFromUrl}
             boards={boards}
+            customFields={customFields}
             canEdit={true}
             startEditing={editTaskId === selectedTask.id}
             onClose={() => { onSetSelectedTask(null); onSetEditTaskId(null); }}

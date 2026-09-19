@@ -13,6 +13,17 @@ vi.mock('../services/api', () => ({
   commentsApi: {
     create: vi.fn().mockResolvedValue({ id: 'comment-1', content: 'Test comment' }),
   },
+  ApiError: class ApiError extends Error {
+    constructor(message: string, public status?: number) {
+      super(message);
+      this.name = 'ApiError';
+    }
+  },
+}));
+
+const showErrorToastMock = vi.fn();
+vi.mock('../components/ErrorToast', () => ({
+  showErrorToast: (...args: unknown[]) => showErrorToastMock(...args),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -22,7 +33,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-import { tasksApi, commentsApi } from '../services/api';
+import { tasksApi, commentsApi, ApiError } from '../services/api';
 
 const mockTask: Task = {
   id: 'task-1',
@@ -570,6 +581,59 @@ describe('useTasks', () => {
       );
       expect(result.current.isProcessingQueueRef).toBeDefined();
       expect(typeof result.current.isProcessingQueueRef.current).toBe('boolean');
+    });
+  });
+
+  describe('addTask permission denial (s-1053)', () => {
+    beforeEach(() => {
+      showErrorToastMock.mockClear();
+    });
+
+    it('surfaces a permission toast when the API returns 403', async () => {
+      const permissionError = new ApiError('No permission to create task in this column', 403);
+      vi.mocked(tasksApi.create).mockRejectedValueOnce(permissionError);
+
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+
+      await act(async () => {
+        await result.current.addTask('col-1', 'My new task');
+      });
+
+      expect(showErrorToastMock).toHaveBeenCalledWith('toast.createFailedNoPermission', 'error');
+    });
+
+    it('does not cache the failed payload to localStorage when the failure is a permission denial', async () => {
+      const permissionError = new ApiError('No permission to create task in this column', 403);
+      vi.mocked(tasksApi.create).mockRejectedValueOnce(permissionError);
+
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+
+      await act(async () => {
+        await result.current.addTask('col-1', 'Permission denied task');
+      });
+
+      const cached = localStorage.getItem('failedTaskCreations');
+      expect(cached).toBeNull();
+    });
+
+    it('surfaces a generic toast for non-403 failures and still caches the payload', async () => {
+      vi.mocked(tasksApi.create).mockRejectedValueOnce(new Error('Network down'));
+
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+
+      await act(async () => {
+        await result.current.addTask('col-1', 'Will fail offline');
+      });
+
+      expect(showErrorToastMock).toHaveBeenCalledWith('toast.createFailed', 'error');
+      const cached = localStorage.getItem('failedTaskCreations');
+      expect(cached).not.toBeNull();
     });
   });
 });

@@ -95,10 +95,15 @@ jobs:
             echo "" >> CHANGELOG.md.tmp
           fi
 
-          # Append existing CHANGELOG if it exists
+          # Append existing CHANGELOG if it exists. We want to preserve the
+          # released version sections (## [v...]) but drop the [Unreleased]
+          # categories above them so the freshly-generated [Unreleased]
+          # block at the top of CHANGELOG.md.tmp doesn't end up duplicated.
           if [ -f CHANGELOG.md ] && [ -s CHANGELOG.md ]; then
-            # Skip the header we just added and append
-            tail -n +7 CHANGELOG.md >> CHANGELOG.md.tmp 2>/dev/null || true
+            VERSION_LINE=$(grep -n '^## \[' CHANGELOG.md | grep -v 'Unreleased' | head -1 | cut -d: -f1 || true)
+            if [ -n "$VERSION_LINE" ]; then
+              tail -n +"$VERSION_LINE" CHANGELOG.md >> CHANGELOG.md.tmp || true
+            fi
           fi
 
           mv CHANGELOG.md.tmp CHANGELOG.md

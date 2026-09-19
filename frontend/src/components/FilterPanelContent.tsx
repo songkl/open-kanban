@@ -1,11 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import type { FilterState, FilterPreset } from '../hooks/useFilters';
+import type { CustomField } from '@/types/kanban';
 import { CustomDropdown } from './CustomDropdown';
 
 interface FilterPanelContentProps {
   filters: FilterState;
   uniqueAssignees: string[];
   uniqueTags: string[];
+  uniqueCustomFieldValues: Record<string, string[]>;
+  customFields: CustomField[];
   filterPresets: FilterPreset[];
   showPresetDropdown: boolean;
   onSetFilters: React.Dispatch<React.SetStateAction<FilterState>>;
@@ -22,6 +25,8 @@ export function FilterPanelContent({
   filters,
   uniqueAssignees,
   uniqueTags,
+  uniqueCustomFieldValues,
+  customFields,
   filterPresets,
   showPresetDropdown,
   onSetFilters,
@@ -35,6 +40,14 @@ export function FilterPanelContent({
 }: FilterPanelContentProps) {
   const { t } = useTranslation();
   const showSavePreset = filterPresets.length > 0 && !!onSaveCurrentAsPreset;
+
+  // s-1197: render the custom-field filter as two coupled dropdowns —
+  // first pick the field (any non-archived definition), then pick a
+  // value from the unique values seen across this board's tasks. We
+  // deliberately keep both dropdowns mounted even when the field is
+  // empty so the layout doesn't jump when toggled.
+  const selectedField = customFields.find(f => f.id === filters.customField.fieldId);
+  const valueOptions = selectedField ? (uniqueCustomFieldValues[selectedField.id] ?? []) : [];
 
   return (
     <>

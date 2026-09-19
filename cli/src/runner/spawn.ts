@@ -28,6 +28,33 @@
 //     `<cwd>/.kanban-runner-<taskId>.md` and append
 //     `<promptArg> <path>` to argv (same flag shape as `arg`, but the
 //     path is project-relative and survives the run).
+//   * `promptMode === "argv"` (s-1191): append the prompt **content**
+//     directly as a single positional argv entry. No flag, no temp
+//     file. This is the only mode that works for agents that take the
+//     message as a positional argument (e.g. `opencode run [message..]`)
+//     — the previous default of `arg` rendered the invocation as
+//     `opencode run --prompt /tmp/...` which `opencode run` rejects
+//     with its help banner because `--prompt` is not a `run` flag.
+//     Subject to the OS argv size limit (32 KiB on Windows,
+//     effectively unlimited on macOS / Linux).
+//   * `promptMode === "acp"` (s-1235): talk to the agent over the
+//     [Agent Client Protocol]. The runner appends `agent.acpFlag`
+//     (default `--acp`) to argv, opens the child's stdio as
+//     pipe/pipe/pipe, and drives the full handshake
+//     (`initialize` → `session/new` → `session/prompt`) via the
+//     helper in `acp.ts`. Streamed text chunks are aggregated into
+//     `result.stdout` so the existing finish-pipe code path can
+//     forward the reply verbatim. The prompt is **not** written to
+//     disk and never appears in argv, so the OS argv cap is irrelevant.
+//
+// `agent.args` is shell-tokenised before any other transform (s-1238):
+// each YAML scalar entry is run through `splitShellArgs`, so
+// `--auto true run "do-kanban $taskId"` produces four argv entries
+// instead of one opaque flag. The substitution pipeline (`$name` →
+// value, `{prompt}` → flag pair or positional content) then runs
+// on the tokenised list.
+//
+// [Agent Client Protocol]: https://agentclientprotocol.com/
 
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -48,6 +75,7 @@ import {
   type ArgVariable,
   type ArgVariableValues,
 } from "./types.js";
+import { AcpClient, LineJsonTransport } from "./acp.js";
 
 /** Hard cap on the stderr payload the loop forwards to `/finish`. */
 export const STDERR_TRUNCATE_BYTES = 64 * 1024;
@@ -99,6 +127,121 @@ export const ARG_VARIABLE_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
+ * Tokenize a single `agent.args` entry into zero-or-more argv
+ * entries using POSIX shell-style quoting rules. Necessary because
+ * YAML scalars are opaque strings — an operator who writes
+ *
+ * ```yaml
+ *   args:
+ *     - --auto true run "do-kanban $taskId"
+ * ```
+ *
+ * expects four argv entries, but pre-tokenization the entry is one
+ * opaque string (`--auto true run "do-kanban T-1003"`) that gets
+ * passed verbatim to `child_process.spawn`, so the agent binary
+ * sees a single malformed flag. Surfacing this mismatch required
+ * operators to manually split their YAML into one entry per token
+ * (s-1238).
+ *
+ * Supported grammar (subset of POSIX shell):
+ *
+ *   * Single quotes — wrap a literal token with no escape
+ *     processing inside. `'\$HOME'` stays as `$HOME`.
+ *   * Double quotes — wrap a token, honour `\"` and `\\` so the
+ *     operator can embed a literal quote / backslash. Other
+ *     backslashes are kept literal (matches `sh` / `bash`).
+ *   * Backslash outside quotes — escapes the next character
+ *     unconditionally (so a backslash can split on a space with
+ *     `--key=a\ b`).
+ *   * Whitespace (` `, `\t`, `\n`, `\r`) separates tokens and is
+ *     otherwise discarded.
+ *
+ * Fast path: when the input has **no** whitespace and no quote /
+ * backslash, return it as a single token. This keeps the common
+ * `args: ["--flag", "value"]` shape exactly as written — no
+ * accidental splitting, no state-machine cost, and `$name`
+ * substitution sees the same string the operator typed.
+ *
+ * Throws on an unterminated quote so a stale config fails loudly at
+ * load time instead of silently swallowing the rest of the line
+ * (s-1238 — the previous behaviour silently passed the raw string to
+ * the agent, which then exited non-zero with a confusing help banner).
+ */
+export function splitShellArgs(input: string): string[] {
+  if (!/[\s'"\\]/.test(input)) {
+    return [input];
+  }
+  const tokens: string[] = [];
+  let current = "";
+  let hasToken = false;
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < input.length; i++) {
+    const c = input[i];
+    if (inSingle) {
+      if (c === "'") {
+        inSingle = false;
+      } else {
+        current += c;
+      }
+      continue;
+    }
+    if (inDouble) {
+      if (c === '"') {
+        inDouble = false;
+        continue;
+      }
+      if (
+        c === "\\" &&
+        i + 1 < input.length &&
+        (input[i + 1] === '"' || input[i + 1] === "\\")
+      ) {
+        current += input[i + 1];
+        i++;
+        continue;
+      }
+      current += c;
+      continue;
+    }
+    if (c === "'") {
+      inSingle = true;
+      hasToken = true;
+      continue;
+    }
+    if (c === '"') {
+      inDouble = true;
+      hasToken = true;
+      continue;
+    }
+    if (c === "\\" && i + 1 < input.length) {
+      current += input[i + 1];
+      hasToken = true;
+      i++;
+      continue;
+    }
+    if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+      if (hasToken) {
+        tokens.push(current);
+        current = "";
+        hasToken = false;
+      }
+      continue;
+    }
+    current += c;
+    hasToken = true;
+  }
+  if (inSingle || inDouble) {
+    throw new Error(
+      `unterminated ${inSingle ? "single" : "double"} quote in agent.args entry: ${input}`
+    );
+  }
+  if (hasToken) {
+    tokens.push(current);
+  }
+  return tokens;
+}
+
+/**
  * Substitute every supported `$name` token in `args` with the value
  * supplied in `variables`. Missing values (or `""` entries) become
  * literal empty strings so the operator's argv keeps its shape — e.g.
@@ -118,6 +261,28 @@ export function expandArgs(
 ): string[] {
   if (args.length === 0) return [];
   return args.map((arg) => substituteVariables(arg, variables));
+}
+
+/**
+ * Flatten `agent.args` through `splitShellArgs` so a single YAML
+ * scalar containing multiple shell tokens becomes multiple argv
+ * entries. Unmatched-quote errors throw here so a stale config
+ * fails at spawn time with a clear pointer to the offending entry,
+ * instead of silently handing the raw string to the agent (s-1238).
+ *
+ * The output preserves order and never drops entries — an entry
+ * with no whitespace / quoting returns a one-element array, which
+ * `flat()` happily keeps intact.
+ */
+function tokeniseArgs(args: readonly string[]): string[] {
+  if (args.length === 0) return [];
+  const out: string[] = [];
+  for (const arg of args) {
+    for (const token of splitShellArgs(arg)) {
+      out.push(token);
+    }
+  }
+  return out;
 }
 
 function substituteVariables(
@@ -470,19 +635,83 @@ export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
     ...(opts.env ?? process.env),
     ...(cfg.env ?? {}),
   };
+  // Step 0: tokenize each `agent.args` entry using shell-style
+  // quoting rules (s-1238). YAML scalars are opaque strings, so an
+  // operator who writes
+  //
+  //   args:
+  //     - --auto true run "do-kanban $taskId"
+  //
+  // sees four argv entries at spawn time, not one malformed flag.
+  // Fast path keeps the common `args: ["--flag", "value"]` shape
+  // untouched (no whitespace / quoting → no state-machine cost).
+  const tokenised = tokeniseArgs(cfg.args ?? []);
   // Step 1: substitute `$name` tokens in the operator's args. Done
   // before the prompt splice so the prompt flag (which never carries
   // a `$name`) is never affected and so an operator who sets
   // `promptPosition: replace` with a `$name` token alongside
   // `{prompt}` still sees the prompt pair land in the right slot.
-  const baseArgs = expandArgs(cfg.args ?? [], opts.variables ?? {});
+  const baseArgs = expandArgs(tokenised, opts.variables ?? {});
   const createdFiles: string[] = [];
   let pipeStdin = false;
   let stdinPayload: string | undefined;
   let promptArg = cfg.promptArg ?? "--prompt";
+  if (mode === "acp") {
+    // s-1235: the ACP path needs the child's stdio fully piped so
+    // the JSON-RPC client can drive the handshake. The prompt
+    // content travels inside the `session/prompt` JSON-RPC payload,
+    // not via argv, so we have nothing to write to disk and nothing
+    // to splice into the agent's command line besides the opt-in
+    // flag. We still expand `$name` tokens above so an operator who
+    // embeds per-task data in their pre-flag args keeps the same
+    // semantics they get from every other mode.
+    const acpFlag = cfg.acpFlag ?? "--acp";
+    baseArgs.push(acpFlag);
+    pipeStdin = true;
+    stdinPayload = undefined;
+    return {
+      bin: cfg.binPath ?? cfg.bin,
+      args: baseArgs,
+      cwd,
+      env,
+      pipeStdin,
+      stdinPayload,
+      cleanup: () => undefined,
+    };
+  }
   if (mode === "stdin") {
     pipeStdin = true;
     stdinPayload = opts.prompt;
+  } else if (mode === "argv") {
+    // s-1191: pass the prompt content directly as a single positional
+    // argv entry. Required for agents like `opencode run [message..]`
+    // that take the message as a positional argument rather than via a
+    // `--prompt <file>` flag. The prompt is **not** written to disk;
+    // nothing to clean up. Operator is responsible for staying within
+    // the OS argv limit (Windows: 32 KiB; macOS / Linux: no real cap).
+    //
+    // The shared `insertPrompt` helper expects a `[flag, value]`
+    // pair, which doesn't fit a single-entry positional arg, so the
+    // three `promptPosition` modes are inlined. For `"replace"` the
+    // `{prompt}` token in `agent.args` is replaced with the prompt
+    // content directly, so the operator can write e.g.
+    // `["opencode", "run", "{prompt}"]` and get
+    // `["opencode", "run", "the actual prompt"]` at spawn time.
+    if (position === "replace") {
+      const idx = baseArgs.indexOf(PROMPT_PLACEHOLDER);
+      if (idx >= 0) {
+        baseArgs.splice(idx, 1, opts.prompt);
+      } else {
+        // validate() rejects the missing-placeholder case; this is
+        // a defensive fallback so a malformed runtime call never
+        // silently drops the prompt.
+        baseArgs.push(opts.prompt);
+      }
+    } else if (position === "prepend") {
+      baseArgs.unshift(opts.prompt);
+    } else {
+      baseArgs.push(opts.prompt);
+    }
   } else if (mode === "file") {
     const file = join(cwd, `.kanban-runner-${sanitiseTaskId(opts.taskId)}.md`);
     writeFileSync(file, opts.prompt, "utf8");
@@ -531,6 +760,14 @@ export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
  *                   enforces uniqueness; doing the work in a single
  *                   place keeps the runtime path free of throw
  *                   branches.
+ *
+ * The `argv` mode (s-1191) reuses this helper with a synthetic pair
+ * where the "flag" slot is the empty string and the "path" slot is the
+ * prompt content — so a `{prompt}` placeholder in `agent.args` lands
+ * in the right slot when the operator wants the prompt as a single
+ * positional argv entry (e.g. `opencode run {prompt}`). When the
+ * placeholder is absent we fall back to pushing the prompt content
+ * directly so the operator never silently loses the message.
  */
 function insertPrompt(
   baseArgs: string[],
@@ -575,7 +812,40 @@ export class AgentSpawner {
     this.spawner = spawner;
   }
 
-  spawn(opts: PrepareSpawnOptions): { process: AgentProcess; cleanup: () => void } {
+  /**
+   * Spawn an agent for one task. The returned `prepared` is the
+   * post-substitution argv / cwd / env the spawn layer is about to
+   * hand to the OS, surfaced so the loop can emit it under
+   * `--debug` (s-1236) without re-running `prepareSpawn` and risking
+   * a divergent result. ACP runs reuse the same argv + cwd + env the
+   * non-ACP path would build; only the actual child wiring differs.
+   */
+  spawn(opts: PrepareSpawnOptions): {
+    process: AgentProcess;
+    cleanup: () => void;
+    prepared: PreparedSpawn;
+  } {
+    // s-1235: ACP needs bidirectional control of the child's stdio
+    // so the existing `ProcessSpawner` shape (fire-and-forget) does
+    // not fit. The ACP path bypasses `prepareSpawn` for the spawn
+    // step but still reuses its argv + env + cwd resolution by
+    // delegating to `spawnAcpAgent` with the same resolved values.
+    if ((this.cfg.promptMode ?? "arg") === "acp") {
+      const prepared = prepareSpawn({ ...opts, cfg: this.cfg });
+      const out = spawnAcpAgent({
+        bin: prepared.bin,
+        args: prepared.args,
+        cwd: prepared.cwd,
+        env: prepared.env,
+        timeoutMs: this.cfg.timeoutMs ?? 1_800_000,
+        prompt: opts.prompt,
+      });
+      return {
+        process: out.process,
+        cleanup: out.cleanup,
+        prepared,
+      };
+    }
     const prepared = prepareSpawn({ ...opts, cfg: this.cfg });
     const out = this.spawner.spawn({
       bin: prepared.bin,
@@ -592,8 +862,268 @@ export class AgentSpawner {
         userCleanup();
         out.cleanup();
       },
+      prepared,
     };
   }
+}
+
+/**
+ * Spawn a child process that speaks the Agent Client Protocol and
+ * drive the full handshake → prompt round-trip via `AcpClient`. The
+ * returned `AgentProcess` resolves with an `AgentResult` shaped
+ * exactly like the non-ACP paths so the loop's `wait()` / `kill()`
+ * contract is identical regardless of how the prompt was delivered.
+ *
+ * `spawnAcpAgent` is intentionally **not** wrapped behind the
+ * `ProcessSpawner` interface: we need synchronous access to the
+ * child's stdin / stdout streams so the JSON-RPC client can write
+ * requests and parse responses, which the fire-and-forget spawner
+ * does not expose. Tests substitute a `LineJsonTransport` against
+ * a fake `child_process.spawn` to drive the same code path.
+ */
+export interface SpawnAcpOptions {
+  bin: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  /** Per-task hard ceiling in milliseconds. */
+  timeoutMs: number;
+  /** Rendered prompt content sent via the ACP `session/prompt` request. */
+  prompt: string;
+  /**
+   * Cancel signal — fired when the runner wants to abort the agent.
+   * Wired to the loop's `AbortController` so SIGINT/SIGTERM tear
+   * down the handshake cleanly instead of leaving the child alive.
+   */
+  cancelSignal?: AbortSignal;
+}
+
+/**
+ * Spawn the agent and drive the full ACP round-trip. Mirrors the
+ * `ChildProcessSpawner` timeout / signal semantics so a hung agent
+ * is reaped the same way the non-ACP path would reap it.
+ */
+export function spawnAcpAgent(opts: SpawnAcpOptions): {
+  process: AgentProcess;
+  cleanup: () => void;
+} {
+  const { bin, args, cwd, env, timeoutMs, prompt } = opts;
+  let child: ReturnType<typeof spawn>;
+  try {
+    child = spawn(bin, args, {
+      cwd,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (err) {
+    const reason: AgentResult = {
+      exitCode: null,
+      signal: null,
+      stderr: `spawn failed: ${(err as Error).message}`,
+      stdout: "",
+      reason: "spawn_error",
+    };
+    return {
+      process: createResolvedProcess(reason),
+      cleanup: () => undefined,
+    };
+  }
+  if (!child.pid) {
+    const reason: AgentResult = {
+      exitCode: null,
+      signal: null,
+      stderr: "spawn returned a process without a pid",
+      stdout: "",
+      reason: "spawn_error",
+    };
+    return {
+      process: createResolvedProcess(reason),
+      cleanup: () => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // already dead
+        }
+      },
+    };
+  }
+  // Stderr capture — kept in lock-step with `ChildProcessSpawner`
+  // so the JSON-RPC fail path populates `result.stderr` the same
+  // way a non-ACP agent would.
+  let stderrBytes = 0;
+  let stderrChunks: Buffer[] = [];
+  let stderrTruncated = false;
+  if (child.stderr) {
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      if (stderrTruncated) return;
+      const buf =
+        typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+      const remaining = STDERR_TRUNCATE_BYTES - stderrBytes;
+      if (buf.length <= remaining) {
+        stderrChunks.push(buf);
+        stderrBytes += buf.length;
+        return;
+      }
+      if (remaining > 0) {
+        stderrChunks.push(buf.subarray(0, remaining));
+        stderrBytes = STDERR_TRUNCATE_BYTES;
+      }
+      stderrTruncated = true;
+    });
+  }
+
+  // Wire the ACP client over the child's stdio. We close stdin at
+  // the end of the handshake so the agent sees a clean EOF; agents
+  // use that as the cue to release any background work and exit.
+  const transport = new LineJsonTransport(child.stdin!, child.stdout!);
+  const client = new AcpClient({
+    transport,
+    cwd,
+    cancelSignal: opts.cancelSignal,
+  });
+  let waitPromise: Promise<AgentResult> | null = null;
+  let settled = false;
+  let resolveWait: ((r: AgentResult) => void) | null = null;
+  const settle = (result: AgentResult): void => {
+    if (settled) return;
+    settled = true;
+    if (deadline) clearTimeout(deadline);
+    if (graceTimer) clearTimeout(graceTimer);
+    resolveWait?.(result);
+  };
+  let deadline: NodeJS.Timeout | null = null;
+  let graceTimer: NodeJS.Timeout | null = null;
+  child.on("error", (err) => {
+    const stderrText = stderrChunks.length
+      ? Buffer.concat(stderrChunks).toString("utf8") +
+        (stderrTruncated ? "\n[truncated]" : "")
+      : `spawn error: ${err.message}`;
+    settle({
+      exitCode: null,
+      signal: null,
+      stderr: stderrText,
+      stdout: "",
+      reason: "spawn_error",
+    });
+  });
+  child.on("close", (code, signal) => {
+    const stderrText = stderrChunks.length
+      ? Buffer.concat(stderrChunks).toString("utf8") +
+        (stderrTruncated ? "\n[truncated]" : "")
+      : stderrTruncated
+        ? "[truncated]"
+        : "";
+    const reason: AgentResult["reason"] = signal
+      ? signal === "SIGKILL" && graceTimer
+        ? "timeout"
+        : "signal"
+      : "exit";
+    // Only override an in-flight ACP result with the close signal
+    // when the handshake hasn't already produced a usable result.
+    settle({
+      exitCode: code,
+      signal: signal as NodeJS.Signals | null,
+      stderr: stderrText,
+      stdout: "",
+      reason,
+    });
+  });
+  deadline = setTimeout(() => {
+    if (settled) return;
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // already dead
+    }
+    graceTimer = setTimeout(() => {
+      if (settled) return;
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // already dead
+      }
+    }, 15_000);
+  }, timeoutMs);
+  waitPromise = new Promise<AgentResult>((resolve) => {
+    resolveWait = resolve;
+  });
+  // Kick off the handshake. We deliberately don't await it here so
+  // the loop can register `kill()` / `wait()` immediately; the
+  // promise chain resolves the wait promise when the handshake
+  // completes (or with a spawn_error if the agent rejected the
+  // handshake).
+  void (async () => {
+    let result: AgentResult;
+    try {
+      const acpResult = await client.run(prompt);
+      // Merge the agent's stderr capture with anything the ACP
+      // handshake layer surfaced (initialise failures, malformed
+      // JSON frames, etc.) so the finish pipe sees the same shape
+      // it would for a non-ACP agent.
+      const stderrText = stderrChunks.length
+        ? Buffer.concat(stderrChunks).toString("utf8") +
+          (stderrTruncated ? "\n[truncated]" : "")
+        : stderrTruncated
+          ? "[truncated]"
+          : "";
+      result = {
+        exitCode: acpResult.exitCode,
+        signal: acpResult.signal,
+        stderr: acpResult.stderr
+          ? stderrText
+            ? `${acpResult.stderr}\n${stderrText}`
+            : acpResult.stderr
+          : stderrText,
+        stdout: acpResult.stdout,
+        reason: acpResult.reason,
+      };
+    } catch (err) {
+      const stderrText = stderrChunks.length
+        ? Buffer.concat(stderrChunks).toString("utf8") +
+          (stderrTruncated ? "\n[truncated]" : "")
+        : stderrTruncated
+          ? "[truncated]"
+          : "";
+      result = {
+        exitCode: null,
+        signal: null,
+        stderr: stderrText || `ACP handshake failed: ${(err as Error).message}`,
+        stdout: "",
+        reason: "spawn_error",
+      };
+    }
+    // Close stdin so the agent can shut down cleanly; the close
+    // event will eventually arrive but we don't want to wait on it
+    // before resolving the wait promise — the handshake result is
+    // already authoritative.
+    try {
+      child.stdin?.end();
+    } catch {
+      // already closed
+    }
+    settle(result);
+  })();
+  const agent: AgentProcess = {
+    kill: (signal: NodeJS.Signals = "SIGTERM") => {
+      try {
+        return child.kill(signal);
+      } catch {
+        return false;
+      }
+    },
+    wait: () => waitPromise!,
+    pid: child.pid,
+  };
+  return {
+    process: agent,
+    cleanup: () => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // ignore
+      }
+    },
+  };
 }
 
 function sanitiseTaskId(taskId: string): string {

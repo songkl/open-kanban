@@ -128,6 +128,13 @@ export type BuildLoopFn = (deps: {
   runnerId: string;
   agentType: string;
   http: HttpClient;
+  /**
+   * OAuth client used by `defaultBuildLoop` to wire the runner's
+   * 401-retry-on-refresh hook into the claim / heartbeat / finish /
+   * release round-trips. Optional so tests can pass a `buildLoop`
+   * override without it; production callers always supply one.
+   */
+  oauth?: OAuthClient | null;
   signal?: AbortSignal;
   abortController?: AbortController;
   debug?: boolean;
@@ -488,10 +495,22 @@ export function formatRunnerConfigHealth(health: RunnerConfigHealth): string[] {
  * (idle)` debug lines. The probe is fire-and-forget — it never
  * blocks the loop and any HTTP failure is swallowed (the loop's
  * own error path will surface transport problems).
+ *
+ * As of s-1229 the claim client also receives a refresh-on-401
+ * hook so a logged-in runner whose access token has aged out no
+ * longer shuts down with an opaque "API error 401" — the runner
+ * triggers an OAuth refresh (when a refresh token is available),
+ * retries the call once, and only surfaces a "session expired"
+ * error if the refresh fails. Without this hook the runner was
+ * doing the bare `HttpRunTransport` round-trip which had no
+ * refresh-on-401 path of its own.
  */
 export function defaultBuildLoop(deps: Parameters<BuildLoopFn>[0]): RunLoop {
-  const { config, runnerId, agentType, http, signal, abortController, debug } = deps;
+  const { config, runnerId, agentType, http, oauth, signal, abortController, debug } = deps;
   const claimClient = RunClaimClient.fromHttpClient(http);
+  if (oauth) {
+    claimClient.setRefreshAuth(() => refreshOAuthAccessToken(oauth));
+  }
   const heartbeat = new HeartbeatScheduler(claimClient, runnerId, {
     intervalMs: config.runner.heartbeatIntervalMs ?? 30_000,
   });
@@ -548,6 +567,31 @@ function runConfigHealthProbe(deps: ConfigHealthProbeDeps): void {
       );
     }
   })();
+}
+
+/**
+ * Force a refresh of the OAuth access token, regardless of the cached
+ * expiry window. Returns `true` when the credential store now holds a
+ * fresh access token, `false` when no refresh token is available or the
+ * server rejected the refresh request.
+ *
+ * The runner calls this whenever a `/api/v1/runs/*` round-trip returns
+ * 401; without it the runner would shut down on the first stale-token
+ * claim attempt even though the OAuthClient has a perfectly good
+ * refresh token in the credential store. The shared HttpClient already
+ * does the same dance for the public API endpoints (see
+ * `HttpClient.retryWithRefresh`); mirroring it on the runner side
+ * keeps the two surfaces consistent.
+ */
+async function refreshOAuthAccessToken(oauth: OAuthClient): Promise<boolean> {
+  const stored = oauth.loadCredentials();
+  if (!stored?.refreshToken) return false;
+  try {
+    await oauth.refreshTokens();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 interface BoardWatcherDeps {
@@ -781,6 +825,7 @@ export async function runRunCommand(
     runnerId,
     agentType: resolveAgentType(),
     http: deps.http,
+    oauth: deps.oauth,
     signal: abort.signal,
     abortController: abort,
     debug: parsed.debug,

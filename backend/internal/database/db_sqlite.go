@@ -113,6 +113,23 @@ func runSQLiteMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create SQLite migrate instance: %w", err)
 	}
 
+	if drift, err := sqliteSchemaDrift(db); err != nil {
+		return fmt.Errorf("failed to check for schema drift: %w", err)
+	} else if drift {
+		effective, err := sqliteEffectiveMigrationVersion(db)
+		if err != nil {
+			return fmt.Errorf("failed to compute effective migration version for drift repair: %w", err)
+		}
+		forceTarget := effective
+		if forceTarget <= 0 {
+			forceTarget = -1
+		}
+		log.Printf("[SQLite] schema drift detected; rewinding recorded version to %d so m.Up() replays only the missing migrations", forceTarget)
+		if err := m.Force(forceTarget); err != nil {
+			return fmt.Errorf("failed to force migration state after drift detection: %w", err)
+		}
+	}
+
 	// Dev builds (commits past the closest tag) skip VersionMigrationMap
 	// and run every embedded migration file so locally-developed schema
 	// changes (e.g. 008 users.created_by from s-1131) are applied on
@@ -159,7 +176,7 @@ func runSQLiteMigrations(db *sql.DB) error {
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
-			if forceErr := m.Force(7); forceErr != nil {
+			if forceErr := m.Force(-1); forceErr != nil {
 				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
 			}
 		} else {

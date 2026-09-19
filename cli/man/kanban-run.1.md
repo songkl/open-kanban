@@ -132,7 +132,7 @@ status: todo
 # mode: mine
 agent:
   bin: opencode
-  promptMode: arg          # arg | stdin | file
+  promptMode: arg          # arg | stdin | file | argv | acp
   promptArg: --prompt
   cwd: .
   args: ["--non-interactive"]
@@ -204,6 +204,120 @@ indices stay stable across heterogeneous tasks.
 Only the narrow \fB$name\fR form is recognised. POSIX shell-style
 references (\fB${HOME}\fR, \fB$1\fR, \fB$$\fR, \fB$?\fR) pass through
 unchanged.
+
+.SS "Shell-style tokenisation of agent.args (s-1238)"
+Each entry in \fBagent.args\fR is run through a POSIX shell-style
+tokeniser before variable substitution and the prompt splice. This
+lets operators write a multi-token CLI invocation as a single YAML
+scalar instead of one entry per flag:
+
+.RS
+.IP
+.nf
+agent:
+  args:
+    - --auto true run "do-kanban $taskId"
+.fi
+
+.IP
+becomes the four argv entries
+\fB--auto\fR, \fBtrue\fR, \fBrun\fR, \fBdo-kanban <taskId>\fR at spawn
+time, with single/double quotes honoured (text inside \fB'...\fR is
+literal; \fB\\"\fR and \fB\\\\\fR escape inside \fB"..."\fR), and a
+backslash outside quotes escaping the next character (so
+\fB--key=a\\ b\fR produces \fB--key=a b\fR as one argv slot).
+
+.RE
+
+Entries with no whitespace and no quoting are returned untouched,
+so the common \fBargs: ["--flag", "value"]\fR shape has zero
+behaviour change. Unterminated quotes fail loudly with a
+\fBRunnerConfigError\fR pointing at \fBagent.args\fR rather than
+silently handing a malformed string to the agent binary.
+
+.SS "Agent Client Protocol (s-1235)"
+The runner speaks the
+.IR "Agent Client Protocol"
+(https://agentclientprotocol.com/) when
+.B agent.promptMode
+is set to
+.BR acp .
+The runner appends
+.B agent.acpFlag
+(default
+.BR --acp )
+to the agent's argv, opens the child's stdio as pipe/pipe/pipe,
+and drives the full handshake over a line-delimited JSON-RPC
+channel:
+
+.RS
+.IP \(bu 4
+.B initialize
+\- capability handshake (the runner advertises
+.BR "open-kanban-cli" ).
+.IP \(bu 4
+.B session/new
+\- opens a fresh session rooted at
+.BR agent.cwd .
+.IP \(bu 4
+.B session/prompt
+\- sends the rendered prompt (the same markdown the
+non-ACP modes ship). Streamed
+.B session/update
+notifications with
+.B sessionUpdate=agent_message_chunk
+and
+.B content.type=text
+are concatenated into
+.B result.stdout
+and forwarded to
+.B /api/v1/runs/:taskId/finish
+as the agent's reply. The prompt itself never reaches disk or
+argv, so the OS argv cap is irrelevant.
+.RE
+
+Use
+.B acp
+for mainstream agents that ship an
+.B --acp
+opt-in:
+
+.RS
+.IP \(bu 4
+.B "claude --acp"
+.IP \(bu 4
+.B "opencode acp"
+.IP \(bu 4
+.B "gemini --acp"
+.RE
+
+Override
+.B agent.acpFlag
+when your binary uses a different opt-in (e.g.
+.B --agent-client-protocol
+or a positional subcommand):
+
+.RS
+.RS
+.PP
+.RS
+.nf
+agent:
+  bin: my-agent
+  promptMode: acp
+  acpFlag: --agent-client-protocol
+  args: ["--non-interactive"]
+.fi
+.RE
+.RE
+
+Cancel / SIGTERM behaviour: closing the child's stdin (the
+.B "abortSignal"
+the runner wires up) sends
+.B "session/cancel"
+before SIGTERM, so the agent can flush a clean stop notification
+instead of being killed mid-sentence. Streamed text chunks up to
+the 64 KiB cap are concatenated into the final reply.
 
 .SH "EXIT STATUS"
 .TP

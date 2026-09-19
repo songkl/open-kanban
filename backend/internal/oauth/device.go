@@ -65,10 +65,15 @@ const (
 	defaultDCREnabled             = "1"
 )
 
-// DeviceCodeRequest is the RFC 8628 §3.1 request body.
+// DeviceCodeRequest is the RFC 8628 §3.1 request body. AudienceType is an
+// extension parameter that lets the caller hint which identity it intends
+// to bind the resulting token to: "agent" requests the server to render an
+// Agent identity picker on the approval page; "human" preserves the legacy
+// behaviour where the device code is bound to the human approver.
 type DeviceCodeRequest struct {
-	ClientID string `json:"client_id" form:"client_id"`
-	Scope    string `json:"scope" form:"scope"`
+	ClientID     string `json:"client_id" form:"client_id"`
+	Scope        string `json:"scope" form:"scope"`
+	AudienceType string `json:"audience_type" form:"audience_type"`
 }
 
 // RequestDeviceCode handles POST /oauth/device/code. It validates the client
@@ -78,13 +83,17 @@ func RequestDeviceCode(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientID := c.PostForm("client_id")
 		scope := c.PostForm("scope")
+		var audienceType string
 		if clientID == "" {
 			// Allow JSON bodies for symmetry with /oauth/register.
 			var req DeviceCodeRequest
 			if err := c.ShouldBindJSON(&req); err == nil && req.ClientID != "" {
 				clientID = req.ClientID
 				scope = req.Scope
+				audienceType = req.AudienceType
 			}
+		} else {
+			audienceType = c.PostForm("audience_type")
 		}
 		if clientID == "" {
 			c.JSON(http.StatusBadRequest, models.OAuthErrorResponse{
@@ -130,6 +139,13 @@ func RequestDeviceCode(db *sql.DB) gin.HandlerFunc {
 		if scope == "" {
 			scope = strings.Join(SupportedScopes(), " ")
 		}
+
+		// audience_type is an extension parameter that lets the caller
+		// hint which identity it intends to bind to. Empty / unknown
+		// values are ignored — the server still relies on its own client
+		// heuristic (AgentSelectionRequired) to decide whether to render
+		// the identity picker.
+		audienceType = normalizeAudienceType(audienceType)
 
 		// Tokens used only once.
 		deviceCode, err := randomURLSafeToken(40)
@@ -186,7 +202,26 @@ func RequestDeviceCode(db *sql.DB) gin.HandlerFunc {
 			VerificationURIComplete: verificationURIComplete,
 			ExpiresIn:               int64(ttl),
 			Interval:                interval,
+			// Echo the resolved audience_type so CLI / MCP clients can
+			// confirm the server understood their hint. Empty string
+			// means "no hint — fall back to the client-name heuristic".
+			AudienceType: audienceType,
 		})
+	}
+}
+
+// normalizeAudienceType validates the audience_type extension parameter and
+// returns the canonical value. Unknown / unsupported values are coerced to
+// the empty string so callers can fall back to the client-name heuristic
+// without leaking garbage into the device code row.
+func normalizeAudienceType(in string) string {
+	switch strings.ToLower(strings.TrimSpace(in)) {
+	case "agent":
+		return "agent"
+	case "human":
+		return "human"
+	default:
+		return ""
 	}
 }
 

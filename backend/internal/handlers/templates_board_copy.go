@@ -57,6 +57,15 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		_, err = tx.Exec(
+			"INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES (?, ?, ?, ?, 'ADMIN', ?, NULL, NULL, NULL, '')",
+			generateID(), user.ID, newBoardID, user.ID, user.ID,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant copier ownership"})
+			return
+		}
+
 		colRows, err := tx.Query(`
 			SELECT id, name, status, position, color, board_id, created_at, updated_at
 			FROM columns WHERE board_id = ? ORDER BY position ASC

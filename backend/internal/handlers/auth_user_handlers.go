@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -325,6 +326,151 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// GetUsersVisible lists the candidate users who do NOT already hold
+// effective access on the board named by ?boardId=. The endpoint is
+// the input source for AddBoardPermissionForm so that the user picker
+// only shows collaborators who can still be invited.
+//
+// Authorization rules:
+//
+//   - With ?boardId=: caller must be either a global ADMIN or the
+//     recorded owner of that board. Anyone else (including a user
+//     holding a per-board ADMIN row granted by another admin) gets
+//     403. The rule mirrors SetPermission / DeletePermission /
+//     TransferOwnership so the permission-management surface stays
+//     consistent.
+//   - Without ?boardId=: caller must be a global ADMIN. The endpoint
+//     then returns every enabled user — same shape as the legacy
+//     getUsers() picker, restricted to admins only so a MEMBER
+//     cannot use it to enumerate the user base.
+//
+// Effective access means a board_permissions row whose `access IS
+// NOT NULL`, is not soft-deleted (revoked_at IS NULL), and is not
+// past its expiry (expires_at IS NULL OR expires_at > NOW()). Rows
+// that fail any of these predicates are treated as "no permission"
+// and the user is re-included in the visible list — the owner can
+// then re-grant them. This matches the s-1101 expires_at semantics
+// already used elsewhere in the permission-management surface.
+//
+// Response shape (with or without boardId):
+//
+//	{
+//	  "users": [
+//	    {"userId": "...", "username": "...", "nickname": "...",
+//	     "type": "HUMAN"|"AGENT", "role": "ADMIN"|"MEMBER"|"VIEWER"},
+//	    ...
+//	  ]
+//	}
+//
+// The list is ordered by users.created_at DESC so the response is
+// stable and matches the order GetUsers() returns.
+func GetUsersVisible(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		boardID := strings.TrimSpace(c.Query("boardId"))
+		if boardID == "" {
+			if !isAdmin(user) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Only admin can list users without boardId"})
+				return
+			}
+
+			rows, err := db.Query(`
+				SELECT id, username, nickname, type, role
+				FROM users
+				ORDER BY created_at DESC
+			`)
+			if err != nil {
+				log.Printf("[GetUsersVisible] list all users failed: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
+				return
+			}
+			defer rows.Close()
+
+			users := make([]gin.H, 0)
+			for rows.Next() {
+				var id, username, nickname, userType, role string
+				if err := rows.Scan(&id, &username, &nickname, &userType, &role); err == nil {
+					users = append(users, gin.H{
+						"userId":   id,
+						"username": username,
+						"nickname": nickname,
+						"type":     userType,
+						"role":     role,
+					})
+				}
+			}
+
+			c.JSON(http.StatusOK, gin.H{"users": users})
+			return
+		}
+
+		if !canManageBoardPermissions(db, user, boardID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admin or board owner can list visible users"})
+			return
+		}
+
+		var boardExists bool
+		if err := db.QueryRow(
+			"SELECT EXISTS(SELECT 1 FROM boards WHERE id = ?)", boardID,
+		).Scan(&boardExists); err != nil {
+			log.Printf("[GetUsersVisible] board existence check failed (board=%s): %v", boardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load board"})
+			return
+		}
+		if !boardExists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Board not found"})
+			return
+		}
+
+		// LEFT JOIN keeps every user; the ON clause restricts the
+		// joined permission row to *effective* access — access set,
+		// not revoked, and not past expiry. WHERE bp.id IS NULL
+		// therefore selects only users with no effective grant, so
+		// they show up as invitation candidates. The owner of the
+		// board is filtered out the same way because their own row
+		// carries owner_agent_id and access='ADMIN'.
+		rows, err := db.Query(`
+			SELECT u.id, u.username, u.nickname, u.type, u.role
+			FROM users u
+			LEFT JOIN board_permissions bp
+				ON bp.user_id = u.id
+				AND bp.board_id = ?
+				AND bp.access IS NOT NULL
+				AND bp.revoked_at IS NULL
+				AND (bp.expires_at IS NULL OR bp.expires_at > ?)
+			WHERE bp.id IS NULL
+			ORDER BY u.created_at DESC
+		`, boardID, time.Now())
+		if err != nil {
+			log.Printf("[GetUsersVisible] visible-users query failed (board=%s): %v", boardID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get visible users"})
+			return
+		}
+		defer rows.Close()
+
+		users := make([]gin.H, 0)
+		for rows.Next() {
+			var id, username, nickname, userType, role string
+			if err := rows.Scan(&id, &username, &nickname, &userType, &role); err == nil {
+				users = append(users, gin.H{
+					"userId":   id,
+					"username": username,
+					"nickname": nickname,
+					"type":     userType,
+					"role":     role,
+				})
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"users": users})
+	}
+}
+
 func GetAgents(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -351,25 +497,29 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 		var agents []gin.H
 		for rows.Next() {
 			var u models.User
-			var tokenCount int
+			var tokenCount, runsLast24h, failsLast24h, totalRuns int
 			var lastActiveAt sql.NullTime
 			var createdBy sql.NullString
 			var creatorNickname sql.NullString
 			var creatorUsername sql.NullString
 			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &createdBy, &creatorNickname, &creatorUsername, &tokenCount); err == nil {
 				agent := gin.H{
-					"id":         u.ID,
-					"nickname":   u.Nickname,
-					"avatar":     u.Avatar,
-					"type":       u.Type,
-					"role":       u.Role,
-					"enabled":    u.Enabled,
-					"createdAt":  u.CreatedAt,
-					"updatedAt":  u.UpdatedAt,
-					"tokenCount": tokenCount,
+					"id":            u.ID,
+					"nickname":      u.Nickname,
+					"avatar":        u.Avatar,
+					"type":          u.Type,
+					"role":          u.Role,
+					"enabled":       u.Enabled,
+					"createdAt":     u.CreatedAt,
+					"updatedAt":     u.UpdatedAt,
+					"tokenCount":    tokenCount,
+					"runsLast24h":   runsLast24h,
+					"failsLast24h":  failsLast24h,
+					"totalRuns":     totalRuns,
 				}
 				if lastActiveAt.Valid {
 					agent["lastActiveAt"] = lastActiveAt.Time
+					agent["lastHeartbeatAt"] = lastActiveAt.Time
 				}
 				if createdBy.Valid {
 					agent["createdBy"] = createdBy.String
@@ -388,10 +538,134 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// BoardAccessGrant is one (boardId, access) pair that callers can
+// attach to CreateAgent / CreateUser so the freshly-minted user is
+// born with explicit per-board access instead of inheriting the
+// overly-broad default grants. Access must be one of {READ,
+// WRITE, ADMIN}; unknown values are rejected by the handler so a
+// typo in the client does not silently downscope a board to "".
+//
+// Used by the s-1253 "specify per-board roles at creation time"
+// affordance: prior to this, CreateAgent granted the new agent
+// ADMIN on every existing board (public + private), and CreateUser
+// always inserted a READ row on every public board. Both behaviours
+// were flagged as "permissions too broad" because there was no way
+// to (a) keep a brand-new agent off a private board or (b) hand
+// the new agent a non-default access on a single board.
+type BoardAccessGrant struct {
+	BoardID string `json:"boardId"`
+	Access  string `json:"access"`
+}
+
 type CreateAgentRequest struct {
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Role     string `json:"role"`
+	Nickname    string            `json:"nickname"`
+	Avatar      string            `json:"avatar"`
+	Role        string            `json:"role"`
+	BoardGrants []BoardAccessGrant `json:"boardGrants"`
+}
+
+// ResolveBoardGrants validates a CreateAgent/CreateUser BoardGrants
+// payload and writes one board_permissions row per entry. It is the
+// shared implementation behind the new s-1253 "specify per-board
+// roles at creation time" affordance — both endpoints funnel
+// through here so the validation contract (unknown access values
+// are an error, duplicates collapse, unknown board ids are an
+// error) stays identical.
+//
+// Returns the count of granted rows so the caller can include it
+// in the response. The granted_by_user_id is always the calling
+// admin; we do not propagate the request's "actor" because admin
+// creation happens under the admin's token, not a user-provided
+// field that could be spoofed.
+//
+// Exported so the OAuth device-flow inline-create endpoint
+// (POST /oauth/device/create-agent) can share the same validator
+// without forking the validation contract in two places.
+func ResolveBoardGrants(db *sql.DB, callerID, newUserID string, grants []BoardAccessGrant) (int, error) {
+	if len(grants) == 0 {
+		return 0, nil
+	}
+	// Validate access + dedupe by boardId so a malformed or
+	// duplicate payload is caught before any INSERT runs. The
+	// loop preserves the first occurrence's access value, which
+	// matches the dedupe contract used by BulkSetPermissions
+	// (see auth_permission_handlers.go).
+	seen := make(map[string]string, len(grants))
+	for _, g := range grants {
+		if g.BoardID == "" || g.Access == "" {
+			return 0, fmt.Errorf("invalid boardGrants entry: boardId and access are required")
+		}
+		switch g.Access {
+		case "READ", "WRITE", "ADMIN":
+		default:
+			return 0, fmt.Errorf("invalid access %q for board %q", g.Access, g.BoardID)
+		}
+		if _, dup := seen[g.BoardID]; dup {
+			continue
+		}
+		seen[g.BoardID] = g.Access
+	}
+	if len(seen) == 0 {
+		return 0, nil
+	}
+
+	// Existence-check every target boardId in one IN-list query so
+	// the caller gets a single 404 with every offending id
+	// surfaced at once (matching the unknown-user-id reporting in
+	// BulkSetPermissions).
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	existing, err := db.Query(
+		"SELECT id FROM boards WHERE deleted = false AND id IN ("+placeholders+")", args...,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to verify boards: %w", err)
+	}
+	found := make(map[string]struct{}, len(ids))
+	for existing.Next() {
+		var id string
+		if err := existing.Scan(&id); err == nil {
+			found[id] = struct{}{}
+		}
+	}
+	existing.Close()
+	var missing []string
+	for _, id := range ids {
+		if _, ok := found[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return 0, fmt.Errorf("unknown board ids: %v", missing)
+	}
+
+	// Stable iteration order: re-walk `ids` so the INSERT order
+	// matches the request order. The granted_by_user_id is the
+	// calling admin, mirroring SetPermission.
+	permArgs := make([]interface{}, 0, len(ids)*9)
+	placeholders = ""
+	for i, id := range ids {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "(?, ?, ?, ?, ?, NULL, NULL, NULL, '')"
+		permArgs = append(permArgs, generateID(), newUserID, id, seen[id], callerID)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES "+placeholders,
+		permArgs...,
+	); err != nil {
+		return 0, fmt.Errorf("failed to insert board_permissions: %w", err)
+	}
+	return len(ids), nil
 }
 
 func CreateAgent(db *sql.DB) gin.HandlerFunc {
@@ -450,38 +724,46 @@ func CreateAgent(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		rows, err := db.Query("SELECT id FROM boards WHERE deleted = false")
-		if err == nil {
-			defer rows.Close()
-			var boardIDs []string
-			for rows.Next() {
-				var boardID string
-				if err := rows.Scan(&boardID); err == nil {
-					boardIDs = append(boardIDs, boardID)
+		// s-1253: per-board role selection at creation time.
+		// When the request carries boardGrants, grant exactly
+		// those (boardId, access) pairs and nothing else — the
+		// legacy "ADMIN on every existing board" fallback is
+		// gone because it leaked private boards to every new
+		// agent.
+		//
+		// When boardGrants is omitted, the new agent gets zero
+		// board_permissions rows. The admin grants explicit
+		// access afterwards via the BoardPermissionsModal, which
+		// keeps the s-1030 visibility contract intact (private
+		// boards stay private unless an owner/admin opts in).
+		grantedCount := 0
+		if len(req.BoardGrants) > 0 {
+			grantedCount, err = ResolveBoardGrants(db, user.ID, agentID, req.BoardGrants)
+			if err != nil {
+				// Best-effort cleanup: if the grants failed
+				// after the agent row was created we want to
+				// roll the user back so the operator isn't
+				// left with an orphan agent. The token row
+				// cascades with the user FK.
+				if _, delErr := db.Exec("DELETE FROM users WHERE id = ?", agentID); delErr != nil {
+					log.Printf("[CreateAgent] failed to roll back orphan agent %s after grant error: %v", agentID, delErr)
 				}
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
 			}
-			if len(boardIDs) > 0 {
-				args := make([]interface{}, 0, len(boardIDs)*4)
-				placeholders := make([]string, len(boardIDs))
-				for i, boardID := range boardIDs {
-					permID := generateID()
-					placeholders[i] = "(?, ?, ?, ?)"
-					args = append(args, permID, agentID, boardID, "ADMIN")
-				}
-				query := "INSERT INTO board_permissions (id, user_id, board_id, access) VALUES " + strings.Join(placeholders, ", ")
-				db.Exec(query, args...)
-			}
+			permissionCache.InvalidateUser(agentID)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"agent": gin.H{
-				"id":        agentID,
-				"nickname":  req.Nickname,
-				"avatar":    avatar,
-				"type":      "AGENT",
-				"token":     tokenKey,
-				"createdAt": now,
-				"createdBy": user.ID,
+				"id":           agentID,
+				"nickname":     req.Nickname,
+				"avatar":       avatar,
+				"type":         "AGENT",
+				"token":        tokenKey,
+				"createdAt":    now,
+				"createdBy":    user.ID,
+				"grantedCount": grantedCount,
 			},
 		})
 	}
@@ -587,11 +869,12 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 }
 
 type CreateUserRequest struct {
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
-	Avatar   string `json:"avatar"`
+	Username    string            `json:"username"`
+	Nickname    string            `json:"nickname"`
+	Password    string            `json:"password"`
+	Role        string            `json:"role"`
+	Avatar      string            `json:"avatar"`
+	BoardGrants []BoardAccessGrant `json:"boardGrants"`
 }
 
 func CreateUser(db *sql.DB) gin.HandlerFunc {
@@ -666,41 +949,100 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		rows, _ := db.Query("SELECT id FROM boards WHERE deleted = false")
-		if rows != nil {
-			defer rows.Close()
-			var boardIDs []string
-			for rows.Next() {
-				var boardID string
-				if err := rows.Scan(&boardID); err == nil {
-					boardIDs = append(boardIDs, boardID)
+		grantPublicBoardRead(db, userID)
+
+		// s-1253: per-board role selection at creation time. The
+		// public-board READ grant above stays the baseline (a
+		// freshly-minted user is still expected to see the same
+		// public boards anonymous callers see), and boardGrants
+		// only ADDS explicit rows — typically on private boards
+		// the admin wants the user to be able to access from
+		// day one. resolveBoardGrants de-dupes by boardId so a
+		// caller cannot grant themselves two competing access
+		// levels on the same board.
+		var explicitGranted int
+		if len(req.BoardGrants) > 0 {
+			explicitGranted, err = ResolveBoardGrants(db, currentUser.ID, userID, req.BoardGrants)
+			if err != nil {
+				if _, delErr := db.Exec("DELETE FROM users WHERE id = ?", userID); delErr != nil {
+					log.Printf("[CreateUser] failed to roll back orphan user %s after grant error: %v", userID, delErr)
 				}
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
 			}
-			if len(boardIDs) > 0 {
-				args := make([]interface{}, 0, len(boardIDs)*4)
-				placeholders := make([]string, len(boardIDs))
-				for i, boardID := range boardIDs {
-					permID := generateID()
-					placeholders[i] = "(?, ?, ?, ?)"
-					args = append(args, permID, userID, boardID, "WRITE")
-				}
-				query := "INSERT INTO board_permissions (id, user_id, board_id, access) VALUES " + strings.Join(placeholders, ", ")
-				db.Exec(query, args...)
-			}
+			permissionCache.InvalidateUser(userID)
 		}
 
 		LogActivity(db, currentUser.ID, "USER_CREATE", "USER", userID, req.Nickname, "", c.ClientIP(), getRequestSource(c))
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
-				"id":       userID,
-				"username": req.Username,
-				"nickname": req.Nickname,
-				"avatar":   avatar,
-				"role":     role,
-				"type":     "HUMAN",
-				"token":    tokenKey,
+				"id":            userID,
+				"username":      req.Username,
+				"nickname":      req.Nickname,
+				"avatar":        avatar,
+				"role":          role,
+				"type":          "HUMAN",
+				"token":         tokenKey,
+				"grantedCount":  explicitGranted,
 			},
 		})
 	}
+}
+
+// grantPublicBoardRead inserts one board_permissions row per
+// public, non-deleted board so a freshly created HUMAN user can
+// see every board the system already exposes to anonymous
+// callers. Private (is_public=0) boards stay hidden and must be
+// granted explicitly by their owner.
+//
+// The cache invalidation that follows is defensive: brand new
+// users have no permission_cache entries, but if a future caller
+// pre-warms the cache before inserting the permission rows the
+// InvalidateUser call still drops the stale state so the first
+// effectiveAccess lookup reads the freshly-written rows.
+//
+// The query deliberately mirrors the public-board filter that
+// GetBoards / writeAnonymousBoards use (`deleted = 0 AND
+// is_public = 1`) so the inserted rows line up 1:1 with the
+// boards the user will actually see when they call GetBoards.
+func grantPublicBoardRead(db *sql.DB, userID string) {
+	if userID == "" {
+		return
+	}
+	rows, err := db.Query("SELECT id FROM boards WHERE deleted = false AND is_public = 1")
+	if err != nil {
+		log.Printf("[grantPublicBoardRead] failed to list public boards: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var boardIDs []string
+	for rows.Next() {
+		var boardID string
+		if err := rows.Scan(&boardID); err == nil {
+			boardIDs = append(boardIDs, boardID)
+		}
+	}
+	if len(boardIDs) == 0 {
+		return
+	}
+
+	args := make([]interface{}, 0, len(boardIDs)*9)
+	placeholders := make([]string, len(boardIDs))
+	for i, boardID := range boardIDs {
+		permID := generateID()
+		placeholders[i] = "(?, ?, ?, ?, ?, NULL, NULL, NULL, '')"
+		args = append(args, permID, userID, boardID, "READ", userID)
+	}
+	query := "INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES " + strings.Join(placeholders, ", ")
+	if _, err := db.Exec(query, args...); err != nil {
+		log.Printf("[grantPublicBoardRead] failed to insert board_permissions: %v", err)
+		return
+	}
+
+	// Drop any cached (user, board) entries so the new rows are
+	// visible on the very next permission lookup, even if the
+	// caller has pre-warmed the cache from a different code path.
+	permissionCache.InvalidateUser(userID)
 }

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -23,25 +23,15 @@ export function ConfirmDialog({
   variant = 'default',
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
-  const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onCancel();
-        }
-      };
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [isOpen, onCancel]);
-
-  useEffect(() => {
-    if (isOpen) {
-      dialogRef.current?.focus();
-    }
-  }, [isOpen]);
+  // s-1199: focus trap handles Escape and Tab cycling, restores focus
+  // to whatever the user had focused when the dialog opened.
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    enabled: isOpen,
+    initialFocus: 'first',
+    onEscape: onCancel,
+    restoreFocus: true,
+  });
 
   if (!isOpen) return null;
 
@@ -51,6 +41,9 @@ export function ConfirmDialog({
     default: 'from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700',
   };
 
+  const titleId = 'confirm-dialog-title';
+  const descId = 'confirm-dialog-desc';
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
@@ -59,12 +52,18 @@ export function ConfirmDialog({
       <div className="absolute inset-0" />
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descId}
+        className="relative z-10 w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 outline-none p-6"
         onClick={(e) => e.stopPropagation()}
-        tabIndex={-1}
       >
         <div className="mb-4 flex items-center gap-3">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${variantStyles[variant].split(' ')[0]} ${variantStyles[variant].split(' ')[1]} text-white shadow-lg`}>
+          <div
+            aria-hidden="true"
+            className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${variantStyles[variant].split(' ')[0]} ${variantStyles[variant].split(' ')[1]} text-white shadow-lg`}
+          >
             {variant === 'danger' ? (
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -75,11 +74,11 @@ export function ConfirmDialog({
               </svg>
             )}
           </div>
-          <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100">
+          <h3 id={titleId} className="text-lg font-bold text-zinc-800 dark:text-zinc-100">
             {title}
           </h3>
         </div>
-        <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">
+        <p id={descId} className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">
           {message}
         </p>
         <div className="flex gap-3">

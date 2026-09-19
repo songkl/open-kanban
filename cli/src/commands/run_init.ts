@@ -53,7 +53,7 @@ const ALLOWED_STATUSES: readonly RunnerStatus[] = [
   "review",
   "done",
 ];
-const ALLOWED_PROMPT_MODES: readonly AgentPromptMode[] = ["arg", "stdin", "file"];
+const ALLOWED_PROMPT_MODES: readonly AgentPromptMode[] = ["arg", "stdin", "file", "argv", "acp"];
 
 const LOCAL_FILENAME = ".kanban-runner.local.yaml";
 const PROJECT_FILENAME = ".kanban-runner.yaml";
@@ -372,7 +372,30 @@ async function promptAgent(prompter: Prompter): Promise<AgentConfig> {
     choices: [
       { value: "arg", name: "arg — pass via a temp-file flag (default)" },
       { value: "stdin", name: "stdin — pipe to the agent's stdin" },
-      { value: "file", name: "file — write to <cwd>/.kanban-runner-<taskId>.md" },
+      {
+        value: "file",
+        name: "file — write to <cwd>/.kanban-runner-<taskId>.md",
+      },
+      {
+        value: "argv",
+        // s-1191: positional-arg delivery is the only mode that works
+        // for agents like `opencode run [message..]` that take the
+        // message as a positional argument. Surfacing it in the wizard
+        // means an operator never has to hand-edit the YAML when they
+        // switch from a flag-style agent to opencode.
+        name: "argv — pass prompt content as a positional argv entry (use for `opencode run`)",
+      },
+      {
+        value: "acp",
+        // s-1235: Agent Client Protocol (https://agentclientprotocol.com/)
+        // is the emerging JSON-RPC-over-stdio contract shared by
+        // mainstream agents. The runner drives the full
+        // `initialize` → `session/new` → `session/prompt` handshake
+        // and streams `session/update` chunks back as the agent's
+        // reply. Pick this for `claude --acp`, `opencode acp`,
+        // `gemini --acp`, etc.
+        name: "acp — speak the Agent Client Protocol over stdio (use for `claude --acp`, `opencode acp`, `gemini --acp`, …)",
+      },
     ],
     default: "arg",
   });
@@ -381,6 +404,19 @@ async function promptAgent(prompter: Prompter): Promise<AgentConfig> {
     promptArg = await prompter.input({
       message: "Flag used to pass the prompt path to the agent",
       default: "--prompt",
+    });
+  }
+  let acpFlag: string | undefined;
+  if (promptMode === "acp") {
+    // Different ACP-compatible agents opt into the protocol with
+    // different flags. `--acp` is the convention most agents use
+    // today; operators whose binary uses something else (e.g.
+    // `--agent-client-protocol` or a positional subcommand) can
+    // override the default here. Empty input falls back to the
+    // built-in `--acp` default the runner ships with.
+    acpFlag = await prompter.input({
+      message: "Flag the binary uses to opt into the Agent Client Protocol",
+      default: "--acp",
     });
   }
   const cwd = await prompter.input({
@@ -407,6 +443,7 @@ async function promptAgent(prompter: Prompter): Promise<AgentConfig> {
     binPath,
     promptMode,
     promptArg,
+    acpFlag: acpFlag?.trim() || RUNNER_DEFAULTS.agent.acpFlag,
     cwd: cwd.trim() || RUNNER_DEFAULTS.agent.cwd,
     args: parseStringList(extraArgsRaw),
     env: parseStringMap(extraEnvRaw),
@@ -420,52 +457,62 @@ async function promptRunnerSettings(prompter: Prompter): Promise<RunnerSettings>
     default: false,
   });
   const defaults = RUNNER_DEFAULTS.runner;
+  let pollIntervalMs: number;
+  let heartbeatIntervalMs: number;
+  let lockTimeoutMs: number;
+  let maxConcurrent: number;
   if (!tune) {
-    return {
-      pollIntervalMs: defaults.pollIntervalMs,
-      heartbeatIntervalMs: defaults.heartbeatIntervalMs,
-      lockTimeoutMs: defaults.lockTimeoutMs,
-      maxConcurrent: defaults.maxConcurrent,
-      mode: defaults.mode,
-    };
+    pollIntervalMs = defaults.pollIntervalMs;
+    heartbeatIntervalMs = defaults.heartbeatIntervalMs;
+    lockTimeoutMs = defaults.lockTimeoutMs;
+    maxConcurrent = defaults.maxConcurrent;
+  } else {
+    pollIntervalMs = (await prompter.number({
+      message: "Idle poll cadence (ms)",
+      default: defaults.pollIntervalMs,
+      min: 100,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive number" : true,
+    })) ?? defaults.pollIntervalMs;
+    heartbeatIntervalMs = (await prompter.number({
+      message: "Heartbeat cadence (ms)",
+      default: defaults.heartbeatIntervalMs,
+      min: 100,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive number" : true,
+    })) ?? defaults.heartbeatIntervalMs;
+    lockTimeoutMs = (await prompter.number({
+      message: "Lock timeout (ms); must exceed 2 × heartbeat",
+      default: defaults.lockTimeoutMs,
+      min: heartbeatIntervalMs * 2 + 1,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive number" : true,
+    })) ?? defaults.lockTimeoutMs;
+    maxConcurrent = (await prompter.number({
+      message: "Max concurrent tasks (v1 always runs one)",
+      default: defaults.maxConcurrent,
+      min: 1,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive integer" : true,
+    })) ?? defaults.maxConcurrent;
   }
-  const pollIntervalMs = await prompter.number({
-    message: "Idle poll cadence (ms)",
-    default: defaults.pollIntervalMs,
-    min: 100,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive number" : true,
-  });
-  const heartbeatIntervalMs = await prompter.number({
-    message: "Heartbeat cadence (ms)",
-    default: defaults.heartbeatIntervalMs,
-    min: 100,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive number" : true,
-  });
-  const lockTimeoutMs = await prompter.number({
-    message: "Lock timeout (ms); must exceed 2 × heartbeat",
-    default: defaults.lockTimeoutMs,
-    min: heartbeatIntervalMs * 2 + 1,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive number" : true,
-  });
-  const maxConcurrent = await prompter.number({
-    message: "Max concurrent tasks (v1 always runs one)",
-    default: defaults.maxConcurrent,
-    min: 1,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive integer" : true,
-  });
+  // s-1236: the runner id used to live inside the `tune` branch so an
+  // operator who accepted every default never had a way to pin a
+  // stable id — a real problem for anyone running the loop on more
+  // than one host (the auto-generated `<host>-<pid>-<uuid>` differs
+  // every restart, so historical `task_runs` rows can never be
+  // attributed to the same logical runner). Surface the prompt on
+  // every invocation; an empty answer preserves the auto-gen
+  // fallback so existing single-host setups keep working untouched.
   const runnerId = await prompter.input({
-    message: "Runner id (leave blank to auto-generate)",
+    message: "Runner id (leave blank to auto-generate from <host>-<pid>-<uuid>)",
     default: "",
   });
   return {
-    pollIntervalMs: pollIntervalMs ?? defaults.pollIntervalMs,
-    heartbeatIntervalMs: heartbeatIntervalMs ?? defaults.heartbeatIntervalMs,
-    lockTimeoutMs: lockTimeoutMs ?? defaults.lockTimeoutMs,
-    maxConcurrent: maxConcurrent ?? defaults.maxConcurrent,
+    pollIntervalMs,
+    heartbeatIntervalMs,
+    lockTimeoutMs,
+    maxConcurrent,
     mode: defaults.mode,
     runnerId: runnerId.trim() || undefined,
   };
@@ -543,6 +590,13 @@ function serialiseAgent(agent: AgentConfig): Record<string, unknown> {
   if (agent.binPath !== undefined) out.binPath = agent.binPath;
   if (agent.promptMode !== undefined) out.promptMode = agent.promptMode;
   if (agent.promptArg !== undefined) out.promptArg = agent.promptArg;
+  // s-1235: only emit `acpFlag` when it deviates from the default,
+  // so existing configs (and `--init` output for non-ACP agents)
+  // stay terse. The wizard always writes it explicitly so operators
+  // don't have to know which mode flips it on.
+  if (agent.acpFlag !== undefined && agent.acpFlag !== RUNNER_DEFAULTS.agent.acpFlag) {
+    out.acpFlag = agent.acpFlag;
+  }
   if (agent.cwd !== undefined) out.cwd = agent.cwd;
   if (agent.args !== undefined && agent.args.length > 0) out.args = [...agent.args];
   if (agent.env !== undefined && Object.keys(agent.env).length > 0) {

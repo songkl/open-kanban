@@ -7,11 +7,26 @@ import type { TaskRun } from '@/types/kanban';
 import type { Task, Attachment, Column, Agent, Subtask, Comment } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
-import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi } from '@/services/api';
+import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi, tasksApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
 
 const STORAGE_KEY = 'kanban-username';
+
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromDateInputValue(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
 
 function formatCommentDate(t: ReturnType<typeof useTranslation>[0], dateStr: string): string {
   const date = new Date(dateStr);
@@ -187,6 +202,13 @@ interface TaskModalProps {
   boards?: Board[];
   canEdit?: boolean;
   startEditing?: boolean;
+  /**
+   * s-1197: pre-loaded custom field definitions. When omitted, the
+   * modal falls back to its own `useCustomFields(boardId)` lookup so
+   * other entry points (ColumnDetailPage, etc.) get the chips too.
+   * Passing them in avoids a redundant localStorage read.
+   */
+  customFields?: CustomField[];
   onClose: () => void;
   onUpdate: (task: Task) => void;
   onDelete: (taskId: string) => void;
@@ -203,6 +225,7 @@ export function TaskModal({
   boards: _boards = [],
   canEdit = true,
   startEditing = false,
+  customFields: customFieldsProp,
   onClose,
   onUpdate,
   onDelete,
@@ -235,12 +258,6 @@ export function TaskModal({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-
       if (e.key === 'Enter' && isEditing) {
         const target = e.target as HTMLElement;
         const isTextarea = target.tagName === 'TEXTAREA' || target.closest('textarea');
@@ -261,25 +278,24 @@ export function TaskModal({
         ];
         const currentIndex = fieldOrder.findIndex(ref => ref.current === e.target);
         if (currentIndex !== -1) {
-          e.preventDefault();
           const nextIndex = e.shiftKey
             ? (currentIndex - 1 + fieldOrder.length) % fieldOrder.length
             : (currentIndex + 1) % fieldOrder.length;
           fieldOrder[nextIndex]?.current?.focus();
-          return;
         }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, isEditing]);
+  }, [isEditing]);
 
   const [editDesc, setEditDesc] = useState(task.description || '');
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editAssignee, setEditAssignee] = useState(task.assignee || '');
+  const [editDueAt, setEditDueAt] = useState<string | null>(task.dueAt ?? null);
   const [editAgentId, setEditAgentId] = useState(task.agentId || '');
   const [editAgentPrompt, setEditAgentPrompt] = useState(task.agentPrompt || '');
-  const [editMeta, setEditMeta] = useState<Record<string, string>>({});
+  const [editMeta, setEditMeta] = useState<Record<string, unknown>>({});
   const [newMetaKey, setNewMetaKey] = useState('');
   const [newMetaValue, setNewMetaValue] = useState('');
   const [newComment, setNewComment] = useState('');
@@ -303,23 +319,42 @@ export function TaskModal({
   const metaKeyInputRef = useRef<HTMLInputElement>(null);
   const handleSaveRef = useRef<() => void>(() => {});
   const handleSaveRefDeps = useRef<unknown[]>([]);
+
+  // s-1199: focus trap so keyboard users can Tab through the drawer
+  // without leaking focus to the underlying board. Escape is handled
+  // by the trap (calls onClose); focus is restored to whatever the
+  // user clicked when the drawer opened.
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    enabled: true,
+    initialFocus: 'first',
+    onEscape: onClose,
+    restoreFocus: true,
+  });
   const [commentsPage, setCommentsPage] = useState(1);
   const [taskComments, setTaskComments] = useState<Comment[]>(task.comments ?? []);
   const COMMENTS_PER_PAGE = 10;
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const parseMeta = (metaStr: string | Record<string, unknown> | null): Record<string, string> => {
+  const parseMeta = (metaStr: string | Record<string, unknown> | null): Record<string, unknown> => {
     if (!metaStr) return {};
-    if (typeof metaStr === 'object' && metaStr !== null) return metaStr as Record<string, string>;
+    if (typeof metaStr === 'object' && metaStr !== null) return metaStr as Record<string, unknown>;
     if (typeof metaStr === 'string') {
       try {
-        return JSON.parse(metaStr);
+        const parsed = JSON.parse(metaStr);
+        return parsed && typeof parsed === 'object' ? parsed : {};
       } catch {
         return {};
       }
     }
     return {};
   };
+
+  // s-1197: prefer the prop-injected list (avoids re-reading
+  // localStorage); fall back to the per-board lookup for entry points
+  // that don't pipe it through (e.g. ColumnDetailPage). When no board
+  // is loaded yet, both paths return [] and the editor self-hides.
+  const { customFields: ownCustomFields } = useCustomFields(boardId);
+  const customFields = customFieldsProp ?? ownCustomFields;
 
   useEffect(() => {
     const loadAuthor = async () => {
@@ -345,6 +380,10 @@ export function TaskModal({
   }, [task.meta]);
 
   useEffect(() => {
+    setEditDueAt(task.dueAt ?? null);
+  }, [task.id, task.dueAt]);
+
+  useEffect(() => {
     if (boardId) {
       columnsApi.getByBoard(boardId).then((data) => setAllColumns(data || [])).catch(console.error);
     }
@@ -360,16 +399,21 @@ export function TaskModal({
     }
   }, [task.id]);
 
+  const lastTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!task.id) return;
-    if (!task.comments || task.comments.length === 0) {
-      commentsApi.getByTask(task.id)
-        .then((data) => setTaskComments(data || []))
-        .catch(console.error);
-    } else {
-      setTaskComments(task.comments);
+    if (lastTaskIdRef.current !== task.id) {
+      lastTaskIdRef.current = task.id;
+      setCommentsPage(1);
+      if (task.comments && task.comments.length > 0) {
+        setTaskComments(task.comments);
+      } else {
+        commentsApi.getByTask(task.id)
+          .then((data) => setTaskComments(data || []))
+          .catch(console.error);
+      }
     }
-  }, [task.id, JSON.stringify(task.comments)]);
+  }, [task.id, task.comments]);
 
   useEffect(() => {
     if (commentsRef.current) {
@@ -399,6 +443,7 @@ export function TaskModal({
         description: editDesc,
         priority: editPriority,
         assignee: editAssignee,
+        dueAt: editDueAt,
         meta: editMeta,
         columnId: editColumn,
         agentId: editAgentId || null,
@@ -409,10 +454,10 @@ export function TaskModal({
     } catch (error) {
       console.error('Failed to save task:', error);
     }
-  }, [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate]);
+  }, [task, editTitle, editDesc, editPriority, editAssignee, editDueAt, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate]);
 
   useEffect(() => {
-    const deps = [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate];
+    const deps = [task, editTitle, editDesc, editPriority, editAssignee, editDueAt, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate];
     if (handleSaveRefDeps.current.join() !== deps.join()) {
       handleSaveRef.current = handleSave;
       handleSaveRefDeps.current = deps;
@@ -421,7 +466,22 @@ export function TaskModal({
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
-    onAddComment(task.id, newComment.trim(), commentAuthor);
+    const trimmed = newComment.trim();
+    const optimisticComment: Comment = {
+      id: `temp-${Date.now()}`,
+      content: trimmed,
+      author: commentAuthor,
+      taskId: task.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setTaskComments((prev) => {
+      const next = [...prev, optimisticComment];
+      const totalPages = Math.max(1, Math.ceil(next.length / COMMENTS_PER_PAGE));
+      setCommentsPage(totalPages);
+      return next;
+    });
+    onAddComment(task.id, trimmed, commentAuthor);
     setNewComment('');
   };
 
@@ -510,24 +570,52 @@ export function TaskModal({
   };
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 overflow-y-auto ${isFullscreen ? 'p-0' : ''}`}>
-      <div className={`relative z-10 flex flex-col bg-white dark:bg-zinc-800 rounded-xl shadow-xl overflow-hidden ${isFullscreen ? 'w-screen h-screen max-w-full max-h-full rounded-none' : 'h-full max-h-[calc(100vh-4rem)] my-8 mx-auto max-w-7xl'}`}>
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 overflow-y-auto ${isFullscreen ? 'p-0' : ''}`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-modal-title"
+        className={`relative z-10 flex flex-col bg-white dark:bg-zinc-800 rounded-xl shadow-xl outline-none overflow-hidden ${isFullscreen ? 'w-screen h-screen max-w-full max-h-full rounded-none' : 'h-full max-h-[calc(100vh-4rem)] my-8 mx-auto max-w-7xl'}`}
+      >
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-700 px-6 py-4">
           <div className="flex items-center gap-3 flex-wrap">
-            {columnName && (
+            {/*
+              Single source of truth for the status pill. PM_REVIEW_2026-09-17
+              §3.6 finding #1 (s-1190): the column name (e.g. "已完成") must
+              be hidden whenever a live/terminal task_runs row exists, so the
+              drawer never shows both "🤖 运行中" and "已完成" on the same
+              row. The run status badge is rendered inside RunInfoSection
+              below and re-renders the single canonical state.
+            */}
+            {columnName && !run && (
               <span className="rounded-full bg-zinc-100 dark:bg-zinc-700 px-3 py-1 text-sm text-zinc-600 dark:text-zinc-300">
                 {columnName}
               </span>
             )}
             {!isEditing && (
               <div>
-                <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
+                <h2 id="task-modal-title" className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
                 <div className="mt-1 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-400">
-                  {task.createdByUsername && (
-                    <div className="flex items-center gap-1">
-                      <UserAvatar username={task.createdByUsername} size="sm" />
-                      <span>{task.createdByUsername}</span>
+                  {(task.createdByNickname || task.createdByUsername) && (
+                    <div
+                      className="flex items-center gap-1.5"
+                      title={`${t('taskModal.createdBy')}: ${task.createdByNickname || task.createdByUsername}`}
+                    >
+                      <UserAvatar
+                        username={task.createdByNickname || task.createdByUsername || ''}
+                        avatar={task.createdByAvatar}
+                        size="sm"
+                      />
+                      <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                        {task.createdByNickname || task.createdByUsername}
+                      </span>
                     </div>
                   )}
                   <span>{t('taskModal.publishedAt')}: {new Date(task.createdAt).toLocaleString()}</span>
@@ -548,61 +636,90 @@ export function TaskModal({
               </button>
             )}
             <button
+              type="button"
               onClick={() => {
                 navigator.clipboard.writeText(task.id);
               }}
               title={t('taskModal.copyTaskId')}
+              aria-label={t('taskModal.copyTaskId')}
               className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
             >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             </button>
             <button
+              type="button"
               onClick={() => setIsFullscreen(!isFullscreen)}
               title={t('taskModal.fullscreen')}
+              aria-label={isFullscreen ? t('taskModal.exitFullscreen') : t('taskModal.fullscreen')}
+              aria-pressed={isFullscreen}
               className="rounded-md p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
             >
               {isFullscreen ? (
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
                 </svg>
               ) : (
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                 </svg>
               )}
             </button>
             <button
+              type="button"
               onClick={onClose}
+              title={t('common.close')}
+              aria-label={t('common.close')}
               className="rounded-md p-1 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 dark:bg-zinc-700 hover:text-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
             >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
         </div>
 
+        {/* s-1193: persistent CI-pipeline-style stepper in the drawer
+            header. Sits below the title row so the operator sees the
+            run timeline even when scrolled deep into the comment
+            thread (PM_REVIEW_2026-09-17 §5.1 finding #2). */}
+        {run && (
+          <div className="flex-shrink-0 border-b border-zinc-100 dark:border-zinc-700 px-6 py-3">
+            <RunTimeline run={run} />
+          </div>
+        )}
+
         <div className="flex flex-1 min-h-0">
           {/* Main Content */}
           <div className="flex-1 min-w-[28rem] overflow-y-auto p-6">
             {/* Title - only show input when editing, title is in header otherwise */}
             {isEditing && (
-              <input
-                ref={titleInputRef}
-                id="task-title-input"
-                name="task-title-input"
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="mb-4 w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-xl font-semibold"
-              />
+              <label className="mb-4 block">
+                <span className="sr-only">{t('taskModal.titleField')}</span>
+                <input
+                  ref={titleInputRef}
+                  id="task-title-input"
+                  name="task-title-input"
+                  type="text"
+                  aria-label={t('taskModal.titleField')}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-xl font-semibold"
+                />
+              </label>
             )}
+
+            {/* Run Info — only rendered while a CLI runner holds the task.
+                Surfaced near the top of the modal so operators can see
+                who is working on the task without scrolling. The run
+                status badge here is the single source of truth — see the
+                columnName suppression above. */}
+            {run && <RunInfoSection run={run} />}
 
             {/* Description */}
             <div className="mb-6">
-              <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              <label htmlFor="task-modal-description" className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
                 {t('taskModal.description')} {isEditing && t('taskModal.descriptionHint')}
               </label>
               {isEditing ? (
@@ -613,11 +730,13 @@ export function TaskModal({
                   onDrop={(e) => handleEditorDrop(e, 'desc')}
                   onDragOver={(e) => e.preventDefault()}
                 >
-                  <Suspense fallback={<textarea className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none" style={{ height: 200 }} disabled />}>
+                  <Suspense fallback={<textarea aria-label={t('taskModal.description')} id="task-modal-description" className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 font-mono text-sm resize-none" style={{ height: 200 }} disabled />}>
                     <MarkdownEditor
                       value={editDesc}
                       onChange={(val) => setEditDesc(val || '')}
                       height={200}
+                      id="task-modal-description"
+                      aria-label={t('taskModal.description')}
                     />
                   </Suspense>
                 </div>
@@ -638,6 +757,65 @@ export function TaskModal({
             {run && <RunInfoSection run={run} />}
 
             {/* Grid Layout for Edit Mode */}
+            {/* s-1202: surface assignee + last runner + due date explicitly in the
+                drawer (read-only view) so the operator sees both fields
+                without having to scroll into the Run info section. Mirrors
+                the card footer chips: 👤 for assignee, 🤖 for runner, 📅
+                for due date. PM_REVIEW_2026-09-17 §3.2 finding #3. T-1207 /
+                s-1207 adds the due-date row so a task created with one
+                surfaces it in the same place the assignee + runner already do. */}
+            {!isEditing && (task.assignee || task.dueAt || (run && run.runnerId)) && (
+              <div
+                className="mb-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-700/40 px-4 py-3"
+                data-testid="task-modal-people"
+              >
+                <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5 text-xs">
+                  {task.assignee && (
+                    <>
+                      <dt className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                        <span aria-hidden>👤</span>
+                        <span>{t('taskModal.assigneeFieldLabel')}</span>
+                      </dt>
+                      <dd
+                        className="text-zinc-700 dark:text-zinc-200"
+                        data-testid="task-modal-assignee"
+                      >
+                        {task.assignee}
+                      </dd>
+                    </>
+                  )}
+                  {task.dueAt && (
+                    <>
+                      <dt className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                        <span aria-hidden>📅</span>
+                        <span>{t('taskModal.dueDate')}</span>
+                      </dt>
+                      <dd
+                        className="text-zinc-700 dark:text-zinc-200"
+                        data-testid="task-modal-due-at"
+                      >
+                        {new Date(task.dueAt).toLocaleString()}
+                      </dd>
+                    </>
+                  )}
+                  {run && run.runnerId && (
+                    <>
+                      <dt className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                        <span aria-hidden>🤖</span>
+                        <span>{t('taskModal.lastRunnerFieldLabel')}</span>
+                      </dt>
+                      <dd
+                        className="font-mono text-zinc-700 dark:text-zinc-200 break-all"
+                        title={run.runnerId}
+                        data-testid="task-modal-last-runner"
+                      >
+                        {run.runnerId}
+                      </dd>
+                    </>
+                  )}
+                </dl>
+              </div>
+            )}
             {isEditing && (
               <div className="mb-6 grid grid-cols-2 gap-4">
                 <div>
@@ -650,6 +828,23 @@ export function TaskModal({
                   >
                     {(allColumns.length > 0 ? allColumns : columns).map((col) => (
                       <option key={col.id} value={col.id}>{col.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.assignee')}</label>
+                  <select
+                    ref={assigneeSelectRef}
+                    value={editAssignee}
+                    onChange={(e) => setEditAssignee(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
+                  >
+                    <option value="">{t('taskModal.unassigned')}</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.nickname}>
+                        {agent.nickname}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -669,20 +864,25 @@ export function TaskModal({
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.assignee')}</label>
-                  <select
-                    ref={assigneeSelectRef}
-                    value={editAssignee}
-                    onChange={(e) => setEditAssignee(e.target.value)}
+                  <label htmlFor="task-modal-due-at" className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                    {t('taskModal.dueDate')}
+                  </label>
+                  <input
+                    id="task-modal-due-at"
+                    type="datetime-local"
+                    value={toDateInputValue(editDueAt)}
+                    onChange={(e) => setEditDueAt(fromDateInputValue(e.target.value))}
                     className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
-                  >
-                    <option value="">{t('taskModal.unassigned')}</option>
-                    {agents.map((agent) => (
-                      <option key={agent.id} value={agent.nickname}>
-                        {agent.nickname}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  {editDueAt && (
+                    <button
+                      type="button"
+                      onClick={() => setEditDueAt(null)}
+                      className="mt-1 text-xs text-blue-500 hover:text-blue-600"
+                    >
+                      {t('taskModal.dueDateClear')}
+                    </button>
+                  )}
                 </div>
 
                 <div>
@@ -709,14 +909,35 @@ export function TaskModal({
               </div>
             )}
 
-            {/* Meta */}
+            {/* s-1197: typed custom-field editor. Renders nothing when no
+                fields are defined for this board so legacy meta-only
+                boards stay unchanged. */}
+            {customFields.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('customFields.editorTitle')}</h4>
+                <CustomFieldEditor
+                  customFields={customFields}
+                  values={editMeta}
+                  isEditing={isEditing}
+                  onChange={(next) => setEditMeta(next)}
+                />
+              </div>
+            )}
+
+            {/* Meta — legacy free-form key/value editor. Kept as a
+                fallback so existing users' metadata isn't dropped when
+                a board hasn't opted into the typed editor yet. */}
             <div>
               <h4 className="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-300">{t('taskModal.meta')}</h4>
               <div className="space-y-2">
-                {Object.entries(editMeta).map(([key, value]) => (
+                {Object.entries(editMeta)
+                  .filter(([key]) => !customFields.some(f => f.name === key))
+                  .map(([key, value]) => (
                   <div key={key} className="flex items-center gap-2">
                     <span className="min-w-[80px] text-sm">{key}:</span>
-                    <span className="flex-1 text-sm">{value}</span>
+                    <span className="flex-1 text-sm">
+                      {Array.isArray(value) ? value.join(', ') : String(value ?? '')}
+                    </span>
                     {isEditing && (
                       <button
                         onClick={() => {
@@ -726,7 +947,7 @@ export function TaskModal({
                         }}
                         className="text-xs text-red-500"
                       >
-                        {t('taskModal.deleteMeta')}
+                        {t('common.deleteMeta')}
                       </button>
                     )}
                   </div>
@@ -1016,19 +1237,27 @@ export function TaskModal({
       )}
 
       {showDeleteConfirmModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center" role="presentation">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowDeleteConfirmModal(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
-            <h3 className="mb-2 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('taskModal.confirmDeleteTitle')}</h3>
-            <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">{t('taskModal.confirmDelete')}</p>
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="task-modal-delete-title"
+            aria-describedby="task-modal-delete-desc"
+            className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6 shadow"
+          >
+            <h3 id="task-modal-delete-title" className="mb-2 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('taskModal.confirmDeleteTitle')}</h3>
+            <p id="task-modal-delete-desc" className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">{t('taskModal.confirmDelete')}</p>
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setShowDeleteConfirmModal(false)}
                 className="flex-1 rounded-md bg-zinc-100 dark:bg-zinc-700 px-4 py-2.5 text-base font-medium text-zinc-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600"
               >
                 {t('taskModal.cancel')}
               </button>
               <button
+                type="button"
                 onClick={confirmDelete}
                 className="flex-1 rounded-md bg-red-500 px-4 py-2.5 text-base font-medium text-white hover:bg-red-600"
               >

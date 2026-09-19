@@ -54,23 +54,23 @@ describe('MarkdownEditor', () => {
 
   it('should show preview mode when preview button is clicked', () => {
     render(<MarkdownEditor {...defaultProps} value="Hello world" />);
-    const previewButton = screen.getByRole('button', { name: '预览' });
+    const previewButton = screen.getByRole('button', { name: 'markdownEditor.previewTab' });
     fireEvent.click(previewButton);
-    expect(screen.getByText('Markdown 实时预览')).toBeInTheDocument();
+    expect(screen.getByText('markdownEditor.livePreview')).toBeInTheDocument();
   });
 
   it('should switch back to edit mode when edit button is clicked', () => {
     render(<MarkdownEditor {...defaultProps} value="Hello world" />);
-    const previewButton = screen.getByRole('button', { name: '预览' });
+    const previewButton = screen.getByRole('button', { name: 'markdownEditor.previewTab' });
     fireEvent.click(previewButton);
-    const editButton = screen.getByRole('button', { name: '编辑' });
+    const editButton = screen.getByRole('button', { name: 'markdownEditor.editTab' });
     fireEvent.click(editButton);
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
   it('should render markdown content in preview mode', () => {
     render(<MarkdownEditor {...defaultProps} value="**bold** and *italic*" />);
-    const previewButton = screen.getByRole('button', { name: '预览' });
+    const previewButton = screen.getByRole('button', { name: 'markdownEditor.previewTab' });
     fireEvent.click(previewButton);
     expect(screen.getByText('bold')).toBeInTheDocument();
   });

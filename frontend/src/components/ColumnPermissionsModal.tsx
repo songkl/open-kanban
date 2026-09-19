@@ -1,15 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { Column } from '@/types/kanban';
+import type { Column, ColumnPermission } from '@/types/kanban';
 import { AddColumnPermissionForm } from '@/components/AddColumnPermissionForm';
-
-interface ColumnPermission {
-  id: string;
-  columnId: string;
-  columnName: string;
-  access: string;
-  userId: string;
-  userNickname: string;
-}
 
 interface ColumnPermissionsModalProps {
   isOpen: boolean;
@@ -19,6 +10,33 @@ interface ColumnPermissionsModalProps {
   onClose: () => void;
   onDeletePermission: (permissionId: string) => void;
   onPermissionAdded: () => void;
+}
+
+// Unified row shape (s-1054) carries `nickname` / `username` while
+// the legacy ColumnPermission keyed off `userNickname`. Read both
+// so the modal keeps working regardless of which shape the caller
+// passed in.
+function columnPermissionDisplayName(perm: ColumnPermission): string {
+  const row = perm as ColumnPermission & { nickname?: string };
+  return perm.userNickname || row.nickname || '';
+}
+
+function columnPermissionGrantor(perm: ColumnPermission): string {
+  return perm.grantedByUsername || perm.grantedByNickname || '';
+}
+
+function columnPermissionGrantedAt(perm: ColumnPermission): string {
+  if (!perm.grantedAt) return '';
+  const date = new Date(perm.grantedAt);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString();
+}
+
+function columnPermissionExpiresAt(perm: ColumnPermission): string {
+  if (!perm.expiresAt) return '';
+  const date = new Date(perm.expiresAt);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString();
 }
 
 export function ColumnPermissionsModal({
@@ -40,7 +58,7 @@ export function ColumnPermissionsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 max-h-[80vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 max-h-[80vh] overflow-y-auto p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
@@ -64,16 +82,47 @@ export function ColumnPermissionsModal({
               {permissions.length === 0 ? (
                 <p className="text-sm text-zinc-400 dark:text-zinc-500 py-4 text-center">{t('column.noPermissions')}</p>
               ) : (
-                <div className="space-y-2">
-                  {permissions.map((perm) => (
-                    <div key={perm.id} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-700 rounded-xl border border-zinc-100">
-                      <div className="flex items-center gap-3">
+                <div className="space-y-2" data-testid="column-permissions-list">
+                  {permissions.map((perm) => {
+                    const displayName = columnPermissionDisplayName(perm);
+                    const grantor = columnPermissionGrantor(perm);
+                    const grantedAtText = columnPermissionGrantedAt(perm);
+                    const expiresAtText = columnPermissionExpiresAt(perm);
+                    const showAuditLine = grantor || grantedAtText || expiresAtText;
+                    return (
+                    <div key={perm.id} data-testid="column-permission-row" className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-700 rounded-xl border border-zinc-100">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-violet-600 text-xs font-bold">
-                          {perm.userNickname.charAt(0).toUpperCase()}
+                          {(displayName || '?').charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{perm.userNickname}</div>
-                          <div className="text-xs text-zinc-400 dark:text-zinc-500">{perm.columnName} - {t('column.permission.' + perm.access)}</div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{displayName}</div>
+                          <div className="text-xs text-zinc-400 dark:text-zinc-500">{t('column.permission.' + perm.access)}</div>
+                          {showAuditLine && (
+                            <div
+                              className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400"
+                              data-testid="column-permission-audit"
+                            >
+                              {grantor && (
+                                <span>
+                                  <span className="text-zinc-400 dark:text-zinc-500">{t('board.grantedBy')}</span>
+                                  <span className="ml-1 font-medium text-zinc-700 dark:text-zinc-200">{grantor}</span>
+                                </span>
+                              )}
+                              {grantedAtText && (
+                                <span>
+                                  <span className="text-zinc-400 dark:text-zinc-500">{t('board.grantedAt')}</span>
+                                  <span className="ml-1 text-zinc-600 dark:text-zinc-300">{grantedAtText}</span>
+                                </span>
+                              )}
+                              {expiresAtText && (
+                                <span>
+                                  <span className="text-zinc-400 dark:text-zinc-500">{t('board.expiresAt')}</span>
+                                  <span className="ml-1">{expiresAtText}</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <button
@@ -83,7 +132,8 @@ export function ColumnPermissionsModal({
                         {t('column.remove')}
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

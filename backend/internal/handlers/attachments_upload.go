@@ -20,8 +20,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot upload files"})
+		if requireNonViewer(c, user) {
 			return
 		}
 

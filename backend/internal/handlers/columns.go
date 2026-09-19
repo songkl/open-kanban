@@ -640,27 +640,63 @@ func GetColumnAgent(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var agentTypesStr string
+		var agentTypesStr, triggerVal string
 		err := db.QueryRow(
-			"SELECT agent_types FROM column_agents WHERE column_id = ?",
+			"SELECT agent_types, COALESCE(transition_trigger, 'none') FROM column_agents WHERE column_id = ?",
 			columnID,
-		).Scan(&agentTypesStr)
+		).Scan(&agentTypesStr, &triggerVal)
 
 		if err != nil {
-			c.JSON(http.StatusOK, gin.H{"agentTypes": []string{}})
+			c.JSON(http.StatusOK, gin.H{"agentTypes": []string{}, "transitionTrigger": "none"})
 			return
 		}
 
 		var agentTypes []string
 		json.Unmarshal([]byte(agentTypesStr), &agentTypes)
 
-		c.JSON(http.StatusOK, gin.H{"agentTypes": agentTypes})
+		c.JSON(http.StatusOK, gin.H{
+			"agentTypes":        agentTypes,
+			"transitionTrigger": normalizeTransitionTrigger(triggerVal),
+		})
 	}
+}
+
+// TransitionTriggerNone / TransitionTriggerOnEnter / TransitionTriggerOnExit / TransitionTriggerBoth
+// enumerate the supported values for column_agents.transition_trigger.
+// The handler layer accepts the same strings and rejects anything else
+// with a 400 so a typo never silently degrades the auto-trigger.
+const (
+	TransitionTriggerNone     = "none"
+	TransitionTriggerOnEnter  = "on_enter"
+	TransitionTriggerOnExit   = "on_exit"
+	TransitionTriggerBoth     = "both"
+)
+
+// normalizeTransitionTrigger collapses any empty string to "none" so
+// legacy column_agents rows created before s-1214 (which have no
+// trigger column at all and fall back to '' via COALESCE(... , ''))
+// still resolve to the documented default.
+func normalizeTransitionTrigger(raw string) string {
+	switch raw {
+	case TransitionTriggerOnEnter, TransitionTriggerOnExit, TransitionTriggerBoth:
+		return raw
+	default:
+		return TransitionTriggerNone
+	}
+}
+
+// NormalizeTransitionTriggerForTest is the exported alias used by
+// the handler tests (see columns_transition_trigger_test.go). Kept
+// in the production package so the same enum-coercion rule that
+// guards SetColumnAgent also guards the test assertions.
+func NormalizeTransitionTriggerForTest(raw string) string {
+	return normalizeTransitionTrigger(raw)
 }
 
 // SetColumnAgentRequest represents agent config request
 type SetColumnAgentRequest struct {
-	AgentTypes []string `json:"agentTypes"`
+	AgentTypes        []string `json:"agentTypes"`
+	TransitionTrigger string   `json:"transitionTrigger"`
 }
 
 // ReorderColumnsRequest represents column reorder request
@@ -754,13 +790,23 @@ func SetColumnAgent(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		trigger := normalizeTransitionTrigger(req.TransitionTrigger)
+		// Reject malformed trigger values explicitly so a typo never
+		// silently degrades the auto-trigger to "none".
+		if req.TransitionTrigger != "" && req.TransitionTrigger != trigger {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Invalid transitionTrigger; expected one of none, on_enter, on_exit, both",
+			})
+			return
+		}
+
 		agentTypesJSON, _ := json.Marshal(req.AgentTypes)
 		now := time.Now()
 
 		// Try to update first, then insert
 		res, err := db.Exec(
-			"UPDATE column_agents SET agent_types = ?, updated_at = ? WHERE column_id = ?",
-			string(agentTypesJSON), now, columnID,
+			"UPDATE column_agents SET agent_types = ?, transition_trigger = ?, updated_at = ? WHERE column_id = ?",
+			string(agentTypesJSON), trigger, now, columnID,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
@@ -772,8 +818,8 @@ func SetColumnAgent(db *sql.DB) gin.HandlerFunc {
 			// Insert new
 			agentID := generateID()
 			_, err = db.Exec(
-				"INSERT INTO column_agents (id, column_id, agent_types, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-				agentID, columnID, string(agentTypesJSON), now, now,
+				"INSERT INTO column_agents (id, column_id, agent_types, transition_trigger, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+				agentID, columnID, string(agentTypesJSON), trigger, now, now,
 			)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set"})
@@ -781,7 +827,10 @@ func SetColumnAgent(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(http.StatusOK, gin.H{"agentTypes": req.AgentTypes})
+		c.JSON(http.StatusOK, gin.H{
+			"agentTypes":        req.AgentTypes,
+			"transitionTrigger": trigger,
+		})
 	}
 }
 

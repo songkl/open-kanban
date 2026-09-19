@@ -342,3 +342,183 @@ describe("RunnerHttpError", () => {
     expect(err.cause).toBe(cause);
   });
 });
+
+// s-1229: the runner used to surface a 401 from any /runs/* endpoint
+// as an opaque "API error 401" and shut down — even though the user
+// had a perfectly good refresh token on disk. These tests pin the
+// retry-on-401 behaviour the RunClaimClient now provides.
+describe("RunClaimClient — refresh on 401", () => {
+  it("retries once with a refreshed token on a 401 claim", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+      {
+        status: 200,
+        body: {
+          task: { id: "s-1229" },
+          run: { taskId: "s-1229", runnerId: "runner-1" },
+        },
+      },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        refreshCalls.count += 1;
+        return true;
+      },
+    });
+    const outcome = await client.claim(BASE_REQUEST);
+    expect(outcome.kind).toBe("claimed");
+    expect(calls).toHaveLength(2);
+    expect(refreshCalls.count).toBe(1);
+  });
+
+  it("surfaces a clear session-expired error when refresh fails", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        refreshCalls.count += 1;
+        return false;
+      },
+    });
+    await expect(client.claim(BASE_REQUEST)).rejects.toMatchObject({
+      name: "RunnerHttpError",
+      retryable: false,
+      status: 401,
+      path: "/runs/claim",
+      message: expect.stringMatching(/session expired|auth login/i),
+    });
+    expect(calls).toHaveLength(1);
+    expect(refreshCalls.count).toBe(1);
+  });
+
+  it("surfaces a clear session-expired error when refresh succeeds but retry still 401s", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+      { status: 401, body: { error: "still expired" } },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        refreshCalls.count += 1;
+        return true;
+      },
+    });
+    await expect(client.claim(BASE_REQUEST)).rejects.toMatchObject({
+      name: "RunnerHttpError",
+      retryable: false,
+      status: 401,
+      message: expect.stringMatching(/session expired|auth login/i),
+    });
+    expect(calls).toHaveLength(2);
+    expect(refreshCalls.count).toBe(1);
+  });
+
+  it("retries once on heartbeat 401", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+      { status: 200, body: { expiresAt: "2030-01-01T00:00:00Z" } },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        refreshCalls.count += 1;
+        return true;
+      },
+    });
+    const outcome = await client.heartbeat("s-1229", "runner-1");
+    expect(outcome).toEqual({ kind: "ok", expiresAt: "2030-01-01T00:00:00Z" });
+    expect(calls).toHaveLength(2);
+    expect(refreshCalls.count).toBe(1);
+  });
+
+  it("retries once on finish 401", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+      { status: 200, body: { advanced: true } },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        refreshCalls.count += 1;
+        return true;
+      },
+    });
+    const outcome = await client.finish("s-1229", {
+      runnerId: "runner-1",
+      status: "completed",
+    });
+    expect(outcome).toEqual({ kind: "ok", advanced: true });
+    expect(calls).toHaveLength(2);
+    expect(refreshCalls.count).toBe(1);
+  });
+
+  it("retries once on release 401", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+      { status: 200, body: { released: 2 } },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        refreshCalls.count += 1;
+        return true;
+      },
+    });
+    const outcome = await client.release({ runnerId: "runner-1" });
+    expect(outcome).toEqual({ kind: "ok", released: 2 });
+    expect(calls).toHaveLength(2);
+    expect(refreshCalls.count).toBe(1);
+  });
+
+  it("treats a refresh hook that throws as a failed refresh", async () => {
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        throw new Error("token endpoint unreachable");
+      },
+    });
+    await expect(client.claim(BASE_REQUEST)).rejects.toMatchObject({
+      name: "RunnerHttpError",
+      retryable: false,
+      status: 401,
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("does not call refresh when the first response is 200", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport } = makeTransport([
+      { status: 204, body: null },
+    ]);
+    const client = new RunClaimClient(transport, {
+      refreshAuth: async () => {
+        refreshCalls.count += 1;
+        return true;
+      },
+    });
+    await client.claim(BASE_REQUEST);
+    expect(refreshCalls.count).toBe(0);
+  });
+
+  it("allows swapping the refresh hook via setRefreshAuth", async () => {
+    const refreshCalls = { count: 0 };
+    const { transport, calls } = makeTransport([
+      { status: 401, body: { error: "expired" } },
+      { status: 200, body: { ok: true } },
+    ]);
+    const client = new RunClaimClient(transport);
+    expect(calls).toHaveLength(0);
+    client.setRefreshAuth(async () => {
+      refreshCalls.count += 1;
+      return true;
+    });
+    await client.release({ runnerId: "runner-1" });
+    expect(refreshCalls.count).toBe(1);
+    expect(calls).toHaveLength(2);
+  });
+});

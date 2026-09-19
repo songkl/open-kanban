@@ -131,6 +131,7 @@ import {
   runAgentCreate,
   runAgentBind,
   runAgentDelete,
+  runAgentLogin,
 } from "./commands/agents.js";
 
 const DEFAULT_APP_NAME = "kanban-cli";
@@ -155,6 +156,59 @@ export function buildOAuthClient(apiUrl: string, profile: string | undefined): O
   } as const;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return new OAuthClient(apiUrl, metadata as any, provider);
+}
+
+// ResolveLoginModeDeps keeps the @inquirer/prompts surface injectable so
+// the identity-picker logic in program.ts stays unit-testable without
+// pulling in a TTY. ProgramDeps already wires the default; tests pass
+// a fake prompt to drive the deterministic branches.
+export interface ResolveLoginModeDeps {
+  prompt?: <T>(message: string, choices: Array<{ value: T; name?: string; description?: string }>, defaultValue?: T) => Promise<T>;
+  stdin?: NodeJS.ReadableStream;
+}
+
+// resolveLoginMode decides which LoginMode `auth login` should use.
+// The historical defaults (s-1231) stay in place: --as-human forces
+// the human-binding flow, --as-agent forces the agent-binding flow,
+// and any other flag-less invocation defaults to 'agent' so non-TTY
+// callers (CI scripts, the e2e agent-selection suite) keep working.
+//
+// s-1246 adds the interactive branch: when stdin is a TTY and no mode
+// flag was supplied, surface a selector so the operator can pick
+// between binding to themselves (Human) and binding to an Agent. The
+// selector defaults to 'agent' to keep the unattended-runner use case
+// one keystroke away from the previous behaviour.
+export async function resolveLoginMode(
+  cmdOpts: { asHuman?: boolean; asAgent?: boolean },
+  deps: ResolveLoginModeDeps = {}
+): Promise<"human" | "agent"> {
+  if (cmdOpts.asHuman) return "human";
+  if (cmdOpts.asAgent) return "agent";
+  const stdin = deps.stdin ?? process.stdin;
+  const isInteractive =
+    stdin && (stdin as { isTTY?: boolean }).isTTY === true;
+  if (!isInteractive) return "agent";
+  const prompt = deps.prompt;
+  if (!prompt) return "agent";
+  const choice = await prompt<"human" | "agent">(
+    "Bind this CLI to which identity?",
+    [
+      {
+        value: "agent",
+        name: "Agent (recommended for unattended runners)",
+        description:
+          "Bind the token to an Agent identity — the CLI will run as that Agent (long-lived API token).",
+      },
+      {
+        value: "human",
+        name: "My account (Human)",
+        description:
+          "Bind the token to the human approver's account — useful when driving the dashboard from the terminal.",
+      },
+    ],
+    "agent"
+  );
+  return choice;
 }
 
 // ProgramDeps captures the runtime collaborators every command needs.
@@ -211,12 +265,45 @@ export function createProgram(
 
   authCmd
     .command("login")
-    .description("start OAuth 2.1 device flow and persist credentials")
-    .action(async () => {
+    .description(
+      "start the OAuth device flow and bind the CLI to an Agent identity (s-1231). When run from a TTY with no explicit mode flag, interactively asks whether to bind to an Agent or to your own account (s-1246). Pass --as-human / --as-agent to skip the prompt."
+    )
+    .option(
+      "--as-human",
+      "bind the token to the human approver's account instead of the default Agent identity (s-1231)"
+    )
+    .option(
+      "--as-agent",
+      "explicitly bind the token to an Agent identity; skips the interactive identity picker when stdin is a TTY (s-1246)"
+    )
+    .option(
+      "--no-open",
+      "do not launch the verification URL in the default browser (agent mode only)"
+    )
+    .action(async (cmdOpts: { asHuman?: boolean; asAgent?: boolean; open?: boolean }) => {
       try {
+        if (cmdOpts.asHuman && cmdOpts.asAgent) {
+          process.stderr.write(
+            "Cannot pass both --as-human and --as-agent; pick one.\n"
+          );
+          process.exit(1);
+        }
+        const mode = await resolveLoginMode(cmdOpts, {
+          prompt: async (message, choices, defaultValue) =>
+            inquirerSelect({
+              message,
+              choices,
+              default: defaultValue,
+            }),
+        });
         await runLogin(
-          { apiUrl: opts.apiUrl, profile: opts.profile },
-          { oauth }
+          {
+            apiUrl: opts.apiUrl,
+            profile: opts.profile,
+            mode,
+            openBrowser: cmdOpts.open !== false,
+          },
+          { oauth, http }
         );
       } catch (err) {
         process.stderr.write(`${(err as Error).message}\n`);
@@ -358,6 +445,37 @@ export function createProgram(
               validate: (v: string) =>
                 v && v.trim().length > 0 ? true : "Token is required",
             }),
+        });
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(exitCodeForError(err));
+      }
+    });
+
+  // `kanban auth agent login` opens the OAuth device authorization
+  // page so the human approver can pick "bind existing Agent" or
+  // "create new Agent" on the approval screen, then validates the
+  // resulting token is bound to a type='AGENT' user before persisting
+  // it under the agent-token marker. Complements `auth login` (which
+  // binds the human approver by default; pass --as-agent to bind to
+  // an Agent, or pick "Agent" in the interactive picker on a TTY —
+  // s-1246) and `auth agent {create,bind}` (which require admin or a
+  // pre-issued token).
+  agentCmd
+    .command("login")
+    .description(
+      "start the OAuth device flow and bind the CLI to an Agent identity chosen on the approval page"
+    )
+    .option("--no-open", "do not launch the verification URL in the default browser")
+    .action(async (cmdOpts: { open?: boolean }) => {
+      const o = program.opts<{ output?: string }>();
+      try {
+        await runAgentLogin({
+          apiUrl: opts.apiUrl,
+          format: resolveOutputFormat(o.output),
+          http,
+          oauth,
+          openBrowser: cmdOpts.open !== false,
         });
       } catch (err) {
         process.stderr.write(`${(err as Error).message}\n`);

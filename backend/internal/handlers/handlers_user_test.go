@@ -52,6 +52,7 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		short_alias TEXT UNIQUE,
 		task_counter INTEGER DEFAULT 1000,
 		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		description TEXT DEFAULT ''
@@ -62,6 +63,11 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		board_id TEXT NOT NULL,
 		owner_agent_id TEXT,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
+		notes TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -86,6 +92,10 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		user_id TEXT NOT NULL,
 		column_id TEXT NOT NULL,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -104,6 +114,7 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		agent_id TEXT,
 		agent_prompt TEXT,
 		created_by TEXT,
@@ -267,12 +278,15 @@ func TestGetPermissionsHandler(t *testing.T) {
 
 		var resp struct {
 			Permissions []struct {
-				ID           string `json:"id"`
-				BoardID      string `json:"boardId"`
-				BoardName    string `json:"boardName"`
-				Access       string `json:"access"`
-				UserID       string `json:"userId"`
-				UserNickname string `json:"userNickname"`
+				ID        string `json:"id"`
+				BoardID   string `json:"boardId"`
+				BoardName string `json:"boardName"`
+				Access    string `json:"access"`
+				UserID    string `json:"userId"`
+				Username  string `json:"username"`
+				Nickname  string `json:"nickname"`
+				UserType  string `json:"userType"`
+				UserRole  string `json:"userRole"`
 			} `json:"permissions"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -285,8 +299,17 @@ func TestGetPermissionsHandler(t *testing.T) {
 		if p.UserID != "admin1" {
 			t.Errorf("expected userId=admin1, got %q", p.UserID)
 		}
-		if p.UserNickname != "admin" {
-			t.Errorf("expected userNickname=admin, got %q", p.UserNickname)
+		if p.Username != "admin" {
+			t.Errorf("expected username=admin, got %q", p.Username)
+		}
+		if p.Nickname != "admin" {
+			t.Errorf("expected nickname=admin, got %q", p.Nickname)
+		}
+		if p.UserType != "HUMAN" {
+			t.Errorf("expected userType=HUMAN, got %q", p.UserType)
+		}
+		if p.UserRole != "ADMIN" {
+			t.Errorf("expected userRole=ADMIN, got %q", p.UserRole)
 		}
 		if p.BoardID != "board1" {
 			t.Errorf("expected boardId=board1, got %q", p.BoardID)
@@ -1250,6 +1273,153 @@ func TestGetAgentsHandler(t *testing.T) {
 	})
 }
 
+func TestGetAgentsHandlerHealthMetrics(t *testing.T) {
+	handlers.ResetTokenCacheForTest()
+	db := setupUserPermDB(t)
+	defer db.Close()
+
+	// Fresh agent with no activity yet — health counters must
+	// default to zero rather than NULL so the frontend can render
+	// "0 / 0%" placeholders without a guard.
+	if _, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled, last_active_at)
+		VALUES ('agent-quiet', 'aq', 'Quiet Agent', '', 'MEMBER', 'AGENT', 1, datetime('now', '-2 hours'))`); err != nil {
+		t.Fatalf("insert quiet agent: %v", err)
+	}
+
+	// Active agent — last_active_at within the last minute,
+	// three successful runs (UPDATE_TASK) and one failure
+	// (DELETE_TASK) in the last 24h, plus an old (>24h) run to
+	// prove the 24h window is respected, plus an old (>24h)
+	// failure to prove fails_last_24h excludes it.
+	if _, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled, last_active_at)
+		VALUES ('agent-busy', 'ab', 'Busy Agent', '', 'MEMBER', 'AGENT', 1, datetime('now'))`); err != nil {
+		t.Fatalf("insert busy agent: %v", err)
+	}
+	activities := []struct {
+		id      string
+		action  string
+		minutes string
+	}{
+		// recent successful runs
+		{"a1", "UPDATE_TASK", "-30"},
+		{"a2", "COMPLETE_TASK", "-45"},
+		{"a3", "ADD_COMMENT", "-60"},
+		// recent failure
+		{"a4", "DELETE_TASK", "-15"},
+		// old run (>24h ago) — must NOT count in runs_last_24h
+		{"a5", "CREATE_TASK", "-1500"},
+		// old failure (>24h ago) — must NOT count in fails_last_24h
+		{"a6", "BOARD_DELETE", "-2880"},
+	}
+	for _, a := range activities {
+		if _, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source, created_at)
+			VALUES (?, 'agent-busy', ?, 'TASK', 'mcp', datetime('now', ?))`,
+			a.id, a.action, a.minutes+" minutes"); err != nil {
+			t.Fatalf("insert activity %s: %v", a.id, err)
+		}
+	}
+
+	// A third agent with mixed activity from a non-agent user —
+	// proves the join pins health metrics to u.type='AGENT' only.
+	if _, err := db.Exec(`INSERT INTO users (id, username, nickname, avatar, role, type, enabled)
+		VALUES ('agent-noisy', 'an', 'Noisy Agent', '', 'MEMBER', 'AGENT', 1)`); err != nil {
+		t.Fatalf("insert noisy agent: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, source)
+		VALUES ('a-noise-1', 'agent-noisy', 'DELETE_TASK', 'TASK', 'mcp'),
+		       ('a-noise-2', 'agent-noisy', 'CREATE_TASK', 'TASK', 'mcp')`); err != nil {
+		t.Fatalf("insert noisy activity: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.GET("/api/agents", handlers.GetAgents(db))
+
+	req, _ := http.NewRequest("GET", "/api/agents", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Agents []map[string]interface{} `json:"agents"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Agents) != 3 {
+		t.Fatalf("expected 3 agents, got %d", len(resp.Agents))
+	}
+
+	byID := map[string]map[string]interface{}{}
+	for _, a := range resp.Agents {
+		byID[a["id"].(string)] = a
+	}
+
+	t.Run("quiet agent exposes zero counters and last_heartbeat_at from last_active_at", func(t *testing.T) {
+		a := byID["agent-quiet"]
+		if a == nil {
+			t.Fatal("missing agent-quiet")
+		}
+		// runs_last_24h / fails_last_24h / total_runs default to 0
+		// (not null/missing) so the frontend can render without
+		// a null check.
+		for _, key := range []string{"runsLast24h", "failsLast24h", "totalRuns"} {
+			got, ok := a[key].(float64)
+			if !ok {
+				t.Errorf("quiet agent: %s missing or non-numeric: %v", key, a[key])
+				continue
+			}
+			if got != 0 {
+				t.Errorf("quiet agent: expected %s=0, got %v", key, got)
+			}
+		}
+		// last_heartbeat_at mirrors last_active_at so the frontend
+		// has a single field to render in the health badge.
+		if _, ok := a["lastHeartbeatAt"]; !ok {
+			t.Error("quiet agent: expected lastHeartbeatAt to be set from last_active_at")
+		}
+		if _, ok := a["lastActiveAt"]; !ok {
+			t.Error("quiet agent: expected lastActiveAt to be set")
+		}
+	})
+
+	t.Run("busy agent counts only last-24h runs and last-24h failures", func(t *testing.T) {
+		a := byID["agent-busy"]
+		if a == nil {
+			t.Fatal("missing agent-busy")
+		}
+		if got := a["runsLast24h"].(float64); got != 4 {
+			t.Errorf("runsLast24h: expected 4 (3 successful + 1 fail), got %v", got)
+		}
+		if got := a["failsLast24h"].(float64); got != 1 {
+			t.Errorf("failsLast24h: expected 1, got %v", got)
+		}
+		// total_runs counts every activity row regardless of age.
+		if got := a["totalRuns"].(float64); got != 6 {
+			t.Errorf("totalRuns: expected 6, got %v", got)
+		}
+	})
+
+	t.Run("noisy agent sees only its own activity even when sharing the users table", func(t *testing.T) {
+		a := byID["agent-noisy"]
+		if a == nil {
+			t.Fatal("missing agent-noisy")
+		}
+		if got := a["runsLast24h"].(float64); got != 2 {
+			t.Errorf("runsLast24h: expected 2, got %v", got)
+		}
+		if got := a["failsLast24h"].(float64); got != 1 {
+			t.Errorf("failsLast24h: expected 1, got %v", got)
+		}
+		if got := a["totalRuns"].(float64); got != 2 {
+			t.Errorf("totalRuns: expected 2, got %v", got)
+		}
+	})
+}
+
 func TestCreateAgentHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
@@ -1600,6 +1770,119 @@ func TestGetColumnPermissionsHandler(t *testing.T) {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("returns unified row shape with userType, userRole and audit fields", func(t *testing.T) {
+		// Seed an additional user with AGENT type so the userType
+		// projection is exercised against a non-HUMAN value. The
+		// grant row is attributed to admin1 (the seeded admin) so
+		// grantedByUserId / grantedByUsername / grantedByNickname
+		// all surface.
+		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, password, role, enabled, avatar, type) VALUES ('agent-x', 'agent-x', 'Agent X', '', 'ADMIN', 1, '', 'AGENT')`); err != nil {
+			t.Fatalf("seed agent user: %v", err)
+		}
+		if _, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access, granted_by_user_id) VALUES ('cp-unified', 'agent-x', 'col1', 'WRITE', 'admin1')`); err != nil {
+			t.Fatalf("seed column permission: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/columns/permissions?userId=agent-x", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp struct {
+			Permissions []struct {
+				ID                string  `json:"id"`
+				UserID            string  `json:"userId"`
+				Username          string  `json:"username"`
+				Nickname          string  `json:"nickname"`
+				UserType          string  `json:"userType"`
+				UserRole          string  `json:"userRole"`
+				ColumnID          string  `json:"columnId"`
+				ColumnName        string  `json:"columnName"`
+				Access            string  `json:"access"`
+				GrantedByUserID   *string `json:"grantedByUserId"`
+				GrantedByUsername *string `json:"grantedByUsername"`
+				GrantedByNickname *string `json:"grantedByNickname"`
+				GrantedAt         *string `json:"grantedAt"`
+				ExpiresAt         *string `json:"expiresAt"`
+				RevokedAt         *string `json:"revokedAt"`
+			} `json:"permissions"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(resp.Permissions) != 1 {
+			t.Fatalf("expected 1 permission, got %d", len(resp.Permissions))
+		}
+		p := resp.Permissions[0]
+		if p.UserID != "agent-x" || p.UserType != "AGENT" || p.UserRole != "ADMIN" {
+			t.Errorf("missing or wrong user fields: %+v", p)
+		}
+		if p.ColumnID != "col1" || p.ColumnName != "Test Column" || p.Access != "WRITE" {
+			t.Errorf("missing or wrong column fields: %+v", p)
+		}
+		if p.Username != "agent-x" || p.Nickname != "Agent X" {
+			t.Errorf("missing or wrong display fields: %+v", p)
+		}
+		if p.GrantedByUserID == nil || *p.GrantedByUserID != "admin1" {
+			t.Errorf("missing grantedByUserId: %+v", p)
+		}
+		if p.GrantedByUsername == nil || *p.GrantedByUsername != "admin" {
+			t.Errorf("missing grantedByUsername: %+v", p)
+		}
+		if p.GrantedByNickname == nil || *p.GrantedByNickname != "admin" {
+			t.Errorf("missing grantedByNickname: %+v", p)
+		}
+		if p.GrantedAt == nil || *p.GrantedAt == "" {
+			t.Errorf("missing grantedAt: %+v", p)
+		}
+		// expiresAt and revokedAt must always be present as keys
+		// even when their DB columns are NULL — the field-set
+		// identity contract requires this.
+		if p.ExpiresAt != nil {
+			t.Errorf("expiresAt should be null for an un-expiring grant: %+v", p)
+		}
+		if p.RevokedAt != nil {
+			t.Errorf("revokedAt should be null for an active grant: %+v", p)
+		}
+	})
+
+	t.Run("excludes revoked rows", func(t *testing.T) {
+		// Add a fresh row and immediately soft-delete it. The
+		// listing must not surface it, otherwise the management
+		// UI could re-revoke an already-revoked row and log a
+		// duplicate PERMISSION_REVOKE activity entry.
+		if _, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access, revoked_at, revoked_by_user_id) VALUES ('cp-revoked', 'member1', 'col1', 'READ', datetime('now'), 'admin1')`); err != nil {
+			t.Fatalf("seed revoked row: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/columns/permissions", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp struct {
+			Permissions []struct {
+				ID string `json:"id"`
+			} `json:"permissions"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		for _, p := range resp.Permissions {
+			if p.ID == "cp-revoked" {
+				t.Errorf("revoked row cp-revoked should be excluded, but was returned: %+v", resp.Permissions)
+			}
+		}
+	})
 }
 
 func TestSetColumnPermissionHandler(t *testing.T) {
@@ -1671,22 +1954,6 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		if _, err := db.Exec("DROP TABLE column_permissions"); err != nil {
 			t.Fatalf("failed to drop column_permissions for test setup: %v", err)
 		}
-		// Re-create the table before any subsequent subtests so the
-		// order of t.Run entries doesn't matter.
-		t.Cleanup(func() {
-			_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS column_permissions (
-				id TEXT PRIMARY KEY,
-				user_id TEXT NOT NULL,
-				column_id TEXT NOT NULL,
-				access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
-				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-				FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
-				UNIQUE(user_id, column_id)
-			)`)
-		})
-
 		body := map[string]interface{}{"columnId": "col1", "userId": "member1", "access": "WRITE"}
 		jsonBody, _ := json.Marshal(body)
 
@@ -1705,6 +1972,23 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		errMsg, _ := resp["error"].(string)
 		if errMsg == "" || errMsg == "Failed to set" {
 			t.Errorf("expected error message to include the driver error, got %q", errMsg)
+		}
+		if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS column_permissions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			column_id TEXT NOT NULL,
+			access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+			granted_by_user_id TEXT,
+			expires_at DATETIME,
+			revoked_at DATETIME,
+			revoked_by_user_id TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+			FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
+			UNIQUE(user_id, column_id)
+		)`); err != nil {
+			t.Fatalf("failed to restore column_permissions for test setup: %v", err)
 		}
 	})
 
@@ -1748,7 +2032,7 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		// calls the endpoint twice with the same (userId, columnId)
 		// pair and verifies the row is updated, not duplicated.
 		for _, access := range []string{"WRITE", "ADMIN", "READ"} {
-			body := map[string]interface{}{"columnId": "col-upsert", "userId": "member-upsert", "access": access}
+			body := map[string]interface{}{"columnId": "col1", "userId": "member-upsert", "access": access}
 			jsonBody, _ := json.Marshal(body)
 
 			req, _ := http.NewRequest("POST", "/api/columns/permissions", bytes.NewBuffer(jsonBody))
@@ -1768,7 +2052,7 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		var count int
 		if err := db.QueryRow(
 			"SELECT COUNT(*) FROM column_permissions WHERE user_id = ? AND column_id = ?",
-			"member-upsert", "col-upsert",
+			"member-upsert", "col1",
 		).Scan(&count); err != nil {
 			t.Fatalf("count query failed: %v", err)
 		}
@@ -1780,7 +2064,7 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 		var gotAccess string
 		if err := db.QueryRow(
 			"SELECT access FROM column_permissions WHERE user_id = ? AND column_id = ?",
-			"member-upsert", "col-upsert",
+			"member-upsert", "col1",
 		).Scan(&gotAccess); err != nil {
 			t.Fatalf("select failed: %v", err)
 		}

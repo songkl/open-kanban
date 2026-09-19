@@ -80,12 +80,12 @@ func DefaultConfig() []ConfigKey {
 			DefaultVal:  "kanban",
 			Description: "aud claim used in issued access tokens.",
 		},
-		{
-			Key:         "oauth_issuer_override",
-			DefaultVal:  "",
-			Description: "Optional fixed issuer URL (overrides Host-based detection).",
-		},
-	}
+{
+		Key:         "oauth_issuer_override",
+		DefaultVal:  "",
+		Description: "Optional fixed issuer URL (overrides Host-based detection).",
+	},
+}
 }
 
 // EnsureDefaults writes default values to app_config for keys that are not yet

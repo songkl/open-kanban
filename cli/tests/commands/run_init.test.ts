@@ -174,7 +174,9 @@ function mode1Answers(opts: {
   confirmOverwrite?: boolean;
   extraArgs?: string;
   extraEnv?: string;
-  promptMode?: "arg" | "stdin" | "file";
+  // s-1191: extended to include "argv" so the wizard script covers the
+  // new positional-arg mode without hand-built answer sequences.
+  promptMode?: "arg" | "stdin" | "file" | "argv";
 } = {}): Array<{ kind: string; value: unknown }> {
   const {
     bin = "opencode",
@@ -197,7 +199,12 @@ function mode1Answers(opts: {
     { kind: "input", value: bin },
     { kind: "confirm", value: false }, // wantBinPath?
     { kind: "select", value: promptMode },
-    { kind: "input", value: promptMode === "arg" ? "--prompt" : "" },
+    // promptArg is only collected for the `arg` mode (the others
+    // don't accept a flag prefix). s-1191: this matches the wizard's
+    // skip-promptArg-for-non-arg branch so the script stays aligned.
+    ...(promptMode === "arg"
+      ? [{ kind: "input", value: "--prompt" }]
+      : []),
     { kind: "input", value: "." }, // cwd
     { kind: "input", value: extraArgs },
     { kind: "input", value: extraEnv },
@@ -209,9 +216,12 @@ function mode1Answers(opts: {
           { kind: "number", value: heartbeatIntervalMs },
           { kind: "number", value: lockTimeoutMs },
           { kind: "number", value: 1 }, // maxConcurrent
-          { kind: "input", value: "" }, // runnerId
         ]
       : []),
+    // s-1236: runnerId is now asked on every invocation, regardless
+    // of whether the operator tunes the cadences. Tests that opt
+    // out of tuning still need to script the answer.
+    { kind: "input", value: "" }, // runnerId
     { kind: "select", value: scope },
     { kind: "input", value: "" }, // apiUrl
     { kind: "input", value: "" }, // profile
@@ -246,7 +256,8 @@ function noFetchAnswers(opts: {
     { kind: "input", value: "" },
     { kind: "input", value: "" },
     { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
-    { kind: "confirm", value: false },
+    { kind: "confirm", value: false }, // tune cadences?
+    { kind: "input", value: "" }, // runnerId (s-1236)
     { kind: "select", value: scope },
     { kind: "input", value: "" },
     { kind: "input", value: "" },
@@ -274,7 +285,8 @@ function mode1AnswersWithBinPath(): Array<{ kind: string; value: unknown }> {
     { kind: "input", value: "" },
     { kind: "input", value: "" },
     { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
-    { kind: "confirm", value: false },
+    { kind: "confirm", value: false }, // tune cadences?
+    { kind: "input", value: "" }, // runnerId (s-1236)
     { kind: "select", value: "project" },
     { kind: "input", value: "" },
     { kind: "input", value: "" },
@@ -343,6 +355,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false }, // tune
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "local" },
       { kind: "input", value: "" }, // apiUrl
       { kind: "input", value: "" }, // profile
@@ -379,6 +392,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false },
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       // The apiUrl / profile prompts are skipped because presets are
       // already supplied; no answers needed.
@@ -403,7 +417,7 @@ describe("runRunnerInitWizard", () => {
     // Presets skip two prompts; the overwrite confirm only fires when
     // the file already exists, so we just assert we consumed enough
     // scripted answers to reach the write step.
-    expect(prompter.calls.length).toBeGreaterThanOrEqual(12);
+    expect(prompter.calls.length).toBeGreaterThanOrEqual(13);
   });
 
   it("asks the user to confirm when the file already exists", async () => {
@@ -419,6 +433,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false },
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       { kind: "input", value: "" },
       { kind: "input", value: "" },
@@ -453,6 +468,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false }, // tune?
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       { kind: "input", value: "" },
       { kind: "input", value: "" },
@@ -487,6 +503,42 @@ describe("runRunnerInitWizard", () => {
         }
       )
     ).rejects.toBeInstanceOf(RunnerInitError);
+  });
+
+  // s-1191: the wizard surfaces `promptMode: argv` so an operator
+  // targeting opencode can pick the positional-arg mode without
+  // hand-editing the YAML. The agent block keeps the same shape as
+  // the existing `arg`/`stdin`/`file` paths; only the promptMode
+  // value differs.
+  it("writes a config that uses promptMode=argv for opencode", async () => {
+    const cwd = freshDir("run-init-argv-");
+    // We supply two boards so the wizard emits a board picker —
+    // with a single board, `promptBoard` short-circuits and the
+    // scripted board-select slot gets consumed by the next call
+    // (column-status picker), which would break the script.
+    const prompter = scriptedPrompter(mode1Answers({ promptMode: "argv" }));
+    const writes: Array<{ path: string; content: string }> = [];
+    const result = await runRunnerInitWizard(
+      { cwd },
+      {
+        prompter,
+        fetchBoards: async () => [
+          { id: "sys", name: "Sys board" },
+          { id: "dev", name: "Dev board" },
+        ],
+        fetchColumns: async () => [
+          { id: "todo-c", name: "Todo", status: "todo" },
+        ],
+        writeFile: (p, c) => writes.push({ path: p, content: c }),
+        pathExists: () => false,
+      }
+    );
+    expect(result.config.agent.promptMode).toBe("argv");
+    expect(result.config.agent.promptArg).toBeUndefined();
+    // The serialized YAML must round-trip — parseConfig must accept
+    // the new mode and not regress on the existing schema.
+    const parsed = roundTripRunnerConfig(writes[0].content);
+    expect(parsed.agent.promptMode).toBe("argv");
   });
 
   it("parses extra args + env vars from the wizard's comma-separated input", async () => {
@@ -547,6 +599,51 @@ describe("runRunnerInitWizard", () => {
     expect(result.config.runner.lockTimeoutMs).toBe(40000);
   });
 
+  // s-1236: pre-this-change, the runner id prompt lived inside the
+  // `tune` branch, so an operator who accepted every default never
+  // had a chance to pin a stable id across restarts. The wizard now
+  // asks for it on every invocation; supplying a non-empty string
+  // here proves the answer survives both the prompter skip and the
+  // YAML serializer so the saved config keeps the explicit id.
+  it("always asks for the runner id even when the user skips cadence tuning", async () => {
+    const cwd = freshDir("run-init-runnerid-");
+    // mode1Answers() with tune=false but a non-empty runnerId answer.
+    const prompter = scriptedPrompter(mode1Answers({
+      tune: false,
+    }).map((step, idx, all) => {
+      // The runnerId slot is at the index immediately after the
+      // cadence-tuning branch. Without a tune branch the slot is
+      // right after the "tune cadences?" confirm. We splice it in
+      // here so the assertion below can target the actual runnerId
+      // answer rather than the placeholder empty string in the
+      // default script.
+      if (step.kind === "input" && step.value === "" && all[idx - 1]?.kind === "confirm") {
+        return { kind: "input", value: "stable-runner-1" };
+      }
+      return step;
+    }));
+    const writes: Array<{ path: string; content: string }> = [];
+    const result = await runRunnerInitWizard(
+      { cwd },
+      {
+        prompter,
+        fetchBoards: async () => [
+          { id: "sys", name: "Sys board" },
+          { id: "dev", name: "Dev board" },
+        ],
+        fetchColumns: async () => [
+          { id: "todo-c", name: "Todo", status: "todo" },
+        ],
+        writeFile: (p, c) => writes.push({ path: p, content: c }),
+        pathExists: () => false,
+      }
+    );
+    expect(result.config.runner.runnerId).toBe("stable-runner-1");
+    // And it must round-trip through the YAML serializer so the
+    // value lands in the on-disk file the runner reads at startup.
+    expect(writes[0].content).toMatch(/runnerId:\s*stable-runner-1/);
+  });
+
   it("falls back to a raw board-id prompt when no HTTP client is supplied", async () => {
     const cwd = freshDir("run-init-nofetch-");
     const prompter = scriptedPrompter([
@@ -562,6 +659,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false },
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       { kind: "input", value: "" },
       { kind: "input", value: "" },

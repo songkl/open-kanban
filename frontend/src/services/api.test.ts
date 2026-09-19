@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ApiError, createApiRequest, setGlobalErrorHandler } from './api';
+import { ApiError, authApi, createApiRequest, setGlobalErrorHandler } from './api';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -415,5 +415,147 @@ describe('retry behavior', () => {
     const result = await request.promise;
     expect(result).toEqual(mockData);
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('authApi.bulkSetPermissions', () => {
+  const originalFetch = global.fetch;
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockFetch = vi.fn();
+    global.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  const mockOkResponse = (data: unknown) => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(data),
+    });
+  };
+
+  const mockErrorResponse = (status: number, body: unknown) => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status,
+      json: () => Promise.resolve(body),
+    });
+  };
+
+  it('POSTs to auth/permissions/bulk with { boardId, userIds, access } as JSON body', async () => {
+    mockOkResponse({
+      success: true,
+      boardId: 'board-1',
+      granted: [
+        { userId: 'user-1', access: 'READ' },
+        { userId: 'user-2', access: 'READ' },
+      ],
+      count: 2,
+    });
+
+    await authApi.bulkSetPermissions('board-1', ['user-1', 'user-2'], 'READ');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain('auth/permissions/bulk');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    expect(JSON.parse(init.body)).toEqual({
+      boardId: 'board-1',
+      userIds: ['user-1', 'user-2'],
+      access: 'READ',
+    });
+    expect(init.headers['Content-Type']).toBe('application/json');
+  });
+
+  it('returns the parsed BoardBulkGrantResult on success', async () => {
+    const payload = {
+      success: true,
+      boardId: 'board-7',
+      granted: [
+        { userId: 'u-1', access: 'WRITE' },
+        { userId: 'u-2', access: 'WRITE' },
+        { userId: 'u-3', access: 'WRITE' },
+      ],
+      count: 3,
+    };
+    mockOkResponse(payload);
+
+    const result = await authApi.bulkSetPermissions('board-7', ['u-1', 'u-2', 'u-3'], 'WRITE');
+
+    expect(result).toEqual(payload);
+    expect(result.success).toBe(true);
+    expect(result.boardId).toBe('board-7');
+    expect(result.count).toBe(3);
+    expect(Array.isArray(result.granted)).toBe(true);
+    expect(result.granted).toHaveLength(3);
+    result.granted.forEach((entry) => {
+      expect(entry).toHaveProperty('userId');
+      expect(entry).toHaveProperty('access');
+    });
+  });
+
+  it('preserves userIds order in the request body', async () => {
+    mockOkResponse({
+      success: true,
+      boardId: 'board-1',
+      granted: [],
+      count: 0,
+    });
+
+    const ids = ['user-z', 'user-a', 'user-m'];
+    await authApi.bulkSetPermissions('board-1', ids, 'ADMIN');
+
+    const [, init] = mockFetch.mock.calls[0];
+    expect(JSON.parse(init.body).userIds).toEqual(ids);
+  });
+
+  const failureCases = [
+    {
+      name: '400 unknown user ids → ApiError preserves status and parses message',
+      status: 400,
+      body: {
+        error: 'Unknown user ids',
+        unknownUserIds: ['user-99'],
+      },
+      access: 'READ' as const,
+    },
+    {
+      name: '400 too many users → ApiError preserves status',
+      status: 400,
+      body: { error: 'Too many users in one request' },
+      access: 'READ' as const,
+    },
+    {
+      name: '403 owner forbidden → ApiError preserves status',
+      status: 403,
+      body: { error: "Cannot bulk-modify owner's permission row" },
+      access: 'WRITE' as const,
+    },
+    {
+      name: '404 board not found → ApiError preserves status',
+      status: 404,
+      body: { error: 'Board not found' },
+      access: 'READ' as const,
+    },
+  ];
+
+  failureCases.forEach((tc) => {
+    it(tc.name, async () => {
+      mockErrorResponse(tc.status, tc.body);
+
+      await expect(
+        authApi.bulkSetPermissions('board-1', ['user-1'], tc.access)
+      ).rejects.toMatchObject({
+        status: tc.status,
+        message: tc.body.error,
+      });
+    });
   });
 });

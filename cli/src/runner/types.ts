@@ -18,7 +18,41 @@ export type RunnerTopMode = "mine";
 
 export type RunnerClaimMode = "claim" | "move";
 
-export type AgentPromptMode = "arg" | "stdin" | "file";
+/**
+ * How the runner delivers the rendered prompt to the agent binary.
+ *
+ *   * `"arg"`    — write the prompt to a temp file and append
+ *                 `<promptArg> <path>` to the agent's argv. Default.
+ *                 Works for agents that take a `--prompt <file>` style
+ *                 flag (e.g. `claude`, `gemini`).
+ *   * `"stdin"`  — pipe the prompt to the agent's stdin and close it
+ *                 after writing. Use this for agents that read
+ *                 commands / messages from stdin (`opencode run`,
+ *                 `codex`, etc.).
+ *   * `"file"`   — write the prompt to `<cwd>/.kanban-runner-<taskId>.md`
+ *                 and append `<promptArg>-file <path>`. Useful when the
+ *                 agent expects a project-local file that survives the
+ *                 run (e.g. for debugging or re-running locally).
+ *   * `"argv"`   — append the prompt **content** as a single positional
+ *                 argv entry. No flag, no temp file. Works for agents
+ *                 that take the message as a positional argument
+ *                 (e.g. `opencode run [message..]`). Subject to the
+ *                 operating system's argv size limit (32 KiB on
+ *                 Windows, effectively unlimited on macOS / Linux).
+ *   * `"acp"`    — talk to the agent over the [Agent Client Protocol]
+ *                 (s-1235). The runner spawns the agent with an
+ *                 ACP-enabling flag (defaults to `--acp`, configurable
+ *                 via `agent.acpFlag`), then drives a JSON-RPC session
+ *                 over the child's stdio: `initialize` → `newSession`
+ *                 → `prompt`, collecting `session/update` chunks into
+ *                 the final reply. The prompt content is **not** written
+ *                 to disk and never appears in the child's argv — the
+ *                 full payload travels over the JSON-RPC `prompt`
+ *                 request, so the OS argv cap is irrelevant.
+ *
+ * [Agent Client Protocol]: https://agentclientprotocol.com/
+ */
+export type AgentPromptMode = "arg" | "stdin" | "file" | "argv" | "acp";
 
 /**
  * Where the `--prompt <path>` (or `--prompt-file <path>`) pair is
@@ -103,14 +137,29 @@ export interface AgentConfig {
   binPath?: string;
   /** How the agent receives the rendered prompt. */
   promptMode?: AgentPromptMode;
-  /** Flag passed alongside the prompt when `promptMode === "arg"`. */
+  /**
+   * Flag passed alongside the prompt when `promptMode === "arg"` (or
+   * `"file"` — the suffix `-file` is appended automatically).
+   * Ignored for `promptMode: "stdin"` and `promptMode: "argv"`.
+   */
   promptArg?: string;
   /**
    * Where the prompt is spliced into argv. Defaults to `"append"`.
    * See `AgentPromptPosition` for the three supported modes.
    */
   promptPosition?: AgentPromptPosition;
-  /** Working directory when spawning the agent. */
+  /**
+   * When `promptMode === "acp"`, this flag (default `"--acp"`) is
+   * appended to `agent.args` so the child binary knows to speak the
+   * Agent Client Protocol instead of its default non-interactive
+   * mode. Different agents expose different opt-ins (`--acp`,
+   * `--agent-client-protocol`, a positional subcommand, …) so the
+   * string is configurable.
+   */
+  acpFlag?: string;
+  /**
+   * Working directory when spawning the agent.
+   */
   cwd?: string;
   /** Extra arguments appended after the prompt. Replaced wholesale on merge. */
   args?: string[];
@@ -166,6 +215,7 @@ export const RUNNER_DEFAULTS = Object.freeze({
     promptMode: "arg" as AgentPromptMode,
     promptArg: "--prompt",
     promptPosition: "append" as AgentPromptPosition,
+    acpFlag: "--acp",
     cwd: ".",
     args: [] as string[],
     env: {} as Record<string, string>,

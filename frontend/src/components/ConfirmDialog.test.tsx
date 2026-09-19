@@ -79,11 +79,11 @@ describe('ConfirmDialog', () => {
     expect(defaultProps.onCancel).not.toHaveBeenCalled();
   });
 
-  it('renders danger variant with warning icon', () => {
-    render(<ConfirmDialog {...defaultProps} variant="danger" />);
-    const svgElement = document.querySelector('svg');
-    expect(svgElement).toBeInTheDocument();
-  });
+    it('renders danger variant with warning icon', () => {
+      render(<ConfirmDialog {...defaultProps} variant="danger" />);
+      const svgElement = document.querySelector('svg');
+      expect(svgElement).toBeInTheDocument();
+    });
 
   it('renders with different variants', () => {
     const { rerender } = render(<ConfirmDialog {...defaultProps} variant="default" />);
@@ -94,5 +94,41 @@ describe('ConfirmDialog', () => {
 
     rerender(<ConfirmDialog {...defaultProps} variant="danger" />);
     expect(screen.getByRole('button', { name: /task.confirm/i })).toBeInTheDocument();
+  });
+
+  describe('a11y attributes (s-1199)', () => {
+    it('exposes alertdialog role with aria-modal and labelledby/describedby', () => {
+      render(<ConfirmDialog {...defaultProps} />);
+      const dialog = screen.getByRole('alertdialog');
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+      const titleId = dialog.getAttribute('aria-labelledby');
+      const descId = dialog.getAttribute('aria-describedby');
+      expect(titleId).toBeTruthy();
+      expect(descId).toBeTruthy();
+      expect(document.getElementById(titleId as string)).toHaveTextContent('Confirm Delete');
+      expect(document.getElementById(descId as string)).toHaveTextContent('Are you sure you want to delete this item?');
+    });
+
+    it('hides the icon container from screen readers', () => {
+      render(<ConfirmDialog {...defaultProps} />);
+      const dialog = screen.getByRole('alertdialog');
+      const icon = dialog.querySelector('[aria-hidden="true"]');
+      expect(icon).toBeInTheDocument();
+    });
+
+    it('focuses the first focusable element (cancel button) when opened', () => {
+      render(<ConfirmDialog {...defaultProps} />);
+      const cancel = screen.getByRole('button', { name: /task.cancel/i });
+      expect(document.activeElement).toBe(cancel);
+    });
+
+    it('cycles focus forward inside the dialog', () => {
+      render(<ConfirmDialog {...defaultProps} />);
+      const confirm = screen.getByRole('button', { name: /task.confirm/i });
+      confirm.focus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      const cancel = screen.getByRole('button', { name: /task.cancel/i });
+      expect(document.activeElement).toBe(cancel);
+    });
   });
 });

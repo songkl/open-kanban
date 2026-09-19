@@ -33,6 +33,7 @@ import type { HeartbeatScheduler } from "./heartbeat.js";
 import {
   type AgentProcess,
   type AgentResult,
+  type PreparedSpawn,
   type ProcessSpawner,
   AgentSpawner,
   ChildProcessSpawner,
@@ -393,13 +394,25 @@ export class RunLoop {
         mode: this.config.mode === "mine" ? "mine" : "board",
       });
     } catch (err) {
-      const retryable = (err as RunnerHttpError).retryable;
+      const runnerErr = err as RunnerHttpError;
+      const retryable = runnerErr.retryable;
+      const status = runnerErr.status;
       this.logger.error(
         `claim failed: ${(err as Error).message} (retryable=${retryable})`
       );
       this.logger.debug(
         `claim error stack: ${(err as Error).stack ?? "(no stack)"}`
       );
+      if (status === 401) {
+        // The RunClaimClient already attempted an OAuth refresh on a
+        // 401; reaching this branch means the refresh failed (no
+        // refresh token, or the server rejected the refresh). Surface
+        // a human-friendly hint so the operator knows to re-auth,
+        // rather than just an opaque "API error 401 on /runs/claim".
+        this.logger.error(
+          `runner session expired; run \`kanban auth login\` to refresh credentials and restart the runner`
+        );
+      }
       if (!retryable) {
         this.requestShutdown();
         return;
@@ -450,12 +463,23 @@ export class RunLoop {
     this.logger.debug(
       `spawning agent for task ${task.id}: bin=${this.config.agent.bin} timeoutMs=${this.config.agent.timeoutMs ?? 1_800_000} promptBytes=${prompt.length}`
     );
-    const { process: child, cleanup } = this.agentSpawner.spawn({
+    // s-1236: surface the full argv + cwd + env the spawn layer is
+    // about to hand to the OS. The pre-spawn debug line above only
+    // named the binary, so an operator tailing `--debug` could see
+    // "agent spawned" without any hint of which flags / positional
+    // args were passed — making a typo'd `agent.args`, a wrong
+    // `promptArg`, or a stale `cwd` invisible until the agent
+    // misbehaved. We log the resolved values straight from
+    // `AgentSpawner.spawn` so the loop never has to re-derive them.
+    const { process: child, cleanup, prepared } = this.agentSpawner.spawn({
       cfg: this.config.agent,
       prompt,
       taskId: task.id,
       variables: buildArgVariables(ctx),
     });
+    this.logger.debug(
+      `agent command for task ${task.id}: cmd=${formatCmd(prepared)} cwd=${prepared.cwd}`
+    );
     this.logger.debug(`agent spawned for task ${task.id} pid=${child.pid ?? "(unknown)"}`);
     this.inFlight = {
       taskId: task.id,
@@ -551,6 +575,16 @@ export class RunLoop {
     if (finish.kind !== "ok") {
       this.logger.warn(
         `task ${task.id} finish(failed) returned 409; comment was already posted`
+      );
+    } else {
+      // s-1240: the server now restores the task to the column
+      // it was claimed from when the run reports `failed`, so
+      // a dead agent no longer strands the task in the
+      // in-progress column. Mirror that on the operator-facing
+      // log so tailing --debug matches the task detail page
+      // without them having to cross-reference HTTP traces.
+      this.logger.info(
+        `task ${task.id} failed; server restored column from snapshot`
       );
     }
   }
@@ -690,6 +724,33 @@ function buildArgVariables(ctx: PromptContext): Partial<ArgVariableValues> {
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Render the prepared agent invocation as a single shell-shaped
+ * string for the `--debug` log. Used by `loop.startSpawn` (s-1236)
+ * so an operator can copy/paste the line and replay the agent
+ * manually when investigating a misbehaving config.
+ *
+ * Each argv entry is shell-quoted with single quotes; entries that
+ * already contain a single quote get the standard `'foo'\''bar'`
+ * escape so the resulting line is safe to paste into bash / zsh.
+ * The bin path is prefixed unchanged (it's resolved to an absolute
+ * path by `prepareSpawn`) so the printed line still tells the
+ * operator exactly which file was exec'd.
+ */
+function formatCmd(prepared: PreparedSpawn): string {
+  const parts: string[] = [shellQuote(prepared.bin)];
+  for (const arg of prepared.args) {
+    parts.push(shellQuote(arg));
+  }
+  return parts.join(" ");
+}
+
+function shellQuote(value: string): string {
+  if (value.length === 0) return "''";
+  if (/^[A-Za-z0-9_./:=@%+-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 /**

@@ -194,7 +194,8 @@ func runSQLiteMigrations(db *sql.DB) error {
 	// (for example, the migration 008 that adds users.created_by for
 	// s-1131). Running every embedded migration file on a dev build keeps
 	// the schema aligned with the application code under test.
-	if isDevGitBuild() {
+	devBuild := isDevGitBuild()
+	if devBuild {
 		log.Printf("[SQLite] Dev build detected (%s > %s), running all embedded migrations",
 			version.GetFullGitVersion(), version.GetGitVersion())
 		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
@@ -206,6 +207,75 @@ func runSQLiteMigrations(db *sql.DB) error {
 				return fmt.Errorf("failed to run SQLite migrations: %w", err)
 			}
 		}
+		// Fall through to drift detection below — if a previous
+		// dev-build run left the schema out of sync with the recorded
+		// version (the s-1217 production incident), the post-Up()
+		// check still needs to fire so the missing canary columns /
+		// tables get restored on the next restart.
+	}
+
+	// Schema drift detection (s-1217). golang-migrate records every
+	// applied migration in `schema_migrations.version` and
+	// `m.Up()` short-circuits to ErrNoChange when the recorded
+	// version is already at-or-above the latest embedded migration.
+	// That is the right behaviour for a healthy DB, but it hides a
+	// corrupt state where someone (or an earlier partial run) set
+	// `schema_migrations.version` to a high number without actually
+	// applying the schema changes — the recorded version is
+	// untrustworthy and the embedded migrations never re-run on
+	// their own.
+	//
+	// Recovery: compute the *effective* version by inspecting the
+	// actual schema (canary tables / columns introduced by each
+	// migration), then force the recorded version down to that
+	// effective value so the subsequent m.Up() only replays the
+	// missing migrations. Migrations that use ALTER TABLE ADD
+	// COLUMN (004 / 014) are not naturally idempotent, so a blanket
+	// force-NilVersion would re-run them and fail with "duplicate
+	// column name"; aligning the recorded version with the effective
+	// one skips those re-runs cleanly.
+	//
+	// When the effective version is 0 (every canary is missing) we
+	// force NilVersion (-1) instead of 0 — golang-migrate has no
+	// migration for version 0 and `m.Up()` would otherwise hit
+	// `versionExists(0)` and bail with "no migration found".
+	// NilVersion puts the driver back into the "fresh DB" state
+	// where m.Up() starts from the first embedded migration.
+	//
+	// On a dev build, the dev branch above already applied every
+	// embedded migration; if m.Up() returned ErrNoChange (everything
+	// is at v28 already) and the canary check still fires, force
+	// back and let the second m.Up() below replay the missing ALTER
+	// TABLE ADD COLUMN migrations — they were never re-run by the
+	// first pass because they weren't missing then.
+	if drift, err := sqliteSchemaDrift(db); err != nil {
+		return fmt.Errorf("failed to check for schema drift: %w", err)
+	} else if drift {
+		effective, err := sqliteEffectiveMigrationVersion(db)
+		if err != nil {
+			return fmt.Errorf("failed to compute effective migration version for drift repair: %w", err)
+		}
+		forceTarget := effective
+		if forceTarget <= 0 {
+			forceTarget = -1
+		}
+		log.Printf("[SQLite] schema drift detected (recorded version >= 16 but at least one post-016 canary is missing); rewinding recorded version to %d so m.Up() replays only the missing migrations", forceTarget)
+		if err := m.Force(forceTarget); err != nil {
+			return fmt.Errorf("failed to force migration state after drift detection: %w", err)
+		}
+		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+			return fmt.Errorf("failed to run SQLite migrations after drift repair: %w", err)
+		}
+		if devBuild {
+			return nil
+		}
+	} else if devBuild {
+		// Healthy DB on a dev build: dev branch above already
+		// applied every embedded migration and there is no drift to
+		// repair. Skip the version-map / final-m.Up() branches
+		// below so we don't try to migrate to a stale `toMig` from
+		// VersionMigrationMap (which would rewind the recorded
+		// version) or apply already-applied migrations twice.
 		return nil
 	}
 
@@ -234,17 +304,43 @@ func runSQLiteMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Always apply every pending migration. The migration files are
+	// embedded in the binary, so the runner can only see migrations
+	// the binary ships with; capping the run at the version map's
+	// `toMig` (e.g. "0.2.0" → 2) would strand a fresh install on a
+	// stale git tag and leave the schema out of sync with the code
+	// that needs migration 4+ (boards.is_public, audit columns, ...).
+	// m.Migrate(toMig) is also dangerous when the DB is already past
+	// toMig: golang-migrate would try to migrate DOWN, dropping
+	// tables and data. m.Up() only ever moves forward.
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
-			// With the consolidated schema there is only one migration
-			// (version 1). Forcing the dirty flag back to "no migrations
-			// applied" lets the next startup re-run it from scratch
-			// rather than getting stuck in a half-applied state.
-			if forceErr := m.Force(0); forceErr != nil {
+			// Forcing the dirty flag back to NilVersion lets
+			// m.Up() re-run the full set from scratch rather
+			// than getting stuck in a half-applied state. The
+			// migration files are written to be idempotent
+			// (CREATE TABLE IF NOT EXISTS, etc.) so re-running
+			// them is safe.
+			if forceErr := m.Force(-1); forceErr != nil {
 				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
 			}
 		} else {
 			return fmt.Errorf("failed to run SQLite migrations: %w", err)
+		}
+	}
+
+	// Record the binary's git version for observability / upgrade
+	// tracking, but only when it's a known release. An unknown
+	// version (e.g. "0.2.0-81-gff98edc" from a development
+	// checkout) would write a misleading row, so we leave the
+	// existing schema_version alone in that case.
+	if gitVersion := version.GetGitVersion(); gitVersion != "" {
+		if _, _, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			if err := storeSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[SQLite] Warning: failed to store schema version: %v", err)
+			}
+		} else {
+			log.Printf("[SQLite] Skipping schema_version write for unknown git version %q", gitVersion)
 		}
 	}
 
@@ -333,13 +429,24 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 		}
 	}
 
+
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
-			if forceErr := m.Force(7); forceErr != nil {
+			if forceErr := m.Force(0); forceErr != nil {
 				return fmt.Errorf("failed to force clean migration state: %w", forceErr)
 			}
 		} else {
 			return fmt.Errorf("failed to run MySQL migrations: %w", err)
+		}
+	}
+
+	if gitVersion := version.GetGitVersion(); gitVersion != "" {
+		if _, _, found := migrations.GetMigrationRangeForVersion(gitVersion); found {
+			if err := storeMySQLSchemaVersion(db, gitVersion); err != nil {
+				log.Printf("[MySQL] Warning: failed to store schema version: %v", err)
+			}
+		} else {
+			log.Printf("[MySQL] Skipping schema_version write for unknown git version %q", gitVersion)
 		}
 	}
 

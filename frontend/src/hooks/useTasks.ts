@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { tasksApi, commentsApi } from '../services/api';
+import { tasksApi, commentsApi, ApiError } from '../services/api';
 import { showErrorToast } from '../components/ErrorToast';
 import type { Task, Column as ColumnType, Board } from '../types/kanban';
 
@@ -162,7 +162,15 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     setSelectedTask(null);
   }, [onColumnsChange, notifyLastLocalUpdate]);
 
-  const addTask = useCallback(async (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => {
+  const addTask = useCallback(async (
+    columnId?: string,
+    title?: string,
+    description?: string,
+    published?: boolean,
+    boardId?: string,
+    priority?: string,
+    extra?: { dueAt?: string | null; assignee?: string | null; attachmentIds?: string[] },
+  ) => {
     if (!columnId) {
       console.error('addTask called without columnId');
       return;
@@ -183,6 +191,9 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
         position: 9999,
         published: published ?? true,
         priority: priority || 'medium',
+        dueAt: extra?.dueAt ?? null,
+        assignee: extra?.assignee ?? null,
+        attachmentIds: extra?.attachmentIds ?? [],
       });
 
       if (isSameBoard) {
@@ -200,15 +211,20 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
       }
     } catch (error) {
       console.error('Failed to create task:', error);
-      saveFailedTaskToLocalStorage({
-        title: taskTitle.trim(),
-        description: description || '',
-        columnId: targetColumnId,
-        position: 9999,
-        priority: priority || 'medium',
-        published: published ?? true,
-        createdAt: new Date().toISOString(),
-      });
+      if (error instanceof ApiError && error.status === 403) {
+        showErrorToast(t('toast.createFailedNoPermission'), 'error');
+      } else {
+        showErrorToast(t('toast.createFailed'), 'error');
+        saveFailedTaskToLocalStorage({
+          title: taskTitle.trim(),
+          description: description || '',
+          columnId: targetColumnId,
+          position: 9999,
+          priority: priority || 'medium',
+          published: published ?? true,
+          createdAt: new Date().toISOString(),
+        });
+      }
     }
   }, [currentBoard?.id, t, onColumnsChange, notifyLastLocalUpdate]);
 

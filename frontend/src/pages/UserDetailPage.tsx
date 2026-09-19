@@ -4,24 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { authApi, activitiesApi } from '../services/api';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { UserAvatar } from '../components/UserAvatar';
-import type { User } from '../types/kanban';
+import type { User, BoardPermission, ColumnPermission } from '../types/kanban';
 import { useSetupGuard } from '../hooks/useSetupGuard';
 
 type Tab = 'profile' | 'activities' | 'permissions' | 'boards';
-
-interface BoardPermission {
-  id: string;
-  boardId: string;
-  boardName: string;
-  access: string;
-}
-
-interface ColumnPermission {
-  id: string;
-  columnId: string;
-  columnName: string;
-  access: string;
-}
 
 interface Activity {
   id: string;
@@ -68,7 +54,9 @@ export function UserDetailPage() {
         authApi.getUsers(),
       ]);
       setCurrentUser(meData.user);
-      const foundUser = usersData.find((u: User) => u.id === userId);
+      const byId = usersData.find((u: User) => u.id === userId);
+      const byNickname = usersData.find((u: User) => u.nickname === userId);
+      const foundUser = byId ?? byNickname ?? null;
       if (!foundUser) {
         navigate('/settings?tab=users');
         return;

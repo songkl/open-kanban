@@ -56,7 +56,7 @@ const ALLOWED_STATUSES: readonly RunnerStatus[] = [
   "done",
 ];
 
-const ALLOWED_PROMPT_MODES: readonly AgentPromptMode[] = ["arg", "stdin", "file"];
+const ALLOWED_PROMPT_MODES: readonly AgentPromptMode[] = ["arg", "stdin", "file", "argv", "acp"];
 const ALLOWED_PROMPT_POSITIONS: readonly AgentPromptPosition[] = [
   "append",
   "prepend",
@@ -115,6 +115,7 @@ interface RawAgent {
   promptMode?: unknown;
   promptArg?: unknown;
   promptPosition?: unknown;
+  acpFlag?: unknown;
   cwd?: unknown;
   args?: unknown;
   env?: unknown;
@@ -340,6 +341,14 @@ function normaliseConfig(raw: RawConfig, path: string): RunnerConfig {
         ALLOWED_PROMPT_POSITIONS,
         path
       ) ?? RUNNER_DEFAULTS.agent.promptPosition,
+    // s-1235: ACP mode appends `acpFlag` to argv so the child
+    // binary speaks the Agent Client Protocol. Defaults to "--acp"
+    // (the convention every mainstream ACP-compatible agent uses);
+    // operators whose binary uses a different opt-in can override
+    // it via the YAML.
+    acpFlag:
+      optionalString(agentRaw.acpFlag, "agent.acpFlag", path) ??
+      RUNNER_DEFAULTS.agent.acpFlag,
     cwd:
       optionalString(agentRaw.cwd, "agent.cwd", path) ??
       RUNNER_DEFAULTS.agent.cwd,
@@ -598,6 +607,19 @@ export function validate(cfg: RunnerConfig, opts: ValidateOptions = {}): RunnerC
         "agent.promptPosition"
       );
     }
+  }
+  // Defensive enum check on promptMode. `normaliseConfig` already
+  // enforces this for on-disk configs, but `validate()` is sometimes
+  // called directly on a hand-built object (tests, programmatic
+  // builders) — failing here gives the same error surface so the
+  // operator never sees a confused "all checks passed" state before
+  // the spawn layer blows up at runtime (s-1191).
+  const promptMode = cfg.agent.promptMode ?? RUNNER_DEFAULTS.agent.promptMode;
+  if (!(ALLOWED_PROMPT_MODES as readonly string[]).includes(promptMode)) {
+    throw new RunnerConfigError(
+      `agent.promptMode must be one of ${ALLOWED_PROMPT_MODES.join(", ")}, got '${promptMode}'`,
+      "agent.promptMode"
+    );
   }
   validateArgVariables(cfg);
   return cfg;

@@ -35,7 +35,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 		if len(columnIDs) > 0 {
 			// Use IN clause
 			query := `
-				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_at, updated_at
+				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, due_at, created_at, updated_at
 				FROM tasks
 				WHERE archived = true AND column_id IN (?
 			`
@@ -51,7 +51,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 			rows, err = db.Query(query, placeholders...)
 		} else {
 			rows, err = db.Query(`
-				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_at, updated_at
+				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, due_at, created_at, updated_at
 				FROM tasks
 				WHERE archived = true
 				ORDER BY archived_at DESC
@@ -67,8 +67,8 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 		for rows.Next() {
 			var task models.Task
 			var desc, assignee, meta sql.NullString
-			var archivedAt sql.NullTime
-			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &task.CreatedAt, &task.UpdatedAt); err == nil {
+			var archivedAt, dueAt sql.NullTime
+			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &dueAt, &task.CreatedAt, &task.UpdatedAt); err == nil {
 				if desc.Valid {
 					task.Description = &desc.String
 				}
@@ -80,6 +80,9 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 				}
 				if archivedAt.Valid {
 					task.ArchivedAt = &archivedAt.Time
+				}
+				if dueAt.Valid {
+					task.DueAt = &dueAt.Time
 				}
 
 				// Get comments
@@ -99,6 +102,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 					"published":   task.Published,
 					"archived":    task.Archived,
 					"archivedAt":  task.ArchivedAt,
+					"dueAt":       task.DueAt,
 					"createdAt":   task.CreatedAt,
 					"updatedAt":   task.UpdatedAt,
 					"comments":    comments,
@@ -134,31 +138,31 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 		// Build query
 		var rows *sql.Rows
 		var err error
-		if len(columnIDs) > 0 {
-			// Use IN clause
-			query := `
-				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_at, updated_at
-				FROM tasks
-				WHERE published = false AND archived = false AND column_id IN (?
-			`
-			// Build placeholders
-			placeholders := make([]interface{}, len(columnIDs))
-			for i, id := range columnIDs {
-				placeholders[i] = id
-				if i > 0 {
-					query += ",?"
-				}
+if len(columnIDs) > 0 {
+		// Use IN clause
+		query := `
+			SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, due_at, created_at, updated_at
+			FROM tasks
+			WHERE published = false AND archived = false AND column_id IN (?
+		`
+		// Build placeholders
+		placeholders := make([]interface{}, len(columnIDs))
+		for i, id := range columnIDs {
+			placeholders[i] = id
+			if i > 0 {
+				query += ",?"
 			}
-			query += `) ORDER BY created_at DESC`
-			rows, err = db.Query(query, placeholders...)
-		} else {
-			rows, err = db.Query(`
-				SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, created_at, updated_at
-				FROM tasks
-				WHERE published = false AND archived = false
-				ORDER BY created_at DESC
-			`)
 		}
+		query += `) ORDER BY created_at DESC`
+		rows, err = db.Query(query, placeholders...)
+	} else {
+		rows, err = db.Query(`
+			SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, due_at, created_at, updated_at
+			FROM tasks
+			WHERE published = false AND archived = false
+			ORDER BY created_at DESC
+		`)
+	}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get drafts"})
 			return
@@ -169,8 +173,8 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 		for rows.Next() {
 			var task models.Task
 			var desc, assignee, meta sql.NullString
-			var archivedAt sql.NullTime
-			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &task.CreatedAt, &task.UpdatedAt); err == nil {
+			var archivedAt, dueAt sql.NullTime
+			if err := rows.Scan(&task.ID, &task.Title, &desc, &task.Priority, &assignee, &meta, &task.ColumnID, &task.Position, &task.Published, &task.Archived, &archivedAt, &dueAt, &task.CreatedAt, &task.UpdatedAt); err == nil {
 				if desc.Valid {
 					task.Description = &desc.String
 				}
@@ -182,6 +186,9 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 				}
 				if archivedAt.Valid {
 					task.ArchivedAt = &archivedAt.Time
+				}
+				if dueAt.Valid {
+					task.DueAt = &dueAt.Time
 				}
 
 				// Get comments
@@ -201,6 +208,7 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 					"published":   task.Published,
 					"archived":    task.Archived,
 					"archivedAt":  task.ArchivedAt,
+					"dueAt":       task.DueAt,
 					"createdAt":   task.CreatedAt,
 					"updatedAt":   task.UpdatedAt,
 					"comments":    comments,
@@ -226,8 +234,7 @@ func BatchDeleteDrafts(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot delete drafts"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -269,8 +276,7 @@ func BatchPublishDrafts(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot publish drafts"})
+		if requireNonViewer(c, user) {
 			return
 		}
 
@@ -317,8 +323,7 @@ func BatchArchiveDrafts(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if user.Role == "VIEWER" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot archive drafts"})
+		if requireNonViewer(c, user) {
 			return
 		}
 

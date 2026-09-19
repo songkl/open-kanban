@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Agent } from '@/types/kanban';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface AddColumnModalProps {
   isOpen: boolean;
@@ -36,6 +37,13 @@ export function AddColumnModal({
 }: AddColumnModalProps) {
   const { t } = useTranslation();
 
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    enabled: isOpen,
+    initialFocus: 'first',
+    onEscape: onClose,
+    restoreFocus: true,
+  });
+
   if (!isOpen) return null;
 
   return (
@@ -44,30 +52,35 @@ export function AddColumnModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-column-modal-title"
+        className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 outline-none p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+          <div aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 5v14M5 12h14"/>
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{t('modal.addColumn')}</h2>
+          <h2 id="add-column-modal-title" className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{t('modal.addColumn')}</h2>
         </div>
 
         <div className="space-y-5">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
+            <label htmlFor="add-column-name" className="mb-2 block text-sm font-semibold text-zinc-700 dark:text-zinc-400">
               {t('column.columnName')}
             </label>
             <input
+              id="add-column-name"
               type="text"
               value={newColumnName}
               onChange={(e) => onNameChange(e.target.value)}
               placeholder={t('column.namePlaceholder')}
+              aria-required="true"
               className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-700 px-4 py-3 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 transition-all focus:border-blue-500 focus:bg-white dark:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              autoFocus
             />
           </div>
 

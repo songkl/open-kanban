@@ -36,6 +36,15 @@ func IsOriginAllowedForTest(origin string) bool {
 	return isOriginAllowed(origin)
 }
 
+// InitBroadcastWorkerForTest kicks off the async worker that
+// drains broadcastQueue when the rest of the boot path (HTTP
+// listener, setup wizard) is bypassed in tests. Production code
+// triggers the same init via WebSocketHandler / initBroadcastWorker
+// once the listener is up.
+func InitBroadcastWorkerForTest() {
+	initBroadcastWorker()
+}
+
 func AddClientForTest(conn *websocket.Conn) {
 	clientsMux.Lock()
 	clients[conn] = &sync.Mutex{}
@@ -78,9 +87,8 @@ func BroadcastTaskNotificationForTest(boardID, taskID, action string) {
 // that exercise the broadcast path without going through a
 // real WS upgrade need to start the worker explicitly so the
 // fan-out goroutine is running when the handler enqueues.
-func InitBroadcastWorkerForTest() {
-	initBroadcastWorker()
-}
+// (duplicate removed during workthree merge; only the version
+// above remains)
 
 var (
 	upgrader = websocket.Upgrader{

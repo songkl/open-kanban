@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { authApi, attachmentsApi } from '../../services/api';
+import { authApi, attachmentsApi, boardsApi } from '../../services/api';
 import { showErrorToast } from '../ErrorToast';
 import { UserAvatar } from '../UserAvatar';
 import { ConfirmDialog } from '../ConfirmDialog';
-import type { Agent } from '../../types/kanban';
+import type { Agent, Board, PermissionAccess } from '../../types/kanban';
 
 interface ConfirmDialogState {
   isOpen: boolean;
@@ -13,6 +13,8 @@ interface ConfirmDialogState {
   onConfirm: () => void;
   variant?: 'danger' | 'warning' | 'default';
 }
+
+type BoardAccessMap = Record<string, PermissionAccess>;
 
 export function AgentsSettings() {
   const { t } = useTranslation();
@@ -29,9 +31,16 @@ export function AgentsSettings() {
   const [editingAgentSaving, setEditingAgentSaving] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [loading, setLoading] = useState(false);
+  // s-1253: per-board access picker for the new-agent form. The
+  // admin picks zero or more boards, each at READ/WRITE/ADMIN;
+  // omitted boards mean the new agent has no access on them and
+  // an admin grants it later via the BoardPermissionsModal.
+  const [availableBoards, setAvailableBoards] = useState<Board[]>([]);
+  const [newAgentBoardAccess, setNewAgentBoardAccess] = useState<BoardAccessMap>({});
 
   useEffect(() => {
     loadAgents();
+    loadAvailableBoards();
   }, []);
 
   const loadAgents = async () => {
@@ -46,15 +55,38 @@ export function AgentsSettings() {
     }
   };
 
+  const loadAvailableBoards = async () => {
+    try {
+      const boards = await boardsApi.getAll();
+      setAvailableBoards(boards || []);
+    } catch (err) {
+      console.error('Failed to load boards for agent creation:', err);
+    }
+  };
+
+  const setBoardAccess = (boardID: string, access: PermissionAccess | '') => {
+    setNewAgentBoardAccess((prev) => {
+      const next = { ...prev };
+      if (access === '') {
+        delete next[boardID];
+      } else {
+        next[boardID] = access;
+      }
+      return next;
+    });
+  };
+
   const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAgentName.trim()) return;
     setCreatingAgent(true);
     try {
-      const data = await authApi.createAgent(newAgentName.trim(), undefined, newAgentRole);
+      const boardGrants = Object.entries(newAgentBoardAccess).map(([boardId, access]) => ({ boardId, access }));
+      const data = await authApi.createAgent(newAgentName.trim(), undefined, newAgentRole, boardGrants);
       await loadAgents();
       setNewAgentName('');
       setNewAgentRole('MEMBER');
+      setNewAgentBoardAccess({});
       setNewAgentToken(data.agent.token);
       setShowTokenModal(true);
     } catch (err) {
@@ -96,34 +128,75 @@ export function AgentsSettings() {
       <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.agentManagement')}</h2>
       <p className="text-sm text-zinc-500 dark:text-zinc-500">{t('settings.agentDescription')}</p>
 
-      <form onSubmit={handleCreateAgent} className="flex gap-3">
-        <label htmlFor="newAgentName" className="sr-only">{t('settings.agentNamePlaceholder')}</label>
-        <input
-          id="newAgentName"
-          type="text"
-          value={newAgentName}
-          onChange={(e) => setNewAgentName(e.target.value)}
-          placeholder={t('settings.agentNamePlaceholder')}
-          className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none"
-        />
-        <label htmlFor="newAgentRole" className="sr-only">{t('settings.role')}</label>
-        <select
-          id="newAgentRole"
-          value={newAgentRole}
-          onChange={(e) => setNewAgentRole(e.target.value as 'ADMIN' | 'MEMBER' | 'VIEWER')}
-          className="rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-        >
-          <option value="ADMIN">{t('settings.admin')}</option>
-          <option value="MEMBER">{t('settings.member')}</option>
-          <option value="VIEWER">{t('settings.viewer')}</option>
-        </select>
-        <button
-          type="submit"
-          disabled={creatingAgent || !newAgentName.trim()}
-          className="rounded-md bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:bg-zinc-300"
-        >
-          {creatingAgent ? t('settings.creating') : t('settings.createAgent')}
-        </button>
+      <form onSubmit={handleCreateAgent} className="space-y-3">
+        <div className="flex gap-3">
+          <label htmlFor="newAgentName" className="sr-only">{t('settings.agentNamePlaceholder')}</label>
+          <input
+            id="newAgentName"
+            type="text"
+            value={newAgentName}
+            onChange={(e) => setNewAgentName(e.target.value)}
+            placeholder={t('settings.agentNamePlaceholder')}
+            className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 focus:border-blue-500 focus:outline-none"
+          />
+          <label htmlFor="newAgentRole" className="sr-only">{t('settings.role')}</label>
+          <select
+            id="newAgentRole"
+            value={newAgentRole}
+            onChange={(e) => setNewAgentRole(e.target.value as 'ADMIN' | 'MEMBER' | 'VIEWER')}
+            className="rounded-md border border-zinc-300 dark:border-zinc-600 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          >
+            <option value="ADMIN">{t('settings.admin')}</option>
+            <option value="MEMBER">{t('settings.member')}</option>
+            <option value="VIEWER">{t('settings.viewer')}</option>
+          </select>
+          <button
+            type="submit"
+            disabled={creatingAgent || !newAgentName.trim()}
+            className="rounded-md bg-green-500 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:bg-zinc-300"
+          >
+            {creatingAgent ? t('settings.creating') : t('settings.createAgent')}
+          </button>
+        </div>
+        {availableBoards.length > 0 && (
+          <div
+            className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 p-3 space-y-2"
+            data-testid="agent-board-grants"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                {t('settings.agentBoardAccessHeading', 'Initial board access')}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500">
+                {t('settings.agentBoardAccessHelp', 'Optional. Pick zero or more boards; omitted boards mean no access for the new agent.')}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {availableBoards.map((board) => {
+                const value = newAgentBoardAccess[board.id] ?? '';
+                return (
+                  <div key={board.id} className="flex items-center gap-2 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2">
+                    <span className="flex-1 truncate text-sm text-zinc-800 dark:text-zinc-100" title={board.name}>
+                      {board.name}
+                    </span>
+                    <select
+                      aria-label={t('settings.agentBoardAccessFor', { name: board.name })}
+                      value={value}
+                      onChange={(e) => setBoardAccess(board.id, e.target.value as PermissionAccess | '')}
+                      className="rounded-md border border-zinc-300 dark:border-zinc-600 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                      data-testid={`agent-board-access-${board.id}`}
+                    >
+                      <option value="">{t('settings.agentBoardAccessNone', 'No access')}</option>
+                      <option value="READ">READ</option>
+                      <option value="WRITE">WRITE</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </form>
 
       <div className="space-y-3">
@@ -237,7 +310,7 @@ export function AgentsSettings() {
       {showTokenModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6">
             <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.tokenGenerated')}</h2>
             <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-500">{t('settings.tokenGeneratedHint')}</p>
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-zinc-100 dark:bg-zinc-700 p-3">
@@ -271,7 +344,7 @@ export function AgentsSettings() {
       {editingAgent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setEditingAgent(null)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6">
             <h2 className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('settings.editAgent')}</h2>
             <form onSubmit={(e) => { e.preventDefault(); handleUpdateAgent(); }} className="space-y-4">
               <div>

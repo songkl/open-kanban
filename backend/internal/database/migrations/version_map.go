@@ -131,6 +131,106 @@ var VersionMigrationMap = []VersionMigration{
 	// in the same release so the new column is never read with
 	// the old meaning.
 	{Version: "0.15.0", From: 1, To: 15},
+	// 0.16.0 added migration 016 to introduce boards.is_public so the
+	// board list endpoint can hide private boards from anonymous and
+	// unauthorized users. Defaults to 1 so existing boards stay
+	// publicly visible after upgrade.
+	{Version: "0.16.0", From: 1, To: 16},
+	// 0.17.0 added migration 017 to extend the activities.action CHECK
+	// constraint with PERMISSION_TRANSFER so the new TransferOwnership
+	// handler (POST /api/v1/auth/permissions/transfer-ownership) can
+	// record its activity row when a board owner hands ownership to
+	// another user. See docs/PERMISSION_MATRIX.md section 4.8.
+	{Version: "0.17.0", From: 1, To: 17},
+	// 0.18.0 added migration 018 to extend the activities.action CHECK
+	// constraint with PERMISSION_BULK_GRANT so the new
+	// BulkSetPermissions handler (POST /api/v1/auth/permissions/bulk)
+	// can record a single activity row per batch grant.
+	{Version: "0.18.0", From: 1, To: 18},
+	// 0.19.0 added migration 019 to widen comments.content from TEXT
+	// (max 65,535 bytes on MySQL) to LONGTEXT (max 4 GiB) so the
+	// CreateComment handler can accept arbitrarily long comment bodies
+	// without the storage layer truncating or rejecting the INSERT.
+	// SQLite side is documentation-only because SQLite TEXT is already
+	// variable-length. Tracked as s-1018.
+	{Version: "0.19.0", From: 1, To: 19},
+	// 0.20.0 added migration 020 to add audit / lifecycle columns to
+	// board_permissions and column_permissions:
+	//   - granted_by_user_id  (FK users.id NULLABLE)
+	//   - expires_at          (DATETIME NULLABLE)
+	//   - revoked_at          (DATETIME NULLABLE)
+	//   - revoked_by_user_id  (FK users.id NULLABLE)
+	//   - notes (TEXT DEFAULT '', board_permissions only)
+	// Existing rows are backfilled with NULL / '' defaults so the
+	// migration is non-destructive. The SetPermission /
+	// DeletePermission / SetColumnPermission / DeleteColumnPermission
+	// handlers now stamp granted_by_user_id / revoked_by_user_id on
+	// write, and DELETE was replaced with a soft-delete UPDATE so the
+	// audit trail survives revoke. Tracked as s-1037.
+	{Version: "0.20.0", From: 1, To: 20},
+	// 0.21.0 added migration 021 to introduce the notifications table
+	// that powers the in-app notification center (PM_REVIEW §5.2 ROI
+	// #2). Rows are fan-out inserts by the handlers in
+	// internal/handlers/notifications.go and surface as a bell-badge
+	// stream driven by the existing WebSocket connection. Tracked
+	// as s-1194.
+	{Version: "0.21.0", From: 1, To: 21},
+	// 0.22.0 added migration 022 to introduce the preset_templates
+	// table that backs the first-login wizard and the public template
+	// marketplace (PM_REVIEW §5.4 ROI #4 / §6). The table is seeded
+	// with at least 4 starter presets (product iteration, bug triage,
+	// content calendar, customer support) by the migration itself, so a
+	// fresh install lands on a populated marketplace without any manual
+	// configuration. Tracked as s-1196.
+	{Version: "0.22.0", From: 1, To: 22},
+	// 0.23.0 added migration 023 to give column_agents a
+	// transition_trigger flag (none / on_enter / on_exit / both) so
+	// the SetColumnAgent handler can wake a bound Agent automatically
+	// when a task crosses the column boundary. Tracked as s-1214
+	// (PM_REVIEW §3.5).
+	{Version: "0.23.0", From: 1, To: 23},
+	// 0.24.0 added migration 024 to introduce the
+	// user_notification_preferences table that backs the new
+	// "Notifications" section in Settings (PM_REVIEW §3.7). One row
+	// per user with email_enabled / webhook_enabled flags plus a
+	// webhook_url, so each delivery channel can be muted
+	// independently. Tracked as s-1203.
+	{Version: "0.24.0", From: 1, To: 24},
+	// 0.25.0 added migration 025 to introduce the viewer_tokens
+	// table that backs the public read-only share link + iframe
+	// embed surface for boards (PM_REVIEW §6). One row per minted
+	// token; the secret value is stored as a SHA-256 hash and the
+	// plaintext is only returned ONCE at mint time, the same way
+	// the regular /api/v1/auth/token endpoint behaves. Tracked as
+	// s-1204.
+	{Version: "0.25.0", From: 1, To: 25},
+	// 0.26.0 added migration 026 to introduce the tasks.due_at
+	// column so a freshly created task can carry a due date
+	// straight through the create-task modal into the storage
+	// layer (PM_REVIEW §3.12). The column is nullable; existing
+	// rows are backfilled with NULL. The idx_tasks_due_at index
+	// is built in the same migration so the upcoming "overdue /
+	// due in next N days" surface can be served by a plain index
+	// scan. Tracked as T-1207 / s-1207.
+	{Version: "0.26.0", From: 1, To: 26},
+	// 0.27.0 added migration 027 to extend the activities.action
+	// CHECK constraint with BULK_ARCHIVE_COLUMN /
+	// BULK_COMPLETE_COLUMN so the new BulkColumnAction handler
+	// (POST /api/v1/tasks/bulk/column-action) can record a single
+	// audit-log row per column-level "Archive all" / "Mark all as
+	// completed" action surfaced by the new column-header
+	// 3-dot menu. Tracked as s-1212.
+	{Version: "0.27.0", From: 1, To: 27},
+	// 0.28.0 added migration 028 to introduce the frontend_events
+	// table that backs the new Sentry-compatible error sink at
+	// /api/v1/frontend-events (PM_REVIEW_2026-09-17 §7). One row per
+	// unhandled React error / window.onerror / unhandledrejection
+	// captured by the root ErrorBoundary + global handlers. The
+	// handler runs the same secret-redaction pass on the client
+	// payload that the client runs itself, so a future client
+	// regression cannot leak a credential into the database.
+	// Tracked as s-1210.
+	{Version: "0.28.0", From: 1, To: 28},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

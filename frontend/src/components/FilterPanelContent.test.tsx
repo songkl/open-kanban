@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FilterPanelContent } from './FilterPanelContent';
-import type { FilterPreset, FilterState } from '@/hooks/useFilters';
+import { EMPTY_CUSTOM_FIELD_FILTER, type FilterPreset, type FilterState } from '@/hooks/useFilters';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -16,6 +16,10 @@ describe('FilterPanelContent', () => {
     searchQuery: '',
     dateRange: '',
     tag: '',
+    customField: EMPTY_CUSTOM_FIELD_FILTER,
+    runStatus: '',
+    hasComments: '',
+    hasSubtasks: '',
   };
 
   const mockPresets: FilterPreset[] = [];
@@ -24,6 +28,8 @@ describe('FilterPanelContent', () => {
     filters: mockFilters,
     uniqueAssignees: [],
     uniqueTags: [],
+    uniqueCustomFieldValues: {},
+    customFields: [],
     filterPresets: mockPresets,
     showPresetDropdown: false,
     onSetFilters: vi.fn(),

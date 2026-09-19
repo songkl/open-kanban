@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AddTaskModal } from './AddTaskModal';
 
@@ -8,6 +8,31 @@ vi.mock('@/services/api', () => ({
     getByBoard: vi.fn().mockResolvedValue([
       { id: 'col-1', name: 'To Do' },
       { id: 'col-2', name: 'In Progress' },
+    ]),
+  },
+  attachmentsApi: {
+    upload: vi.fn((file: File) => {
+      const promise = Promise.resolve({
+        id: `att-${file.name}`,
+        filename: file.name,
+        url: `/uploads/att-${file.name}`,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+        taskId: undefined,
+        commentId: undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      return { promise, abort: vi.fn() };
+    }),
+  },
+  authApi: {
+    listVisibleUsers: vi.fn().mockResolvedValue([
+      { id: 'u-alice', nickname: 'Alice' },
+      { id: 'u-bob', nickname: 'Bob' },
+    ]),
+    getAgents: vi.fn().mockResolvedValue([
+      { id: 'ag-claude', nickname: 'claude', avatar: null, role: 'MEMBER', type: 'AGENT', enabled: true, createdAt: '', updatedAt: '', tokenCount: 0, runsLast24h: 0, failsLast24h: 0, totalRuns: 0 },
     ]),
   },
 }));
@@ -53,7 +78,12 @@ describe('AddTaskModal', () => {
       true,
       expect.any(String),
       expect.any(String),
-      'medium'
+      'medium',
+      expect.objectContaining({
+        dueAt: null,
+        assignee: null,
+        attachmentIds: expect.any(Array),
+      }),
     );
   });
 
@@ -91,7 +121,12 @@ describe('AddTaskModal', () => {
       true,
       expect.any(String),
       expect.any(String),
-      'high'
+      'high',
+      expect.objectContaining({
+        dueAt: null,
+        assignee: null,
+        attachmentIds: expect.any(Array),
+      }),
     );
   });
 
@@ -120,5 +155,196 @@ describe('AddTaskModal', () => {
     await userEvent.type(textarea!, 'hello');
 
     expect(document.activeElement).toBe(textarea);
+  });
+
+  describe('due date, assignee, and attachments (T-1207 / s-1207)', () => {
+    it('persists a due date when the operator picks one', async () => {
+      render(<AddTaskModal {...defaultProps} />);
+      const titleInput = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(titleInput, 'Deadline task');
+      const dueInput = document.getElementById('add-task-due-at') as HTMLInputElement;
+      expect(dueInput).toBeInTheDocument();
+      await userEvent.type(dueInput, '2026-12-31T08:00');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      await userEvent.click(submitButton);
+      expect(defaultProps.onSubmit).toHaveBeenCalledTimes(1);
+      const payload = defaultProps.onSubmit.mock.calls[0];
+      expect(payload[6]).toMatchObject({
+        assignee: null,
+        attachmentIds: [],
+      });
+      expect(payload[6].dueAt).toBeTruthy();
+      expect(typeof payload[6].dueAt).toBe('string');
+      expect(payload[6].dueAt.startsWith('2026-12-31')).toBe(true);
+    });
+
+    it('clears the due date via the Clear button', async () => {
+      render(<AddTaskModal {...defaultProps} />);
+      const dueInput = document.getElementById('add-task-due-at') as HTMLInputElement;
+      await userEvent.type(dueInput, '1226-12-31T08:00');
+      const clearButton = screen.getByRole('button', { name: 'taskModal.dueDateClear' });
+      await userEvent.click(clearButton);
+      expect(dueInput.value).toBe('');
+    });
+
+    it('populates the assignee select with people + agents and submits the chosen id', async () => {
+      render(<AddTaskModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByRole('option', { name: 'Alice' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'Bob' })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: 'claude (agent)' })).toBeInTheDocument();
+      });
+      const titleInput = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(titleInput, 'Assigned task');
+      const assigneeSelect = document.getElementById('add-task-assignee') as HTMLSelectElement;
+      await userEvent.selectOptions(assigneeSelect, 'u-bob');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      await userEvent.click(submitButton);
+      const payload = defaultProps.onSubmit.mock.calls[0];
+      expect(payload[6]).toMatchObject({
+        dueAt: null,
+        assignee: 'u-bob',
+        attachmentIds: [],
+      });
+    });
+
+    it('uploads a chosen file via /api/upload and threads the returned id on submit', async () => {
+      const { attachmentsApi } = await import('@/services/api');
+      const file = new File(['hello'], 'spec.pdf', { type: 'application/pdf' });
+      render(<AddTaskModal {...defaultProps} />);
+      const fileInput = screen.getByTestId('add-task-attachments-input') as HTMLInputElement;
+      await userEvent.upload(fileInput, file);
+      await waitFor(() => {
+        expect(screen.getByText('spec.pdf')).toBeInTheDocument();
+      });
+      expect(attachmentsApi.upload).toHaveBeenCalledWith(file);
+      const titleInput = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(titleInput, 'With attachment');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      await userEvent.click(submitButton);
+      const payload = defaultProps.onSubmit.mock.calls[0];
+      expect(payload[6].attachmentIds).toEqual(['att-spec.pdf']);
+    });
+
+    it('removes a queued attachment before submit', async () => {
+      render(<AddTaskModal {...defaultProps} />);
+      const file = new File(['x'], 'mock.png', { type: 'image/png' });
+      const fileInput = screen.getByTestId('add-task-attachments-input') as HTMLInputElement;
+      await userEvent.upload(fileInput, file);
+      await waitFor(() => {
+        expect(screen.getByText('mock.png')).toBeInTheDocument();
+      });
+      const removeButton = screen.getByRole('button', { name: 'taskModal.removeAttachment' });
+      await userEvent.click(removeButton);
+      expect(screen.queryByText('mock.png')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('board and column selector layout (s-1223)', () => {
+    it('renders board and column selectors side-by-side in a single grid row', async () => {
+      const boards = [
+        { id: 'board-1', name: 'Board One' },
+        { id: 'board-2', name: 'Board Two' },
+      ];
+      render(<AddTaskModal {...defaultProps} boards={boards} currentBoardId="board-1" />);
+      const boardLabel = await screen.findByText('task.selectBoard');
+      const columnLabel = await screen.findByText('task.selectColumn');
+      const boardContainer = boardLabel.parentElement as HTMLElement;
+      const columnContainer = columnLabel.parentElement as HTMLElement;
+      expect(boardContainer).toBeTruthy();
+      expect(columnContainer).toBeTruthy();
+      expect(boardContainer.parentElement).toBe(columnContainer.parentElement);
+      const grid = boardContainer.parentElement as HTMLElement;
+      expect(grid.className).toMatch(/grid-cols-2/);
+    });
+
+    it('hides the selector row entirely when no boards and no columns are available', () => {
+      render(<AddTaskModal {...defaultProps} />);
+      expect(screen.queryByText('task.selectBoard')).not.toBeInTheDocument();
+      expect(screen.queryByText('task.selectColumn')).not.toBeInTheDocument();
+    });
+  });
+
+  // s-1230: priority + due date side-by-side. Mirrors the s-1223
+  // pattern so the two controls read as a pair instead of stacking
+  // full-width on top of each other.
+  describe('priority + due date row (s-1230)', () => {
+    it('renders priority and due date fields side-by-side in a 2-column grid on desktop', () => {
+      render(<AddTaskModal {...defaultProps} />);
+      const priorityLabel = screen.getByText('taskModal.priority');
+      const dueDateLabel = screen.getByText('taskModal.dueDateFieldLabel');
+      const priorityContainer = priorityLabel.parentElement as HTMLElement;
+      const dueDateContainer = dueDateLabel.parentElement as HTMLElement;
+      expect(priorityContainer.parentElement).toBe(dueDateContainer.parentElement);
+      const grid = priorityContainer.parentElement as HTMLElement;
+      expect(grid.className).toMatch(/grid-cols-1/);
+      expect(grid.className).toMatch(/sm:grid-cols-2/);
+    });
+  });
+
+  describe('create-task permission gating (s-1053)', () => {
+    const canCreateTaskInColumn = (columnId: string) => columnId !== 'col-2';
+
+    it('enables submit when the selected column is allowed', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const input = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(input, 'New task');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      expect(submitButton).not.toBeDisabled();
+    });
+
+    it('disables submit when the selected column is forbidden by the permission gate', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          defaultColumnId="col-2"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const input = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(input, 'New task');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      expect(submitButton).toBeDisabled();
+      expect(submitButton).toHaveAttribute('title', 'column.noAddPermission');
+    });
+
+    it('shows a permission warning when the selected column is forbidden', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          defaultColumnId="col-2"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(screen.getByText('column.noAddPermission')).toBeInTheDocument();
+    });
+
+    it('does not call onSubmit when the submit button is disabled by the permission gate', async () => {
+      render(
+        <AddTaskModal
+          {...defaultProps}
+          currentBoardId="board-1"
+          defaultColumnId="col-2"
+          canCreateTaskInColumn={canCreateTaskInColumn}
+        />
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const input = screen.getByPlaceholderText('task.titlePlaceholder');
+      await userEvent.type(input, 'New task');
+      const submitButton = screen.getByRole('button', { name: 'task.add' });
+      await userEvent.click(submitButton);
+      expect(defaultProps.onSubmit).not.toHaveBeenCalled();
+    });
   });
 });

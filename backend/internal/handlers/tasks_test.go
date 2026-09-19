@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +51,7 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		short_alias TEXT UNIQUE,
 		task_counter INTEGER DEFAULT 1000,
 		deleted BOOLEAN DEFAULT 0,
+		is_public BOOLEAN DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		description TEXT DEFAULT ''
@@ -100,6 +102,7 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		published BOOLEAN DEFAULT 0,
 		archived BOOLEAN DEFAULT 0,
 		archived_at DATETIME,
+		due_at DATETIME,
 		agent_id TEXT,
 		agent_prompt TEXT,
 		created_by TEXT,
@@ -137,6 +140,23 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+	);
+	CREATE TABLE attachments (
+		id TEXT PRIMARY KEY,
+		filename TEXT NOT NULL,
+		storage_path TEXT NOT NULL,
+		storage_type TEXT DEFAULT 'local',
+		mime_type TEXT,
+		size INTEGER,
+		uploader_id TEXT,
+		task_id TEXT,
+		comment_id TEXT,
+		access_token TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+		FOREIGN KEY (uploader_id) REFERENCES users(id) ON DELETE SET NULL
 	);
 	CREATE TABLE app_config (
 		key TEXT PRIMARY KEY,
@@ -388,6 +408,157 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &resp)
 		if int(resp["position"].(float64)) != 500 {
 			t.Errorf("expected position 500, got %v", resp["position"])
+		}
+	})
+}
+
+// TestCreateTaskHandlerWithDueDateAndAttachments (T-1207 / s-1207)
+// pins the two newest columns on the create-task payload:
+//   - dueAt round-trips through the handler into the DB and back
+//     via the response body.
+//   - attachmentIds re-links pre-uploaded (task_id IS NULL) rows
+//     to the freshly minted task. Rows uploaded by another user
+//     and rows already linked to a task must be left untouched.
+func TestCreateTaskHandlerWithDueDateAndAttachments(t *testing.T) {
+	handlers.ResetRateLimitMapForTest()
+	handlers.ResetGlobalRateLimitMapForTest()
+	handlers.ResetTokenCacheForTest()
+	db := setupTasksDB(t)
+	defer db.Close()
+	// Pin to a single open connection so the handler always
+	// sees the schema we set up in setupTasksDB — without this,
+	// the goroutine spawned by the broadcast handler (and any
+	// subsequent SELECT the test does through the same pool)
+	// can land on a second ":memory:" connection that has its
+	// own empty database.
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id) VALUES ('att-self-1', 'spec.pdf', '/tmp/spec.pdf', 'u1')`); err != nil {
+		t.Fatalf("failed to insert self attachment: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id) VALUES ('att-self-2', 'mock.png', '/tmp/mock.png', 'u1')`); err != nil {
+		t.Fatalf("failed to insert self attachment #2: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id) VALUES ('att-other', 'foreign.txt', '/tmp/foreign.txt', 'someone-else')`); err != nil {
+		t.Fatalf("failed to insert foreign attachment: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id) VALUES ('t-pre', 'pre-existing task', 'c1')`); err != nil {
+		t.Fatalf("failed to insert pre-existing task: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO attachments (id, filename, storage_path, uploader_id, task_id) VALUES ('att-already', 'linked.png', '/tmp/linked.png', 'u1', 't-pre')`); err != nil {
+		t.Fatalf("failed to insert already-linked attachment: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/tasks", handlers.CreateTask(db))
+
+	t.Run("dueAt persists and attachmentIds re-link pre-uploaded rows", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		handlers.ResetGlobalRateLimitMapForTest()
+		dueAt := "2026-12-31T08:00:00Z"
+		body := map[string]interface{}{
+			"title":         "Task with due date and attachments",
+			"columnId":      "c1",
+			"priority":      "high",
+			"dueAt":         dueAt,
+			"attachmentIds": []string{"att-self-1", "att-self-2"},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		dueAtOut, ok := resp["dueAt"].(string)
+		if !ok || dueAtOut == "" {
+			t.Errorf("expected response.dueAt to be a non-empty string, got %v", resp["dueAt"])
+		} else if !strings.HasPrefix(dueAtOut, "2026-12-31") {
+			t.Errorf("expected response.dueAt to keep the date prefix, got %q", dueAtOut)
+		}
+
+		newTaskID, _ := resp["id"].(string)
+		if newTaskID == "" {
+			t.Fatalf("expected non-empty task id in response, got %v", resp["id"])
+		}
+
+		var storedDueAt sql.NullString
+		if err := db.QueryRow(`SELECT due_at FROM tasks WHERE id = ?`, newTaskID).Scan(&storedDueAt); err != nil {
+			t.Fatalf("query stored due_at: %v", err)
+		}
+		if !storedDueAt.Valid {
+			t.Errorf("expected tasks.due_at to be populated, got NULL")
+		} else if !strings.HasPrefix(storedDueAt.String, "2026-12-31") {
+			t.Errorf("expected stored due_at to start with 2026-12-31, got %q", storedDueAt.String)
+		}
+
+		var selfTaskID, otherTaskID, alreadyTaskID sql.NullString
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-self-1'`).Scan(&selfTaskID); err != nil {
+			t.Fatalf("query att-self-1 task_id: %v", err)
+		}
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-self-2'`).Scan(&selfTaskID); err == nil {
+			_ = selfTaskID
+		} else {
+			t.Fatalf("query att-self-2 task_id: %v", err)
+		}
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-other'`).Scan(&otherTaskID); err != nil {
+			t.Fatalf("query att-other task_id: %v", err)
+		}
+		if err := db.QueryRow(`SELECT task_id FROM attachments WHERE id = 'att-already'`).Scan(&alreadyTaskID); err != nil {
+			t.Fatalf("query att-already task_id: %v", err)
+		}
+
+		var linkedCount int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM attachments WHERE task_id = ? AND id IN ('att-self-1','att-self-2')`, newTaskID).Scan(&linkedCount); err != nil {
+			t.Fatalf("count linked attachments: %v", err)
+		}
+		if linkedCount != 2 {
+			t.Errorf("expected both att-self-* rows linked to the new task, got %d", linkedCount)
+		}
+
+		if otherTaskID.Valid {
+			t.Errorf("expected att-other to remain unlinked (NULL task_id), got %q", otherTaskID.String)
+		}
+		if !alreadyTaskID.Valid || alreadyTaskID.String != "t-pre" {
+			t.Errorf("expected att-already to remain linked to t-pre, got %v", alreadyTaskID)
+		}
+	})
+
+	t.Run("dueAt omitted round-trips as null in response and DB", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		handlers.ResetGlobalRateLimitMapForTest()
+		body := map[string]interface{}{
+			"title":    "Task without due date",
+			"columnId": "c1",
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if v, present := resp["dueAt"]; present && v != nil {
+			t.Errorf("expected response.dueAt to be omitted/null, got %v", v)
 		}
 	})
 }
@@ -1003,6 +1174,261 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 		if task["title"] != "Feature Request" {
 			t.Errorf("expected title 'Feature Request', got %v", task["title"])
+		}
+	})
+}
+
+func TestReorderTasksHandler(t *testing.T) {
+	handlers.ResetRateLimitMapForTest()
+	handlers.ResetTokenCacheForTest()
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t1', 'Task 1', 'c1', 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert t1: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t2', 'Task 2', 'c1', 1, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert t2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t3', 'Task 3', 'c1', 2, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert t3: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'Column 2', 'b1', 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert column c2: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.PUT("/api/tasks/reorder", handlers.ReorderTasks(db))
+
+	getPositions := func(columnID string) map[string]int {
+		rows, err := db.Query("SELECT id, position FROM tasks WHERE column_id = ? ORDER BY position ASC", columnID)
+		if err != nil {
+			t.Fatalf("failed to query positions: %v", err)
+		}
+		defer rows.Close()
+		result := make(map[string]int)
+		for rows.Next() {
+			var id string
+			var pos int
+			if err := rows.Scan(&id, &pos); err != nil {
+				t.Fatalf("scan failed: %v", err)
+			}
+			result[id] = pos
+		}
+		return result
+	}
+
+	t.Run("reorder without auth returns 401", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "c1", "position": 0},
+				{"id": "t2", "columnId": "c1", "position": 1},
+				{"id": "t3", "columnId": "c1", "position": 2},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder with empty tasks returns 400", func(t *testing.T) {
+		body := map[string]interface{}{"tasks": []interface{}{}}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder with missing id returns 400", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "", "columnId": "c1", "position": 0},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder with duplicate ids returns 400", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "c1", "position": 0},
+				{"id": "t1", "columnId": "c1", "position": 1},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("reorder within same column persists new order", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t3", "columnId": "c1", "position": 0},
+				{"id": "t2", "columnId": "c1", "position": 1},
+				{"id": "t1", "columnId": "c1", "position": 2},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		positions := getPositions("c1")
+		if positions["t3"] != 0 {
+			t.Errorf("expected t3 position 0, got %d", positions["t3"])
+		}
+		if positions["t2"] != 1 {
+			t.Errorf("expected t2 position 1, got %d", positions["t2"])
+		}
+		if positions["t1"] != 2 {
+			t.Errorf("expected t1 position 2, got %d", positions["t1"])
+		}
+	})
+
+	t.Run("reorder moves tasks between columns", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "c2", "position": 0},
+				{"id": "t2", "columnId": "c2", "position": 1},
+				{"id": "t3", "columnId": "c1", "position": 0},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var columnID string
+		var pos int
+		if err := db.QueryRow("SELECT column_id, position FROM tasks WHERE id = 't1'").Scan(&columnID, &pos); err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if columnID != "c2" || pos != 0 {
+			t.Errorf("expected t1 in c2 pos 0, got column=%s pos=%d", columnID, pos)
+		}
+
+		if err := db.QueryRow("SELECT column_id, position FROM tasks WHERE id = 't3'").Scan(&columnID, &pos); err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if columnID != "c1" || pos != 0 {
+			t.Errorf("expected t3 in c1 pos 0, got column=%s pos=%d", columnID, pos)
+		}
+	})
+
+	t.Run("reorder with invalid column returns 500", func(t *testing.T) {
+		body := map[string]interface{}{
+			"tasks": []map[string]interface{}{
+				{"id": "t1", "columnId": "nonexistent", "position": 0},
+			},
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PUT", "/api/tasks/reorder", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestSearchTasksOrdering(t *testing.T) {
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, archived, created_by) VALUES ('task-old', 'Old Order', 'c1', 100, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert task-old: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, archived, created_by) VALUES ('task-mid', 'Mid Order', 'c1', 50, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert task-mid: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, archived, created_by) VALUES ('task-new', 'New Order', 'c1', 10, 1, 0, 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert task-new: %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/api/tasks/search", handlers.SearchTasks(db))
+
+	t.Run("search returns tasks ordered by position ascending", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/tasks/search", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var response map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &response)
+
+		data, ok := response["data"].([]interface{})
+		if !ok || len(data) != 3 {
+			t.Fatalf("expected 3 tasks in response, got %v", response["data"])
+		}
+
+		expected := []string{"task-new", "task-mid", "task-old"}
+		for i, expectedID := range expected {
+			task := data[i].(map[string]interface{})
+			if task["id"] != expectedID {
+				t.Errorf("expected task at index %d to be %s, got %s", i, expectedID, task["id"])
+			}
 		}
 	})
 }
