@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
 
+	"open-kanban/internal/handlers"
 	"open-kanban/internal/models"
 	"open-kanban/internal/oauth"
 )
@@ -563,5 +565,244 @@ func TestDenyWithAgentIDMirrorsApprove(t *testing.T) {
 	_ = db.QueryRow(`SELECT status FROM oauth_device_codes WHERE user_code_display = 'DNYI-DNYI'`).Scan(&status)
 	if status != "denied" {
 		t.Errorf("expected denied status, got %s", status)
+	}
+}
+
+// newDeviceCreateAgentServer wires the create-agent endpoint into a fresh
+// gin router alongside the existing approve / lookup routes so the table
+// tests below can exercise both happy and error paths in isolation.
+func newDeviceCreateAgentServer(t *testing.T, db *sql.DB) *gin.Engine {
+	t.Helper()
+	r := gin.New()
+	r.POST("/oauth/device/create-agent", handlers.RequireAuth(db), oauth.DeviceCreateAgentHandler(db))
+	return r
+}
+
+// TestDeviceCreateAgentTable drives the POST /oauth/device/create-agent
+// endpoint across the documented matrix: ADMIN happy path with default
+// role, ADMIN with explicit role, MEMBER refusal, anonymous refusal, and
+// missing-nickname validation. Each subtest stands up its own router so a
+// panic in one branch can't taint the rest.
+func TestDeviceCreateAgentTable(t *testing.T) {
+	tests := []struct {
+		name       string
+		role       string
+		nickname   string
+		bodyRole   string
+		wantStatus int
+		wantRole   string
+	}{
+		{
+			name:       "ADMIN defaults role to MEMBER when omitted",
+			role:       "ADMIN",
+			nickname:   "Admin Bot",
+			wantStatus: http.StatusOK,
+			wantRole:   "MEMBER",
+		},
+		{
+			name:       "ADMIN can request an explicit VIEWER role",
+			role:       "ADMIN",
+			nickname:   "Read-Only Bot",
+			bodyRole:   "VIEWER",
+			wantStatus: http.StatusOK,
+			wantRole:   "VIEWER",
+		},
+		{
+			name:       "ADMIN rejects garbage role and falls back to MEMBER",
+			role:       "ADMIN",
+			nickname:   "Garbage Bot",
+			bodyRole:   "owner",
+			wantStatus: http.StatusOK,
+			wantRole:   "MEMBER",
+		},
+		{
+			name:       "MEMBER approver is forbidden from creating Agents",
+			role:       "MEMBER",
+			nickname:   "Member Bot",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "VIEWER approver is forbidden from creating Agents",
+			role:       "VIEWER",
+			nickname:   "Viewer Bot",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "Empty nickname returns 400 even for ADMIN",
+			role:       "ADMIN",
+			nickname:   "",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "Whitespace-only nickname returns 400",
+			role:       "ADMIN",
+			nickname:   "   ",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupApproveAgentDB(t)
+			defer db.Close()
+			r := newDeviceCreateAgentServer(t, db)
+			// Reset the token cache so a previously-cached user from a
+			// sibling subtest (e.g. the first ADMIN run) cannot leak into
+			// this run via the global tokenCache in handlers/auth.go.
+			handlers.ResetTokenCacheForTest()
+
+			// Use a unique approver per subtest so the bearer lookup joins
+			// on the right users row and the tokenCache key matches.
+			userID := "approver-" + tc.name
+			body, _ := json.Marshal(map[string]string{
+				"nickname": tc.nickname,
+				"role":     tc.bodyRole,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/oauth/device/create-agent", strings.NewReader(string(body)))
+			req.Header.Set("Content-Type", "application/json")
+			if tc.wantStatus != http.StatusUnauthorized {
+				setApproveUserRole(t, req, db, userID, tc.role)
+			}
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected status %d, got %d: %s", tc.wantStatus, w.Code, w.Body.String())
+			}
+			if tc.wantStatus != http.StatusOK {
+				return
+			}
+
+			var resp struct {
+				Agent struct {
+					ID       string `json:"id"`
+					Nickname string `json:"nickname"`
+					Role     string `json:"role"`
+					Type     string `json:"type"`
+					Enabled  bool   `json:"enabled"`
+				} `json:"agent"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Agent.ID == "" {
+				t.Errorf("expected agent.id, got empty")
+			}
+			if resp.Agent.Type != "AGENT" {
+				t.Errorf("expected type=AGENT, got %q", resp.Agent.Type)
+			}
+			if resp.Agent.Nickname != strings.TrimSpace(tc.nickname) {
+				t.Errorf("expected nickname %q, got %q", strings.TrimSpace(tc.nickname), resp.Agent.Nickname)
+			}
+			if resp.Agent.Role != tc.wantRole {
+				t.Errorf("expected role %q, got %q", tc.wantRole, resp.Agent.Role)
+			}
+			if !resp.Agent.Enabled {
+				t.Errorf("expected enabled=true for freshly created Agent")
+			}
+
+			// Confirm the row landed in users with the expected columns so
+			// future lookups (DeviceLookupHandler → listAvailableAgents) see
+			// the new identity without an extra round trip. The
+			// users.enabled column is BOOLEAN on SQLite, so scan it as bool.
+			var dbType, dbRole string
+			var dbEnabled bool
+			if err := db.QueryRow(
+				`SELECT type, role, enabled FROM users WHERE id = ?`, resp.Agent.ID,
+			).Scan(&dbType, &dbRole, &dbEnabled); err != nil {
+				t.Fatalf("query user row: %v", err)
+			}
+			if dbType != "AGENT" || dbRole != tc.wantRole || !dbEnabled {
+				t.Errorf("users row mismatch: type=%q role=%q enabled=%v", dbType, dbRole, dbEnabled)
+			}
+		})
+	}
+}
+
+// TestDeviceCreateAgentRequiresAuth confirms anonymous visitors (no
+// session cookie / bearer) are rejected with 401 before any role check
+// runs, mirroring the rest of the /oauth/device/* endpoints.
+func TestDeviceCreateAgentRequiresAuth(t *testing.T) {
+	db := setupApproveAgentDB(t)
+	defer db.Close()
+	r := newDeviceCreateAgentServer(t, db)
+
+	body := `{"nickname":"Anon Bot"}`
+	req := httptest.NewRequest(http.MethodPost, "/oauth/device/create-agent", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestDeviceCreateAgentThenApprove exercises the full integration: an
+// ADMIN creates a new Agent via the device-flow endpoint, then uses the
+// returned id as agent_id on the subsequent approve call. The device
+// code must bind to the freshly minted identity (not the approver), and
+// the consent row must record that identity too.
+func TestDeviceCreateAgentThenApprove(t *testing.T) {
+	db := setupApproveAgentDB(t)
+	defer db.Close()
+	handlers.ResetTokenCacheForTest()
+	insertClient(t, db, "kanban-cli-1", "", "open-kanban-cli",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertPendingDevice(t, db, "kanban-cli-1", "INLN-INLN", "kanban:read", time.Hour)
+	r := gin.New()
+	r.POST("/oauth/device/create-agent", handlers.RequireAuth(db), oauth.DeviceCreateAgentHandler(db))
+	r.POST("/oauth/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
+
+	createBody := `{"nickname":"Inline Bot"}`
+	createReq := httptest.NewRequest(http.MethodPost, "/oauth/device/create-agent", strings.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	setApproveUserRole(t, createReq, db, "admin-1", "ADMIN")
+	createW := httptest.NewRecorder()
+	r.ServeHTTP(createW, createReq)
+	if createW.Code != http.StatusOK {
+		t.Fatalf("create: expected 200, got %d: %s", createW.Code, createW.Body.String())
+	}
+	var created struct {
+		Agent struct {
+			ID string `json:"id"`
+		} `json:"agent"`
+	}
+	if err := json.Unmarshal(createW.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if created.Agent.ID == "" {
+		t.Fatalf("expected new agent id, got empty")
+	}
+
+	approveBody := `{"user_code":"INLN-INLN","decision":"approve","agent_id":"` + created.Agent.ID + `"}`
+	approveReq := httptest.NewRequest(http.MethodPost, "/oauth/device/approve", strings.NewReader(approveBody))
+	approveReq.Header.Set("Content-Type", "application/json")
+	setApproveUserRole(t, approveReq, db, "admin-1", "ADMIN")
+	approveW := httptest.NewRecorder()
+	r.ServeHTTP(approveW, approveReq)
+	if approveW.Code != http.StatusOK {
+		t.Fatalf("approve: expected 200, got %d: %s", approveW.Code, approveW.Body.String())
+	}
+
+	var bound sql.NullString
+	if err := db.QueryRow(
+		`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'INLN-INLN'`,
+	).Scan(&bound); err != nil {
+		t.Fatalf("query bound user: %v", err)
+	}
+	if !bound.Valid || bound.String != created.Agent.ID {
+		t.Errorf("expected device code bound to %s, got %v", created.Agent.ID, bound)
+	}
+
+	var consentUser sql.NullString
+	if err := db.QueryRow(
+		`SELECT user_id FROM oauth_consents WHERE client_id = 'kanban-cli-1'`,
+	).Scan(&consentUser); err != nil {
+		t.Fatalf("consent query: %v", err)
+	}
+	if consentUser.String != created.Agent.ID {
+		t.Errorf("expected consent for %s, got %s", created.Agent.ID, consentUser.String)
 	}
 }

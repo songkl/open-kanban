@@ -1184,7 +1184,19 @@
       "identityAsSelf": "我的账户（当前登录用户）",
       "identityEmpty": "暂无可用的 Agent，请联系管理员。",
       "identityRequired": "请先选择此设备需要绑定的身份再批准。",
-      "identityServerDefault": "服务器默认"
+      "identityServerDefault": "服务器默认",
+      "createAgentHeading": "没有合适的 Agent？",
+      "createAgentPrompt": "创建一个新的 Agent 并将本设备绑定到它。",
+      "createAgentButton": "新建 Agent",
+      "createAgentNicknameLabel": "Agent 名称",
+      "createAgentNicknamePlaceholder": "例如 kanban-runner",
+      "createAgentRoleLabel": "角色",
+      "createAgentSubmit": "创建并选中",
+      "createAgentSubmitting": "创建中…",
+      "createAgentCancel": "取消",
+      "createAgentError": "创建 Agent 失败，请重试或联系管理员。",
+      "createAgentForbidden": "只有管理员可以在此页面新建 Agent，请联系管理员创建后刷新本页。",
+      "createAgentSuccess": "Agent \"{{nickname}}\" 已创建并被选中。"
     },
     "admin": {
       "title": "OAuth 2.1",

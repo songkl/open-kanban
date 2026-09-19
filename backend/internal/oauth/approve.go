@@ -345,6 +345,101 @@ func upsertConsent(db *sql.DB, userID, clientID, scope string) {
 	)
 }
 
+// DeviceCreateAgentRequest is the body submitted by the verification page
+// when the approver (ADMIN) wants to create a fresh Agent identity inline
+// instead of picking from the existing list. The new Agent is inserted into
+// the users table (type='AGENT', role='MEMBER') and immediately selected as
+// the device-code binding target on the page.
+type DeviceCreateAgentRequest struct {
+	Nickname string `json:"nickname"`
+	Role     string `json:"role"`
+}
+
+// DeviceCreateAgentHandler serves POST /oauth/device/create-agent. It lets
+// an authenticated ADMIN approver spawn a new Agent identity directly from
+// the device-flow approval page (so a CLI / MCP runner that resolved to a
+// HUMAN user because the approver had no Agents yet can still finish the
+// binding in one click instead of bouncing through the admin settings).
+//
+// The new Agent is created as enabled=true with the supplied nickname and
+// role (defaulting to MEMBER). It is returned to the caller with id /
+// nickname / role / type so the SPA can re-render the picker and
+// pre-select the freshly minted Agent before the approver presses Approve.
+//
+// Non-ADMIN approvers get 403; anonymous visitors get 401; invalid input
+// (missing nickname) gets 400 — mirroring the shape of the existing
+// /api/v1/auth/agents endpoint so the UI can reuse the same error
+// handling.
+func DeviceCreateAgentHandler(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := currentUserOrUnauthorized(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":             "unauthenticated",
+				"error_description": "You must be logged in to create an Agent",
+			})
+			return
+		}
+		if user.Role != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":             "forbidden",
+				"error_description": "Only admin approvers can create Agent identities from the device-flow page",
+			})
+			return
+		}
+
+		var req DeviceCreateAgentRequest
+		if err := c.ShouldBind(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":             "invalid_request",
+				"error_description": "request body must be JSON with a non-empty nickname",
+			})
+			return
+		}
+		nickname := strings.TrimSpace(req.Nickname)
+		if nickname == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":             "invalid_request",
+				"error_description": "nickname is required",
+			})
+			return
+		}
+
+		role := strings.ToUpper(strings.TrimSpace(req.Role))
+		if role == "" {
+			role = "MEMBER"
+		}
+		if role != "ADMIN" && role != "MEMBER" && role != "VIEWER" {
+			role = "MEMBER"
+		}
+
+		agentID := generateOpaqueID()
+		now := time.Now()
+		if _, err := db.Exec(
+			`INSERT INTO users (id, username, nickname, avatar, type, role, enabled, created_at, updated_at, last_active_at)
+			 VALUES (?, ?, ?, '', 'AGENT', ?, 1, ?, ?, ?)`,
+			agentID, nickname, nickname, role, now, now, now,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":             "server_error",
+				"error_description": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"agent": gin.H{
+				"id":        agentID,
+				"nickname":  nickname,
+				"role":      role,
+				"type":      "AGENT",
+				"enabled":   true,
+				"createdAt": now,
+			},
+		})
+	}
+}
+
 // respondDeviceApproveError maps internal errors to OAuth-style JSON.
 func respondDeviceApproveError(c *gin.Context, err error) {
 	switch {

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { OAuthDevicePage } from './OAuthDevicePage';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: Record<string, unknown>) => {
       const map: Record<string, string> = {
         'oauth.device.title': 'Authorize device',
         'oauth.device.subtitle': 'Enter the code',
@@ -26,19 +26,43 @@ vi.mock('react-i18next', () => ({
         'oauth.device.identityAsSelf': 'Myself',
         'oauth.device.identityEmpty': 'No agents available',
         'oauth.device.identityRequired': 'Pick an identity first',
-        'oauth.device.identityServerDefault': 'Server default'
+        'oauth.device.identityServerDefault': 'Server default',
+        'oauth.device.createAgentHeading': 'No suitable agent?',
+        'oauth.device.createAgentPrompt': 'Create a new agent to bind this device to.',
+        'oauth.device.createAgentButton': 'Create new agent',
+        'oauth.device.createAgentNicknameLabel': 'Agent nickname',
+        'oauth.device.createAgentNicknamePlaceholder': 'e.g. kanban-runner',
+        'oauth.device.createAgentRoleLabel': 'Role',
+        'oauth.device.createAgentSubmit': 'Create and select',
+        'oauth.device.createAgentSubmitting': 'Creating…',
+        'oauth.device.createAgentCancel': 'Cancel',
+        'oauth.device.createAgentError': 'Could not create the agent.',
+        'oauth.device.createAgentForbidden': 'Only admins can mint new agents from this page.',
+        'oauth.device.createAgentSuccess': 'Agent "{{nickname}}" created and selected.'
       };
-      return map[key] || key;
+      let out = map[key] || key;
+      if (params && typeof out === 'string') {
+        for (const [k, v] of Object.entries(params)) {
+          out = out.replace(`{{${k}}}`, String(v));
+        }
+      }
+      return out;
     },
     i18n: { language: 'en' }
   })
 }));
 
+let mockMeResponse: { user: { id: string; role?: string } } = { user: { id: 'user-1', role: 'ADMIN' } };
+
 vi.mock('../services/api', () => ({
   authApi: {
-    me: vi.fn().mockResolvedValue({ user: { id: 'user-1' } })
+    me: vi.fn(() => Promise.resolve(mockMeResponse))
   }
 }));
+
+const setMockMe = (resp: { user: { id: string; role?: string } }) => {
+  mockMeResponse = resp;
+};
 
 const renderPage = (search = '') =>
   render(
@@ -365,5 +389,173 @@ describe('OAuthDevicePage', () => {
       expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
     });
     expect(screen.getByText('No agents available')).toBeInTheDocument();
+  });
+});
+
+describe('OAuthDevicePage — inline create-agent (s-1248)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    setMockMe({ user: { id: 'admin-1', role: 'ADMIN' } });
+  });
+
+  const cliLookup = (overrides: Record<string, unknown> = {}) =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-cli-1',
+        clientName: 'open-kanban-cli',
+        scope: 'kanban:read',
+        expiresAt: new Date().toISOString(),
+        status: 'pending',
+        agentSelectionRequired: true,
+        availableAgents: [{ id: 'agent-bot-1', nickname: 'Bot One', role: 'MEMBER' }],
+        defaultAgentId: 'agent-bot-1',
+        ...overrides
+      })
+    });
+
+  it('renders the create-agent toggle for an ADMIN approver', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => cliLookup()));
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'ADMN-ADMN' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('create-agent-block')).toBeInTheDocument();
+    expect(screen.getByTestId('create-agent-toggle')).toBeInTheDocument();
+    expect(screen.queryByTestId('create-agent-form')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('create-agent-hint')).not.toBeInTheDocument();
+  });
+
+  it('hides the toggle for non-ADMIN approvers and shows the hint instead', async () => {
+    setMockMe({ user: { id: 'member-1', role: 'MEMBER' } });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => cliLookup()));
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'MBER-MBER' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('create-agent-block')).toBeInTheDocument();
+    expect(screen.getByTestId('create-agent-hint')).toBeInTheDocument();
+    expect(screen.queryByTestId('create-agent-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('create-agent-form')).not.toBeInTheDocument();
+  });
+
+  it('opens the form on toggle and submits the inline create-agent request', async () => {
+    const newAgent = { id: 'agent-new-1', nickname: 'Inline Bot', role: 'MEMBER', type: 'AGENT', enabled: true };
+    // Mirror the page's optimistic-update behaviour: the second lookup
+    // call (the canonical refresh after a successful create) returns
+    // the freshly minted Agent in availableAgents so the assertion on
+    // the picker UI doesn't depend on the optimistic state surviving a
+    // re-render.
+    let lookupCalls = 0;
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        lookupCalls += 1;
+        return lookupCalls > 1
+          ? cliLookup({
+              availableAgents: [
+                { id: 'agent-bot-1', nickname: 'Bot One', role: 'MEMBER' },
+                { id: newAgent.id, nickname: newAgent.nickname, role: newAgent.role }
+              ],
+              defaultAgentId: newAgent.id
+            })
+          : cliLookup();
+      }
+      if (url === '/oauth/device/create-agent') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ agent: newAgent })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ approved: true }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'INLN-INLN' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('create-agent-toggle')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('create-agent-toggle'));
+
+    const form = await screen.findByTestId('create-agent-form');
+    fireEvent.change(screen.getByTestId('inline-agent-nickname'), {
+      target: { value: 'Inline Bot' }
+    });
+    fireEvent.click(within(form).getByRole('button', { name: /Create and select/ }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/oauth/device/create-agent',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          body: JSON.stringify({ nickname: 'Inline Bot', role: 'MEMBER' })
+        })
+      );
+    });
+    // After success the freshly minted agent should be selected and visible
+    // in the picker, and the form should close itself.
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-agent-agent-new-1')).toBeInTheDocument();
+    });
+    const newRadio = screen.getByTestId('identity-agent-radio-agent-new-1') as HTMLInputElement;
+    expect(newRadio.checked).toBe(true);
+    expect(screen.queryByTestId('create-agent-form')).not.toBeInTheDocument();
+  });
+
+  it('surfaces a 403 from the create-agent endpoint as the forbidden hint', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) return cliLookup();
+      if (url === '/oauth/device/create-agent') {
+        return Promise.resolve({
+          ok: false,
+          status: 403,
+          json: async () => ({ error_description: 'Only admin approvers can create Agent identities from the device-flow page' })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'INLN-INLN' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('create-agent-toggle')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('create-agent-toggle'));
+    const form = await screen.findByTestId('create-agent-form');
+    fireEvent.change(screen.getByTestId('inline-agent-nickname'), { target: { value: 'Inline Bot' } });
+    fireEvent.click(within(form).getByRole('button', { name: /Create and select/ }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('create-agent-error').textContent).toMatch(
+        /Only admins can mint new agents from this page/
+      );
+    });
+  });
+
+  it('does not render the create-agent block when the picker is hidden', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-web-1',
+        clientName: 'kanban-web',
+        scope: 'kanban:read',
+        expiresAt: new Date().toISOString(),
+        status: 'pending'
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'WEBB-WEBB' } });
+    await waitFor(() => {
+      expect(screen.getByText('kanban-web')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('create-agent-block')).not.toBeInTheDocument();
   });
 });

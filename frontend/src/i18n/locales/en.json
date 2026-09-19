@@ -1184,7 +1184,19 @@
       "identityAsSelf": "Myself (your account)",
       "identityEmpty": "No agents available — contact an administrator.",
       "identityRequired": "Pick which identity this device should bind to before approving.",
-      "identityServerDefault": "Server default"
+      "identityServerDefault": "Server default",
+      "createAgentHeading": "No suitable agent?",
+      "createAgentPrompt": "Create a new agent to bind this device to.",
+      "createAgentButton": "Create new agent",
+      "createAgentNicknameLabel": "Agent nickname",
+      "createAgentNicknamePlaceholder": "e.g. kanban-runner",
+      "createAgentRoleLabel": "Role",
+      "createAgentSubmit": "Create and select",
+      "createAgentSubmitting": "Creating…",
+      "createAgentCancel": "Cancel",
+      "createAgentError": "Could not create the agent. Please retry or contact an administrator.",
+      "createAgentForbidden": "Only admins can mint new agents from this page. Ask an administrator to create the agent, then refresh this page.",
+      "createAgentSuccess": "Agent \"{{nickname}}\" created and selected."
     },
     "admin": {
       "title": "OAuth 2.1",
