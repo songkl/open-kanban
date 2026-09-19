@@ -652,7 +652,10 @@ export function BoardPage() {
         onConnectWebSocket={connectWebSocket}
       />
 
-      <header className="p-3 sm:p-6 sm:pb-0 mb-3 sm:mb-6 flex items-center justify-between gap-2 flex-wrap" role="banner">
+      <header
+        className="p-3 pr-20 sm:p-6 sm:pr-24 sm:pb-0 mb-3 sm:mb-6 flex items-center justify-between gap-2 flex-wrap"
+        role="banner"
+      >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <BoardSelector
             ref={boardDropdownRef}
