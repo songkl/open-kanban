@@ -31,6 +31,23 @@ cd "$PROJECT_DIR/mcp-server"
 npm install --legacy-peer-deps
 npm run build
 
+# Build CLI
+echo ""
+echo "--- Building CLI ---"
+cd "$PROJECT_DIR/cli"
+npm install --legacy-peer-deps
+npm run build
+
+# Package CLI artifacts into the release directory
+rm -rf "$RELEASE_DIR/cli"
+mkdir -p "$RELEASE_DIR/cli"
+cp -r "$PROJECT_DIR/cli/dist/." "$RELEASE_DIR/cli/dist/"
+cp "$PROJECT_DIR/cli/package.json" "$RELEASE_DIR/cli/package.json"
+cp -r "$PROJECT_DIR/cli/man" "$RELEASE_DIR/cli/man"
+cp "$PROJECT_DIR/cli/README.md" "$RELEASE_DIR/cli/README.md"
+cp "$PROJECT_DIR/cli/README_ZH.md" "$RELEASE_DIR/cli/README_ZH.md"
+chmod +x "$RELEASE_DIR/cli/dist/index.js"
+
 # Build backend for current platform
 echo ""
 echo "--- Building Backend ---"
@@ -49,8 +66,10 @@ echo ""
 echo "=== Build Complete ==="
 echo "Release:  $RELEASE_DIR/"
 echo "  ├── web/"
+echo "  ├── cli/"
 echo "  ├── $OUTPUT_NAME"
 echo "  └── open-kanban-mcp/"
 echo ""
 echo "MCP Server published to npm: npm publish"
+echo "CLI published to npm:      cd $RELEASE_DIR/cli && npm publish"
 echo "Run '$RELEASE_DIR/$OUTPUT_NAME' to start the server"
