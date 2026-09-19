@@ -12,7 +12,12 @@ vi.mock('../hooks/useNotifications', () => ({
 }));
 
 vi.mock('./NotificationBell', () => ({
-  NotificationBell: () => <div data-testid="notification-bell-stub" />
+  NotificationBell: () => (
+    <div
+      data-testid="notification-bell-stub"
+      className="h-9 w-9 rounded-md border border-zinc-200 bg-white"
+    />
+  )
 }));
 
 vi.mock('./Sidebar', () => ({
@@ -94,5 +99,21 @@ describe('AppShell theme toggle (s-1203)', () => {
     const bell = screen.getByTestId('notification-bell-stub');
     // Both must share the same flex parent (the header toolbar).
     expect(toggle.parentElement).toBe(bell.parentElement);
+  });
+
+  it('matches the notification bell size so the icons stay visually aligned (s-1250)', () => {
+    renderShell();
+    const toggle = screen.getByTestId('header-theme-toggle');
+    const bell = screen.getByTestId('notification-bell-stub');
+    // Both buttons must share the same box (h-9 w-9) so their icons
+    // line up vertically across every authenticated page.
+    expect(toggle.className).toContain('h-9');
+    expect(toggle.className).toContain('w-9');
+    expect(bell.className).toContain('h-9');
+    expect(bell.className).toContain('w-9');
+    // The theme toggle must also surface a visible chrome (border +
+    // background) to match the bell — otherwise it floats differently.
+    expect(toggle.className).toContain('border');
+    expect(toggle.className).toContain('bg-white');
   });
 });

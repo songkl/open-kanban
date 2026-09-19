@@ -89,14 +89,14 @@ export function AppShell({ children }: AppShellProps) {
             aria-pressed={darkMode}
             title={darkMode ? t('darkMode.switchToLight') : t('darkMode.switchToDark')}
             data-testid="header-theme-toggle"
-            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
             {darkMode ? (
               <svg
                 aria-hidden="true"
                 xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -119,8 +119,8 @@ export function AppShell({ children }: AppShellProps) {
               <svg
                 aria-hidden="true"
                 xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
