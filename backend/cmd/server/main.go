@@ -519,21 +519,10 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 
 	r.GET("/api/v1/mcp/my-tasks", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.GetMyTasks(db))
 
-	// Runner API endpoints (§3.4 of CLI_RUNNER_PLAN). claim/heartbeat/finish
-	// all run through RequireAuth so a leaked socket cannot drive the
-	// runner without a bearer token; per-column WRITE permission is
-	// enforced inside ClaimRun for mode=board, matching PM §9.1.
-	runs := r.Group("/api/v1/runs")
-	runs.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
-	{
-		runs.POST("/claim", handlers.ClaimRun(db))
-		runs.POST("/release", handlers.ReleaseRuns(db))
-		runs.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
-		runs.POST("/:taskId/finish", handlers.FinishRun(db))
-		runs.POST("/:taskId/attach", handlers.AttachRun(db))
-		runs.GET("/:taskId", handlers.GetRun(db))
-		runs.GET("/history", handlers.ListRunsHistory(db))
-	}
+	// Runner API endpoints (§3.4 of CLI_RUNNER_PLAN) are wired by
+	// setupRunsRoutes below so the route table can be asserted
+	// directly in cmd/server/main_test.go. Duplicating them here
+	// triggers gin's "handlers are already registered" panic.
 
 	comments := r.Group("/api/v1/comments")
 	{
