@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -30,7 +31,36 @@ type DeviceApproveRequest struct {
 	// enabled AGENT row (plan §4.1.1): unknown / disabled / non-AGENT
 	// ids surface as 400 invalid_request, and MEMBER approvers pointing
 	// at ADMIN-role Agents surface as 403 forbidden.
-	AgentID string `json:"agentId" form:"agentId"`
+	//
+	// The wire key is accepted under BOTH spellings: the worktree SPA
+	// posts snake_case `agent_id` while older / external callers used
+	// camelCase `agentId`. See UnmarshalJSON below.
+	AgentID string `json:"agent_id" form:"agent_id"`
+}
+
+// UnmarshalJSON accepts the agent_id field under either the snake_case
+// (`agent_id`, used by the SPA) or camelCase (`agentId`, legacy) key so
+// the device-flow approval can't silently drop the binding and fall
+// back to the human approver. gin's ShouldBind calls this for JSON
+// bodies; form-encoded bodies keep the snake_case tag.
+func (r *DeviceApproveRequest) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		UserCode     string `json:"user_code"`
+		Decision     string `json:"decision"`
+		AgentIDSnake string `json:"agent_id"`
+		AgentIDCamel string `json:"agentId"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	r.UserCode = raw.UserCode
+	r.Decision = raw.Decision
+	if raw.AgentIDSnake != "" {
+		r.AgentID = raw.AgentIDSnake
+	} else {
+		r.AgentID = raw.AgentIDCamel
+	}
+	return nil
 }
 
 // DeviceVerifyPageHandler serves GET /oauth/device and renders the user

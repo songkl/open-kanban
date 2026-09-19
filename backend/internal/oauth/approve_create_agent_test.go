@@ -289,3 +289,49 @@ func TestDeviceLookup_EmitsCamelCaseAliases(t *testing.T) {
 		t.Errorf("available_agents has %d entries but availableAgents has %d", len(snakeAgents), len(camelAgents))
 	}
 }
+
+// TestDeviceApprove_AcceptsSnakeCaseAgentID guards the wire-key mismatch
+// that made the device flow silently fall back to the human approver:
+// the worktree SPA posts `agent_id` while the backend's struct tag
+// historically read `agentId`, so the binding was dropped and the CLI
+// refused the HUMAN token. Both spellings must bind to the Agent.
+func TestDeviceApprove_AcceptsSnakeCaseAgentID(t *testing.T) {
+	cases := []struct {
+		name string
+		key  string
+	}{
+		{"snake_case_agent_id", "agent_id"},
+		{"camel_case_agentId", "agentId"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupAgentApprovalDB(t)
+			defer db.Close()
+			insertClient(t, db, "kanban-cli", "", "open-kanban-cli",
+				[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+			insertPendingDevice(t, db, "kanban-cli", "WIRE-0001", "kanban:read", time.Hour)
+			seedAgentWithRole(t, db, "agent-wire", "Wire Agent", "MEMBER", true)
+			r := newApproveServer(t, db)
+
+			body := `{"user_code":"WIRE-0001","decision":"approve","` + tc.key + `":"agent-wire"}`
+			req := httptest.NewRequest(http.MethodPost, "/oauth/device/approve", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			setApproveUserRole(req, db, "admin-wire", "ADMIN")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+			}
+			var bound sql.NullString
+			if err := db.QueryRow(
+				`SELECT user_id FROM oauth_device_codes WHERE user_code_display = 'WIRE-0001'`,
+			).Scan(&bound); err != nil {
+				t.Fatalf("query bound: %v", err)
+			}
+			if !bound.Valid || bound.String != "agent-wire" {
+				t.Errorf("expected device code bound to agent-wire, got %+v", bound)
+			}
+		})
+	}
+}
