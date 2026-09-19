@@ -273,6 +273,9 @@ func setupOnlyRoutes(r *gin.Engine, onConfigPersisted func(path string)) {
 		// a nil DB by returning the "setup needed" payload without touching
 		// the database, so it is safe to call before the wizard runs.
 		auth.GET("/me", handlers.GetMe(nil))
+		// /api/v1/users/me mirrors /api/v1/auth/me for CLI/agent callers that
+		// follow the REST convention of /users/me rather than /auth/me.
+		r.GET("/api/v1/users/me", handlers.GetMe(nil))
 	}
 }
 
@@ -318,6 +321,10 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		auth.GET("/me", handlers.GetMe(db))
 		auth.GET("/config", handlers.GetAppConfig(db))
 	}
+
+	// /api/v1/users/me is an alias for /api/v1/auth/me so external callers
+	// (CLI, OAuth agents) using the REST-style /users/me URL don't 404.
+	r.GET("/api/v1/users/me", handlers.GetMe(db))
 
 	authProtected := r.Group("/api/v1/auth")
 	authProtected.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
@@ -579,17 +586,17 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 
 func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 	mimeTypes := map[string]string{
-		".js":           "application/javascript",
-		".css":          "text/css",
-		".html":         "text/html",
-		".json":         "application/json",
-		".webmanifest":  "application/manifest+json",
-		".png":          "image/png",
-		".jpg":          "image/jpeg",
-		".svg":          "image/svg+xml",
-		".ico":          "image/x-icon",
-		".woff":         "font/woff",
-		".woff2":        "font/woff2",
+		".js":          "application/javascript",
+		".css":         "text/css",
+		".html":        "text/html",
+		".json":        "application/json",
+		".webmanifest": "application/manifest+json",
+		".png":         "image/png",
+		".jpg":         "image/jpeg",
+		".svg":         "image/svg+xml",
+		".ico":         "image/x-icon",
+		".woff":        "font/woff",
+		".woff2":       "font/woff2",
 	}
 
 	getMimeType := func(path string) string {
@@ -662,14 +669,14 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 		// here will fall through to the SPA NoRoute handler, which is fine
 		// for navigation routes but wrong for binary / manifest files.
 		rootStaticFiles := map[string]string{
-			"/manifest.webmanifest":    "manifest.webmanifest",
-			"/sw.js":                   "sw.js",
-			"/offline.html":            "offline.html",
-			"/icon.svg":                "icon.svg",
-			"/icon-192.png":            "icon-192.png",
-			"/icon-512.png":            "icon-512.png",
-			"/icon-maskable-512.png":   "icon-maskable-512.png",
-			"/apple-touch-icon.png":    "apple-touch-icon.png",
+			"/manifest.webmanifest":  "manifest.webmanifest",
+			"/sw.js":                 "sw.js",
+			"/offline.html":          "offline.html",
+			"/icon.svg":              "icon.svg",
+			"/icon-192.png":          "icon-192.png",
+			"/icon-512.png":          "icon-512.png",
+			"/icon-maskable-512.png": "icon-maskable-512.png",
+			"/apple-touch-icon.png":  "apple-touch-icon.png",
 		}
 		for route, asset := range rootStaticFiles {
 			asset := asset

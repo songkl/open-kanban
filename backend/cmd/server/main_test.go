@@ -415,6 +415,35 @@ func TestSetupOnlyRoutesRegistersMe(t *testing.T) {
 	}
 }
 
+func TestSetupOnlyRoutesRegistersUsersMeAlias(t *testing.T) {
+	// The CLI's `auth whoami` command hits /api/v1/users/me (REST-style
+	// alias for /api/v1/auth/me). setupOnlyRoutes must register it so the
+	// CLI does not 404 against a freshly-bootstrapped server that has not
+	// yet completed the setup wizard.
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	setupOnlyRoutes(router, func(string) {})
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /api/v1/users/me to be registered in setupOnlyRoutes, got status %d body=%s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse /users/me response: %v", err)
+	}
+	if resp["needsSetup"] != true {
+		t.Errorf("expected needsSetup=true from /users/me in setupOnlyRoutes, got %v", resp["needsSetup"])
+	}
+	if resp["user"] != nil {
+		t.Errorf("expected nil user from /users/me in setupOnlyRoutes, got %v", resp["user"])
+	}
+}
+
 // pwaShellFiles lists the static files that the PWA / mobile install flow
 // depends on. setupStaticRoutes must serve each one at the root with the
 // correct content type. The list is duplicated from setupStaticRoutes
