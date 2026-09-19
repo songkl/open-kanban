@@ -162,7 +162,15 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
     setSelectedTask(null);
   }, [onColumnsChange, notifyLastLocalUpdate]);
 
-  const addTask = useCallback(async (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => {
+  const addTask = useCallback(async (
+    columnId?: string,
+    title?: string,
+    description?: string,
+    published?: boolean,
+    boardId?: string,
+    priority?: string,
+    extra?: { dueAt?: string | null; assignee?: string | null; attachmentIds?: string[] },
+  ) => {
     if (!columnId) {
       console.error('addTask called without columnId');
       return;
@@ -183,6 +191,9 @@ export function useTasks({ columns, currentBoard, onColumnsChange, onLastLocalUp
         position: 9999,
         published: published ?? true,
         priority: priority || 'medium',
+        dueAt: extra?.dueAt ?? null,
+        assignee: extra?.assignee ?? null,
+        attachmentIds: extra?.attachmentIds ?? [],
       });
 
       if (isSameBoard) {

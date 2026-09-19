@@ -504,6 +504,16 @@ export const tasksApi = {
     published?: boolean;
     agentId?: string;
     agentPrompt?: string;
+    // T-1207 / s-1207, PM_REVIEW_2026-09-17 §3.12: the
+    // create-task modal lets the operator pick a due date /
+    // assignee / attachment set without leaving the modal. The
+    // backend round-trips DueAt as RFC3339 and stores it in
+    // tasks.due_at; Assignee is the user/agent id; AttachmentIDs
+    // are the rows pre-uploaded via /api/v1/upload that the
+    // server re-links to the freshly minted task.
+    assignee?: string | null;
+    dueAt?: string | null;
+    attachmentIds?: string[];
   }) =>
     fetchApi<Task>('tasks', {
       method: 'POST',

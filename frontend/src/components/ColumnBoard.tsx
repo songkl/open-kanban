@@ -35,7 +35,15 @@ interface ColumnBoardProps {
   showAddTaskModal: boolean;
   defaultColumnIdForNewTask: string | undefined;
   editTaskId: string | null;
-  onAddTask: (columnId?: string, title?: string, description?: string, published?: boolean, boardId?: string, priority?: string) => void;
+  onAddTask: (
+    columnId?: string,
+    title?: string,
+    description?: string,
+    published?: boolean,
+    boardId?: string,
+    priority?: string,
+    extra?: { dueAt?: string | null; assignee?: string | null; attachmentIds?: string[] },
+  ) => void;
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
@@ -472,8 +480,8 @@ export function ColumnBoard({
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}
-          onSubmit={(title, description, published, columnId, boardId, priority) => {
-            onAddTask(columnId, title, description, published, boardId, priority);
+          onSubmit={(title, description, published, columnId, boardId, priority, extra) => {
+            onAddTask(columnId, title, description, published, boardId, priority, extra);
             onSetShowAddTaskModal(false);
             onSetDefaultColumnIdForNewTask(undefined);
           }}

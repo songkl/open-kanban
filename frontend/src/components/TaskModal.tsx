@@ -16,6 +16,21 @@ import { AddSubtaskModal } from './AddSubtaskModal';
 
 const STORAGE_KEY = 'kanban-username';
 
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromDateInputValue(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 function formatCommentDate(t: ReturnType<typeof useTranslation>[0], dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -310,6 +325,7 @@ export function TaskModal({
   const [editDesc, setEditDesc] = useState(task.description || '');
   const [editPriority, setEditPriority] = useState(task.priority);
   const [editAssignee, setEditAssignee] = useState(task.assignee || '');
+  const [editDueAt, setEditDueAt] = useState<string | null>(task.dueAt ?? null);
   const [editAgentId, setEditAgentId] = useState(task.agentId || '');
   const [editAgentPrompt, setEditAgentPrompt] = useState(task.agentPrompt || '');
   const [editMeta, setEditMeta] = useState<Record<string, unknown>>({});
@@ -395,6 +411,10 @@ export function TaskModal({
   useEffect(() => {
     setEditMeta(parseMeta(task.meta));
   }, [task.meta]);
+
+  useEffect(() => {
+    setEditDueAt(task.dueAt ?? null);
+  }, [task.id, task.dueAt]);
 
   useEffect(() => {
     if (boardId) {
@@ -493,6 +513,7 @@ export function TaskModal({
         description: editDesc,
         priority: editPriority,
         assignee: editAssignee,
+        dueAt: editDueAt,
         meta: editMeta,
         columnId: editColumn,
         agentId: editAgentId || null,
@@ -503,10 +524,10 @@ export function TaskModal({
     } catch (error) {
       console.error('Failed to save task:', error);
     }
-  }, [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate]);
+  }, [task, editTitle, editDesc, editPriority, editAssignee, editDueAt, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate]);
 
   useEffect(() => {
-    const deps = [task, editTitle, editDesc, editPriority, editAssignee, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate];
+    const deps = [task, editTitle, editDesc, editPriority, editAssignee, editDueAt, editMeta, editColumn, editAgentId, editAgentPrompt, onUpdate];
     if (handleSaveRefDeps.current.join() !== deps.join()) {
       handleSaveRef.current = handleSave;
       handleSaveRefDeps.current = deps;
@@ -801,12 +822,14 @@ export function TaskModal({
             </div>
 
             {/* Grid Layout for Edit Mode */}
-            {/* s-1202: surface assignee + last runner explicitly in the
+            {/* s-1202: surface assignee + last runner + due date explicitly in the
                 drawer (read-only view) so the operator sees both fields
                 without having to scroll into the Run info section. Mirrors
-                the card footer chips: 👤 for assignee, 🤖 for runner.
-                PM_REVIEW_2026-09-17 §3.2 finding #3. */}
-            {!isEditing && (task.assignee || (run && run.runnerId)) && (
+                the card footer chips: 👤 for assignee, 🤖 for runner, 📅
+                for due date. PM_REVIEW_2026-09-17 §3.2 finding #3. T-1207 /
+                s-1207 adds the due-date row so a task created with one
+                surfaces it in the same place the assignee + runner already do. */}
+            {!isEditing && (task.assignee || task.dueAt || (run && run.runnerId)) && (
               <div
                 className="mb-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-700/40 px-4 py-3"
                 data-testid="task-modal-people"
@@ -823,6 +846,20 @@ export function TaskModal({
                         data-testid="task-modal-assignee"
                       >
                         {task.assignee}
+                      </dd>
+                    </>
+                  )}
+                  {task.dueAt && (
+                    <>
+                      <dt className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                        <span aria-hidden>📅</span>
+                        <span>{t('taskModal.dueDate')}</span>
+                      </dt>
+                      <dd
+                        className="text-zinc-700 dark:text-zinc-200"
+                        data-testid="task-modal-due-at"
+                      >
+                        {new Date(task.dueAt).toLocaleString()}
                       </dd>
                     </>
                   )}
@@ -889,6 +926,28 @@ export function TaskModal({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label htmlFor="task-modal-due-at" className="mb-1.5 block text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                    {t('taskModal.dueDate')}
+                  </label>
+                  <input
+                    id="task-modal-due-at"
+                    type="datetime-local"
+                    value={toDateInputValue(editDueAt)}
+                    onChange={(e) => setEditDueAt(fromDateInputValue(e.target.value))}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2"
+                  />
+                  {editDueAt && (
+                    <button
+                      type="button"
+                      onClick={() => setEditDueAt(null)}
+                      className="mt-1 text-xs text-blue-500 hover:text-blue-600"
+                    >
+                      {t('taskModal.dueDateClear')}
+                    </button>
+                  )}
                 </div>
 
                 <div>

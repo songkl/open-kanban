@@ -16,6 +16,7 @@ const mockTask: Task = {
   columnId: 'col-1',
   archived: false,
   archivedAt: null,
+  dueAt: null,
   published: true,
   createdBy: 'user-1',
   createdByUsername: 'creatorlogin',
@@ -791,6 +792,62 @@ describe('TaskModal', () => {
       render(<TaskModal {...defaultProps} task={taskUnassigned} />);
       expect(screen.queryByTestId('task-modal-people')).not.toBeInTheDocument();
       expect(screen.queryByTestId('task-modal-assignee')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('due date display (T-1207 / s-1207)', () => {
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('renders the due-date row when task.dueAt is set', () => {
+      const taskWithDue = { ...mockTask, assignee: null, dueAt: '2026-12-31T08:00:00.000Z' };
+      render(<TaskModal {...defaultProps} task={taskWithDue} />);
+      expect(screen.getByTestId('task-modal-people')).toBeInTheDocument();
+      expect(screen.getByTestId('task-modal-due-at')).toBeInTheDocument();
+      expect(screen.getByText('taskModal.dueDate')).toBeInTheDocument();
+    });
+
+    it('omits the due-date row when task.dueAt is null', () => {
+      const taskNoDue = { ...mockTask, assignee: null, dueAt: null };
+      render(<TaskModal {...defaultProps} task={taskNoDue} />);
+      expect(screen.queryByTestId('task-modal-people')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-modal-due-at')).not.toBeInTheDocument();
+    });
+
+    it('exposes a due-date picker in the edit grid that round-trips the saved value', async () => {
+      const taskWithDue = { ...mockTask, dueAt: '2026-12-31T08:00:00.000Z' };
+      const user = userEvent.setup();
+      render(<TaskModal {...defaultProps} task={taskWithDue} startEditing={true} />);
+      const dueInput = document.getElementById('task-modal-due-at') as HTMLInputElement;
+      expect(dueInput).toBeInTheDocument();
+      // value is the local-time representation of 2026-12-31T08:00:00Z;
+      // we just check the year/month so the test isn't timezone-sensitive.
+      expect(dueInput.value).toMatch(/^2026-12-31T/);
+      await user.clear(dueInput);
+      await user.type(dueInput, '2027-01-15T09:30');
+      const saveButton = await screen.findByText('taskModal.save');
+      await user.click(saveButton);
+      const onUpdate = defaultProps.onUpdate;
+      const lastCall = onUpdate.mock.calls[onUpdate.mock.calls.length - 1];
+      expect(lastCall[0].dueAt).toBeTruthy();
+      expect(lastCall[0].dueAt.startsWith('2027-01-15')).toBe(true);
+    });
+
+    it('exposes a Clear button that nulls the due date before save', async () => {
+      const taskWithDue = { ...mockTask, dueAt: '2026-12-31T08:00:00.000Z' };
+      const user = userEvent.setup();
+      render(<TaskModal {...defaultProps} task={taskWithDue} startEditing={true} />);
+      const dueInput = document.getElementById('task-modal-due-at') as HTMLInputElement;
+      expect(dueInput.value).toMatch(/^2026-12-31T/);
+      const clearButton = screen.getByRole('button', { name: 'taskModal.dueDateClear' });
+      await user.click(clearButton);
+      expect(dueInput.value).toBe('');
+      const saveButton = await screen.findByText('taskModal.save');
+      await user.click(saveButton);
+      const lastCall = defaultProps.onUpdate.mock.calls[defaultProps.onUpdate.mock.calls.length - 1];
+      expect(lastCall[0].dueAt).toBeNull();
     });
   });
 });
