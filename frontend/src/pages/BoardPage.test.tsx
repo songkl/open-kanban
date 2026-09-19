@@ -60,6 +60,20 @@ vi.mock('../hooks/useSetupGuard', () => ({
   useSetupGuard: vi.fn(),
 }));
 
+// s-1218: capture the `updateTaskPosition` callback that BoardPage
+// wires into ColumnBoard so we can drive it directly in unit tests
+// without rendering the full DnD tree.
+const capturedColumnBoardProps = vi.hoisted(() => ({
+  current: null as null | { updateTaskPosition?: (...args: unknown[]) => Promise<void> },
+}));
+
+vi.mock('../components/ColumnBoard', () => ({
+  ColumnBoard: (props: { updateTaskPosition?: (...args: unknown[]) => Promise<void> }) => {
+    capturedColumnBoardProps.current = props;
+    return <div data-testid="column-board-stub" />;
+  },
+}));
+
 const defaultBoard: Board = {
   id: 'board-1',
   name: 'Test Board',
@@ -322,6 +336,100 @@ describe('BoardPage', () => {
     await waitFor(() => {
       expect(fetchBoards).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// s-1218: cross-column drag-and-drop must persist the active task's
+// new column_id. The earlier BoardPage.updateTaskPosition filter
+// `task.id !== activeId` on the destination-column payload silently
+// dropped the dragged task from the reorder request, so the next
+// refresh (WebSocket or manual reload) snapped the card back to its
+// original column. Capture the `updateTaskPosition` callback the page
+// wires into ColumnBoard and assert the request body it builds for a
+// cross-column move includes every task in the destination column —
+// most importantly, the dragged task with its new columnId.
+describe('BoardPage cross-column reorder (s-1218)', () => {
+  const buildTask = (overrides: Partial<Task>): Task => ({
+    id: 't',
+    title: 'T',
+    columnId: 'col-source',
+    position: 0,
+    published: true,
+    archived: false,
+    priority: 'medium',
+    createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
+    meta: null,
+    ...overrides,
+  });
+
+  const sourceColumn: ColumnType = {
+    ...defaultColumn,
+    id: 'col-source',
+    tasks: [
+      buildTask({ id: 't1', title: 'T1', position: 0 }),
+      buildTask({ id: 't2', title: 'T2', position: 1 }),
+      buildTask({ id: 't3', title: 'T3', position: 2 }),
+    ],
+  };
+
+  const destColumn: ColumnType = {
+    ...defaultColumn,
+    id: 'col-dest',
+    name: 'Dest',
+    tasks: [buildTask({ id: 't4', title: 'T4', position: 0, columnId: 'col-dest' })],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedColumnBoardProps.current = null;
+    boardStateMock.current = buildBoardStateMock({
+      columns: [sourceColumn, destColumn],
+    });
+  });
+
+  it('includes the dragged task in the reorder payload with the new columnId', async () => {
+    const { tasksApi } = await import('../services/api');
+    renderBoardPage();
+
+    const props = capturedColumnBoardProps.current;
+    expect(props?.updateTaskPosition).toBeDefined();
+    const updateTaskPosition = props!.updateTaskPosition as unknown as (
+      activeId: string,
+      overId: string,
+      activeColumn: ColumnType,
+      overColumn: ColumnType,
+      activeTask: Task,
+    ) => Promise<void>;
+
+    const draggedTask = buildTask({ id: 't3', title: 'T3', columnId: 'col-source', position: 2 });
+    await updateTaskPosition('t3', 't4', sourceColumn, destColumn, draggedTask);
+
+    expect(tasksApi.reorder).toHaveBeenCalledTimes(1);
+    const payload = (tasksApi.reorder as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0] as Array<{
+      id: string;
+      columnId: string;
+      position: number;
+    }>;
+
+    // The dragged task must show up in the destination column.
+    const t3 = payload.find((item) => item.id === 't3');
+    expect(t3).toBeDefined();
+    expect(t3?.columnId).toBe('col-dest');
+
+    // Tasks that stayed in the source column must still be reported.
+    const t1 = payload.find((item) => item.id === 't1');
+    const t2 = payload.find((item) => item.id === 't2');
+    expect(t1?.columnId).toBe('col-source');
+    expect(t2?.columnId).toBe('col-source');
+
+    // The pre-existing destination task must remain in the destination column.
+    const t4 = payload.find((item) => item.id === 't4');
+    expect(t4?.columnId).toBe('col-dest');
+
+    // No duplicates / no missing tasks.
+    const payloadIds = payload.map((item) => item.id).sort();
+    expect(payloadIds).toEqual(['t1', 't2', 't3', 't4']);
   });
 });
 

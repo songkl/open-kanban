@@ -331,10 +331,18 @@ export function BoardPage() {
       });
     }
     if (nextOverTasks && overColumn.id !== activeColumn.id) {
+      // s-1218: include every task in the destination column. The
+      // earlier `task.id !== activeId` filter dropped the dragged
+      // task itself, which meant the backend never received the new
+      // column_id for it. The optimistic local UI update placed the
+      // card in the destination column, but the next WebSocket
+      // refresh (or a manual reload) would re-read the DB row in its
+      // original column, snapping the card back. Sending every
+      // `nextOverTasks` row — including the active one with its
+      // already-updated columnId — closes that round-trip gap so the
+      // move persists.
       nextOverTasks.forEach((task, idx) => {
-        if (task.id !== activeId) {
-          reorderItems.push({ id: task.id, columnId: overColumn.id, position: idx });
-        }
+        reorderItems.push({ id: task.id, columnId: overColumn.id, position: idx });
       });
     }
 
