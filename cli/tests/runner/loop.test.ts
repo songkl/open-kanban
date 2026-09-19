@@ -1281,8 +1281,79 @@ describe("RunLoop — debug logging", () => {
     expect(joined).toMatch(/claim succeeded: taskId=s-debug-1/);
     expect(joined).toMatch(/hydrated task s-debug-1:/);
     expect(joined).toMatch(/spawning agent for task s-debug-1:/);
+    // s-1236: the loop now also logs the full prepared argv + cwd so
+    // operators can see the actual command being spawned without
+    // reaching for `ps`/strace.
+    expect(joined).toMatch(/agent command for task s-debug-1: cmd=/);
     expect(joined).toMatch(/agent spawned for task s-debug-1 pid=/);
     expect(joined).toMatch(/agent finished for task s-debug-1:/);
+  });
+
+  // s-1236: assert the new `agent command` debug line surfaces the
+  // resolved argv + cwd the spawn layer is about to hand to the OS,
+  // not just the agent's `bin`. We pin a custom `args` array so the
+  // assertion can verify the shell-shaped `cmd=…` string contains
+  // every expected token (including operator-supplied extras like
+  // `--non-interactive` and the prompt path).
+  it("emits the full prepared command (bin + args + cwd) under --debug", async () => {
+    const claimTask = (id: string): ScriptedClaim => ({
+      request: {
+        boardId: "sys",
+        status: "todo",
+        agentType: "opencoder",
+        runnerId: "runner-1",
+      },
+      outcome: {
+        status: 200,
+        body: {
+          task: { ...TASK_TEMPLATE, id },
+          run: { taskId: id, runnerId: "runner-1", status: "claimed" },
+        },
+      },
+    });
+    const h = makeHarness({
+      config: makeConfig({
+        agent: {
+          bin: "/usr/local/bin/opencode",
+          binPath: "/usr/local/bin/opencode",
+          promptMode: "arg",
+          promptArg: "--prompt",
+          cwd: "/srv/repo",
+          args: ["--non-interactive", "--silent"],
+          env: { LOG_LEVEL: "info" },
+          timeoutMs: 5_000,
+        },
+      }),
+      scripts: [claimTask("s-debug-cmd")],
+    });
+    const runPromise = h.loop.run();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    h.spawner.resolveIndex(0, {
+      exitCode: 0,
+      signal: null,
+      stderr: "",
+      stdout: "",
+      reason: "exit",
+    });
+    for (let i = 0; i < 5; i++) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    h.loop.requestShutdown();
+    await runPromise;
+
+    const cmdLine = h.logs
+      .filter((l) => l.level === "debug")
+      .map((l) => l.message)
+      .find((m) => m.startsWith("agent command for task s-debug-cmd:"));
+    expect(cmdLine).toBeDefined();
+    // The line must contain every argv entry in order and the cwd.
+    expect(cmdLine).toMatch(/cmd=\/usr\/local\/bin\/opencode --non-interactive --silent/);
+    expect(cmdLine).toMatch(/cwd=\/srv\/repo/);
+    // The prompt path is appended by the arg-mode helper; we can't
+    // assert the literal tmp file path, but the line should at least
+    // mention the `--prompt` flag.
+    expect(cmdLine).toMatch(/--prompt /);
   });
 
   it("emits debug trace for idle claim (no task)", async () => {

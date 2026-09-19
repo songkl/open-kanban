@@ -457,52 +457,62 @@ async function promptRunnerSettings(prompter: Prompter): Promise<RunnerSettings>
     default: false,
   });
   const defaults = RUNNER_DEFAULTS.runner;
+  let pollIntervalMs: number;
+  let heartbeatIntervalMs: number;
+  let lockTimeoutMs: number;
+  let maxConcurrent: number;
   if (!tune) {
-    return {
-      pollIntervalMs: defaults.pollIntervalMs,
-      heartbeatIntervalMs: defaults.heartbeatIntervalMs,
-      lockTimeoutMs: defaults.lockTimeoutMs,
-      maxConcurrent: defaults.maxConcurrent,
-      mode: defaults.mode,
-    };
+    pollIntervalMs = defaults.pollIntervalMs;
+    heartbeatIntervalMs = defaults.heartbeatIntervalMs;
+    lockTimeoutMs = defaults.lockTimeoutMs;
+    maxConcurrent = defaults.maxConcurrent;
+  } else {
+    pollIntervalMs = (await prompter.number({
+      message: "Idle poll cadence (ms)",
+      default: defaults.pollIntervalMs,
+      min: 100,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive number" : true,
+    })) ?? defaults.pollIntervalMs;
+    heartbeatIntervalMs = (await prompter.number({
+      message: "Heartbeat cadence (ms)",
+      default: defaults.heartbeatIntervalMs,
+      min: 100,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive number" : true,
+    })) ?? defaults.heartbeatIntervalMs;
+    lockTimeoutMs = (await prompter.number({
+      message: "Lock timeout (ms); must exceed 2 × heartbeat",
+      default: defaults.lockTimeoutMs,
+      min: heartbeatIntervalMs * 2 + 1,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive number" : true,
+    })) ?? defaults.lockTimeoutMs;
+    maxConcurrent = (await prompter.number({
+      message: "Max concurrent tasks (v1 always runs one)",
+      default: defaults.maxConcurrent,
+      min: 1,
+      validate: (v) =>
+        v === undefined || v <= 0 ? "must be a positive integer" : true,
+    })) ?? defaults.maxConcurrent;
   }
-  const pollIntervalMs = await prompter.number({
-    message: "Idle poll cadence (ms)",
-    default: defaults.pollIntervalMs,
-    min: 100,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive number" : true,
-  });
-  const heartbeatIntervalMs = await prompter.number({
-    message: "Heartbeat cadence (ms)",
-    default: defaults.heartbeatIntervalMs,
-    min: 100,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive number" : true,
-  });
-  const lockTimeoutMs = await prompter.number({
-    message: "Lock timeout (ms); must exceed 2 × heartbeat",
-    default: defaults.lockTimeoutMs,
-    min: heartbeatIntervalMs * 2 + 1,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive number" : true,
-  });
-  const maxConcurrent = await prompter.number({
-    message: "Max concurrent tasks (v1 always runs one)",
-    default: defaults.maxConcurrent,
-    min: 1,
-    validate: (v) =>
-      v === undefined || v <= 0 ? "must be a positive integer" : true,
-  });
+  // s-1236: the runner id used to live inside the `tune` branch so an
+  // operator who accepted every default never had a way to pin a
+  // stable id — a real problem for anyone running the loop on more
+  // than one host (the auto-generated `<host>-<pid>-<uuid>` differs
+  // every restart, so historical `task_runs` rows can never be
+  // attributed to the same logical runner). Surface the prompt on
+  // every invocation; an empty answer preserves the auto-gen
+  // fallback so existing single-host setups keep working untouched.
   const runnerId = await prompter.input({
-    message: "Runner id (leave blank to auto-generate)",
+    message: "Runner id (leave blank to auto-generate from <host>-<pid>-<uuid>)",
     default: "",
   });
   return {
-    pollIntervalMs: pollIntervalMs ?? defaults.pollIntervalMs,
-    heartbeatIntervalMs: heartbeatIntervalMs ?? defaults.heartbeatIntervalMs,
-    lockTimeoutMs: lockTimeoutMs ?? defaults.lockTimeoutMs,
-    maxConcurrent: maxConcurrent ?? defaults.maxConcurrent,
+    pollIntervalMs,
+    heartbeatIntervalMs,
+    lockTimeoutMs,
+    maxConcurrent,
     mode: defaults.mode,
     runnerId: runnerId.trim() || undefined,
   };

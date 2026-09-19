@@ -216,9 +216,12 @@ function mode1Answers(opts: {
           { kind: "number", value: heartbeatIntervalMs },
           { kind: "number", value: lockTimeoutMs },
           { kind: "number", value: 1 }, // maxConcurrent
-          { kind: "input", value: "" }, // runnerId
         ]
       : []),
+    // s-1236: runnerId is now asked on every invocation, regardless
+    // of whether the operator tunes the cadences. Tests that opt
+    // out of tuning still need to script the answer.
+    { kind: "input", value: "" }, // runnerId
     { kind: "select", value: scope },
     { kind: "input", value: "" }, // apiUrl
     { kind: "input", value: "" }, // profile
@@ -253,7 +256,8 @@ function noFetchAnswers(opts: {
     { kind: "input", value: "" },
     { kind: "input", value: "" },
     { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
-    { kind: "confirm", value: false },
+    { kind: "confirm", value: false }, // tune cadences?
+    { kind: "input", value: "" }, // runnerId (s-1236)
     { kind: "select", value: scope },
     { kind: "input", value: "" },
     { kind: "input", value: "" },
@@ -281,7 +285,8 @@ function mode1AnswersWithBinPath(): Array<{ kind: string; value: unknown }> {
     { kind: "input", value: "" },
     { kind: "input", value: "" },
     { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
-    { kind: "confirm", value: false },
+    { kind: "confirm", value: false }, // tune cadences?
+    { kind: "input", value: "" }, // runnerId (s-1236)
     { kind: "select", value: "project" },
     { kind: "input", value: "" },
     { kind: "input", value: "" },
@@ -350,6 +355,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false }, // tune
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "local" },
       { kind: "input", value: "" }, // apiUrl
       { kind: "input", value: "" }, // profile
@@ -386,6 +392,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false },
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       // The apiUrl / profile prompts are skipped because presets are
       // already supplied; no answers needed.
@@ -410,7 +417,7 @@ describe("runRunnerInitWizard", () => {
     // Presets skip two prompts; the overwrite confirm only fires when
     // the file already exists, so we just assert we consumed enough
     // scripted answers to reach the write step.
-    expect(prompter.calls.length).toBeGreaterThanOrEqual(12);
+    expect(prompter.calls.length).toBeGreaterThanOrEqual(13);
   });
 
   it("asks the user to confirm when the file already exists", async () => {
@@ -426,6 +433,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false },
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       { kind: "input", value: "" },
       { kind: "input", value: "" },
@@ -460,6 +468,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false }, // tune?
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       { kind: "input", value: "" },
       { kind: "input", value: "" },
@@ -590,6 +599,51 @@ describe("runRunnerInitWizard", () => {
     expect(result.config.runner.lockTimeoutMs).toBe(40000);
   });
 
+  // s-1236: pre-this-change, the runner id prompt lived inside the
+  // `tune` branch, so an operator who accepted every default never
+  // had a chance to pin a stable id across restarts. The wizard now
+  // asks for it on every invocation; supplying a non-empty string
+  // here proves the answer survives both the prompter skip and the
+  // YAML serializer so the saved config keeps the explicit id.
+  it("always asks for the runner id even when the user skips cadence tuning", async () => {
+    const cwd = freshDir("run-init-runnerid-");
+    // mode1Answers() with tune=false but a non-empty runnerId answer.
+    const prompter = scriptedPrompter(mode1Answers({
+      tune: false,
+    }).map((step, idx, all) => {
+      // The runnerId slot is at the index immediately after the
+      // cadence-tuning branch. Without a tune branch the slot is
+      // right after the "tune cadences?" confirm. We splice it in
+      // here so the assertion below can target the actual runnerId
+      // answer rather than the placeholder empty string in the
+      // default script.
+      if (step.kind === "input" && step.value === "" && all[idx - 1]?.kind === "confirm") {
+        return { kind: "input", value: "stable-runner-1" };
+      }
+      return step;
+    }));
+    const writes: Array<{ path: string; content: string }> = [];
+    const result = await runRunnerInitWizard(
+      { cwd },
+      {
+        prompter,
+        fetchBoards: async () => [
+          { id: "sys", name: "Sys board" },
+          { id: "dev", name: "Dev board" },
+        ],
+        fetchColumns: async () => [
+          { id: "todo-c", name: "Todo", status: "todo" },
+        ],
+        writeFile: (p, c) => writes.push({ path: p, content: c }),
+        pathExists: () => false,
+      }
+    );
+    expect(result.config.runner.runnerId).toBe("stable-runner-1");
+    // And it must round-trip through the YAML serializer so the
+    // value lands in the on-disk file the runner reads at startup.
+    expect(writes[0].content).toMatch(/runnerId:\s*stable-runner-1/);
+  });
+
   it("falls back to a raw board-id prompt when no HTTP client is supplied", async () => {
     const cwd = freshDir("run-init-nofetch-");
     const prompter = scriptedPrompter([
@@ -605,6 +659,7 @@ describe("runRunnerInitWizard", () => {
       { kind: "input", value: "" },
       { kind: "number", value: RUNNER_DEFAULTS.agent.timeoutMs },
       { kind: "confirm", value: false },
+      { kind: "input", value: "" }, // runnerId (s-1236)
       { kind: "select", value: "project" },
       { kind: "input", value: "" },
       { kind: "input", value: "" },

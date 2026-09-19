@@ -657,7 +657,19 @@ export class AgentSpawner {
     this.spawner = spawner;
   }
 
-  spawn(opts: PrepareSpawnOptions): { process: AgentProcess; cleanup: () => void } {
+  /**
+   * Spawn an agent for one task. The returned `prepared` is the
+   * post-substitution argv / cwd / env the spawn layer is about to
+   * hand to the OS, surfaced so the loop can emit it under
+   * `--debug` (s-1236) without re-running `prepareSpawn` and risking
+   * a divergent result. ACP runs reuse the same argv + cwd + env the
+   * non-ACP path would build; only the actual child wiring differs.
+   */
+  spawn(opts: PrepareSpawnOptions): {
+    process: AgentProcess;
+    cleanup: () => void;
+    prepared: PreparedSpawn;
+  } {
     // s-1235: ACP needs bidirectional control of the child's stdio
     // so the existing `ProcessSpawner` shape (fire-and-forget) does
     // not fit. The ACP path bypasses `prepareSpawn` for the spawn
@@ -665,7 +677,7 @@ export class AgentSpawner {
     // delegating to `spawnAcpAgent` with the same resolved values.
     if ((this.cfg.promptMode ?? "arg") === "acp") {
       const prepared = prepareSpawn({ ...opts, cfg: this.cfg });
-      return spawnAcpAgent({
+      const out = spawnAcpAgent({
         bin: prepared.bin,
         args: prepared.args,
         cwd: prepared.cwd,
@@ -673,6 +685,11 @@ export class AgentSpawner {
         timeoutMs: this.cfg.timeoutMs ?? 1_800_000,
         prompt: opts.prompt,
       });
+      return {
+        process: out.process,
+        cleanup: out.cleanup,
+        prepared,
+      };
     }
     const prepared = prepareSpawn({ ...opts, cfg: this.cfg });
     const out = this.spawner.spawn({
@@ -690,6 +707,7 @@ export class AgentSpawner {
         userCleanup();
         out.cleanup();
       },
+      prepared,
     };
   }
 }
