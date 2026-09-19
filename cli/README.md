@@ -126,6 +126,16 @@ kanban tasks complete <id>      # advances to the next column
 > kanban auth login --as-human
 > ```
 >
+> Since s-1246, running `kanban auth login` from a TTY with no
+> `--as-human` / `--as-agent` flag opens an interactive identity
+> picker so the operator can pick between binding to an Agent
+> (recommended for unattended runners) or to their own account
+> (Human). The Agent option is the default to keep the unattended
+> runner UX one keystroke away from the previous behaviour. CI /
+> e2e callers (stdin not a TTY) skip the picker and stay on the
+> historical default of Agent, so existing automation is untouched.
+> Add `--as-agent` to suppress the picker even when stdin is a TTY.
+>
 > The end-to-end walkthrough lives in
 > [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to).
 > `kanban auth agent login` remains available as an explicit alias

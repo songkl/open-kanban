@@ -108,6 +108,14 @@ kanban tasks complete <id>      # 推进到下一列
 > kanban auth login --as-human
 > ```
 >
+> 自 s-1246 起，在 TTY 中运行 `kanban auth login` 且未传
+> `--as-human` / `--as-agent` 时，CLI 会弹出一个交互式选择器
+> 让运维者在 Agent（推荐用于无人值守 runner）与你的账号（Human）
+> 之间选择；Agent 选项为默认值，以保持无人值守 runner 场景的
+> 体验不变。CI / e2e 调用方（stdin 不是 TTY）会跳过选择器，
+> 继续沿用 Agent 的历史默认值，不会影响已有自动化。如需在 TTY
+> 下也跳过选择器，可加 `--as-agent`。
+>
 > 端到端教程见
 > [`docs/CLI_USER_GUIDE.md` §2.2](../docs/CLI_USER_GUIDE.md#22-device-flow-agent-选择--pick-which-identity-the-device-flow-binds-to)。
 > `kanban auth agent login` 仍保留为显式的 Agent 绑定别名。

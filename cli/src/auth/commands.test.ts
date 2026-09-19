@@ -18,6 +18,7 @@ import {
   DeniedAuthorizationError,
   NotLoggedInError,
   authExitCodeForError,
+  formatLoginSuccess,
   isUnknownClientIdError,
   runLogin,
   runLogout,
@@ -444,6 +445,13 @@ describe("runLogin (agent mode)", () => {
     expect(stderr).not.toMatch(/Logged in to/);
     expect(agentStdout).toContain("Logged in to http://localhost:8080 as Agent alice-bot");
     expect(agentStdout).toContain("type=AGENT");
+    // s-1246: the success block now includes host / identity / client
+    // id / scope + next-step hints so operators see what they bound to.
+    expect(agentStdout).toContain("Host:");
+    expect(agentStdout).toContain("Identity:");
+    expect(agentStdout).toContain("alice-bot");
+    expect(agentStdout).toContain("Next steps:");
+    expect(agentStdout).toContain("kanban mine");
   });
 
   it("skips the browser launch when openBrowser=false", async () => {
@@ -851,5 +859,113 @@ describe("authExitCodeForError", () => {
     expect(authExitCodeForError(new Error("something else"))).toBe(1);
     expect(authExitCodeForError("string error")).toBe(1);
     expect(authExitCodeForError(null)).toBe(1);
+  });
+});
+
+// s-1246: the post-login success block has to (a) keep the historical
+// "Logged in to <url> as ..." headline so the e2e agent-selection
+// suite and shell scripts that grep for that marker still match, and
+// (b) surface enough extra context (host / identity / client id /
+// scope + next-step hints) that an operator knows what they just
+// bound to. formatLoginSuccess is the single source of truth — both
+// runLoginAsAgent and runLoginAsHuman call it.
+describe("formatLoginSuccess", () => {
+  it("renders the agent-mode success block with identity details and next-step hints", () => {
+    const text = formatLoginSuccess({
+      apiUrl: "http://localhost:8080",
+      mode: "agent",
+      profile: "default",
+      scope: "kanban:read tasks:write comments:write",
+      credentials: {
+        apiUrl: "http://localhost:8080",
+        clientId: "agent:agent-9",
+        clientName: "kanban-cli/agent-token",
+        accessToken: "at-9",
+      },
+      agent: { id: "agent-9", nickname: "alice-bot", type: "AGENT" },
+    });
+    // s-1232 contract — the historical "Logged in to ..." line is
+    // the first line on stdout. Pin it here so a regression that
+    // drops the headline breaks loudly.
+    expect(text).toMatch(/Logged in to http:\/\/localhost:8080 as Agent alice-bot/);
+    expect(text).toContain("type=AGENT");
+    // s-1246 additions: host / identity / client id / scope / next
+    // steps. The agent flow nudges the operator towards `kanban
+    // mine` / `kanban run init` because those are the most common
+    // post-login actions for the unattended-runner case.
+    expect(text).toContain("Host:");
+    expect(text).toContain("http://localhost:8080");
+    expect(text).toContain("Profile:");
+    expect(text).toContain("default");
+    expect(text).toContain("Identity:");
+    expect(text).toContain("alice-bot");
+    expect(text).toContain("agent-9");
+    expect(text).toContain("Client ID:");
+    expect(text).toContain("agent:agent-9");
+    expect(text).toContain("Scope:");
+    expect(text).toContain("kanban:read tasks:write comments:write");
+    expect(text).toContain("Next steps:");
+    expect(text).toContain("kanban auth status");
+    expect(text).toContain("kanban mine");
+    expect(text).toContain("kanban run init");
+    // Human-only next-steps must not leak into the agent block.
+    expect(text).not.toContain("kanban tasks list");
+  });
+
+  it("renders the human-mode success block with the human-specific next-step hints", () => {
+    const text = formatLoginSuccess({
+      apiUrl: "https://kanban.example.com",
+      mode: "human",
+      profile: "work",
+      scope: "kanban:read",
+      credentials: {
+        apiUrl: "https://kanban.example.com",
+        clientId: "cid-1",
+        clientName: "open-kanban-cli",
+        accessToken: "at-1",
+      },
+    });
+    expect(text).toMatch(/Logged in to https:\/\/kanban\.example\.com as cid-1/);
+    expect(text).toContain("Scope:");
+    expect(text).toContain("kanban:read");
+    // Human flow nudges the operator towards `kanban whoami` /
+    // `kanban tasks list` instead of the agent-only commands.
+    expect(text).toContain("kanban auth status");
+    expect(text).toContain("kanban whoami");
+    expect(text).toContain("kanban tasks list");
+    expect(text).not.toContain("kanban mine");
+    expect(text).not.toContain("kanban run init");
+  });
+
+  it("falls back to the stored scope when the caller does not pass one explicitly", () => {
+    const text = formatLoginSuccess({
+      apiUrl: "http://localhost:8080",
+      mode: "human",
+      credentials: {
+        apiUrl: "http://localhost:8080",
+        clientId: "cid-1",
+        clientName: "open-kanban-cli",
+        accessToken: "at-1",
+        scope: "kanban:read",
+      },
+    });
+    expect(text).toContain("Scope:");
+    expect(text).toContain("kanban:read");
+  });
+
+  it("hides the Profile line when no profile is set", () => {
+    const text = formatLoginSuccess({
+      apiUrl: "http://localhost:8080",
+      mode: "agent",
+      credentials: {
+        apiUrl: "http://localhost:8080",
+        clientId: "agent:agent-1",
+        clientName: "kanban-cli/agent-token",
+        accessToken: "at-1",
+      },
+      agent: { id: "agent-1", type: "AGENT" },
+    });
+    expect(text).toContain("Identity:");
+    expect(text).not.toContain("Profile:");
   });
 });

@@ -149,6 +149,13 @@ export interface RunLoginResult {
 // persist the credential and rolls back to the previous state, the
 // same behaviour `kanban auth agent login` already implements.
 //
+// s-1246: the top-level CLI (program.ts) renders an interactive
+// identity picker before reaching runLogin when stdin is a TTY and
+// no `--as-human` / `--as-agent` flag was supplied. runLogin itself
+// is a pure orchestrator that accepts the resolved mode via
+// `opts.mode`; non-interactive callers (e2e tests, CI scripts) skip
+// the picker and stay on the historical default ('agent').
+//
 // onPrompt is intentionally implicit: the human already saw the prompt
 // in the browser, so we just wait. Tests that want to simulate a
 // "deny" can subclass / wrap OAuthClient, or pass a custom onPrompt
@@ -198,9 +205,13 @@ async function runLoginAsHuman(
     });
     const stored = deps.oauth.loadCredentials();
     stdout.write(
-      chalk.green(
-        `Logged in to ${apiUrl} as ${stored?.clientId ?? "unknown client"} (scope: ${tok.scope ?? stored?.scope ?? "default"})\n`
-      )
+      formatLoginSuccess({
+        apiUrl,
+        mode: "human",
+        credentials: stored,
+        scope: tok.scope,
+        profile: opts.profile,
+      })
     );
     return { credentials: stored };
   } catch (err) {
@@ -234,9 +245,13 @@ async function runLoginAsHuman(
         });
         const stored = deps.oauth.loadCredentials();
         stdout.write(
-          chalk.green(
-            `Logged in to ${apiUrl} as ${stored?.clientId ?? "unknown client"} (scope: ${tok.scope ?? stored?.scope ?? "default"})\n`
-          )
+          formatLoginSuccess({
+            apiUrl,
+            mode: "human",
+            credentials: stored,
+            scope: tok.scope,
+            profile: opts.profile,
+          })
         );
         return { credentials: stored };
       } catch (retryErr) {
@@ -363,12 +378,85 @@ async function runLoginAsAgent(
   // line to surface on stdout. The device-flow prompt above still
   // uses stderr so a redirected stdout stream stays free of the
   // verification URL / user code.
+  //
+  // s-1246: surface a richer success block (host / identity / client
+  // id / scope + next-step hints) instead of the bare one-liner so
+  // operators get immediate confirmation of what they just bound to.
+  // The "Logged in to <url> as Agent <nickname> (type=AGENT)" line is
+  // preserved as the first line so the existing e2e assertions in
+  // agent-selection.test.ts still match.
   stdout.write(
-    chalk.green(
-      `Logged in to ${apiUrl} as Agent ${agent.nickname ?? agent.id ?? "unknown"} (type=${agent.type ?? "AGENT"})\n`
-    )
+    formatLoginSuccess({
+      apiUrl,
+      mode: "agent",
+      credentials: stored,
+      scope: tok.scope,
+      profile: opts.profile,
+      agent,
+    })
   );
   return { credentials: stored, agent };
+}
+
+// formatLoginSuccess renders the post-login confirmation block. The
+// output stays on stdout (s-1232 contract: success on stdout, device
+// flow UX on stderr) and starts with the historical
+// "Logged in to <url> as ..." line so consumers grepping for that
+// marker (e2e tests, shell scripts, log scrapers) keep working.
+// Subsequent lines add host / identity / client id / scope / next
+// steps so an operator immediately knows what they just bound to
+// (s-1246).
+export function formatLoginSuccess(input: {
+  apiUrl: string;
+  mode: LoginMode;
+  credentials: StoredCredentials | null | undefined;
+  scope?: string | undefined;
+  profile?: string | undefined;
+  agent?: {
+    id?: string;
+    nickname?: string;
+    username?: string;
+    type?: string;
+  };
+}): string {
+  const apiUrl = stripTrailingSlash(input.apiUrl);
+  const stored = input.credentials;
+  const scope = input.scope ?? stored?.scope ?? "default";
+  const headline =
+    input.mode === "agent"
+      ? `Logged in to ${apiUrl} as Agent ${input.agent?.nickname ?? input.agent?.id ?? "unknown"} (type=${input.agent?.type ?? "AGENT"})`
+      : `Logged in to ${apiUrl} as ${stored?.clientId ?? "unknown client"} (scope: ${scope})`;
+  const identityParts: string[] = [];
+  if (input.mode === "agent" && input.agent) {
+    const nick = input.agent.nickname ?? input.agent.username ?? input.agent.id;
+    if (nick) identityParts.push(String(nick));
+    if (input.agent.type) identityParts.push(`type=${input.agent.type}`);
+    if (input.agent.id) identityParts.push(`id=${input.agent.id}`);
+  } else if (stored?.clientId) {
+    identityParts.push(`Human (clientId=${stored.clientId})`);
+  }
+  const nextSteps =
+    input.mode === "agent"
+      ? ["kanban auth status", "kanban mine", "kanban run init"]
+      : ["kanban auth status", "kanban whoami", "kanban tasks list"];
+  const lines: string[] = [chalk.green(headline)];
+  lines.push("");
+  lines.push(`${chalk.bold("Host")}:      ${apiUrl}`);
+  if (input.profile) {
+    lines.push(`${chalk.bold("Profile")}:   ${input.profile}`);
+  }
+  if (identityParts.length > 0) {
+    lines.push(`${chalk.bold("Identity")}:  ${identityParts.join(", ")}`);
+  }
+  lines.push(`${chalk.bold("Client ID")}: ${stored?.clientId ?? chalk.gray("(unknown)")}`);
+  lines.push(`${chalk.bold("Scope")}:     ${scope}`);
+  lines.push("");
+  lines.push(chalk.bold("Next steps:"));
+  for (const step of nextSteps) {
+    lines.push(`  ${chalk.cyan(step)}`);
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
 // CLIENT_NAME_AGENT marks credential-store entries written by the
