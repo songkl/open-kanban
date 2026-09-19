@@ -747,14 +747,19 @@ function buildOnPrompt(stderr: NodeJS.WritableStream, clientName: string) {
 }
 
 // isCliLikeClientName mirrors the server's CLI-detection heuristic
-// (oauth.IsAgentIdSelectionRequired in backend/internal/oauth/device.go)
+// (oauth.AgentSelectionRequired in backend/internal/oauth/approve.go)
 // so the login prompt can warn the operator before the approval
 // page renders the identity picker. Mirrored on purpose: the CLI
 // has no way to query the server for the heuristic value until
 // after the device code has been issued, and we want the warning
-// to surface inline with the prompt. The pattern is intentionally
-// a subset (only the explicit names + the suffix) so false
-// positives don't add noise to a prompt that doesn't need it.
+// to surface inline with the prompt. The pattern covers both the
+// CLI and MCP registration shapes — the CLI registers via DCR as
+// `open-kanban-mcp` (the shared client.ts factory hardcodes that
+// name), and the MCP server ships with the same registration, so
+// the heuristic must match `-mcp` (not just `-cli`) or the prompt
+// stays silent and the approver lands on the device page without
+// the Agent identity picker (s-1249). First-party web clients
+// (kanban-frontend, kanban-web, …) are intentionally excluded.
 function isCliLikeClientName(name: string | undefined): boolean {
   if (!name) return false;
   const trimmed = name.trim().toLowerCase();
@@ -762,7 +767,9 @@ function isCliLikeClientName(name: string | undefined): boolean {
   return (
     trimmed === "kanban-cli" ||
     trimmed === "open-kanban-cli" ||
-    trimmed.endsWith("-cli")
+    trimmed === "open-kanban-mcp" ||
+    trimmed.endsWith("-cli") ||
+    trimmed.endsWith("-mcp")
   );
 }
 

@@ -236,6 +236,44 @@ describe("runLogin", () => {
     expect(stderr).not.toMatch(/Identity selection/);
   });
 
+  // s-1249: the CLI's DCR factory in src/auth/client.ts hardcodes
+  // client_name="open-kanban-mcp", so the prompt-side heuristic must
+  // also flag -mcp shapes. Without this branch `kanban auth login`
+  // would land on the device page without the Agent identity picker
+  // because the server-side heuristic never matched `open-kanban-mcp`
+  // either — keeping the two sides in sync is what makes the picker
+  // surface for the actual CLI flow.
+  it("prints the identity-selection hint for open-kanban-mcp (s-1249)", async () => {
+    const oauth = makeFakeOAuth({
+      authorize: vi.fn(async (params: { onPrompt?: (p: TrackedPoll) => Promise<"approve" | "deny"> }) => {
+        await params.onPrompt?.(makePoll());
+        return {
+          access_token: "at-1",
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "kanban:read",
+        };
+      }),
+    });
+    // The fake client's authorizeInteractive always rewrites the
+    // clientName to "open-kanban-cli"; the only way to exercise the
+    // MCP-shaped name is to seed credentials with it before runLogin
+    // reads credsBefore.
+    oauth.secretProvider.write({
+      apiUrl: "http://localhost:8080",
+      clientId: "cid",
+      clientName: "open-kanban-mcp",
+      accessToken: "stale",
+    });
+    const cap = makeCapture();
+    await runLogin(
+      { apiUrl: "http://localhost:8080", mode: "human" },
+      { oauth, io: cap.io }
+    );
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Identity selection/);
+  });
+
   it("maps user denial to DeniedAuthorizationError (exit 3)", async () => {
     const oauth = makeFakeOAuth({
       authorize: vi.fn(async () => {

@@ -456,6 +456,43 @@ func TestDeviceLookupSkipsPickerForFirstPartyClient(t *testing.T) {
 	}
 }
 
+// TestDeviceLookupShowsAgentPickerForMCPClient confirms the picker is
+// rendered when the OAuth client registers as `open-kanban-mcp` (the
+// registration name used by both the kanban CLI and the MCP server
+// after DCR). Before s-1249 the heuristic only matched `-cli` suffix,
+// so `kanban auth login` would open the device page without the Agent
+// identity picker and the human approver would silently bind to
+// themselves — defeating the unattended-runner use case. The fix
+// widens the heuristic to also match `open-kanban-mcp` and any
+// `-mcp`-suffixed client name.
+func TestDeviceLookupShowsAgentPickerForMCPClient(t *testing.T) {
+	db := setupApproveAgentDB(t)
+	defer db.Close()
+	insertClient(t, db, "kanban-mcp-1", "", "open-kanban-mcp",
+		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
+	insertUser(t, db, "agent-bot-1", "agent-bot-1", "Bot", "AGENT", "MEMBER", true)
+	insertPendingDevice(t, db, "kanban-mcp-1", "MCPX-MCPX", "kanban:read", time.Hour)
+	r := newApproveServer(t, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/oauth/device/lookup?user_code=mcpx-mcpx", nil)
+	setApproveUserRole(t, req, db, "admin-1", "ADMIN")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if v, _ := resp["agentSelectionRequired"].(bool); !v {
+		t.Errorf("expected agentSelectionRequired=true for open-kanban-mcp client, got %v", resp["agentSelectionRequired"])
+	}
+	agents, _ := resp["availableAgents"].([]interface{})
+	if len(agents) != 1 || agents[0].(map[string]interface{})["id"] != "agent-bot-1" {
+		t.Errorf("expected availableAgents=[agent-bot-1], got %v", resp["availableAgents"])
+	}
+}
+
 // TestRequestDeviceCodeEchoesAudienceType confirms the extension
 // parameter is normalised + echoed back so the CLI / MCP server can
 // confirm the server understood its hint.
@@ -511,7 +548,11 @@ func TestRequestDeviceCodeNormalisesUnknownAudienceType(t *testing.T) {
 }
 
 // TestAgentSelectionRequiredHelper exercises the heuristic directly so
-// regressions in the client-name rules are caught immediately.
+// regressions in the client-name rules are caught immediately. The
+// expectation mirrors the CLI / MCP server registration names: both
+// the legacy CLI registration (open-kanban-cli / kanban-cli) and the
+// MCP-shaped registrations (open-kanban-mcp / *-mcp) should surface
+// the Agent identity picker, while first-party web clients should not.
 func TestAgentSelectionRequiredHelper(t *testing.T) {
 	tests := []struct {
 		name string
@@ -521,9 +562,12 @@ func TestAgentSelectionRequiredHelper(t *testing.T) {
 		{"kanban-cli", true},
 		{"foo-cli", true},
 		{"my-bot-cli", true},
+		{"open-kanban-mcp", true},
+		{"my-bot-mcp", true},
+		{"some-mcp", true},
 		{"kanban-web", false},
+		{"kanban-frontend", false},
 		{"", false},
-		{"open-kanban-mcp", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

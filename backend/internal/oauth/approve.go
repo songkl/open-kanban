@@ -193,10 +193,12 @@ func DeviceLookupHandler(db *sql.DB) gin.HandlerFunc {
 // CLI-side `isCliLikeClientName` (cli/src/auth/commands.ts) so the warning
 // surfaces inline with the device-flow prompt.
 //
-// The rule is intentionally narrow: only client names ending in `-cli` or
-// matching the canonical open-kanban-cli / kanban-cli strings are flagged.
-// First-party web clients (kanban-frontend, kanban-web, etc.) are excluded
-// because their approvers want to bind to their own account.
+// The rule covers both `-cli` and `-mcp` suffixes — the canonical CLI
+// (`open-kanban-cli`, `kanban-cli`) and the MCP server / CLI client
+// registration name (`open-kanban-mcp`) all land on this path so the
+// approval page renders the Agent identity picker. First-party web
+// clients (kanban-frontend, kanban-web, etc.) are excluded because their
+// approvers want to bind to their own account.
 func AgentSelectionRequired(client *models.OAuthClient) bool {
 	if client == nil {
 		return false
@@ -207,7 +209,9 @@ func AgentSelectionRequired(client *models.OAuthClient) bool {
 	}
 	return name == "kanban-cli" ||
 		name == "open-kanban-cli" ||
-		strings.HasSuffix(name, "-cli")
+		name == "open-kanban-mcp" ||
+		strings.HasSuffix(name, "-cli") ||
+		strings.HasSuffix(name, "-mcp")
 }
 
 // AgentSelectionRequiredForTest is the white-box hook the agent-selection

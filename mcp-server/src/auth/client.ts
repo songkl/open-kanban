@@ -59,11 +59,19 @@ export class OAuthClient {
     return stored;
   }
 
-  async ensureRegistered(): Promise<StoredCredentials> {
+  async ensureRegistered(clientName?: string): Promise<StoredCredentials> {
     const existing = this.loadCredentials();
     if (existing?.clientId) return existing;
+    // s-1249: honour the `clientName` supplied via AuthorizeOptions so
+    // the CLI registers as `open-kanban-cli` (which matches the
+    // server's CLI-detection heuristic and surfaces the Agent identity
+    // picker on /oauth/device). When no name is supplied we keep the
+    // historical default so the MCP server keeps registering as
+    // `open-kanban-mcp` (the server's heuristic now also matches the
+    // `-mcp` suffix, so the picker still surfaces for MCP).
+    const name = clientName?.trim() || "open-kanban-mcp";
     const request: RegisterRequest = {
-      client_name: "open-kanban-mcp",
+      client_name: name,
       grant_types: ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
       token_endpoint_auth_method: "none",
       redirect_uris: [],
@@ -73,6 +81,7 @@ export class OAuthClient {
     const stored: StoredCredentials = {
       apiUrl: this.apiUrl,
       clientId: reg.client_id,
+      clientName: name,
       scope: reg.scope
     };
     this.secretProvider.write(stored);
@@ -80,7 +89,7 @@ export class OAuthClient {
   }
 
   async authorizeInteractive(opts: AuthorizeOptions): Promise<TokenResponse> {
-    const creds = await this.ensureRegistered();
+    const creds = await this.ensureRegistered(opts.clientName);
     const scope = opts.scope || creds.scope || this.metadata.scopes_supported?.join(" ") || "kanban:read";
     const poll = await requestDeviceCode(this.metadata, creds.clientId, scope, {
       audienceType: opts.audienceType

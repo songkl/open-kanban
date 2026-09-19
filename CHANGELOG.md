@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
   - fix: fall back to the profile tab when a non-admin lands on `?tab=oauth` via a shared link (s-1203)
   - fix: tokenise `agent.args` with POSIX shell-style quoting so a YAML scalar like `--auto true run "do-kanban $taskId"` lands as multiple argv entries instead of one opaque flag the agent binary cannot parse (s-1238). Operators can now write each flag-value group as a single string and rely on the runner to split on whitespace, honour single/double quotes, and apply `$name` substitution / `{prompt}` replacement on the tokenised list
   - fix: rewrite the `kanban auth login` (agent mode) HUMAN-bound error to spell out the wrong / right radio-button choice on the approval page, surface the `kanban auth login --as-human` escape hatch for operators who genuinely wanted a personal-account binding, and confirm the previous credential snapshot is intact so the operator doesn't need to `auth logout` before re-running (s-1247). The same actionable hint is mirrored on `kanban auth agent bind` so the two paths give the operator a single, consistent recovery story
+  - fix: render the Agent identity picker on `/oauth/device` for `kanban auth login` (s-1249). The CLI / MCP server registers via DCR as `open-kanban-mcp`, which the server's CLI-detection heuristic did not match, so the approval page opened without the picker and the human approver silently bound the token to their own account. The heuristic now also matches `open-kanban-mcp` and any `-mcp`-suffixed client, and the CLI's `ensureRegistered` honours the `clientName` supplied via `authorizeInteractive` so the CLI registers as `open-kanban-cli` (the canonical CLI name) when the operator / test asks for it. The CLI-side `isCliLikeClientName` mirror is updated in lock-step so the device-flow prompt warns operators before they hit the page
 
 ### Improvements
   - i18n: add settings.notifications.* keys (en + zh) for the new Notifications section
@@ -36,6 +37,7 @@ All notable changes to this project will be documented in this file.
   - feat: add explicit "Created by" tooltip to the creator avatar on the task card so the previously unexplained avatar now reads as the task author (s-1202)
   - i18n: add taskCard.{assigneeBadgeTitle,assigneeBadgeAria,lastRunnerBadgeTitle,lastRunnerBadgeAria,createdByTooltip,unassigned} and taskModal.{assigneeFieldLabel,assigneeFieldUnassigned,lastRunnerFieldLabel} (s-1202)
   - test: cover the new task-card assignee/last-runner chips and the drawer people section (s-1202)
+  - test: cover the Agent identity picker surfacing for `open-kanban-mcp` device flows (s-1249) — `AgentSelectionRequired` helper expansion (now matches `open-kanban-mcp` and any `-mcp` suffix), `DeviceLookupHandler` happy path for MCP-shaped clients, the symmetric CLI prompt hint for `open-kanban-mcp`, and the CLI DCR honouring `AuthorizeOptions.clientName` so the CLI registers as `open-kanban-cli` when the operator / test asks for it
 
 ### Documentation
 
