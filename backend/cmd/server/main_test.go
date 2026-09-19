@@ -28,6 +28,95 @@ func unsetEnv(t *testing.T, key string) {
 	})
 }
 
+// TestApplyDefaultServerModePinsReleaseMode verifies that the default
+// build (no `-tags debug`, no `-tags release`) forces gin into release
+// mode even when the operator has GIN_MODE=debug in their shell. This
+// is the regression guard for s-1225 ("后端服务启动 不要 debug"):
+// the server must not boot in debug mode unless the binary was
+// explicitly built with `-tags debug`.
+func TestApplyDefaultServerModePinsReleaseMode(t *testing.T) {
+	// Snapshot whatever the test runner has set so we can restore it
+	// without leaking GIN_MODE into the rest of the test binary.
+	prevMode, hadMode := os.LookupEnv("GIN_MODE")
+	t.Cleanup(func() {
+		if hadMode {
+			_ = os.Setenv("GIN_MODE", prevMode)
+		} else {
+			_ = os.Unsetenv("GIN_MODE")
+		}
+		// Reset gin back to test mode so subsequent tests don't see the
+		// release-mode value we just pinned.
+		gin.SetMode(gin.TestMode)
+	})
+
+	t.Run("ignores GIN_MODE=debug", func(t *testing.T) {
+		_ = os.Setenv("GIN_MODE", gin.DebugMode)
+		// gin's package init() already ran with GIN_MODE=debug, so we
+		// need to actively re-apply before asserting. The function under
+		// test is exactly the production hook init() calls.
+		gin.SetMode(gin.DebugMode)
+		if gin.Mode() != gin.DebugMode {
+			t.Fatalf("precondition: expected gin in debug mode before applyDefaultServerMode, got %q", gin.Mode())
+		}
+
+		applyDefaultServerMode()
+
+		if got := gin.Mode(); got != gin.ReleaseMode {
+			t.Errorf("expected gin mode %q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+		if got := os.Getenv("GIN_MODE"); got != gin.ReleaseMode {
+			t.Errorf("expected GIN_MODE=%q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+	})
+
+	t.Run("ignores GIN_MODE=test", func(t *testing.T) {
+		_ = os.Setenv("GIN_MODE", gin.TestMode)
+		gin.SetMode(gin.TestMode)
+
+		applyDefaultServerMode()
+
+		if got := gin.Mode(); got != gin.ReleaseMode {
+			t.Errorf("expected gin mode %q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+		if got := os.Getenv("GIN_MODE"); got != gin.ReleaseMode {
+			t.Errorf("expected GIN_MODE=%q after applyDefaultServerMode, got %q", gin.ReleaseMode, got)
+		}
+	})
+
+	t.Run("idempotent when already release", func(t *testing.T) {
+		applyDefaultServerMode()
+		applyDefaultServerMode()
+
+		if got := gin.Mode(); got != gin.ReleaseMode {
+			t.Errorf("expected gin mode %q after double apply, got %q", gin.ReleaseMode, got)
+		}
+		if got := os.Getenv("GIN_MODE"); got != gin.ReleaseMode {
+			t.Errorf("expected GIN_MODE=%q after double apply, got %q", gin.ReleaseMode, got)
+		}
+	})
+}
+
+// TestApplyDefaultServerModePanicsOnGarbageGinMode documents the one
+// failure mode applyDefaultServerMode does NOT mask: if GIN_MODE is set
+// to a value gin does not recognise ("foo", "trace", …) then gin.SetMode
+// itself panics. That is by design — silently swallowing the panic would
+// hide the operator's typo. The test pins this behavior so a future
+// "be lenient" change has to update the test, not just the code.
+func TestApplyDefaultServerModePanicsOnGarbageGinMode(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("expected gin.SetMode to panic on GIN_MODE=foo, got no panic")
+		} else if msg, ok := r.(string); ok && !strings.Contains(msg, "gin mode unknown") {
+			t.Errorf("expected panic to mention 'gin mode unknown', got %q", msg)
+		}
+	}()
+
+	// Force gin to a known state so the SetMode("foo") call below
+	// exercises the unknown-mode panic, not the mode-switching path.
+	_ = os.Setenv("GIN_MODE", "foo")
+	gin.SetMode("foo")
+}
+
 func TestCorsMiddlewareDefaultAllowsLocalhost(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	unsetEnv(t, "ALLOWED_ORIGINS")

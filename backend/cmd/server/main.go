@@ -976,6 +976,13 @@ func main() {
 	fmt.Println("")
 	log.Printf("Server starting on port %s", port)
 
+	// Surface the active gin mode in the startup banner so operators can
+	// tell at a glance whether they're on a default (release) build, an
+	// explicit `-tags debug` build, or a `-tags release` build. The
+	// default build also force-pins gin to release mode regardless of any
+	// GIN_MODE the operator exported in their shell (s-1225).
+	log.Printf("Gin mode: %s", gin.Mode())
+
 	// Stamp the process start time so the /api/v1/status endpoint
 	// can report an accurate uptime figure (and so the diagnostic
 	// payload distinguishes a process that just restarted from one
