@@ -278,7 +278,10 @@ type OAuthErrorResponse struct {
 	ErrorURI         string `json:"error_uri,omitempty"`
 }
 
-// DeviceAuthorizationResponse is what RFC 8628 §3.2 returns.
+// DeviceAuthorizationResponse is what RFC 8628 §3.2 returns. AudienceType
+// is an extension field that echoes the resolved audience_type the server
+// applied to the device code; an empty string means the server fell back
+// to its client-name heuristic.
 type DeviceAuthorizationResponse struct {
 	DeviceCode              string `json:"device_code"`
 	UserCode                string `json:"user_code"`
@@ -286,4 +289,5 @@ type DeviceAuthorizationResponse struct {
 	VerificationURIComplete string `json:"verification_uri_complete,omitempty"`
 	ExpiresIn               int64  `json:"expires_in"`
 	Interval                int    `json:"interval"`
+	AudienceType            string `json:"audience_type,omitempty"`
 }

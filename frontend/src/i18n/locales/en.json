@@ -1114,7 +1114,7 @@
     "columnPermissions": "Column Permissions",
     "noBoards": "No accessible boards"
   },
-  "oauth": {
+"oauth": {
     "device": {
       "title": "Authorize device",
       "subtitle": "Enter the code shown by the application that wants to access your kanban.",
@@ -1124,13 +1124,18 @@
       "approve": "Approve",
       "deny": "Deny",
       "unknownCode": "Unknown code. Double-check the value and try again.",
-      "expired": "This code has expired. Restart the application to get a new one.",
+      "expired": "This code has expired. Restart the application to get a new code.",
       "lookupFailed": "Could not verify the code. Please retry.",
       "failed": "Could not submit your decision. Please retry.",
       "loginRequired": "Please sign in to authorize this request.",
       "goLogin": "Sign in",
       "approvedBanner": "Approved. You can return to your device.",
-      "deniedBanner": "Denied. The device will not receive access."
+      "deniedBanner": "Denied. The device will not receive access.",
+      "identityLabel": "Authorize as",
+      "identityAsSelf": "Myself (your account)",
+      "identityEmpty": "No agents available — contact an administrator.",
+      "identityRequired": "Pick which identity this device should bind to before approving.",
+      "identityServerDefault": "Server default"
     },
     "admin": {
       "title": "OAuth 2.1",

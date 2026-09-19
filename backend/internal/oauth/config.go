@@ -66,6 +66,11 @@ func DefaultConfig() []ConfigKey {
 			DefaultVal:  "",
 			Description: "Optional fixed issuer URL (overrides Host-based detection).",
 		},
+		{
+			Key:         "oauth_device_agent_id",
+			DefaultVal:  "",
+			Description: "Default Agent identity for device-flow approvals; empty falls back to the human approver.",
+		},
 	}
 }
 

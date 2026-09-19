@@ -190,6 +190,10 @@ async function runLoginAsHuman(
       apiUrl,
       clientName,
       appName,
+      // s-1233: human-mode device flows still want to bind to the
+      // human approver, so hint the server explicitly. The server
+      // ignores the hint when its client-name heuristic disagrees.
+      audienceType: "human",
       onPrompt: buildOnPrompt(stderr, clientName),
     });
     const stored = deps.oauth.loadCredentials();
@@ -294,6 +298,12 @@ async function runLoginAsAgent(
       apiUrl,
       clientName: "open-kanban-cli",
       appName: "kanban-cli",
+      // s-1233: hint to the server that we want the device flow bound to
+      // an Agent identity. The server still falls back to the human
+      // approver if no Agent is picked on the approval page, but the
+      // hint lets the page render the identity picker so the approver
+      // knows the request is for an unattended runner.
+      audienceType: "agent",
       onPrompt: buildAgentOnPrompt(stderr, openBrowser, openImpl),
     });
   } catch (err) {

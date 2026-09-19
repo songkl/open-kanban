@@ -32,6 +32,11 @@ export interface AuthorizeOptions {
   secretProvider?: SecretProvider;
   // sleepFn is injectable for tests; defaults to a real setTimeout.
   sleepFn?: (ms: number) => Promise<void>;
+  // s-1233: hint to the server about which identity the resulting token
+  // should be bound to. "agent" asks the server to render the Agent
+  // identity picker on the approval page; "human" preserves the legacy
+  // behaviour where the device code is bound to the human approver.
+  audienceType?: "agent" | "human";
 }
 
 export class OAuthClient {
@@ -77,7 +82,9 @@ export class OAuthClient {
   async authorizeInteractive(opts: AuthorizeOptions): Promise<TokenResponse> {
     const creds = await this.ensureRegistered();
     const scope = opts.scope || creds.scope || this.metadata.scopes_supported?.join(" ") || "kanban:read";
-    const poll = await requestDeviceCode(this.metadata, creds.clientId, scope);
+    const poll = await requestDeviceCode(this.metadata, creds.clientId, scope, {
+      audienceType: opts.audienceType
+    });
     if (opts.onPrompt) {
       const choice = await opts.onPrompt(poll);
       if (choice === "deny") {

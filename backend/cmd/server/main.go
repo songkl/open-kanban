@@ -308,7 +308,12 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	oauthGroup.POST("/register", oauth.RegisterClient(db))
 	oauthGroup.POST("/device/code", oauth.RequestDeviceCode(db))
 	oauthGroup.POST("/token", oauth.TokenEndpoint(db, signer))
-	oauthGroup.GET("/device/lookup", oauth.DeviceLookupHandler(db))
+	// /oauth/device/lookup uses OptionalAuth so anonymous visitors can
+	// still peek at the client_name / scope before signing in; when the
+	// caller presents a Bearer token (or cookie) the response is
+	// augmented with agent-selection metadata so the picker UI has
+	// everything it needs in one round trip.
+	oauthGroup.GET("/device/lookup", handlers.OptionalAuth(db), oauth.DeviceLookupHandler(db))
 	oauthGroup.POST("/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
 
 	auth := r.Group("/api/v1/auth")

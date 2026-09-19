@@ -1130,7 +1130,12 @@
       "loginRequired": "请先登录后再授权。",
       "goLogin": "去登录",
       "approvedBanner": "已批准。可以返回设备继续操作。",
-      "deniedBanner": "已拒绝。设备将不会获得访问权限。"
+      "deniedBanner": "已拒绝。设备将不会获得访问权限。",
+      "identityLabel": "授权身份",
+      "identityAsSelf": "我的账户（当前登录用户）",
+      "identityEmpty": "暂无可用的 Agent，请联系管理员。",
+      "identityRequired": "请先选择此设备需要绑定的身份再批准。",
+      "identityServerDefault": "服务器默认"
     },
     "admin": {
       "title": "OAuth 2.1",

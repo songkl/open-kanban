@@ -51,7 +51,7 @@ func newApproveServer(t *testing.T, db *sql.DB) *gin.Engine {
 	t.Helper()
 	r := gin.New()
 	r.POST("/oauth/device/approve", handlers.RequireAuth(db), oauth.DeviceApproveHandler(db))
-	r.GET("/oauth/device/lookup", oauth.DeviceLookupHandler(db))
+	r.GET("/oauth/device/lookup", handlers.OptionalAuth(db), oauth.DeviceLookupHandler(db))
 	return r
 }
 

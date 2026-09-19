@@ -21,7 +21,12 @@ vi.mock('react-i18next', () => ({
         'oauth.device.loginRequired': 'Login required',
         'oauth.device.goLogin': 'Sign in',
         'oauth.device.approvedBanner': 'Approved. Return to device.',
-        'oauth.device.deniedBanner': 'Denied.'
+        'oauth.device.deniedBanner': 'Denied.',
+        'oauth.device.identityLabel': 'Authorize as',
+        'oauth.device.identityAsSelf': 'Myself',
+        'oauth.device.identityEmpty': 'No agents available',
+        'oauth.device.identityRequired': 'Pick an identity first',
+        'oauth.device.identityServerDefault': 'Server default'
       };
       return map[key] || key;
     },
@@ -172,5 +177,193 @@ describe('OAuthDevicePage', () => {
     await waitFor(() => {
       expect(screen.getByText('Sign in')).toBeInTheDocument();
     });
+  });
+
+  it('renders the identity picker when agentSelectionRequired=true', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-cli-1',
+        clientName: 'open-kanban-cli',
+        scope: 'kanban:read tasks:write',
+        expiresAt: new Date().toISOString(),
+        status: 'pending',
+        agentSelectionRequired: true,
+        availableAgents: [
+          { id: 'agent-bot-1', nickname: 'Bot One', role: 'MEMBER' },
+          { id: 'agent-bot-2', nickname: 'Bot Two', role: 'MEMBER' }
+        ],
+        defaultAgentId: 'agent-bot-1'
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'PICK-PICK' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('identity-self')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-agent-agent-bot-1')).toBeInTheDocument();
+    expect(screen.getByTestId('identity-agent-agent-bot-2')).toBeInTheDocument();
+  });
+
+  it('pre-selects the default agent from the lookup response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-cli-1',
+        clientName: 'open-kanban-cli',
+        scope: 'kanban:read',
+        expiresAt: new Date().toISOString(),
+        status: 'pending',
+        agentSelectionRequired: true,
+        availableAgents: [{ id: 'agent-bot-1', nickname: 'Bot One', role: 'MEMBER' }],
+        defaultAgentId: 'agent-bot-1'
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'PICK-PICK' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    const agentRadio = screen.getByTestId('identity-agent-radio-agent-bot-1') as HTMLInputElement;
+    expect(agentRadio.checked).toBe(true);
+  });
+
+  it('submits agent_id when an Agent is picked', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            clientId: 'kanban-cli-1',
+            clientName: 'open-kanban-cli',
+            scope: 'kanban:read',
+            expiresAt: new Date().toISOString(),
+            status: 'pending',
+            agentSelectionRequired: true,
+            availableAgents: [{ id: 'agent-bot-1', nickname: 'Bot One', role: 'MEMBER' }]
+          })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ approved: true }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'PICK-PICK' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('identity-agent-radio-agent-bot-1'));
+    fireEvent.click(screen.getByTestId('approve-btn'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/oauth/device/approve',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          body: JSON.stringify({
+            user_code: 'PICK-PICK',
+            decision: 'approve',
+            agent_id: 'agent-bot-1'
+          })
+        })
+      );
+    });
+  });
+
+  it('omits agent_id when the approver picks "Myself"', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/oauth/device/lookup')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            clientId: 'kanban-cli-1',
+            clientName: 'open-kanban-cli',
+            scope: 'kanban:read',
+            expiresAt: new Date().toISOString(),
+            status: 'pending',
+            agentSelectionRequired: true,
+            availableAgents: [{ id: 'agent-bot-1', nickname: 'Bot One', role: 'MEMBER' }]
+          })
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ approved: true }) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'PICK-PICK' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('identity-self'));
+    fireEvent.click(screen.getByTestId('approve-btn'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/oauth/device/approve',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          body: JSON.stringify({ user_code: 'PICK-PICK', decision: 'approve' })
+        })
+      );
+    });
+  });
+
+  it('hides the picker when agentSelectionRequired is absent', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-web-1',
+        clientName: 'kanban-web',
+        scope: 'kanban:read',
+        expiresAt: new Date().toISOString(),
+        status: 'pending'
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'WEBB-WEBB' } });
+    await waitFor(() => {
+      expect(screen.getByText('kanban-web')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('identity-picker')).not.toBeInTheDocument();
+  });
+
+  it('shows the empty-state hint when no Agents are available', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        clientId: 'kanban-cli-1',
+        clientName: 'open-kanban-cli',
+        scope: 'kanban:read',
+        expiresAt: new Date().toISOString(),
+        status: 'pending',
+        agentSelectionRequired: true,
+        availableAgents: []
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(screen.getByTestId('user-code-input'), { target: { value: 'NOAG-NOAG' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('identity-picker')).toBeInTheDocument();
+    });
+    expect(screen.getByText('No agents available')).toBeInTheDocument();
   });
 });

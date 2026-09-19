@@ -37,6 +37,11 @@ export interface DeviceAuthorizationResponse {
   verification_uri_complete?: string;
   expires_in: number;
   interval: number;
+  // audience_type echoes the resolved audience_type the server applied to
+  // the device code (see s-1233). Empty string means the server fell back
+  // to its client-name heuristic. Surfaced so the CLI can confirm the
+  // server understood the hint.
+  audience_type?: string;
 }
 
 export interface TokenResponse {
