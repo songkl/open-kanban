@@ -42,6 +42,6 @@ EOF
 fi
 
 go env -w CGO_ENABLED=1
-go build -ldflags="-s -w" -o kanban-server ./cmd/server/main.go
+go build -ldflags="-s -w" -o kanban-server ./cmd/server
 
 echo "Backend built: $PROJECT_DIR/backend/kanban-server"

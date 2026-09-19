@@ -57,7 +57,7 @@ jobs:
             OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}"
             [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
             echo "Building $OUTPUT_NAME..."
-            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "../release/$OUTPUT_NAME" ./cmd/server/main.go
+            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "../release/$OUTPUT_NAME" ./cmd/server
             upx -9 --best "../release/$OUTPUT_NAME" || true
           done
 
@@ -71,7 +71,7 @@ jobs:
             OUTPUT_NAME="kanban-server-mysql-${GOOS}-${GOARCH}"
             [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
             echo "Building $OUTPUT_NAME (MySQL-only)..."
-            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -tags mysql -o "../release/$OUTPUT_NAME" ./cmd/server/main.go
+            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -tags mysql -o "../release/$OUTPUT_NAME" ./cmd/server
             upx -9 --best "../release/$OUTPUT_NAME" || true
           done
 

@@ -72,7 +72,7 @@ cd "$PROJECT_DIR"
 
 echo_step "Go Build"
 cd backend
-if go build -o /tmp/kanban-server-test ./cmd/server/main.go; then
+if go build -o /tmp/kanban-server-test ./cmd/server; then
     echo_success "Go build passed"
 else
     echo_fail "Go build failed"

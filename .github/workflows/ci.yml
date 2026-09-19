@@ -172,7 +172,7 @@ jobs:
       - name: Build Go backend
         run: |
           cd backend
-          go build -o /dev/null ./cmd/server/main.go
+          go build -o /dev/null ./cmd/server
 
   frontend-lint:
     name: Frontend Lint

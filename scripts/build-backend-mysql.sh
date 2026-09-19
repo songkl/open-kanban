@@ -19,6 +19,6 @@ else
     echo "MySQL-only build" > cmd/server/web/placeholder.txt
 fi
 
-go build -tags "mysql && !sqlite" -ldflags="-s -w" -o kanban-server-mysql ./cmd/server/main.go
+go build -tags "mysql && !sqlite" -ldflags="-s -w" -o kanban-server-mysql ./cmd/server
 
 echo "MySQL-only backend built: $PROJECT_DIR/backend/kanban-server-mysql"

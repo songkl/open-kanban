@@ -542,10 +542,10 @@ if [ "$DO_BACKEND" = 1 ]; then
     CC_BIN=$(cross_cc "$GOOS" "$GOARCH")
     if [ -n "$CC_BIN" ]; then
       if [ "$CC_BIN" = "native" ]; then
-        CGO_ENABLED=1 go build -tags="release" -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server/main.go
+        CGO_ENABLED=1 go build -tags="release" -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server
       else
         CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH CC="$CC_BIN" \
-          go build -tags="release" -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server/main.go
+          go build -tags="release" -ldflags="-s -w" -o "$RELEASE_DIR/$OUTPUT_NAME" ./cmd/server
       fi
 
       # Compress with UPX if available (max compression)
@@ -579,7 +579,7 @@ if [ "$DO_BACKEND" = 1 ]; then
     # Same stale-file cleanup as the SQLite build above: a previous release
     # may have left an UPX-packed binary at this path.
     rm -f "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" "$RELEASE_DIR/$MYSQL_OUTPUT_NAME.upx"
-    GOOS=$GOOS GOARCH=$GOARCH go build -tags "mysql && release && !sqlite" -ldflags="-s -w" -o "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" ./cmd/server/main.go
+    GOOS=$GOOS GOARCH=$GOARCH go build -tags "mysql && release && !sqlite" -ldflags="-s -w" -o "$RELEASE_DIR/$MYSQL_OUTPUT_NAME" ./cmd/server
 
     # Compress with UPX if available (max compression)
     if [ "$UPX_OK" = true ]; then
