@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../services/api';
-import { OAuthProvidersSettings } from './OAuthProvidersSettings';
-import type { Agent, OAuthClient, OAuthConsent, OAuthConfigEntry } from '@/types/kanban';
+import type { OAuthClient, OAuthConsent, OAuthConfigEntry } from '@/types/kanban';
 
 interface Props {
   currentUser: { id: string; role: 'ADMIN' | 'MEMBER' | 'VIEWER' } | null;
@@ -10,11 +9,10 @@ interface Props {
 
 export function OAuthSettings({ currentUser }: Props) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<'clients' | 'consents' | 'config' | 'providers'>('clients');
+  const [tab, setTab] = useState<'clients' | 'consents' | 'config'>('clients');
   const [clients, setClients] = useState<OAuthClient[]>([]);
   const [consents, setConsents] = useState<OAuthConsent[]>([]);
   const [config, setConfig] = useState<OAuthConfigEntry[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [dynamicEnabled, setDynamicEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -27,15 +25,13 @@ export function OAuthSettings({ currentUser }: Props) {
     setError('');
     try {
       if (isAdmin) {
-        const [cs, cfg, ag] = await Promise.all([
+        const [cs, cfg] = await Promise.all([
           authApi.getOAuthClients(),
-          authApi.getOAuthConfig(),
-          authApi.getAgents()
+          authApi.getOAuthConfig()
         ]);
         setClients(cs);
         setConfig(cfg.config);
         setDynamicEnabled(cfg.dynamicRegistrationEnabled);
-        setAgents((ag || []).filter((a) => a.type === 'AGENT'));
       }
       const myConsents = await authApi.getOAuthConsents();
       setConsents(myConsents);
@@ -123,11 +119,6 @@ export function OAuthSettings({ currentUser }: Props) {
             {t('oauth.admin.tabConfig')}
           </TabButton>
         )}
-        {isAdmin && (
-          <TabButton active={tab === 'providers'} onClick={() => setTab('providers')}>
-            {t('oauth.admin.providers.tabProviders')}
-          </TabButton>
-        )}
       </div>
 
       {loading && <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-500">{t('oauth.admin.loading')}</p>}
@@ -209,16 +200,27 @@ export function OAuthSettings({ currentUser }: Props) {
       {tab === 'config' && isAdmin && (
         <div className="space-y-3" data-testid="oauth-config-list">
           {config.map((row) => (
-            <ConfigRow
+            <div
               key={row.key}
-              row={row}
-              agents={agents}
-              onChange={(value) =>
-                setConfig((prev) =>
-                  prev.map((p) => (p.key === row.key ? { ...p, value } : p))
-                )
-              }
-            />
+              className="space-y-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4"
+            >
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-400">
+                {row.key}
+              </label>
+              <p className="text-xs text-zinc-500 dark:text-zinc-500">{row.description}</p>
+              <input
+                type="text"
+                value={row.value}
+                onChange={(e) =>
+                  setConfig((prev) =>
+                    prev.map((p) => (p.key === row.key ? { ...p, value: e.target.value } : p))
+                  )
+                }
+                className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
+                data-testid={`oauth-config-${row.key}`}
+              />
+              <p className="text-xs text-zinc-400 dark:text-zinc-400">default: {row.default}</p>
+            </div>
           ))}
           <button
             type="button"
@@ -230,75 +232,6 @@ export function OAuthSettings({ currentUser }: Props) {
           </button>
         </div>
       )}
-
-      {tab === 'providers' && isAdmin && (
-        <OAuthProvidersSettings />
-      )}
-    </div>
-  );
-}
-
-function ConfigRow({
-  row,
-  agents,
-  onChange
-}: {
-  row: OAuthConfigEntry;
-  agents: Agent[];
-  onChange: (value: string) => void;
-}) {
-  const { t } = useTranslation();
-  const isToggle =
-    row.key === 'oauth_device_enabled' ||
-    row.key === 'oauth_device_require_agent_selection';
-  const isAgentSelect = row.key === 'oauth_device_agent_id';
-
-  return (
-    <div
-      className="space-y-1 rounded-lg border border-zinc-200 dark:border-zinc-700 p-4"
-      data-testid={`oauth-config-row-${row.key}`}
-    >
-      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-400">
-        {row.key}
-      </label>
-      <p className="text-xs text-zinc-500 dark:text-zinc-500">{row.description}</p>
-      {isToggle ? (
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={row.value !== '0'}
-            onChange={(e) => onChange(e.target.checked ? '1' : '0')}
-            data-testid={`oauth-config-${row.key}`}
-            className="h-4 w-4 rounded border-zinc-300 text-blue-500 focus:ring-blue-500"
-          />
-          <span className="text-zinc-700 dark:text-zinc-300">
-            {row.value !== '0' ? t('common.enabled') : t('common.disabled')}
-          </span>
-        </label>
-      ) : isAgentSelect ? (
-        <select
-          value={row.value}
-          onChange={(e) => onChange(e.target.value)}
-          data-testid={`oauth-config-${row.key}`}
-          className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-        >
-          <option value="">{t('oauth.admin.noAgentBinding')}</option>
-          {agents.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.nickname} ({a.id})
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type="text"
-          value={row.value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-md border border-zinc-300 dark:border-zinc-600 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none dark:bg-zinc-700 dark:text-zinc-100"
-          data-testid={`oauth-config-${row.key}`}
-        />
-      )}
-      <p className="text-xs text-zinc-400 dark:text-zinc-400">default: {row.default}</p>
     </div>
   );
 }

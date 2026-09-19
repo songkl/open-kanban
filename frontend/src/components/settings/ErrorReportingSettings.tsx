@@ -132,8 +132,8 @@ export function ErrorReportingSettings({ isAdmin = false }: { isAdmin?: boolean 
       setSaving(true);
       setError(null);
       try {
-        const cfg = await frontendEventsApi.setConfig({ enabled: next });
-        setAdminEnabled(cfg.enabled);
+        await frontendEventsApi.setConfig(next);
+        setAdminEnabled(next);
         flashSuccess(t('settings.errorReporting.saved'));
       } catch (err) {
         setError((err as Error).message || t('settings.errorReporting.saveFailed'));

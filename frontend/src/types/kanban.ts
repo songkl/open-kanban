@@ -326,8 +326,12 @@ export interface Notification {
   source: string;
   title: string;
   body: string;
-  read: boolean;
-  createdAt: string;
+  targetType?: string;
+  targetId?: string;
+  read?: boolean;
+  readAt?: string;
+  createdAt?: string;
+  timestamp?: string;
 }
 
 export interface StatusReport {

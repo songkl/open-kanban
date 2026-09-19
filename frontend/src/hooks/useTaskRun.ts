@@ -1,156 +1,127 @@
-// useTaskRun — poll the server for an in-flight CLI runner on a task
-// (see `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5 and
-// `devDoc/CLI_RUNNER_OPENAPI_2026-09-12.yaml` §GET /runs/{taskId}).
-//
-// Returns the live `task_runs` row, or `null` when no runner currently
-// holds the task (404 from the API is the "no row" signal — see
-// `FinishRun`'s cleanup in the backend). The hook polls every
-// `intervalMs` while the component is mounted, clears the interval on
-// unmount, and uses an AbortController so an in-flight fetch can be
-// cancelled when the interval fires again or the component goes away.
-//
-// Once the server returns a terminal row (`completed` / `failed` /
-// `released`) the hook stops polling: the backend now retains terminal
-// rows (s-1106) so the UI must opt out of the recurring GET itself to
-// avoid hammering the endpoint for a task whose runner has already
-// settled. The final row is still surfaced so callers can render the
-// end-state badge / banner.
-//
-// We deliberately do NOT poll every task card in a board — the board
-// page calls this hook per TaskCard so each one starts its own
-// polling cycle. With ~30 tasks per board and a 5s interval the load
-// is one HTTP GET per 150ms on average, which the API handles without
-// breaking a sweat. A future task can introduce a per-board
-// subscription if the volume grows (see follow-up ticket stub in
-// `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §9).
-
-import { useEffect, useState, useRef } from 'react';
-import { runsApi } from '../services/api';
-import type { TaskRun } from '../types/kanban';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import type { TaskRun } from '@/types/kanban';
+import { runsApi } from '@/services/api';
 
 export interface UseTaskRunOptions {
-  /**
-   * Polling interval in milliseconds. Defaults to 5000 — matches
-   * the runner heartbeat cadence so a freshly-claimed row surfaces
-   * within one cycle and a stale row that was reaped or finished
-   * disappears within one cycle.
-   */
+  /** Poll cadence in ms. Defaults to 5000. Set to 0 to disable polling. */
   intervalMs?: number;
   /**
-   * When `false`, the hook short-circuits to `null` and never
-   * fetches. The TaskCard uses this to skip polling when the user
-   * isn't on a board view (avoids leaking fetches during navigation).
+   * Skip the first poll until the caller has had a chance to settle
+   * (e.g. when used inside a modal that opens lazily). Defaults to
+   * false.
    */
   enabled?: boolean;
 }
 
 export interface UseTaskRunResult {
-  /** The live run row, or `null` when no runner holds this task. */
+  /** Latest run row, or null when no row exists / fetch failed. */
   run: TaskRun | null;
-  /**
-   * `true` while the initial fetch is in flight. After that the
-   * component renders `run` regardless of subsequent polls.
-   */
+  /** True while the very first fetch is in flight. */
   loading: boolean;
-  /**
-   * The last fetch error, if any. Surface as a small text indicator
-   * rather than blocking the card; the next poll will retry.
-   */
+  /** Last fetch error (network/parse), or null. */
   error: Error | null;
+  /**
+   * s-1191: Force the next poll to fire immediately. Used by the
+   * "Retry run" button so the badge reflects the requeued state
+   * without waiting for the next `intervalMs` tick.
+   */
+  refetch: () => void;
 }
 
-/**
- * Terminal run statuses — once the server reports any of these the
- * runner has settled and there is no reason to keep hitting
- * `GET /api/v1/runs/:taskId`. `claimed` / `running` are the only
- * live states (see backend `models.IsLive`).
- */
 const TERMINAL_STATUSES: ReadonlySet<TaskRun['status']> = new Set([
   'completed',
   'failed',
   'released',
 ]);
 
-function isTerminal(run: TaskRun | null): run is TaskRun {
-  return run !== null && TERMINAL_STATUSES.has(run.status);
-}
-
-export function useTaskRun(
-  taskId: string | null | undefined,
-  options: UseTaskRunOptions = {}
-): UseTaskRunResult {
-  const { intervalMs = 5000, enabled = true } = options;
+/**
+ * useTaskRun — polls GET /api/v1/runs/:taskId while the drawer (or
+ * any other caller) needs the latest `task_runs` row.
+ *
+ * Why polling instead of WebSocket: the CLI runner heartbeats every
+ * 5–15s and the drawer only needs near-real-time accuracy; the cost
+ * of a second WebSocket channel for one row is not worth it.
+ *
+ * Stops polling the moment the row reaches a terminal state so we
+ * don't fire `intervalMs` requests forever for a runner that has
+ * already settled (s-1168).
+ */
+export function useTaskRun(taskId: string | undefined | null, options: UseTaskRunOptions = {}): UseTaskRunResult {
+  const intervalMs = options.intervalMs ?? 5000;
+  const enabled = options.enabled ?? true;
   const [run, setRun] = useState<TaskRun | null>(null);
-  const [loading, setLoading] = useState<boolean>(enabled && !!taskId);
+  const [loading, setLoading] = useState<boolean>(Boolean(taskId) && enabled);
   const [error, setError] = useState<Error | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  // s-1191: bumped by `refetch()` so the next tick fires ASAP rather
+  // than after `intervalMs` ms. Stored in a ref so the tick effect
+  // closure always sees the latest value without having to rebind the
+  // timer.
+  const refetchCounterRef = useRef(0);
+  const refetchTickRef = useRef<(() => void) | null>(null);
+
+  const refetch = useCallback((): void => {
+    refetchCounterRef.current += 1;
+    refetchTickRef.current?.();
+  }, []);
 
   useEffect(() => {
-    if (!enabled || !taskId) {
+    if (!taskId || !enabled) {
       setRun(null);
       setLoading(false);
-      return undefined;
+      return;
     }
 
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let observedCounter = refetchCounterRef.current;
 
-    const stopPolling = (): void => {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+    const tick = async () => {
+      // Re-fire immediately when the consumer bumped the refetch
+      // counter between ticks.
+      if (refetchCounterRef.current !== observedCounter) {
+        observedCounter = refetchCounterRef.current;
       }
-      controllerRef.current?.abort();
-      controllerRef.current = null;
-    };
-
-    const tick = async (): Promise<void> => {
-      // Abort any in-flight request from the previous tick so a slow
-      // server doesn't pile up fetches when the interval is short.
-      controllerRef.current?.abort();
+      abortRef.current?.abort();
       const controller = new AbortController();
-      controllerRef.current = controller;
+      abortRef.current = controller;
       try {
-        const result = await runsApi.getByTask(taskId, controller.signal);
+        const row = await runsApi.getByTask(taskId, { signal: controller.signal });
         if (cancelled) return;
-        setRun(result);
+        setRun(row);
         setError(null);
-        // Once the runner has settled we don't need to keep asking
-        // the server — the row is terminal and won't change. Surface
-        // the final row so the badge / banner can render the end
-        // state, then tear down the interval.
-        if (isTerminal(result)) {
-          stopPolling();
+        setLoading(false);
+        if (row && TERMINAL_STATUSES.has(row.status)) {
+          // Settled — stop polling so we don't keep firing requests
+          // for a runner that's already gone (s-1168). The terminal
+          // row is still surfaced so callers can render the final
+          // badge / banner.
+          return;
         }
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err as Error);
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (err && typeof err === 'object' && 'isAbortError' in err && (err as { isAbortError?: boolean }).isAbortError) return;
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setLoading(false);
+      }
+      if (!cancelled && intervalMs > 0) {
+        timer = setTimeout(tick, intervalMs);
       }
     };
-
-    // Fire immediately so the badge shows on first render, then
-    // continue at the configured interval. The WebSocket broadcast
-    // path (board page listens for ws events) will also flip the run
-    // row's column status, so the polling is the safety net rather
-    // than the primary signal.
-    void tick();
-    timerRef.current = setInterval(() => {
+    refetchTickRef.current = () => {
+      if (timer) clearTimeout(timer);
       void tick();
-    }, intervalMs);
+    };
+
+    tick();
 
     return () => {
       cancelled = true;
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      controllerRef.current?.abort();
-      controllerRef.current = null;
+      if (timer) clearTimeout(timer);
+      abortRef.current?.abort();
     };
-  }, [taskId, intervalMs, enabled]);
+  }, [taskId, enabled, intervalMs]);
 
-  return { run, loading, error };
+  return { run, loading, error, refetch };
 }

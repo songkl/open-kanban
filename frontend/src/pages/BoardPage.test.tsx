@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { BoardPage } from './BoardPage';
 import type { Board, Column as ColumnType, Task, User } from '../types/kanban';
 
@@ -364,71 +364,98 @@ describe('BoardPage', () => {
   });
 });
 
-describe('BoardPage error state', () => {
-  it('wires retry button onClick to fetchBoards when loadError is set', async () => {
-    vi.resetModules();
-    const fetchBoardsMock = vi.fn();
-    vi.doMock('@/hooks/useBoardState', () => ({
-      useBoardState: () => ({
-        boards: [],
-        currentBoard: null,
-        columns: [],
-        activeTask: null,
-        selectedTask: null,
-        selectedTasks: new Set(),
-        lastSelectedTaskId: null,
-        loading: false,
-        boardSwitching: false,
-        loadError: 'network down',
-        wsStatus: 'disconnected',
-        reconnectCount: 0,
-        currentUser: null,
-        filters: {},
-        filterPresets: [],
-        columnPagination: {},
-        searchQuery: '',
-        uniqueAssignees: [],
-        uniqueTags: [],
-        getFilteredColumns: () => [],
-        fetchBoards: fetchBoardsMock,
-        fetchColumns: vi.fn(),
-        handleLoadMoreTasks: vi.fn(),
-        updateTask: vi.fn(),
-        deleteTask: vi.fn(),
-        archiveTask: vi.fn(),
-        addTask: vi.fn(),
-        addComment: vi.fn(),
-        handleTaskSelect: vi.fn(),
-        selectAllInColumn: vi.fn(),
-        clearSelection: vi.fn(),
-        batchDelete: vi.fn(),
-        batchArchive: vi.fn(),
-        batchMove: vi.fn(),
-        batchUpdatePriority: vi.fn(),
-        batchUpdateAssignee: vi.fn(),
-        handleColumnRename: vi.fn(),
-        setSelectedTask: vi.fn(),
-        setActiveTask: vi.fn(),
-        setFilters: vi.fn(),
-        setSearchQuery: vi.fn(),
-        saveCurrentAsPreset: vi.fn(),
-        applyPreset: vi.fn(),
-        deletePreset: vi.fn(),
-        clearFilters: vi.fn(),
-        hasActiveFilters: false,
-        lastLocalUpdateRef: { current: 0 },
-        setColumns: vi.fn(),
-      }),
-    }));
-    const { BoardPage: BoardPageWithError } = await import('./BoardPage');
-    render(
-      <BrowserRouter>
-        <BoardPageWithError />
-      </BrowserRouter>
-    );
-    const retryButton = screen.getByText('app.error.retry');
-    expect(retryButton).toBeInTheDocument();
-    fireEvent.click(retryButton);
-    expect(fetchBoardsMock).toHaveBeenCalledTimes(1);
+// s-1218: cross-column drag-and-drop must persist the active task's
+// new column_id. The earlier BoardPage.updateTaskPosition filter
+// `task.id !== activeId` on the destination-column payload silently
+// dropped the dragged task from the reorder request, so the next
+// refresh (WebSocket or manual reload) snapped the card back to its
+// original column. Capture the `updateTaskPosition` callback the page
+// wires into ColumnBoard and assert the request body it builds for a
+// cross-column move includes every task in the destination column —
+// most importantly, the dragged task with its new columnId.
+describe('BoardPage cross-column reorder (s-1218)', () => {
+  const buildTask = (overrides: Partial<Task>): Task => ({
+    id: 't',
+    title: 'T',
+    columnId: 'col-source',
+    position: 0,
+    published: true,
+    archived: false,
+    priority: 'medium',
+    createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
+    meta: null,
+    ...overrides,
+  });
+
+  const sourceColumn: ColumnType = {
+    ...defaultColumn,
+    id: 'col-source',
+    tasks: [
+      buildTask({ id: 't1', title: 'T1', position: 0 }),
+      buildTask({ id: 't2', title: 'T2', position: 1 }),
+      buildTask({ id: 't3', title: 'T3', position: 2 }),
+    ],
+  };
+
+  const destColumn: ColumnType = {
+    ...defaultColumn,
+    id: 'col-dest',
+    name: 'Dest',
+    tasks: [buildTask({ id: 't4', title: 'T4', position: 0, columnId: 'col-dest' })],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedColumnBoardProps.current = null;
+    boardStateMock.current = buildBoardStateMock({
+      columns: [sourceColumn, destColumn],
+    });
+  });
+
+  it('includes the dragged task in the reorder payload with the new columnId', async () => {
+    const { tasksApi } = await import('../services/api');
+    renderBoardPage();
+
+    const props = capturedColumnBoardProps.current;
+    expect(props?.updateTaskPosition).toBeDefined();
+    const updateTaskPosition = props!.updateTaskPosition as unknown as (
+      activeId: string,
+      overId: string,
+      activeColumn: ColumnType,
+      overColumn: ColumnType,
+      activeTask: Task,
+    ) => Promise<void>;
+
+    const draggedTask = buildTask({ id: 't3', title: 'T3', columnId: 'col-source', position: 2 });
+    await updateTaskPosition('t3', 't4', sourceColumn, destColumn, draggedTask);
+
+    expect(tasksApi.reorder).toHaveBeenCalledTimes(1);
+    const payload = (tasksApi.reorder as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0] as Array<{
+      id: string;
+      columnId: string;
+      position: number;
+    }>;
+
+    // The dragged task must show up in the destination column.
+    const t3 = payload.find((item) => item.id === 't3');
+    expect(t3).toBeDefined();
+    expect(t3?.columnId).toBe('col-dest');
+
+    // Tasks that stayed in the source column must still be reported.
+    const t1 = payload.find((item) => item.id === 't1');
+    const t2 = payload.find((item) => item.id === 't2');
+    expect(t1?.columnId).toBe('col-source');
+    expect(t2?.columnId).toBe('col-source');
+
+    // The pre-existing destination task must remain in the destination column.
+    const t4 = payload.find((item) => item.id === 't4');
+    expect(t4?.columnId).toBe('col-dest');
+
+    // No duplicates / no missing tasks.
+    const payloadIds = payload.map((item) => item.id).sort();
+    expect(payloadIds).toEqual(['t1', 't2', 't3', 't4']);
   });
 });
+
+void useNavigate;

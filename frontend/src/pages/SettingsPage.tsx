@@ -19,9 +19,9 @@ import { OAuthSettings } from '../components/OAuthSettings';
 import { useUIStore } from '../store/uiStore';
 import type { User } from '../types/kanban';
 
-type Tab = 'profile' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth' | 'webhooks' | 'notifications' | 'errorReporting';
+type Tab = 'profile' | 'notifications' | 'errorReporting' | 'tokens' | 'activities' | 'agents' | 'users' | 'shortcuts' | 'theme' | 'oauth' | 'webhooks';
 
-const ALL_TABS: Tab[] = ['profile', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth', 'webhooks'];
+const ALL_TABS: Tab[] = ['profile', 'notifications', 'errorReporting', 'tokens', 'activities', 'agents', 'users', 'shortcuts', 'theme', 'oauth', 'webhooks'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (ALL_TABS as string[]).includes(value);
@@ -327,20 +327,13 @@ export function SettingsPage() {
                 {t('settings.shortcuts')}
               </button>
               <button
-                onClick={() => switchToTab('oauth')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'oauth' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
-                data-testid="tab-oauth"
-              >
-                {t('oauth.admin.title')}
-              </button>
-              <button
-                onClick={() => switchToTab('webhooks')}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm ${activeTab === 'webhooks' ? 'bg-blue-100 text-blue-700' : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700'}`}
-                data-testid="tab-webhooks"
-              >
-                {t('settings.webhooks')}
-              </button>
-              <button
+                type="button"
+                role="tab"
+                id="settings-tab-theme"
+                aria-selected={activeTab === 'theme'}
+                aria-controls="settings-panel-theme"
+                tabIndex={activeTab === 'theme' ? 0 : -1}
+                data-tab-id="theme"
                 onClick={() => switchToTab('theme')}
                 className={sidebarTabClass(activeTab === 'theme', 'flex items-center justify-between')}
               >
@@ -377,6 +370,22 @@ export function SettingsPage() {
                   data-testid="tab-oauth"
                 >
                   {t('oauth.admin.title')}
+                </button>
+              )}
+              {currentUser?.role === 'ADMIN' && (
+                <button
+                  type="button"
+                  role="tab"
+                  id="settings-tab-webhooks"
+                  aria-selected={activeTab === 'webhooks'}
+                  aria-controls="settings-panel-webhooks"
+                  tabIndex={activeTab === 'webhooks' ? 0 : -1}
+                  data-tab-id="webhooks"
+                  onClick={() => switchToTab('webhooks')}
+                  className={sidebarTabClass(activeTab === 'webhooks')}
+                  data-testid="tab-webhooks"
+                >
+                  {t('settings.webhooks')}
                 </button>
               )}
               <div className="border-t border-zinc-200 dark:border-zinc-700 pt-2 mt-2">
@@ -450,7 +459,7 @@ export function SettingsPage() {
               <OAuthSettings currentUser={currentUser} />
             )}
 
-            {activeTab === 'webhooks' && currentUser && (
+            {activeTab === 'webhooks' && currentUser?.role === 'ADMIN' && currentUser && (
               <WebhooksList webhooksApi={webhooksApi} isAdmin={currentUser.role === 'ADMIN'} />
             )}
           </div>

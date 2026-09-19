@@ -5,17 +5,6 @@ import { TaskModal } from './TaskModal';
 import { commentsApi } from '@/services/api';
 import type { Task } from '@/types/kanban';
 
-// Mock the polling hook so the run info section tests can drive `run`
-// directly without faking timers. The hook is exercised end-to-end in
-// `useTaskRun.test.ts`; here we only care that the modal renders the
-// expected fields (runner, agent, status, timestamps) when a run is
-// present and stays hidden when it isn't.
-vi.mock('../hooks/useTaskRun', () => ({
-  useTaskRun: vi.fn(),
-}));
-import { useTaskRun } from '../hooks/useTaskRun';
-const mockedUseTaskRun = useTaskRun as unknown as ReturnType<typeof vi.fn>;
-
 const mockTask: Task = {
   id: 'task-1',
   title: 'Test Task',
@@ -132,9 +121,6 @@ describe('TaskModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    // Default: no active run, so unrelated assertions aren't affected
-    // by the run info section.
-    mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
   });
 
   afterEach(() => {
@@ -566,234 +552,425 @@ describe('TaskModal', () => {
     });
   });
 
-  describe('run info section', () => {
-    beforeEach(() => {
-      mockedUseTaskRun.mockReset();
+  describe('creator display', () => {
+    it('renders creator nickname in header', () => {
+      render(<TaskModal {...defaultProps} />);
+      expect(screen.getByText('Creator Nick')).toBeInTheDocument();
     });
 
-    it('does not render the section when no run is active', () => {
-      mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
+    it('renders creator avatar image when URL is provided', () => {
       render(<TaskModal {...defaultProps} />);
+      const avatarImg = screen.getByAltText('Creator Nick');
+      expect(avatarImg).toBeInTheDocument();
+      expect(avatarImg).toHaveAttribute('src', 'https://example.com/avatar.png');
+    });
+
+    it('falls back to username when nickname is missing', () => {
+      const taskOnlyUsername = {
+        ...mockTask,
+        createdByNickname: undefined,
+        createdByAvatar: undefined,
+      };
+      render(<TaskModal {...defaultProps} task={taskOnlyUsername} />);
+      expect(screen.getByText('creatorlogin')).toBeInTheDocument();
+    });
+
+    it('shows initial-based avatar when avatar URL is missing', () => {
+      const taskNoAvatar = { ...mockTask, createdByAvatar: undefined };
+      render(<TaskModal {...defaultProps} task={taskNoAvatar} />);
+      const initial = screen.getByText('C');
+      expect(initial).toBeInTheDocument();
+    });
+  });
+
+  describe('a11y attributes (s-1199)', () => {
+    it('exposes dialog role with aria-modal and aria-labelledby', () => {
+      render(<TaskModal {...defaultProps} />);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+      expect(dialog).toHaveAttribute('aria-labelledby', 'task-modal-title');
+    });
+
+    it('labels the close button for screen readers', () => {
+      render(<TaskModal {...defaultProps} />);
+      const closeButton = screen.getByRole('button', { name: /common\.close/i });
+      expect(closeButton).toBeInTheDocument();
+    });
+
+    it('labels the copy task id button for screen readers', () => {
+      render(<TaskModal {...defaultProps} />);
+      const copyButton = screen.getByRole('button', { name: /taskModal\.copyTaskId/i });
+      expect(copyButton).toBeInTheDocument();
+    });
+
+    it('exposes aria-pressed on the fullscreen toggle', () => {
+      render(<TaskModal {...defaultProps} />);
+      const fullscreen = screen.getByRole('button', { name: /taskModal\.fullscreen/i });
+      expect(fullscreen).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('traps Tab key within the dialog when the last element is active', () => {
+      render(<TaskModal {...defaultProps} />);
+      fireEvent.keyDown(document, { key: 'Tab' });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+
+    it('closes the dialog when Escape is pressed via the focus trap', () => {
+      render(<TaskModal {...defaultProps} />);
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(defaultProps.onClose).toHaveBeenCalled();
+    });
+
+    it('renders the delete confirmation as an alertdialog', async () => {
+      render(<TaskModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('taskModal.delete'));
+      await waitFor(() => {
+        const alertDialog = screen.getByRole('alertdialog');
+        expect(alertDialog).toHaveAttribute('aria-modal', 'true');
+        expect(alertDialog).toHaveAttribute('aria-labelledby', 'task-modal-delete-title');
+        expect(alertDialog).toHaveAttribute('aria-describedby', 'task-modal-delete-desc');
+      });
+    });
+
+    it('hides creator block when both username and nickname are missing', () => {
+      const taskAnon = {
+        ...mockTask,
+        createdByUsername: undefined,
+        createdByNickname: undefined,
+        createdByAvatar: undefined,
+      };
+      render(<TaskModal {...defaultProps} task={taskAnon} />);
+      expect(screen.queryByText('Creator Nick')).not.toBeInTheDocument();
+      expect(screen.queryByText('creatorlogin')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * PM_REVIEW_2026-09-17 §3.6 finding #1 (s-1190): the drawer used to
+   * show "🤖 运行中" and "已完成" on the same row. The fix routes the
+   * status badge through `task_runs` (single source of truth) and
+   * suppresses the column-name pill whenever a run row exists, so
+   * exactly one of {Running, Completed, Failed, Queued} renders.
+   *
+   * `useTaskRun` is mocked at the top of the file so other tests can
+   * rely on the real hook returning `null` (no row → no run badge).
+   */
+  describe('run status badge (s-1190, PM_REVIEW §3.6)', () => {
+    const liveRun = {
+      id: 'run-1',
+      taskId: 'task-1',
+      runnerId: 'runner-mac-66681-9abc',
+      agentId: 'agent-claude',
+      status: 'running',
+      claimedAt: '2026-09-17T10:00:00.000Z',
+      lastHeartbeatAt: '2026-09-17T10:00:30.000Z',
+      expiresAt: '2026-09-17T10:02:00.000Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    } as const;
+
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('renders the column name when no run row exists', () => {
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      expect(screen.getByText('已完成')).toBeInTheDocument();
       expect(screen.queryByTestId('task-run-info')).not.toBeInTheDocument();
     });
 
-    it('renders runner id, agent id, status and timestamps when a run is active', () => {
-      const claimedAt = new Date('2026-09-15T10:30:00Z').toISOString();
-      const lastHeartbeatAt = new Date('2026-09-15T10:32:00Z').toISOString();
-      const expiresAt = new Date('2026-09-15T10:35:00Z').toISOString();
-      mockedUseTaskRun.mockReturnValue({
-        run: {
-          taskId: 'task-1',
-          runnerId: 'runner-bar',
-          agentId: 'opencode',
-          boardId: 'b-1',
-          columnId: 'c-1',
-          status: 'running',
-          claimedAt,
-          lastHeartbeatAt,
-          expiresAt,
-        },
+    it('suppresses the column name when a live run row exists (s-1190 core fix)', async () => {
+      useTaskRunMock.mockReturnValue({ run: liveRun, loading: false, error: null });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
+      expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      expect(screen.getByTestId('run-status')).toHaveTextContent('taskModal.runStatus.running');
+    });
+
+    it('shows exactly one Completed badge when the latest run is completed', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'completed', finishedAt: '2026-09-17T10:01:00.000Z', exitCode: 0 },
         loading: false,
         error: null,
       });
-      render(<TaskModal {...defaultProps} />);
-      const section = screen.getByTestId('task-run-info');
-      expect(section).toBeInTheDocument();
-      // Section title is translated.
-      expect(section.textContent).toContain('taskModal.runInfo');
-      // Runner id and agent id surfaces verbatim.
-      expect(section.textContent).toContain('runner-bar');
-      expect(section.textContent).toContain('opencode');
-      // Status badge.
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
       const statusBadge = screen.getByTestId('run-status');
-      expect(statusBadge.textContent).toBe('taskModal.runStatus.running');
-      // Labels for the timestamp rows.
-      expect(section.textContent).toContain('taskModal.runRunner');
-      expect(section.textContent).toContain('taskModal.runAgent');
-      expect(section.textContent).toContain('taskModal.runClaimedAt');
-      expect(section.textContent).toContain('taskModal.runLastHeartbeat');
-      expect(section.textContent).toContain('taskModal.runExpiresAt');
-      // Elapsed label is present.
-      expect(section.textContent).toContain('taskModal.runElapsed');
+      expect(statusBadge).toHaveTextContent('taskModal.runStatus.completed');
     });
 
-    it('renders the finished at / exit code / error fields when present', () => {
-      mockedUseTaskRun.mockReturnValue({
+    it('shows exactly one Failed badge when the latest run is failed', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'failed', finishedAt: '2026-09-17T10:01:00.000Z', exitCode: 1, error: 'boom' },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
+      const statusBadge = screen.getByTestId('run-status');
+      expect(statusBadge).toHaveTextContent('taskModal.runStatus.failed');
+    });
+
+    it('shows exactly one Queued badge when the latest run was released', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'released', finishedAt: '2026-09-17T10:01:00.000Z' },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} columnName="已完成" />);
+      await waitFor(() => {
+        expect(screen.queryByText('已完成')).not.toBeInTheDocument();
+      });
+      const statusBadge = screen.getByTestId('run-status');
+      expect(statusBadge).toHaveTextContent('taskModal.runStatus.released');
+    });
+  });
+
+  /**
+   * s-1239: a finished run that exited 0 must not surface its
+   * (possibly stale) `error` string in red. Non-zero exits keep the
+   * red treatment so genuine failures stay scannable.
+   */
+  describe('run error visibility (s-1239)', () => {
+    const liveRun = {
+      id: 'run-1',
+      taskId: 'task-1',
+      runnerId: 'runner-mac-66681-9abc',
+      agentId: 'agent-claude',
+      status: 'running',
+      claimedAt: '2026-09-17T10:00:00.000Z',
+      lastHeartbeatAt: '2026-09-17T10:00:30.000Z',
+      expiresAt: '2026-09-17T10:02:00.000Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    } as const;
+
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('hides the red error row when a completed run exited 0', async () => {
+      useTaskRunMock.mockReturnValue({
         run: {
-          taskId: 'task-1',
-          runnerId: 'runner-failed',
-          agentId: 'opencode',
-          boardId: 'b-1',
-          columnId: 'c-1',
+          ...liveRun,
+          status: 'completed',
+          finishedAt: '2026-09-17T10:01:00.000Z',
+          exitCode: 0,
+          error: 'transient stderr from a successful agent run',
+        },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('taskModal.runError')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('transient stderr from a successful agent run')
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/text-red-600/)).not.toBeInTheDocument();
+    });
+
+    it('keeps the red error row visible when a failed run exited non-zero', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: {
+          ...liveRun,
           status: 'failed',
-          claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
-          lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
-          expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
-          finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
+          finishedAt: '2026-09-17T10:01:00.000Z',
           exitCode: 1,
-          error: 'boom: agent crashed',
+          error: 'agent crashed',
         },
         loading: false,
         error: null,
       });
       render(<TaskModal {...defaultProps} />);
-      const section = screen.getByTestId('task-run-info');
-      expect(section.textContent).toContain('taskModal.runFinishedAt');
-      expect(section.textContent).toContain('taskModal.runExitCode');
-      expect(section.textContent).toContain('taskModal.runError');
-      expect(section.textContent).toContain('boom: agent crashed');
-    });
-
-    it('survives a long runnerId without breaking layout', () => {
-      const longRunnerId = 'a-very-long-runner-id-that-definitely-overflows-the-card';
-      mockedUseTaskRun.mockReturnValue({
-        run: {
-          taskId: 'task-1',
-          runnerId: longRunnerId,
-          agentId: 'opencode',
-          boardId: 'b-1',
-          columnId: 'c-1',
-          status: 'claimed',
-          claimedAt: new Date(Date.now() - 5_000).toISOString(),
-          lastHeartbeatAt: new Date(Date.now() - 1_000).toISOString(),
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        },
-        loading: false,
-        error: null,
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
       });
-      render(<TaskModal {...defaultProps} />);
-      const section = screen.getByTestId('task-run-info');
-      // The dd for runner id carries `break-all` so the long id wraps
-      // rather than pushing sibling columns.
-      const dd = section.querySelector('dd.break-all');
-      expect(dd).not.toBeNull();
-      expect(dd?.textContent).toContain(longRunnerId);
+      expect(screen.getByText('taskModal.runError')).toBeInTheDocument();
+      const errorRow = screen.getByText('agent crashed');
+      expect(errorRow).toHaveClass('text-red-600');
     });
 
-    // s-1185: a successful run carrying both stdout (`output`) and
-    // a non-empty stderr banner (`error`) must render them as two
-    // separate labelled rows. Pre-s-1185 only `error` existed and
-    // opencode's stderr banner made the task look like a failure
-    // even on a clean exit.
-    it('renders the agent output separately from stderr on a successful run (s-1185)', () => {
-      mockedUseTaskRun.mockReturnValue({
+    it('hides the red error row when a completed run exited 0 even with non-zero-looking stderr', async () => {
+      useTaskRunMock.mockReturnValue({
         run: {
-          taskId: 'task-1',
-          runnerId: 'runner-bar',
-          agentId: 'opencode',
-          boardId: 'b-1',
-          columnId: 'c-1',
+          ...liveRun,
           status: 'completed',
-          claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
-          lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
-          expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
-          finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
+          finishedAt: '2026-09-17T10:01:00.000Z',
           exitCode: 0,
-          // stdout — the agent's actual reply
-          output: 'Patched file X\nAll tests pass.\n',
-          // stderr — the opencode banner that used to surface as
-          // the user-facing "Error" field and confuse operators.
-          error: 'opencode build · v1.2.3\n',
+          error: 'warning: deprecated flag used',
         },
         loading: false,
         error: null,
       });
       render(<TaskModal {...defaultProps} />);
-      const section = screen.getByTestId('task-run-info');
-      // The two streams get their own labelled rows so a quick
-      // glance at the modal tells stdout apart from stderr.
-      expect(section.textContent).toContain('taskModal.runOutput');
-      expect(section.textContent).toContain('taskModal.runError');
-      expect(section.textContent).toContain('Patched file X\nAll tests pass.\n');
-      expect(section.textContent).toContain('opencode build · v1.2.3\n');
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('taskModal.runError')).not.toBeInTheDocument();
+      expect(screen.queryByText('warning: deprecated flag used')).not.toBeInTheDocument();
     });
 
-    // s-1185: when `output` is absent (e.g. a legacy row from
-    // before the migration, or a mock agent that writes nothing
-    // to stdout) the run section must not render an empty
-    // "Agent output" row. Same for the legacy `error` field.
-    it('omits the output row when the run did not record any stdout (s-1185)', () => {
-      mockedUseTaskRun.mockReturnValue({
+    it('keeps the red error row visible when the run is still live and has an error', async () => {
+      useTaskRunMock.mockReturnValue({
+        run: { ...liveRun, status: 'running', error: 'pending failure marker' },
+        loading: false,
+        error: null,
+      });
+      render(<TaskModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('task-run-info')).toBeInTheDocument();
+      });
+      // Live runs keep the existing behaviour: an in-progress run
+      // with a non-empty error string still surfaces the red row so
+      // operators see early failure signals.
+      expect(screen.getByText('taskModal.runError')).toBeInTheDocument();
+      const errorRow = screen.getByText('pending failure marker');
+      expect(errorRow).toHaveClass('text-red-600');
+    });
+  });
+
+  /**
+   * s-1202 (PM_REVIEW §3.2 finding #3): the drawer must surface both
+   * `tasks.assignee` and `task_runs.runner` explicitly in read-only mode
+   * so operators can see who owns the task vs. who last ran it without
+   * hunting through the run-info panel. The chip rendered in the card
+   * footer is the visual twin of the row rendered here.
+   */
+  describe('assignee + last runner people section (s-1202)', () => {
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('renders the assignee row with the explicit field label', () => {
+      render(<TaskModal {...defaultProps} />);
+      expect(screen.getByTestId('task-modal-assignee')).toHaveTextContent('John');
+      // The label key should also be visible so translators can verify
+      // localisation without re-reading the implementation.
+      expect(screen.getByText('taskModal.assigneeFieldLabel')).toBeInTheDocument();
+    });
+
+    it('renders the last-runner row when a run row exists', () => {
+      useTaskRunMock.mockReturnValue({
         run: {
+          id: 'run-1',
           taskId: 'task-1',
-          runnerId: 'runner-bar',
-          agentId: 'opencode',
-          boardId: 'b-1',
-          columnId: 'c-1',
-          status: 'completed',
-          claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
-          lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
-          expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
-          finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
-          exitCode: 0,
+          runnerId: 'Mac-66681-9abc',
+          agentId: null,
+          status: 'running',
+          claimedAt: '2026-09-17T10:00:00.000Z',
+          lastHeartbeatAt: '2026-09-17T10:00:30.000Z',
+          expiresAt: '2026-09-17T10:02:00.000Z',
+          finishedAt: null,
+          exitCode: null,
+          error: null,
         },
         loading: false,
         error: null,
       });
       render(<TaskModal {...defaultProps} />);
-      const section = screen.getByTestId('task-run-info');
-      expect(section.textContent).not.toContain('taskModal.runOutput');
-      expect(section.textContent).not.toContain('taskModal.runError');
+      const lastRunner = screen.getByTestId('task-modal-last-runner');
+      expect(lastRunner).toHaveTextContent('Mac-66681-9abc');
+      expect(lastRunner).toHaveAttribute('title', 'Mac-66681-9abc');
+      expect(screen.getByText('taskModal.lastRunnerFieldLabel')).toBeInTheDocument();
     });
 
-    it('does not tick the elapsed label when the run is in a terminal status (s-1168)', () => {
-      vi.useFakeTimers();
-      try {
-        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-        mockedUseTaskRun.mockReturnValue({
-          run: {
-            taskId: 'task-1',
-            runnerId: 'runner-failed',
-            agentId: 'opencode',
-            boardId: 'b-1',
-            columnId: 'c-1',
-            status: 'failed',
-            claimedAt: new Date('2026-09-15T10:30:00Z').toISOString(),
-            lastHeartbeatAt: new Date('2026-09-15T10:32:00Z').toISOString(),
-            expiresAt: new Date('2026-09-15T10:35:00Z').toISOString(),
-            finishedAt: new Date('2026-09-15T10:33:00Z').toISOString(),
-            exitCode: 1,
-            error: 'boom',
-          },
-          loading: false,
-          error: null,
-        });
-        render(<TaskModal {...defaultProps} />);
-        // For terminal runs the modal must not arm a 1-second interval
-        // — useTaskRun already stopped the API poll and the UI should
-        // not keep re-rendering the modal banner either.
-        expect(setIntervalSpy).not.toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
+    it('omits the last-runner row when no run row exists', () => {
+      render(<TaskModal {...defaultProps} />);
+      expect(screen.queryByTestId('task-modal-last-runner')).not.toBeInTheDocument();
     });
 
-    it('keeps ticking the elapsed label while the run is still live', () => {
-      vi.useFakeTimers();
-      try {
-        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-        mockedUseTaskRun.mockReturnValue({
-          run: {
-            taskId: 'task-1',
-            runnerId: 'runner-live',
-            agentId: 'opencode',
-            boardId: 'b-1',
-            columnId: 'c-1',
-            status: 'running',
-            claimedAt: new Date(Date.now() - 5_000).toISOString(),
-            lastHeartbeatAt: new Date(Date.now() - 1_000).toISOString(),
-            expiresAt: new Date(Date.now() + 60_000).toISOString(),
-          },
-          loading: false,
-          error: null,
-        });
-        render(<TaskModal {...defaultProps} />);
-        // Live runs must arm the 1-second tick — positive control for
-        // the terminal-run assertion above.
-        expect(setIntervalSpy).toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
+    it('omits the whole people section when the task has no assignee and no run', () => {
+      const taskUnassigned = { ...mockTask, assignee: null };
+      render(<TaskModal {...defaultProps} task={taskUnassigned} />);
+      expect(screen.queryByTestId('task-modal-people')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-modal-assignee')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('due date display (T-1207 / s-1207)', () => {
+    beforeEach(() => {
+      useTaskRunMock.mockReset();
+      useTaskRunMock.mockReturnValue({ run: null, loading: false, error: null });
+    });
+
+    it('renders the due-date row when task.dueAt is set', () => {
+      const taskWithDue = { ...mockTask, assignee: null, dueAt: '2026-12-31T08:00:00.000Z' };
+      render(<TaskModal {...defaultProps} task={taskWithDue} />);
+      expect(screen.getByTestId('task-modal-people')).toBeInTheDocument();
+      expect(screen.getByTestId('task-modal-due-at')).toBeInTheDocument();
+      expect(screen.getByText('taskModal.dueDate')).toBeInTheDocument();
+    });
+
+    it('omits the due-date row when task.dueAt is null', () => {
+      const taskNoDue = { ...mockTask, assignee: null, dueAt: null };
+      render(<TaskModal {...defaultProps} task={taskNoDue} />);
+      expect(screen.queryByTestId('task-modal-people')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-modal-due-at')).not.toBeInTheDocument();
+    });
+
+    it('exposes a due-date picker in the edit grid that round-trips the saved value', async () => {
+      const taskWithDue = { ...mockTask, dueAt: '2026-12-31T08:00:00.000Z' };
+      const user = userEvent.setup();
+      render(<TaskModal {...defaultProps} task={taskWithDue} startEditing={true} />);
+      const dueInput = document.getElementById('task-modal-due-at') as HTMLInputElement;
+      expect(dueInput).toBeInTheDocument();
+      // value is the local-time representation of 2026-12-31T08:00:00Z;
+      // we just check the year/month so the test isn't timezone-sensitive.
+      expect(dueInput.value).toMatch(/^2026-12-31T/);
+      await user.clear(dueInput);
+      await user.type(dueInput, '2027-01-15T09:30');
+      const saveButton = await screen.findByText('taskModal.save');
+      await user.click(saveButton);
+      const onUpdate = defaultProps.onUpdate;
+      const lastCall = onUpdate.mock.calls[onUpdate.mock.calls.length - 1];
+      expect(lastCall[0].dueAt).toBeTruthy();
+      expect(lastCall[0].dueAt.startsWith('2027-01-15')).toBe(true);
+    });
+
+it('exposes a Clear button that nulls the due date before save', async () => {
+      const taskWithDue = { ...mockTask, dueAt: '2026-12-31T08:00:00.000Z' };
+      const user = userEvent.setup();
+      render(<TaskModal {...defaultProps} task={taskWithDue} startEditing={true} />);
+      const dueInput = document.getElementById('task-modal-due-at') as HTMLInputElement;
+      expect(dueInput.value).toMatch(/^2026-12-31T/);
+      const clearButton = screen.getByRole('button', { name: 'taskModal.dueDateClear' });
+      await user.click(clearButton);
+      expect(dueInput.value).toBe('');
+      const saveButton = await screen.findByText('taskModal.save');
+      await user.click(saveButton);
+      const lastCall = defaultProps.onUpdate.mock.calls[defaultProps.onUpdate.mock.calls.length - 1];
+      expect(lastCall[0].dueAt).toBeNull();
+    });
+
+    // s-1230: the edit grid must place priority + due date in the same
+    // row so the operator can scan them as a pair. Reordering the
+    // source order (Assignee before Priority) swaps the second row to
+    // [Priority, DueAt] inside the same 2-col grid.
+    it('keeps the priority and due-date fields in the same edit-grid row (s-1230)', () => {
+      render(<TaskModal {...defaultProps} task={mockTask} startEditing={true} />);
+      const priorityLabel = screen.getByText('taskModal.priority');
+      const dueDateLabel = screen.getByText('taskModal.dueDate');
+      const priorityContainer = priorityLabel.parentElement as HTMLElement;
+      const dueDateContainer = dueDateLabel.parentElement as HTMLElement;
+      // Both label wrappers must share a parent (the grid row) so the
+      // two fields sit side-by-side rather than stacking full-width.
+      expect(priorityContainer.parentElement).toBe(dueDateContainer.parentElement);
     });
   });
 });

@@ -60,20 +60,9 @@ describe('FilterPanelContent', () => {
   });
 
   it('should render clear and save preset buttons', () => {
-    render(
-      <FilterPanelContent
-        {...defaultProps}
-        filterPresets={[{ id: '1', name: 'Existing', filters: mockFilters }]}
-      />
-    );
+    render(<FilterPanelContent {...defaultProps} />);
     expect(screen.getByRole('button', { name: /filter\.clear/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /filter\.savePreset/i })).toBeInTheDocument();
-  });
-
-  it('should not render save preset button when filterPresets is empty', () => {
-    render(<FilterPanelContent {...defaultProps} filterPresets={[]} />);
-    expect(screen.getByRole('button', { name: /filter\.clear/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /filter\.savePreset/i })).not.toBeInTheDocument();
   });
 
   it('should call onSetFilters when priority changes', () => {
@@ -104,12 +93,7 @@ describe('FilterPanelContent', () => {
   });
 
   it('should call onSaveCurrentAsPreset when save preset button is clicked', () => {
-    render(
-      <FilterPanelContent
-        {...defaultProps}
-        filterPresets={[{ id: '1', name: 'Existing', filters: mockFilters }]}
-      />
-    );
+    render(<FilterPanelContent {...defaultProps} />);
     fireEvent.click(screen.getByRole('button', { name: /filter\.savePreset/i }));
     expect(defaultProps.onSaveCurrentAsPreset).toHaveBeenCalled();
   });
@@ -161,39 +145,53 @@ describe('FilterPanelContent', () => {
 
   it('should call onSetShowPresetDropdown when expand/collapse is clicked', () => {
     const presets: FilterPreset[] = [
-      { id: '1', name: 'My Preset', filters: { ...mockFilters, priority: 'high' } }
+      { id: '1', name: 'My Preset', filters: mockFilters }
     ];
     render(<FilterPanelContent {...defaultProps} filterPresets={presets} showPresetDropdown={false} />);
     fireEvent.click(screen.getByText(/filter\.expand/i));
     expect(defaultProps.onSetShowPresetDropdown).toHaveBeenCalledWith(true);
   });
 
-  it('should render children when provided', () => {
-    render(
-      <FilterPanelContent {...defaultProps} hideBoardDefaults>
-        <div data-testid="custom-child">Custom Field</div>
-      </FilterPanelContent>
-    );
-    expect(screen.getByTestId('custom-child')).toBeInTheDocument();
-    expect(screen.getByText('Custom Field')).toBeInTheDocument();
+  it('should render the runStatus dimension', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    expect(screen.getByLabelText(/filter\.runStatus/i)).toBeInTheDocument();
   });
 
-  it('should hide board-default fields when hideBoardDefaults is true', () => {
-    render(<FilterPanelContent {...defaultProps} hideBoardDefaults />);
-    expect(screen.queryByLabelText(/filter\.priority/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/filter\.assignee/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/filter\.dateRange/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /filter\.clear/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /filter\.savePreset/i })).not.toBeInTheDocument();
+  it('should render the hasComments dimension', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    expect(screen.getByLabelText(/filter\.hasComments/i)).toBeInTheDocument();
   });
 
-  it('should still render children after defaults when hideBoardDefaults is false', () => {
-    render(
-      <FilterPanelContent {...defaultProps}>
-        <div data-testid="custom-child">Extra</div>
-      </FilterPanelContent>
-    );
-    expect(screen.getByLabelText(/filter\.priority/i)).toBeInTheDocument();
-    expect(screen.getByTestId('custom-child')).toBeInTheDocument();
+  it('should render the hasSubtasks dimension', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    expect(screen.getByLabelText(/filter\.hasSubtasks/i)).toBeInTheDocument();
+  });
+
+  it('should always render runStatus/hasComments/hasSubtasks even when uniqueTags is empty', () => {
+    render(<FilterPanelContent {...defaultProps} uniqueTags={[]} />);
+    expect(screen.getByLabelText(/filter\.runStatus/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/filter\.hasComments/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/filter\.hasSubtasks/i)).toBeInTheDocument();
+  });
+
+  it('should call onSetFilters when runStatus changes', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText(/filter\.runStatus/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.runStatusRunning/i }));
+    expect(defaultProps.onSetFilters).toHaveBeenCalled();
+  });
+
+  it('should call onSetFilters when hasComments changes', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText(/filter\.hasComments/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.yes/i }));
+    expect(defaultProps.onSetFilters).toHaveBeenCalled();
+  });
+
+  it('should call onSetFilters when hasSubtasks changes', () => {
+    render(<FilterPanelContent {...defaultProps} />);
+    fireEvent.click(screen.getByLabelText(/filter\.hasSubtasks/i));
+    fireEvent.click(screen.getByRole('option', { name: /filter\.no/i }));
+    expect(defaultProps.onSetFilters).toHaveBeenCalled();
   });
 });

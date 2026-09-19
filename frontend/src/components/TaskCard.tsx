@@ -2,13 +2,12 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useState, useId, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CardDensity, CustomField, Task, TaskRun } from '@/types/kanban';
+import type { CustomField, Task, TaskRun } from '@/types/kanban';
 import { ConfirmDialog } from './ConfirmDialog';
 import { UserAvatar } from './UserAvatar';
-import { useTaskRun } from '../hooks/useTaskRun';
 import { TaskRunIndicator } from './TaskRunIndicator';
 import { CustomFieldChips } from './CustomFieldChips';
-import { getDueDateMeta } from '../utils/dueDate';
+import type { CardDensity } from '../hooks/useCardDensity';
 
 interface TaskCardProps {
   task: Task;
@@ -74,78 +73,37 @@ function highlightText(text: string, query: string): React.ReactNode {
   );
 }
 
-/**
- * Format the elapsed time since `claimedAt` into a short human label
- * (e.g. "12s", "3m", "1h"). Stays short on purpose — the badge has
- * limited horizontal space on a task card.
- *
- * When `finishedAt` is supplied (i.e. the run has reached a terminal
- * status) the elapsed label is frozen at `finishedAt - claimedAt` so
- * the badge does not keep ticking once the runner has settled.
- */
-function formatRunElapsed(
-  claimedAt: string,
-  t: (key: string, opts?: Record<string, unknown>) => string,
-  finishedAt?: string | null
-): string {
-  const startMs = new Date(claimedAt).getTime();
-  if (Number.isNaN(startMs)) return t('taskCard.runnerElapsedSeconds', { count: 0 });
-  const endMs = finishedAt ? new Date(finishedAt).getTime() : Date.now();
-  const elapsedSec = Math.max(0, Math.floor((endMs - startMs) / 1000));
-  if (elapsedSec < 60) return t('taskCard.runnerElapsedSeconds', { count: elapsedSec });
-  if (elapsedSec < 3600) {
-    return t('taskCard.runnerElapsedMinutes', { count: Math.floor(elapsedSec / 60) });
-  }
-  return t('taskCard.runnerElapsedHours', { count: Math.floor(elapsedSec / 3600) });
-}
-
-/**
- * RunnerBadge — small pill rendered on a task card while a CLI runner
- * is processing it (see `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5).
- * Refreshes the elapsed label every second while the run is live
- * (`claimed` / `running`) so the running timer stays accurate without
- * re-querying the API on every tick. Once the run settles into a
- * terminal state (`completed` / `failed` / `released`) the interval
- * is skipped and the label is frozen at the `finishedAt` time so the
- * card stops re-rendering for a runner that has already gone away.
- */
-function RunnerBadge({
-  runnerId,
-  label,
-  live,
-}: {
-  runnerId: string;
+// s-1230: deadline chip. Renders the due date next to the priority
+// badge in the footer so the operator can see priority + deadline
+// side-by-side without opening the task. Color intensifies as the
+// deadline approaches (overdue → red, today → amber, future → zinc).
+function getDueDateMeta(dueAt: string): {
   label: string;
-  live: boolean;
-}) {
-  const { t } = useTranslation();
-  // Re-render every second so the elapsed label stays accurate. The
-  // 1s cadence is intentional — finer granularity wastes CPU on every
-  // task card on the board; coarser granularity makes the badge feel
-  // stale. Skip the interval entirely for terminal runs (s-1168) so a
-  // settled task does not keep ticking on the board.
-  const [, setNow] = useState<number>(() => Date.now());
-  useEffect(() => {
-    if (!live) return undefined;
-    const handle = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(handle);
-  }, [live]);
-  return (
-    <span
-      className="inline-flex max-w-[10rem] items-center gap-1 overflow-hidden rounded-full bg-violet-50 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700/50"
-      aria-label={t('taskCard.runnerBadgeAria', { runnerId, elapsed: label })}
-      title={`${runnerId} · ${label}`}
-      data-testid="runner-badge"
-    >
-      <span aria-hidden className="flex-shrink-0">🤖</span>
-      <span className="font-mono truncate" title={runnerId}>{runnerId}</span>
-      <span aria-hidden className="flex-shrink-0">·</span>
-      <span className="flex-shrink-0">{label}</span>
-    </span>
-  );
+  state: 'overdue' | 'today' | 'tomorrow' | 'future';
+  full: string;
+} | null {
+  const due = new Date(dueAt);
+  if (Number.isNaN(due.getTime())) return null;
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(due) - startOfDay(now)) / (1000 * 60 * 60 * 24));
+  let state: 'overdue' | 'today' | 'tomorrow' | 'future';
+  if (diffDays < 0) state = 'overdue';
+  else if (diffDays === 0) state = 'today';
+  else if (diffDays === 1) state = 'tomorrow';
+  else state = 'future';
+  const label = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return { label, state, full: due.toLocaleString() };
 }
 
-export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run: runProp, customFields, density }: TaskCardProps) {
+const dueDateColors: Record<'overdue' | 'today' | 'tomorrow' | 'future', string> = {
+  overdue: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
+  today: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200',
+  tomorrow: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
+  future: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700/60 dark:text-zinc-300',
+};
+
+export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive, onDelete, onMoveToColumn, columns, searchQuery, isSelected, onSelect, run, customFields, density = 'standard' }: TaskCardProps) {
   const { t } = useTranslation();
   const randomId = useId();
   const taskId = task?.id ?? `temp-${randomId}`;
@@ -160,12 +118,6 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
     onConfirm: () => void;
     variant?: 'danger' | 'warning' | 'default';
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
-
-  // Poll for an in-flight CLI runner. The badge only renders when the
-  // server returns a live `task_runs` row (claimed or running); a 404
-  // flips `run` back to null and the badge disappears.
-  const { run: polledRun } = useTaskRun(task?.id, { intervalMs: 5000 });
-  const run = runProp ?? polledRun;
 
   const {
     attributes,
@@ -233,8 +185,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
   // priority + due-date row in the footer stays consistent for the
   // same input — also avoids re-parsing the date on every scroll
   // tick from the virtualised list.
-  const _dueDateMeta = useMemo(() => (task.dueAt ? getDueDateMeta(task.dueAt) : null), [task.dueAt]);
-  void _dueDateMeta;
+  const dueDateMeta = useMemo(() => (task.dueAt ? getDueDateMeta(task.dueAt) : null), [task.dueAt]);
 
   return (
     <div
@@ -484,7 +435,7 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
       )}
       {!isCompact && (
       <div className="flex items-center justify-between pl-3 pt-1 border-t border-zinc-100 dark:border-zinc-700/50">
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5">
           {columnName === t('task.status.done') && (
             <span className="text-green-500" title={t('taskCard.completed')}>✓</span>
           )}
@@ -495,12 +446,29 @@ export function TaskCard({ task, columnName, onClick, onCommentsClick, onArchive
           >
             {task.priority === 'high' ? t('task.priority.high') : task.priority === 'medium' ? t('task.priority.medium') : t('task.priority.low')}
           </span>
-          {run && (
-            <RunnerBadge
-              runnerId={run.runnerId}
-              label={formatRunElapsed(run.claimedAt, t, run.finishedAt ?? null)}
-              live={run.status === 'claimed' || run.status === 'running'}
-            />
+          {/* s-1230: deadline chip — sits next to the priority badge so
+              the two stay readable as a pair. Skipped when the task has
+              no due date so we don't reserve space for an empty chip. */}
+          {dueDateMeta && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                dueDateColors[dueDateMeta.state]
+              }`}
+              title={dueDateMeta.full}
+              data-testid="task-card-due-date"
+              data-state={dueDateMeta.state}
+            >
+              <span aria-hidden className="text-[11px] leading-none">📅</span>
+              <span>
+                {dueDateMeta.state === 'overdue'
+                  ? t('taskModal.dueDateOverdue')
+                  : dueDateMeta.state === 'today'
+                  ? t('taskModal.dueDateDueToday')
+                  : dueDateMeta.state === 'tomorrow'
+                  ? t('taskModal.dueDateDueTomorrow')
+                  : dueDateMeta.label}
+              </span>
+            </span>
           )}
           {task.subtasks && task.subtasks.length > 0 && (
             <span className="text-xs text-zinc-400 dark:text-zinc-400">

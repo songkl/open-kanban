@@ -1,4 +1,32 @@
-import type { Board, Column, Task, Comment, Subtask, Attachment, Token, User, Agent, OAuthClient, OAuthConsent, OAuthConfigEntry, OAuthProvider, OAuthProviderCreate, OAuthProviderUpdate, TaskRun, Webhook, WebhookCreate, WebhookUpdate, WebhookEventCatalogueEntry, WebhookDelivery, BoardPermission, ColumnPermission, DashboardStats, NotificationPreferences, StatusReport } from '@/types/kanban';
+import type {
+  Board,
+  Column,
+  StatusReport,
+  Task,
+  Comment,
+  Subtask,
+  Attachment,
+  Token,
+  User,
+  Agent,
+  OAuthClient,
+  OAuthConsent,
+  OAuthConfigEntry,
+  BoardPermission,
+  ColumnPermission,
+  BoardBulkGrantResult,
+  TaskRun,
+  DashboardStats,
+  OAuthProvider,
+  OAuthProviderCreate,
+  OAuthProviderUpdate,
+  PublicOAuthProvider,
+  Webhook,
+  WebhookCreate,
+  WebhookUpdate,
+  WebhookEventCatalogueEntry,
+  WebhookDelivery,
+} from '@/types/kanban';
 import i18n from '@/i18n';
 
 /**
@@ -558,43 +586,6 @@ export const commentsApi = {
     }),
 };
 
-// Runs API — see devDoc/CLI_RUNNER_PLAN_2026-09-12.md §3.4 and §9.
-// `getByTask` returns the live `task_runs` row (claimed or running) or
-// `null` when the row has been cleaned up by finish() / reaper. 401s
-// bubble up unchanged so the global handler can redirect to login;
-// network errors are surfaced as ApiError so the hook can stop polling.
-// `list` hits `GET /api/v1/runs/history` and returns the terminal rows
-// (completed / failed / released) that power the /runs page.
-export const runsApi = {
-  getByTask: async (taskId: string, signal?: AbortSignal): Promise<TaskRun | null> => {
-    try {
-      return await fetchApi<TaskRun>(`runs/${encodeURIComponent(taskId)}`, {
-        skip401Handling: true,
-        signal,
-      });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 404) return null;
-      throw err;
-    }
-  },
-  list: async (params?: {
-    runnerId?: string;
-    status?: 'completed' | 'failed' | 'released';
-    taskId?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<TaskRun[]> => {
-    const query = new URLSearchParams();
-    if (params?.runnerId) query.set('runnerId', params.runnerId);
-    if (params?.status) query.set('status', params.status);
-    if (params?.taskId) query.set('taskId', params.taskId);
-    if (params?.limit != null) query.set('limit', String(params.limit));
-    if (params?.offset != null) query.set('offset', String(params.offset));
-    const qs = query.toString();
-    return fetchApi<TaskRun[]>(`runs/history${qs ? `?${qs}` : ''}`);
-  },
-};
-
 // Subtasks API
 export const subtasksApi = {
   getByTask: (taskId: string) =>
@@ -729,7 +720,8 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify({ updates }),
     }),
-  getOAuthProviders: () => fetchApi<{ providers: OAuthProvider[] }>('auth/oauth/providers').then(res => res.providers || []),
+  getOAuthProviders: () =>
+    fetchApi<{ providers: OAuthProvider[] }>('auth/oauth/providers').then((res) => res.providers || []),
   getOAuthProvider: (id: string) => fetchApi<OAuthProvider>(`auth/oauth/providers/${id}`),
   // Public listing of enabled external OAuth providers for the
   // /login page (s-1144). Distinct from getOAuthProviders — this
@@ -738,14 +730,13 @@ export const authApi = {
   // no providers are configured so the login page can render
   // without a null check.
   getEnabledExternalProviders: () =>
-    fetchApi<{ providers: import('@/types/kanban').PublicOAuthProvider[] }>(
-      'auth/external/providers'
-    ).then(res => res.providers || []),
+    fetchApi<{ providers: PublicOAuthProvider[] }>('auth/external/providers').then(
+      (res) => res.providers || []
+    ),
   // Post-callback exchange used by the /login page when the IdP
   // redirected back with ?code=xxx&state=yyy. The server mints a
   // kanban session, sets the cookie, and returns the same
-  // envelope as /auth/login. The slug is the public providerId
-  // (e.g. "google", "corp-okta").
+  // envelope as /auth/login. The slug is the public providerId.
   completeExternalLogin: (slug: string, body: { code: string; state?: string }) =>
     fetchApi<{
       user: User;
@@ -804,13 +795,10 @@ export const authApi = {
       body: JSON.stringify({ userId, boardId, access }),
     }),
   bulkSetPermissions: (boardId: string, userIds: string[], access: string) =>
-    fetchApi<{ success: boolean; boardId: string; granted: string[]; count: number }>(
-      'auth/permissions/bulk',
-      {
-        method: 'POST',
-        body: JSON.stringify({ boardId, userIds, access }),
-      }
-    ),
+    fetchApi<BoardBulkGrantResult>('auth/permissions/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ boardId, userIds, access }),
+    }),
   deletePermission: (id: string) =>
     fetchApi<void>(`auth/permissions?id=${id}`, { method: 'DELETE' }),
   transferOwnership: (boardId: string, newOwnerUserId: string) =>
@@ -973,12 +961,11 @@ interface UploadResult {
 export interface Notification {
   id: string;
   userId: string;
-  source: string;
+  source: 'TASK_ASSIGNED' | 'TASK_MENTIONED' | 'RUN_COMPLETED' | 'WEBHOOK_FAILED';
   title: string;
   body: string;
-  targetType?: string;
-  targetId?: string;
-  read?: boolean;
+  targetType: '' | 'TASK' | 'COMMENT' | 'RUN' | 'WEBHOOK';
+  targetId: string;
   readAt?: string;
   createdAt: string;
 }
@@ -1032,12 +1019,89 @@ export const attachmentsApi = {
     fetchApi<void>(`attachments/${id}`, { method: 'DELETE' }),
 };
 
-// Webhooks API — see docs/EVENT_CENTER_PLAN_s-1138.md §8 and
-// docs/API_CHANGELOG.md ("Event Center multi-stage Webhook").
-// Mirrors backend/internal/handlers/webhooks.go. The wire shapes
-// match WebhookView / WebhookDelivery so the list, form and
-// deliveries components can rely on the same TypeScript types
-// from @/types/kanban.
+// Task runs API — surfaces the live `task_runs` row for a task so the
+// drawer can decide whether to render the run status badge or fall
+// back to the columnName (see PM_REVIEW_2026-09-17 §3.6).
+export const runsApi = {
+  /**
+   * Fetch the latest task_runs row for the given task. Returns
+   * `null` when no row exists (either the task was never claimed or
+   * the row has been reaped). 404 responses are normalised to null so
+   * callers don't need a try/catch around the "no run yet" case.
+   */
+  getByTask: async (taskId: string, options?: { signal?: AbortSignal }): Promise<TaskRun | null> => {
+    const url = `${API_BASE}runs/${encodeURIComponent(taskId)}`;
+    try {
+      const response = await fetch(url, {
+        credentials: 'include',
+        signal: options?.signal,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.status === 404) return null;
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login';
+          throw new ApiError(i18n.t('app.error.unauthorized'), 401);
+        }
+        throw new ApiError(data?.error || i18n.t('app.error.requestFailed', { status: response.status }), response.status);
+      }
+      // s-1244 (PM review s-1243 P1-2): the server now returns
+      // `{ run: null, hasRun: false }` on the empty case instead of
+      // a 404, so the browser doesn't log a red error on every
+      // board page load. Accept both the new envelope and the legacy
+      // bare-run shape.
+      if (data === null || data === undefined) return null;
+      if (data && typeof data === 'object' && 'hasRun' in data) {
+        return (data.run ?? null) as TaskRun | null;
+      }
+      return data as TaskRun;
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw new ApiError('Request was cancelled', undefined, false, true);
+      }
+      if (error instanceof ApiError) throw error;
+      if (isNetworkError(error)) {
+        throw new ApiError(i18n.t('app.error.networkError'), undefined, true);
+      }
+      throw error;
+    }
+  },
+  /**
+   * List terminal task_runs rows for the history view (GET
+   * /api/v1/runs/history). Supports runnerId / status / taskId
+   * filters plus limit / offset pagination.
+   */
+  list: async (params?: {
+    runnerId?: string;
+    status?: 'completed' | 'failed' | 'released';
+    taskId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<TaskRun[]> => {
+    const query = new URLSearchParams();
+    if (params?.runnerId) query.set('runnerId', params.runnerId);
+    if (params?.status) query.set('status', params.status);
+    if (params?.taskId) query.set('taskId', params.taskId);
+    if (params?.limit != null) query.set('limit', String(params.limit));
+    if (params?.offset != null) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return fetchApi<TaskRun[]>(`runs/history${qs ? `?${qs}` : ''}`);
+  },
+};
+
+// Notifications API (s-1194). Powers the bell-badge UI in the new
+// global top bar; the GET endpoint also returns `unreadCount` so the
+// badge can hydrate without a second round-trip.
+export interface NotificationListResult {
+  notifications: Notification[];
+  unreadCount: number;
+}
+
+// Event-center webhook admin API (s-1155 / s-1156). Mirrors the
+// backend internal/handlers/webhooks.go surface; the wire shapes
+// match Webhook / WebhookDelivery so the list, form and deliveries
+// components share the same TypeScript types from @/types/kanban.
 export const webhooksApi = {
   list: () =>
     fetchApi<{ webhooks: Webhook[]; count: number }>('webhooks').then(
@@ -1086,77 +1150,130 @@ export const webhooksApi = {
 };
 
 export const notificationsApi = {
-  list: (params?: { limit?: number; unreadOnly?: boolean }) => {
-    const query = new URLSearchParams();
-    if (params?.limit != null) query.set('limit', String(params.limit));
-    if (params?.unreadOnly) query.set('unreadOnly', 'true');
-    const qs = query.toString();
-    return fetchApi<{ notifications: Notification[]; count: number; unreadCount: number }>(
-      `notifications${qs ? `?${qs}` : ''}`
-    );
+  /**
+   * Fetch the caller's notifications, newest first.
+   *
+   * @param opts.unreadOnly when true, only unread rows are returned.
+   *                        The bell list uses this on first paint to
+   *                        avoid paging through already-read rows.
+   * @param opts.limit      defaults to 50, capped at 100 server-side.
+   * @param opts.offset     defaults to 0; bell-list virtual scroll
+   *                        passes an incrementing offset to load more.
+   */
+  list: (opts?: { unreadOnly?: boolean; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.unreadOnly) params.set('unreadOnly', 'true');
+    if (typeof opts?.limit === 'number') params.set('limit', String(opts.limit));
+    if (typeof opts?.offset === 'number') params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return fetchApi<NotificationListResult>(`notifications${qs ? `?${qs}` : ''}`);
   },
+  /**
+   * Mark a single notification read. Idempotent — a second call on
+   * an already-read row returns 200 with the original readAt, not 404.
+   */
   markRead: (id: string) =>
-    fetchApi<{ success: boolean }>(`notifications/${id}/read`, { method: 'POST' }),
+    fetchApi<{ success: boolean; readAt: string }>(`notifications/${id}/read`, {
+      method: 'POST',
+    }),
+  /**
+   * Mark every unread row owned by the caller read. Single UPDATE,
+   * so it's cheap enough to call on bell-list close.
+   */
   markAllRead: () =>
-    fetchApi<{ success: boolean }>('notifications/read-all', { method: 'POST' }),
+    fetchApi<{ success: boolean; readAt: string }>('notifications/read-all', {
+      method: 'POST',
+    }),
 };
+
+// Per-user notification preferences (s-1203, PM_REVIEW_2026-09-17 §3.7).
+// Backs the "Notifications" section in Settings — every authenticated
+// user can read/write their own row, regardless of role.
+export interface NotificationPreferences {
+  userId: string;
+  emailEnabled: boolean;
+  webhookEnabled: boolean;
+  webhookUrl: string;
+  updatedAt: string;
+}
+
+export type NotificationPreferencesPatch = Partial<
+  Pick<NotificationPreferences, 'emailEnabled' | 'webhookEnabled' | 'webhookUrl'>
+>;
 
 export const notificationPreferencesApi = {
-  get: () =>
-    fetchApi<NotificationPreferences>(
-      'auth/me/notification-preferences'
-    ),
-  update: (prefs: Partial<NotificationPreferences>) =>
+  /**
+   * Fetch the caller's notification preferences. The backend returns
+   * the documented defaults (email + webhook on, empty URL) when the
+   * user has never saved a row, so callers can treat the result as
+   * always-defined.
+   */
+  get: () => fetchApi<NotificationPreferences>('auth/me/notification-preferences'),
+  /**
+   * Partial update: omitted fields are preserved on the server. The
+   * Settings tab uses this to toggle one switch at a time without
+   * re-sending the whole row.
+   */
+  update: (patch: NotificationPreferencesPatch) =>
     fetchApi<NotificationPreferences>('auth/me/notification-preferences', {
       method: 'PUT',
-      body: JSON.stringify(prefs),
+      body: JSON.stringify(patch),
     }),
 };
 
+// Admin-only error reporting configuration (s-1210,
+// PM_REVIEW_2026-09-17 §7). Backed by the
+// /api/v1/frontend-events/config endpoints added in the same
+// task. The Settings → Error Reporting tab uses this to flip
+// the global sink on/off for the whole deployment — a
+// self-hosted admin can disable remote capture of unhandled
+// exceptions without rebuilding the frontend bundle.
+export interface FrontendEventsConfig {
+  enabled: boolean;
+}
+
 export const frontendEventsApi = {
-  ingest: (event: { kind: string; message: string; stack?: string; meta?: Record<string, unknown> }) =>
-    fetchApi<{ id: string }>('frontend-events', {
-      method: 'POST',
-      body: JSON.stringify(event),
-    }),
-  list: () => fetchApi<{ events: Array<{ id: string; kind: string; message: string; createdAt: string }>; count: number }>('frontend-events'),
-  getEnabled: () =>
-    fetchApi<{ enabled: boolean }>('frontend-events/config'),
-  getConfig: () =>
-    fetchApi<{ enabled: boolean }>('frontend-events/config'),
-  setEnabled: (enabled: boolean) =>
-    fetchApi<{ enabled: boolean }>('frontend-events/config', {
+  /** Read the current admin-side toggle. Admin-only on the server. */
+  getConfig: () => fetchApi<FrontendEventsConfig>('frontend-events/config'),
+  /**
+   * Flip the admin-side toggle. When set to false the ingest
+   * endpoint returns 204 with no row written, which the
+   * client treats as "all good, nothing to do" so the
+   * disabled sink does not turn into a flood of console
+   * errors on every page.
+   */
+  setConfig: (enabled: boolean) =>
+    fetchApi<FrontendEventsConfig>('frontend-events/config', {
       method: 'PUT',
       body: JSON.stringify({ enabled }),
     }),
-  setConfig: (next: { enabled: boolean }) =>
-    fetchApi<{ enabled: boolean }>('frontend-events/config', {
-      method: 'PUT',
-      body: JSON.stringify(next),
-    }),
+  /** Admin-only list of the most recent captured events. */
+  list: (limit = 50) =>
+    fetchApi<{ events: Array<{
+      id: string;
+      eventType: string;
+      message?: string;
+      stack?: string;
+      url?: string;
+      source?: string;
+      details?: Record<string, unknown>;
+      receivedAt: string;
+      userId?: string;
+    }>; total: number }>(`frontend-events?limit=${limit}`),
 };
+
+// Public /api/v1/status payload (s-1211). The endpoint is
+// intentionally unauthenticated so the /status page can be
+// opened by anyone — including unauthenticated visitors who
+// want to confirm an instance is up before logging in. We
+// pin skip401Handling to true as belt-and-braces: if the
+// route ever gets accidentally wrapped in auth middleware
+// the /status page would otherwise bounce to /login, which
+// is exactly the wrong UX for an "is the server alive?" page.
+// (StatusReport shape is defined in types/kanban.ts so the page
+// and the api stub share one definition.)
 
 export const statusApi = {
-  get: () => fetchApi<StatusReport>('status'),
-};
-
-export const oauthDeviceApi = {
-  lookup: (userCode: string) =>
-    fetchApi<{
-      clientId: string;
-      clientName: string;
-      scope: string;
-      expiresAt: string;
-      status: string;
-      agentSelectionRequired?: boolean;
-      agent_selection_required?: boolean;
-      availableAgents?: Array<{ id: string; nickname?: string; username?: string; role?: string }>;
-      available_agents?: Array<{ id: string; nickname?: string; username?: string; role?: string }>;
-      defaultAgentId?: string;
-    }>(`oauth/device/lookup?user_code=${encodeURIComponent(userCode)}`),
-  approve: (data: { userCode: string; decision: 'approve' | 'deny'; agentId?: string }) =>
-    fetchApi<{ approved?: boolean; denied?: boolean; boundTo?: string }>(
-      'oauth/device/approve',
-      { method: 'POST', body: JSON.stringify({ user_code: data.userCode, decision: data.decision, agent_id: data.agentId }) }
-    ),
+  /** Fetch the rich /api/v1/status payload. Public — no auth required. */
+  get: () => fetchApi<StatusReport>('status', { skip401Handling: true }),
 };

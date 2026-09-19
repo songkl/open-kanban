@@ -1,19 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskCard } from './TaskCard';
 import type { Task } from '@/types/kanban';
-
-// Mock the polling hook so the badge tests can drive `run` directly
-// without faking timers. The hook is exercised end-to-end in
-// `useTaskRun.test.ts`; here we only care that the card renders the
-// runner id and elapsed label when the hook returns a row, and hides
-// itself when it returns null.
-vi.mock('../hooks/useTaskRun', () => ({
-  useTaskRun: vi.fn(),
-}));
-import { useTaskRun } from '../hooks/useTaskRun';
-const mockedUseTaskRun = useTaskRun as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
@@ -63,10 +52,6 @@ describe('TaskCard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // The polling hook is mocked at module scope; every test starts
-    // with the "no active run" baseline so unrelated assertions aren't
-    // affected by the badge.
-    mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
   });
 
   it('renders task title', () => {
@@ -285,152 +270,218 @@ describe('TaskCard', () => {
     expect(screen.getByText(/taskCard.moreSubtasks/)).toBeInTheDocument();
   });
 
-  describe('runner badge', () => {
-    beforeEach(() => {
-      mockedUseTaskRun.mockReset();
-    });
-
-    it('does not render the badge when no run is active', () => {
-      mockedUseTaskRun.mockReturnValue({ run: null, loading: false, error: null });
+  describe('creator avatar', () => {
+    it('renders avatar image when creator avatar URL is provided', () => {
       render(<TaskCard {...defaultProps} />);
-      expect(screen.queryByTestId('runner-badge')).not.toBeInTheDocument();
+      const avatar = screen.getByAltText('Creator Nick');
+      expect(avatar).toBeInTheDocument();
+      expect(avatar).toHaveAttribute('src', 'https://example.com/avatar.png');
     });
 
-    it('renders the runner id and elapsed seconds when a run is active', async () => {
-      const claimedAt = new Date(Date.now() - 12_000).toISOString(); // 12s ago
-      mockedUseTaskRun.mockReturnValue({
-        run: {
-          taskId: 'task-1',
-          runnerId: 'runner-foo',
-          agentId: 'opencode',
-          boardId: 'b-1',
-          columnId: 'c-1',
-          status: 'claimed',
-          claimedAt,
-          lastHeartbeatAt: claimedAt,
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        },
-        loading: false,
-        error: null,
-      });
+    it('renders creator nickname next to avatar', () => {
       render(<TaskCard {...defaultProps} />);
-      const badge = screen.getByTestId('runner-badge');
-      expect(badge).toBeInTheDocument();
-      // runner id surfaces verbatim so operators can grep logs.
-      expect(badge.textContent).toContain('runner-foo');
-      // 12 seconds of elapsed time, formatted as the i18n key with
-      // count substituted in by the test mock that just returns the
-      // key.
-      await waitFor(() => expect(badge.textContent).toContain('taskCard.runnerElapsedSeconds'));
+      expect(screen.getByText('Creator Nick')).toBeInTheDocument();
     });
 
-    it('truncates an over-long runnerId so it does not push the badge to a new line', () => {
-      const longRunnerId = 'a-very-long-runner-id-that-definitely-overflows-the-card';
-      const claimedAt = new Date(Date.now() - 5_000).toISOString();
-      mockedUseTaskRun.mockReturnValue({
-        run: {
-          taskId: 'task-1',
-          runnerId: longRunnerId,
-          agentId: 'opencode',
-          boardId: 'b-1',
-          columnId: 'c-1',
-          status: 'running',
-          claimedAt,
-          lastHeartbeatAt: claimedAt,
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        },
-        loading: false,
-        error: null,
-      });
+    it('falls back to username when creator nickname is missing', () => {
+      const taskOnlyUsername = {
+        ...mockTask,
+        createdByNickname: undefined,
+      };
+      render(<TaskCard {...defaultProps} task={taskOnlyUsername} />);
+      expect(screen.getByText('creatorlogin')).toBeInTheDocument();
+    });
+
+    it('falls back to initial avatar when creator avatar URL is missing', () => {
+      const taskNoAvatar = { ...mockTask, createdByAvatar: undefined };
+      render(<TaskCard {...defaultProps} task={taskNoAvatar} />);
+      const initial = screen.getByText('C');
+      expect(initial).toBeInTheDocument();
+    });
+
+    it('hides creator avatar when no creator info is available', () => {
+      const taskAnon = {
+        ...mockTask,
+        createdByUsername: undefined,
+        createdByNickname: undefined,
+        createdByAvatar: undefined,
+      };
+      const { container } = render(<TaskCard {...defaultProps} task={taskAnon} />);
+      expect(container.querySelectorAll('img').length).toBe(0);
+      expect(screen.queryByText('creatorlogin')).not.toBeInTheDocument();
+    });
+  });
+
+  // s-1213: card density toggle (PM-s1188 §3.3).
+  describe('card density (s-1213)', () => {
+    const runLive = {
+      id: 'run-live',
+      taskId: 'task-1',
+      runnerId: 'Mac-66681-live',
+      agentId: null,
+      status: 'running' as const,
+      claimedAt: '2024-01-01T00:00:00Z',
+      lastHeartbeatAt: '2024-01-01T00:00:00Z',
+      expiresAt: '2024-01-01T00:10:00Z',
+      finishedAt: null,
+      exitCode: null,
+      error: null,
+    };
+    const runTerminal = {
+      ...runLive,
+      id: 'run-terminal',
+      status: 'completed' as const,
+      finishedAt: '2024-01-01T00:05:00Z',
+      exitCode: 0,
+      error: null,
+    };
+
+    it('defaults to standard density when prop is omitted', () => {
       render(<TaskCard {...defaultProps} />);
-      const badge = screen.getByTestId('runner-badge');
-      // Outer pill must clamp its width so the inner flex children
-      // don't push the footer layout.
-      expect(badge).toHaveClass('max-w-[10rem]');
-      expect(badge).toHaveClass('overflow-hidden');
-      // The runner id span carries `truncate` (Tailwind: overflow:hidden +
-      // text-overflow:ellipsis + white-space:nowrap) so the inner text
-      // never breaks onto a second line. We assert on the class name
-      // rather than the computed style because JSDOM does not honor
-      // layout.
-      const runnerSpan = badge.querySelector('span.font-mono');
-      expect(runnerSpan).not.toBeNull();
-      expect(runnerSpan).toHaveClass('truncate');
-      // The full runner id must still be exposed via the `title`
-      // attribute on the inner span so hover-tooltip shows it.
-      expect(runnerSpan).toHaveAttribute('title', longRunnerId);
-      // And the badge's own title shows the composite "id · elapsed"
-      // label — guards against accidentally regressing this when the
-      // runnerId is no longer surfaced verbatim in `textContent`.
-      expect(badge).toHaveAttribute('title');
-      expect(badge.getAttribute('title')).toContain(longRunnerId);
+      expect(screen.getByTestId('task-card-assignee-badge')).toBeInTheDocument();
+      expect(screen.getByText('task.priority.medium')).toBeInTheDocument();
     });
 
-    it('does not tick the elapsed label when the run is in a terminal status (s-1168)', () => {
-      vi.useFakeTimers();
-      try {
-        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-        // Run finished 30 seconds after it claimed — badge should
-        // freeze the elapsed label at 30s, not keep counting from
-        // Date.now().
-        const claimedAt = new Date(Date.now() - 60_000).toISOString();
-        const finishedAt = new Date(Date.now() - 30_000).toISOString();
-        mockedUseTaskRun.mockReturnValue({
-          run: {
-            taskId: 'task-1',
-            runnerId: 'runner-failed',
-            agentId: 'opencode',
-            boardId: 'b-1',
-            columnId: 'c-1',
-            status: 'failed',
-            claimedAt,
-            lastHeartbeatAt: finishedAt,
-            expiresAt: new Date(Date.now() + 60_000).toISOString(),
-            finishedAt,
-            exitCode: 1,
-            error: 'boom',
-          },
-          loading: false,
-          error: null,
-        });
-        render(<TaskCard {...defaultProps} />);
-        // For terminal runs the badge must not arm a 1-second interval
-        // — useTaskRun already stopped the API poll and the UI should
-        // not keep re-rendering the card either.
-        expect(setIntervalSpy).not.toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
+    it('compact density hides the description block', () => {
+      render(<TaskCard {...defaultProps} density="compact" />);
+      expect(screen.queryByText('This is a test task description')).not.toBeInTheDocument();
     });
 
-    it('keeps ticking the elapsed label when the run is still live', () => {
-      vi.useFakeTimers();
-      try {
-        const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-        const claimedAt = new Date(Date.now() - 5_000).toISOString();
-        mockedUseTaskRun.mockReturnValue({
-          run: {
-            taskId: 'task-1',
-            runnerId: 'runner-live',
-            agentId: 'opencode',
-            boardId: 'b-1',
-            columnId: 'c-1',
-            status: 'running',
-            claimedAt,
-            lastHeartbeatAt: claimedAt,
-            expiresAt: new Date(Date.now() + 60_000).toISOString(),
-          },
-          loading: false,
-          error: null,
-        });
-        render(<TaskCard {...defaultProps} />);
-        // The 1-second tick is required for live runs so the elapsed
-        // label stays accurate — this is the positive control for the
-        // terminal-run assertion above.
-        expect(setIntervalSpy).toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
+    it('compact density hides the footer (priority badge, assignee, comments)', () => {
+      const taskWithComments = {
+        ...mockTask,
+        comments: [
+          { id: 'c-1', content: 'c', author: 'a', taskId: 'task-1', createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+        ],
+      };
+      render(<TaskCard {...defaultProps} task={taskWithComments} density="compact" />);
+      expect(screen.queryByText('task.priority.medium')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-card-assignee-badge')).not.toBeInTheDocument();
+    });
+
+    it('compact density hides the more-actions and view-details buttons', () => {
+      render(
+        <TaskCard
+          {...defaultProps}
+          density="compact"
+          onArchive={vi.fn()}
+          onDelete={vi.fn()}
+        />,
+      );
+      expect(screen.queryByTitle('taskCard.moreActions')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('taskCard.viewDetails')).not.toBeInTheDocument();
+    });
+
+    it('compact density hides the live run indicator', () => {
+      render(<TaskCard {...defaultProps} density="compact" run={runLive} />);
+      expect(screen.queryByTestId('task-run-indicator')).not.toBeInTheDocument();
+    });
+
+    it('compact density still shows the title, ID and priority dot', () => {
+      const { container } = render(<TaskCard {...defaultProps} density="compact" />);
+      expect(screen.getByText('Test Task')).toBeInTheDocument();
+      // ID is rendered as #xxxxxx slice; we look for the font-mono span
+      expect(container.querySelector('span.font-mono')).toBeInTheDocument();
+      // priority dot is the 2x2 round span
+      expect(container.querySelector('span.rounded-full.flex-shrink-0')).toBeInTheDocument();
+    });
+
+    it('standard density still shows the run indicator for any run (current behaviour)', () => {
+      render(<TaskCard {...defaultProps} density="standard" run={runTerminal} />);
+      expect(screen.getByTestId('task-run-indicator')).toBeInTheDocument();
+    });
+
+    it('detailed density surfaces the last-activity stamp', () => {
+      render(<TaskCard {...defaultProps} density="detailed" />);
+      expect(screen.getByTestId('task-card-last-activity')).toBeInTheDocument();
+    });
+
+    it('detailed density hides the last-activity stamp when there is no updatedAt', () => {
+      const taskNoUpdated = { ...mockTask, updatedAt: '' };
+      render(<TaskCard {...defaultProps} density="detailed" task={taskNoUpdated} />);
+      expect(screen.queryByTestId('task-card-last-activity')).not.toBeInTheDocument();
+    });
+
+    it('detailed density shows the run indicator only for live runs', () => {
+      const { rerender } = render(<TaskCard {...defaultProps} density="detailed" run={runLive} />);
+      expect(screen.getByTestId('task-run-indicator')).toBeInTheDocument();
+      rerender(<TaskCard {...defaultProps} density="detailed" run={runTerminal} />);
+      expect(screen.queryByTestId('task-run-indicator')).not.toBeInTheDocument();
+    });
+
+    it('detailed density hides the last-runner chip for terminal runs', () => {
+      render(<TaskCard {...defaultProps} density="detailed" run={runTerminal} />);
+      expect(screen.queryByTestId('task-card-last-runner-badge')).not.toBeInTheDocument();
+    });
+
+    it('detailed density keeps the last-runner chip for live runs', () => {
+      render(<TaskCard {...defaultProps} density="detailed" run={runLive} />);
+      expect(screen.getByTestId('task-card-last-runner-badge')).toBeInTheDocument();
+    });
+  });
+
+  // s-1230: deadline chip is rendered next to the priority badge so the
+  // operator can see priority + due date as a pair in the footer. The
+  // state attribute lets CSS / accessibility tools distinguish overdue
+  // from future deadlines without parsing the label.
+  describe('due date chip (s-1230)', () => {
+    const isoFromOffset = (days: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      d.setHours(12, 0, 0, 0);
+      return d.toISOString();
+    };
+
+    it('renders the chip when dueAt is set and exposes the due state', () => {
+      const taskWithDue = { ...mockTask, dueAt: isoFromOffset(3) };
+      render(<TaskCard {...defaultProps} task={taskWithDue} />);
+      const chip = screen.getByTestId('task-card-due-date');
+      expect(chip).toBeInTheDocument();
+      expect(chip.dataset.state).toBe('future');
+    });
+
+    it('marks overdue deadlines with the overdue state and label', () => {
+      const taskOverdue = { ...mockTask, dueAt: isoFromOffset(-2) };
+      render(<TaskCard {...defaultProps} task={taskOverdue} />);
+      const chip = screen.getByTestId('task-card-due-date');
+      expect(chip.dataset.state).toBe('overdue');
+      expect(chip).toHaveTextContent('taskModal.dueDateOverdue');
+    });
+
+    it('uses today / tomorrow labels for near deadlines', () => {
+      const taskToday = { ...mockTask, dueAt: isoFromOffset(0) };
+      const { rerender } = render(<TaskCard {...defaultProps} task={taskToday} />);
+      expect(screen.getByTestId('task-card-due-date').dataset.state).toBe('today');
+      expect(screen.getByTestId('task-card-due-date')).toHaveTextContent('taskModal.dueDateDueToday');
+
+      const taskTomorrow = { ...mockTask, dueAt: isoFromOffset(1) };
+      rerender(<TaskCard {...defaultProps} task={taskTomorrow} />);
+      expect(screen.getByTestId('task-card-due-date').dataset.state).toBe('tomorrow');
+      expect(screen.getByTestId('task-card-due-date')).toHaveTextContent('taskModal.dueDateDueTomorrow');
+    });
+
+    it('hides the chip when dueAt is null so the footer does not reserve empty space', () => {
+      const taskNoDue = { ...mockTask, dueAt: null };
+      render(<TaskCard {...defaultProps} task={taskNoDue} />);
+      expect(screen.queryByTestId('task-card-due-date')).not.toBeInTheDocument();
+    });
+
+    it('renders the chip alongside the priority badge in the same footer row', () => {
+      const taskWithDue = { ...mockTask, dueAt: isoFromOffset(3) };
+      const { container } = render(<TaskCard {...defaultProps} task={taskWithDue} />);
+      const chip = screen.getByTestId('task-card-due-date');
+      const priority = screen.getByText('task.priority.medium');
+      // The chip and the priority badge live in the same flex container
+      // — the footer left group — so they read as a pair.
+      expect(chip.parentElement).toBe(priority.parentElement);
+      // sanity: the container is the left group of the footer
+      expect(container.querySelector('[data-testid="task-card-due-date"]')?.parentElement?.className).toMatch(/flex items-center gap-2\.5/);
+    });
+
+    it('compact density hides the due date chip alongside the priority badge', () => {
+      const taskWithDue = { ...mockTask, dueAt: isoFromOffset(3) };
+      render(<TaskCard {...defaultProps} task={taskWithDue} density="compact" />);
+      expect(screen.queryByTestId('task-card-due-date')).not.toBeInTheDocument();
     });
   });
 });

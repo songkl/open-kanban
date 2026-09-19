@@ -2,18 +2,17 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next';
 import { SafeMarkdown } from './SafeMarkdown';
 import { UserAvatar } from './UserAvatar';
+import { CustomFieldEditor } from './CustomFieldEditor';
 import { useTaskRun } from '../hooks/useTaskRun';
-import { useFocusTrap } from '../hooks/useFocusTrap';
+import { RunTimeline } from './RunTimeline';
 import { useCustomFields } from '../hooks/useCustomFields';
-import type { TaskRun, CustomField } from '@/types/kanban';
-import type { Task, Attachment, Column, Agent, Subtask, Comment } from '@/types/kanban';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import type { Task, Attachment, Column, Agent, Subtask, Comment, CustomField, TaskRun } from '@/types/kanban';
 
 const MarkdownEditor = lazy(() => import('@/components/MarkdownEditor'));
-import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi } from '@/services/api';
+import { columnsApi, subtasksApi, attachmentsApi, authApi, commentsApi, tasksApi } from '@/services/api';
 import { AttachmentList } from './AttachmentList';
 import { AddSubtaskModal } from './AddSubtaskModal';
-import { RunTimeline } from './RunTimeline';
-import { CustomFieldEditor } from './CustomFieldEditor';
 
 const STORAGE_KEY = 'kanban-username';
 
@@ -61,22 +60,19 @@ function formatCommentDate(t: ReturnType<typeof useTranslation>[0], dateStr: str
 
 /**
  * Format the elapsed time since `claimedAt` into a short human label.
- * Kept short to fit the run info section header — see TaskCard for the
- * badge variant.
- *
- * When `finishedAt` is supplied (i.e. the run has reached a terminal
- * status) the elapsed label is frozen at `finishedAt - claimedAt` so
- * the modal does not keep ticking once the runner has settled.
+ * Frozen at `endMs` (defaulting to now) once the run has settled so the
+ * modal stops re-rendering for a runner that has already gone away
+ * (s-1168).
  */
 function formatRunElapsed(
   claimedAt: string,
   t: (key: string, opts?: Record<string, unknown>) => string,
-  finishedAt?: string | null
+  endMs: number | null = null
 ): string {
   const startMs = new Date(claimedAt).getTime();
   if (Number.isNaN(startMs)) return t('taskCard.runnerElapsedSeconds', { count: 0 });
-  const endMs = finishedAt ? new Date(finishedAt).getTime() : Date.now();
-  const elapsedSec = Math.max(0, Math.floor((endMs - startMs) / 1000));
+  const stopMs = endMs ?? Date.now();
+  const elapsedSec = Math.max(0, Math.floor((stopMs - startMs) / 1000));
   if (elapsedSec < 60) return t('taskCard.runnerElapsedSeconds', { count: elapsedSec });
   if (elapsedSec < 3600) {
     return t('taskCard.runnerElapsedMinutes', { count: Math.floor(elapsedSec / 60) });
@@ -85,12 +81,30 @@ function formatRunElapsed(
 }
 
 /**
+ * Map a `task_runs.status` row to one of the four user-facing badges
+ * PM_REVIEW_2026-09-17 §3.6 requires the drawer to render. The drawer
+ * must never show two of these side-by-side — see s-1190. Returned
+ * values map onto `taskModal.runStatus.*` keys.
+ */
+function runStatusBadgeKey(run: TaskRun): 'claimed' | 'running' | 'completed' | 'failed' | 'released' {
+  return run.status;
+}
+
+const RUN_STATUS_COLORS: Record<TaskRun['status'], string> = {
+  claimed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700/50',
+  running: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-violet-200 dark:border-violet-700/50',
+  completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700/50',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700/50',
+  released: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-600',
+};
+
+/**
  * RunInfoSection — banner shown inside the task modal while a CLI
- * runner holds the task. Mirrors the polling logic in TaskCard (see
- * `devDoc/CLI_RUNNER_PLAN_2026-09-12.md` §5) but exposes the full row
- * — runner id, agent id, status, timestamps — since the modal has
- * room for it. The elapsed label re-renders once a second so it
- * doesn't have to round-trip the API on every tick.
+ * runner holds the task. Single source of truth for the
+ * "Running / Completed / Failed / Queued" badge the PM review called
+ * out as a trust anchor: the column name is hidden whenever this
+ * section renders so the user never sees "🤖 运行中" and "已完成"
+ * on the same row (s-1190, PM_REVIEW_2026-09-17 §3.6 finding #1).
  */
 function RunInfoSection({ run }: { run: TaskRun }) {
   const { t, i18n } = useTranslation();
@@ -103,11 +117,7 @@ function RunInfoSection({ run }: { run: TaskRun }) {
     minute: '2-digit',
     second: '2-digit',
   });
-  // Only tick once a second while the runner is live — once the run
-  // settles into a terminal status (`completed` / `failed` /
-  // `released`) the elapsed label is frozen at `finishedAt` so the
-  // modal stops re-rendering for a runner that has already gone
-  // away (s-1168).
+
   const isLive = run.status === 'claimed' || run.status === 'running';
   const [, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -116,12 +126,27 @@ function RunInfoSection({ run }: { run: TaskRun }) {
     return () => clearInterval(handle);
   }, [isLive]);
 
-  const statusColor: Record<TaskRun['status'], string> = {
-    claimed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700/50',
-    running: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-violet-200 dark:border-violet-700/50',
-    completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700/50',
-    failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700/50',
-    released: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-600',
+  const finishedMs = run.finishedAt ? new Date(run.finishedAt).getTime() : null;
+
+  // s-1191: PM_REVIEW_2026-09-17 §7 — the "Retry Run" button lives in
+  // the failed-run block so an operator can requeue the task without
+  // hand-editing anything. The visible click target is the badge row
+  // (PM called the lack of a retry affordance a "zero-tolerance" miss).
+  // The actual requeue is wired up by the parent TaskModal — this
+  // component just surfaces the button + emits the click via onRetry.
+  const showRetry = run.status === 'failed';
+  const [retrying, setRetrying] = useState(false);
+  const onRetry = (): void => {
+    if (retrying) return;
+    setRetrying(true);
+    // The retry handler is wired by the parent via a custom event so
+    // the section stays free of the tasksApi dependency. Falling back
+    // to a no-op when no listener is attached keeps the section
+    // re-usable in tests / Storybook.
+    const evt = new CustomEvent('task-run-retry', {
+      detail: { taskId: run.taskId, runId: run.id },
+    });
+    window.dispatchEvent(evt);
   };
 
   return (
@@ -135,13 +160,13 @@ function RunInfoSection({ run }: { run: TaskRun }) {
           {t('taskModal.runInfo')}
         </h4>
         <span
-          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusColor[run.status]}`}
+          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${RUN_STATUS_COLORS[runStatusBadgeKey(run)]}`}
           data-testid="run-status"
         >
-          {t(`taskModal.runStatus.${run.status}`)}
+          {t(`taskModal.runStatus.${runStatusBadgeKey(run)}`)}
         </span>
-        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
-          {t('taskModal.runElapsed', { elapsed: formatRunElapsed(run.claimedAt, t, run.finishedAt ?? null) })}
+        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400" data-testid="run-elapsed">
+          {t('taskModal.runElapsed', { elapsed: formatRunElapsed(run.claimedAt, t, finishedMs) })}
         </span>
       </div>
       <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1.5 text-xs">
@@ -172,23 +197,27 @@ function RunInfoSection({ run }: { run: TaskRun }) {
             <dd className="font-mono text-zinc-700 dark:text-zinc-200">{run.exitCode}</dd>
           </>
         )}
-        {run.output && (
-          <>
-            <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runOutput')}</dt>
-            <dd className="whitespace-pre-wrap break-words font-mono text-zinc-700 dark:text-zinc-200 max-h-60 overflow-auto rounded bg-zinc-100/60 dark:bg-zinc-900/40 p-2">
-              {run.output}
-            </dd>
-          </>
-        )}
-        {run.error && (
+        {run.error && !(run.status === 'completed' && run.exitCode === 0) && (
           <>
             <dt className="text-zinc-500 dark:text-zinc-400">{t('taskModal.runError')}</dt>
-            <dd className="whitespace-pre-wrap break-words font-mono text-red-600 dark:text-red-400 max-h-60 overflow-auto rounded bg-red-50/60 dark:bg-red-950/30 p-2">
-              {run.error}
-            </dd>
+            <dd className="text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{run.error}</dd>
           </>
         )}
       </dl>
+      {showRetry && (
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-md border border-violet-300 dark:border-violet-700/60 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            onClick={onRetry}
+            disabled={retrying}
+            data-testid="retry-run-button"
+          >
+            <span aria-hidden>🔁</span>
+            {retrying ? t('taskModal.retrying') : t('taskModal.retryRun')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -429,10 +458,47 @@ export function TaskModal({
     authApi.getAgents().then(setAgents).catch(console.error);
   }, []);
 
-  // Poll for the live CLI runner on this task. The run section only
-  // renders when the server returns a row — same semantics as the
-  // card badge in TaskCard, just with more detail.
-  const { run } = useTaskRun(task.id, { intervalMs: 5000 });
+  // Poll the live CLI runner on this task. The section is the single
+  // source of truth for the run status badge the PM review (s-1190)
+  // requires — see RunInfoSection above.
+  const { run, refetch: refetchRun } = useTaskRun(task.id, { intervalMs: 5000 });
+
+  // s-1191: Retry Run handler (PM_REVIEW_2026-09-17 §7). When the user
+  // clicks the "Retry run" button inside RunInfoSection we requeue the
+  // task by re-saving it. The server-side runner polls every
+  // `pollIntervalMs` (default 5s) and re-claims any task it sees in
+  // the watched column — touching the row via `update` is enough to
+  // wake the next claim cycle. We intentionally avoid mutating
+  // columnId / status so the operator's drag-and-drop layout stays
+  // intact.
+  const [retrying, setRetrying] = useState(false);
+  const handleRetryRun = useCallback(async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      // The no-op PUT keeps the columnId / status untouched while
+      // bumping `updatedAt`, which is the signal the runner claim
+      // query uses to surface the task again.
+      await tasksApi.update(task.id, {});
+      // Immediately re-fetch the run row so the badge reflects the
+      // new claim without waiting for the next poll.
+      void refetchRun();
+    } catch (error) {
+      console.error('Failed to retry run:', error);
+    } finally {
+      setRetrying(false);
+    }
+  }, [retrying, task.id, refetchRun]);
+
+  useEffect(() => {
+    const onRetryEvent = (evt: Event) => {
+      const ce = evt as CustomEvent<{ taskId: string; runId: string }>;
+      if (!ce.detail || ce.detail.taskId !== task.id) return;
+      void handleRetryRun();
+    };
+    window.addEventListener('task-run-retry', onRetryEvent);
+    return () => window.removeEventListener('task-run-retry', onRetryEvent);
+  }, [task.id, handleRetryRun]);
 
   const handleAuthorChange = (value: string) => {
     setCommentAuthor(value);
@@ -754,11 +820,6 @@ export function TaskModal({
                 </div>
               )}
             </div>
-
-            {/* Run Info — only rendered while a CLI runner holds the task.
-                Surfaced near the top of the modal so operators can see
-                who is working on the task without scrolling. */}
-            {run && <RunInfoSection run={run} />}
 
             {/* Grid Layout for Edit Mode */}
             {/* s-1202: surface assignee + last runner + due date explicitly in the
