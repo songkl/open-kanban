@@ -528,6 +528,23 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		handlers.MarkRunComplete(db),
 	)
 
+	// CLI runner claim / heartbeat / finish / release / attach
+	// endpoints (s-1086). Signature + auth are enforced at the
+	// group level; per-handler WRITE permission checks live inside
+	// tasks_run.go so a VIEWER token gets a clean 403 from
+	// userHasBoardStatusWrite / HasColumnWrite rather than a generic
+	// auth-middleware rejection.
+	runs := r.Group("/api/v1/runs")
+	runs.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
+	{
+		runs.POST("/claim", handlers.ClaimRun(db))
+		runs.POST("/release", handlers.ReleaseRuns(db))
+		runs.POST("/:taskId/heartbeat", handlers.HeartbeatRun(db))
+		runs.POST("/:taskId/finish", handlers.FinishRun(db))
+		runs.POST("/:taskId/attach", handlers.AttachRun(db))
+		runs.GET("/:taskId", handlers.GetRun(db))
+	}
+
 	r.POST("/api/v1/upload", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.UploadFile(db))
 	r.GET("/api/v1/uploads/:id", handlers.ServeFile(db))
 	r.DELETE("/api/v1/attachments/:id", handlers.RequireSignatureVerification(), handlers.RequireAuth(db), handlers.DeleteAttachment(db))
@@ -863,6 +880,18 @@ func main() {
 	// Initialize webhook service
 	services.InitWebhookService()
 
+	// Background task_runs reaper (s-1086 §3.5). Scans every 30s
+	// for task_runs rows whose expires_at has elapsed and
+	// releases them back to the originating column so the next
+	// claim cycle can pick them up. Started here (before the
+	// router) so a slow boot doesn't strand an expired lock —
+	// the reaper is idempotent against an empty task_runs table.
+	var runReaper *services.RunReaper
+	if db != nil {
+		runReaper = services.NewRunReaper(db)
+		runReaper.Start(context.Background())
+	}
+
 	// Create Gin router
 	r := gin.New()
 
@@ -970,6 +999,9 @@ func main() {
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			log.Printf("HTTP server shutdown error: %v", err)
+		}
+		if runReaper != nil {
+			runReaper.Stop()
 		}
 	}
 	go func() {

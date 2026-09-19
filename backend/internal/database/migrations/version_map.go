@@ -125,6 +125,15 @@ var VersionMigrationMap = []VersionMigration{
 	// regression cannot leak a credential into the database.
 	// Tracked as s-1210.
 	{Version: "0.16.0", From: 1, To: 16},
+	// 0.17.0 added migration 017 to introduce the task_runs table
+	// (CLI runner claim/heartbeat lock — see
+	// devDoc/CLI_RUNNER_PLAN_2026-09-12.md §3.3). Migration 018
+	// relaxes the runner_id constraint so the reaper can hand a
+	// task back to a different runner; 019 adds the history
+	// indexes used by GET /api/v1/runs/history; 020 adds the
+	// `output` column so successful runs no longer mis-label
+	// their banner-as-stderr payload as "Error".
+	{Version: "0.17.0", From: 1, To: 20},
 }
 
 func GetMigrationRangeForVersion(version string) (from, to int, found bool) {

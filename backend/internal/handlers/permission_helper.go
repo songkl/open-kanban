@@ -230,6 +230,21 @@ func getBoardIDForColumn(db *sql.DB, columnID string) (string, error) {
 	return boardID, err
 }
 
+// HasColumnWrite mirrors checkColumnAccessWithBoardFallback but
+// short-circuits ADMIN to true so the CLI runner claim / finish
+// paths can share a single source of truth with the column-level
+// permission checks used by tasks_crud.go. Returning a plain bool
+// (not error) keeps the helpers symmetric with canModifyTask above.
+func HasColumnWrite(db *sql.DB, user *models.User, boardID, columnID string) bool {
+	if user == nil || columnID == "" {
+		return false
+	}
+	if user.Role == "ADMIN" {
+		return true
+	}
+	return checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role)
+}
+
 func requireNonViewer(c *gin.Context, user *models.User) bool {
 	if user == nil || user.Role == "VIEWER" {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Viewer role cannot perform this action"})

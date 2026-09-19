@@ -1,0 +1,35 @@
+-- 015_task_runs_output.up.sql
+--
+-- Persist the agent's actual reply (stdout) alongside the
+-- existing `error` column on `task_runs`. The CLI runner
+-- currently surfaces the captured stderr under the same
+-- field as the user-facing "Error" / "错误信息" string in
+-- the UI — opencode paints its banner ("> build · …")
+-- to stderr, so a successful run looks like a failure on
+-- the task detail page even though exit_code=0 and the
+-- task has been advanced to the next column.
+--
+-- The new `output` column stores the agent's stdout payload
+-- (truncated to 64 KiB, mirroring the stderr cap) so the
+-- comment stream, the task detail page, and the run
+-- history page can all show what the agent actually
+-- produced. The existing `error` column is repurposed to
+-- carry only true failures (non-zero exit, signal, spawn
+-- error), which the UI already correctly labels.
+--
+-- Both columns are nullable TEXT — historical terminal
+-- rows from before this migration have no `output` and we
+-- don't want to backfill empty strings that look like
+-- "the agent produced nothing" in the history view. The
+-- column lands as a no-op for live `claimed` / `running`
+-- rows; only FinishRun / ReapExpiredRuns will write to it.
+--
+-- We deliberately do NOT add an index on `output`: the
+-- column is read only when the user opens a specific
+-- task or filters the history by task id, and a LIKE
+-- search on a TEXT column is not a hot path. The
+-- `idx_task_runs_finished_at` / `idx_task_runs_status_finished_at`
+-- indexes added in 006 are still the right shape for
+-- history queries.
+
+ALTER TABLE task_runs ADD COLUMN output TEXT;

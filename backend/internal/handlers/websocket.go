@@ -37,6 +37,15 @@ func IsOriginAllowedForTest(origin string) bool {
 	return isOriginAllowed(origin)
 }
 
+// InitBroadcastWorkerForTest kicks off the async worker that
+// drains broadcastQueue when the rest of the boot path (HTTP
+// listener, setup wizard) is bypassed in tests. Production code
+// triggers the same init via WebSocketHandler / initBroadcastWorker
+// once the listener is up.
+func InitBroadcastWorkerForTest() {
+	initBroadcastWorker()
+}
+
 func AddClientForTest(conn *websocket.Conn) {
 	clientsMux.Lock()
 	clients[conn] = &sync.Mutex{}
