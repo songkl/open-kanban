@@ -109,6 +109,11 @@ func setupRunsDB(t *testing.T) *sql.DB {
 		board_id TEXT NOT NULL,
 		owner_agent_id TEXT,
 		access TEXT DEFAULT 'READ' CHECK(access IN ('READ', 'WRITE', 'ADMIN')),
+		granted_by_user_id TEXT,
+		expires_at DATETIME,
+		revoked_at DATETIME,
+		revoked_by_user_id TEXT,
+		notes TEXT DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -1502,7 +1507,9 @@ func TestClaimRun_MineModePicksAssignedTask(t *testing.T) {
 
 	// Add a task assigned to u-bot (not just in a watched
 	// column) so the mode='mine' filter has something to pick.
-	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, assignee, published, created_by) VALUES ('t-mine', 'mine', 'c-todo', 'u-bot', 1, 'u-admin')`); err != nil {
+	// `assignee` is matched against user.Nickname (see
+	// pickMyTaskForClaim), so use the bot's nickname here.
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, assignee, published, created_by) VALUES ('t-mine', 'mine', 'c-todo', 'bot', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 

@@ -482,7 +482,13 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 		rows, err := db.Query(`
 			SELECT u.id, u.nickname, u.avatar, u.type, u.role, u.enabled, u.created_at, u.updated_at, u.last_active_at,
 				u.created_by, cb.nickname, cb.username,
-				(SELECT COUNT(*) FROM tokens WHERE user_id = u.id) as token_count
+				(SELECT COUNT(*) FROM tokens WHERE user_id = u.id) as token_count,
+				COALESCE((SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id
+					AND a.created_at >= datetime('now', '-1 day')), 0) as runs_last_24h,
+				COALESCE((SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id
+					AND a.created_at >= datetime('now', '-1 day')
+					AND a.action IN ('DELETE_TASK', 'BOARD_DELETE', 'COLUMN_DELETE', 'TEMPLATE_DELETE')), 0) as fails_last_24h,
+				COALESCE((SELECT COUNT(*) FROM activities a WHERE a.user_id = u.id), 0) as total_runs
 			FROM users u
 			LEFT JOIN users cb ON cb.id = u.created_by
 			WHERE u.type = 'AGENT'
@@ -502,7 +508,7 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 			var createdBy sql.NullString
 			var creatorNickname sql.NullString
 			var creatorUsername sql.NullString
-			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &createdBy, &creatorNickname, &creatorUsername, &tokenCount); err == nil {
+			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &createdBy, &creatorNickname, &creatorUsername, &tokenCount, &runsLast24h, &failsLast24h, &totalRuns); err == nil {
 				agent := gin.H{
 					"id":            u.ID,
 					"nickname":      u.Nickname,
