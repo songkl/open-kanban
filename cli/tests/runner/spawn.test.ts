@@ -29,6 +29,7 @@ import {
   expandArgs,
   prepareSpawn,
   readPromptFile,
+  splitShellArgs,
   type AgentProcess,
   type AgentResult,
   type SpawnOptions,
@@ -306,6 +307,84 @@ describe("prepareSpawn", () => {
     out.cleanup();
   });
 
+  // s-1238: pre-fix, `agent.args` was opaque to the runner. An
+  // operator who wrote a single YAML scalar containing multiple
+  // shell tokens — the natural way to type a CLI invocation —
+  // produced one argv entry that the agent binary couldn't parse
+  // (`opencode '--auto true run "do-kanban T-1003"'` instead of
+  // four args). The fix runs every `args` entry through
+  // `splitShellArgs` so each whitespace-separated token becomes its
+  // own argv slot, with single / double quotes respected exactly as
+  // the operator typed them.
+  it("tokenises shell-style multi-token args (s-1238)", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptMode: "argv",
+      promptPosition: "append",
+      args: ['--auto true run "do-kanban T-1003"'],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "bye",
+      taskId: "s-shellargs",
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual([
+      "--auto",
+      "true",
+      "run",
+      "do-kanban T-1003",
+      "bye",
+    ]);
+    out.cleanup();
+  });
+
+  it("tokenises args before $name substitution so $var survives inside quotes", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptMode: "argv",
+      args: ['--task="$taskId" --flag'],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "PROMPT",
+      taskId: "s-shellargs-var",
+      variables: { taskId: "abc" },
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual([
+      "--task=abc",
+      "--flag",
+      "PROMPT",
+    ]);
+    out.cleanup();
+  });
+
+  it("tokenises args before the {prompt} placeholder check (s-1238)", () => {
+    // The placeholder can now live inside a single tokenised entry,
+    // so `promptPosition: replace` with the placeholder next to
+    // other flags on the same line works as expected.
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptMode: "argv",
+      promptPosition: "replace",
+      args: ['--auto true run "{prompt}"'],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "POSITIONAL",
+      taskId: "s-shellargs-replace",
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual([
+      "--auto",
+      "true",
+      "run",
+      "POSITIONAL",
+    ]);
+    out.cleanup();
+  });
+
   it("replaces the {prompt} placeholder for promptMode=file", () => {
     const cwd = join(tmpRoot, "project-replace");
     mkdirSync(cwd, { recursive: true });
@@ -541,6 +620,104 @@ describe("expandArgs", () => {
         { HOME: "should-not-show" }
       )
     ).toEqual(["${HOME}", "$1", "$?", "$$"]);
+  });
+});
+
+describe("splitShellArgs", () => {
+  // s-1238: each `agent.args` entry is opaque to YAML, so an
+  // operator who writes a single scalar containing multiple shell
+  // tokens (the natural way to type a CLI invocation) ends up with
+  // one argv entry that the agent binary cannot parse. The runner
+  // now runs every entry through a POSIX-style shell tokenizer
+  // before any other transform. Fast-path is the common case
+  // (`args: ["--flag", "value"]`) — no whitespace, no quoting →
+  // returned unchanged.
+
+  it("returns a single token unchanged when there is no whitespace or quoting", () => {
+    expect(splitShellArgs("--flag")).toEqual(["--flag"]);
+    expect(splitShellArgs("/usr/local/bin/opencode")).toEqual([
+      "/usr/local/bin/opencode",
+    ]);
+    expect(splitShellArgs("--key=value")).toEqual(["--key=value"]);
+  });
+
+  it("splits on whitespace", () => {
+    expect(splitShellArgs("--auto true run")).toEqual([
+      "--auto",
+      "true",
+      "run",
+    ]);
+  });
+
+  it("groups double-quoted segments into one token", () => {
+    // The exact failure from s-1238: the operator wrote
+    //   args:
+    //     - --auto true run "do-kanban T-1003"
+    // expecting four argv entries.
+    expect(splitShellArgs('--auto true run "do-kanban T-1003"')).toEqual([
+      "--auto",
+      "true",
+      "run",
+      "do-kanban T-1003",
+    ]);
+  });
+
+  it("groups single-quoted segments into one token", () => {
+    expect(splitShellArgs("--key='hello world'")).toEqual([
+      "--key=hello world",
+    ]);
+  });
+
+  it("treats single quotes as fully literal (no backslash escape)", () => {
+    // POSIX rule: inside '…' nothing is interpreted, not even \\.
+    expect(splitShellArgs("--key='a\\b'")).toEqual(["--key=a\\b"]);
+  });
+
+  it("honours backslash escapes inside double quotes", () => {
+    expect(splitShellArgs('--key="he said \\"hi\\""')).toEqual([
+      '--key=he said "hi"',
+    ]);
+  });
+
+  it("honours backslash escapes outside quotes", () => {
+    expect(splitShellArgs("--key=a\\ b")).toEqual(["--key=a b"]);
+  });
+
+  it("collapses runs of whitespace and ignores leading / trailing spaces", () => {
+    expect(splitShellArgs("  --a   --b  ")).toEqual(["--a", "--b"]);
+  });
+
+  it("treats tabs and newlines as separators", () => {
+    expect(splitShellArgs("--a\t--b\n--c")).toEqual(["--a", "--b", "--c"]);
+  });
+
+  it("preserves $name tokens intact for downstream substitution", () => {
+    // splitShellArgs runs *before* expandArgs, so a quoted $var must
+    // survive tokenisation as a literal `$taskId` token. We assert
+    // the full round-trip with expandArgs below.
+    expect(splitShellArgs('--task="$taskId" --flag')).toEqual([
+      "--task=$taskId",
+      "--flag",
+    ]);
+  });
+
+  it("throws on an unterminated double quote", () => {
+    expect(() => splitShellArgs('--key="unterminated')).toThrow(
+      /unterminated double quote/
+    );
+  });
+
+  it("throws on an unterminated single quote", () => {
+    expect(() => splitShellArgs("--key='unterminated")).toThrow(
+      /unterminated single quote/
+    );
+  });
+
+  it("returns an empty array only when the input is fully whitespace", () => {
+    // Defensive: the upstream loop ignores empty `args`, but we
+    // don't want a stray whitespace entry to drop the whole config.
+    expect(splitShellArgs("")).toEqual([""]);
+    expect(splitShellArgs("   ")).toEqual([]);
   });
 });
 

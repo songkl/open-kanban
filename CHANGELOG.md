@@ -17,11 +17,13 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
   - fix: fall back to the profile tab when a non-admin lands on `?tab=oauth` via a shared link (s-1203)
+  - fix: tokenise `agent.args` with POSIX shell-style quoting so a YAML scalar like `--auto true run "do-kanban $taskId"` lands as multiple argv entries instead of one opaque flag the agent binary cannot parse (s-1238). Operators can now write each flag-value group as a single string and rely on the runner to split on whitespace, honour single/double quotes, and apply `$name` substitution / `{prompt}` replacement on the tokenised list
 
 ### Improvements
   - i18n: add settings.notifications.* keys (en + zh) for the new Notifications section
   - test: cover the new ACP runner path (s-1235) — JSON-RPC framing, the `initialize` → `session/new` → `session/prompt` handshake, streamed text-chunk aggregation, byte-cap truncation, error-frame forwarding, abort-signal propagation, and the `prepareSpawn` argv shape for `promptMode: "acp"` with default and custom `acpFlag`
   - test: cover the new notifications-preferences endpoints (handler + migration), the admin-gated OAuth tab, the Notifications tab visibility, the theme toggle, and the partial-PUT contract
+  - test: cover the new `agent.args` shell-style tokeniser (s-1238) — fast-path passthrough, whitespace / quote / backslash handling, `$name` and `{prompt}` round-trips, unterminated-quote errors, and the `prepareSpawn` argv shape for `promptMode: "argv"` with multi-token operator entries
   - feat: make board header wrap and hide secondary buttons on mobile so the action bar fits at 375px (s-1192)
   - feat: add mobile icon-only filter and create buttons with 36px tap targets (s-1192)
   - feat: give mobile tab bar and column header 32px+ tap targets for counters, select-all and status badges (s-1192)

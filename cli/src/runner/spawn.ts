@@ -47,6 +47,13 @@
 //     forward the reply verbatim. The prompt is **not** written to
 //     disk and never appears in argv, so the OS argv cap is irrelevant.
 //
+// `agent.args` is shell-tokenised before any other transform (s-1238):
+// each YAML scalar entry is run through `splitShellArgs`, so
+// `--auto true run "do-kanban $taskId"` produces four argv entries
+// instead of one opaque flag. The substitution pipeline (`$name` →
+// value, `{prompt}` → flag pair or positional content) then runs
+// on the tokenised list.
+//
 // [Agent Client Protocol]: https://agentclientprotocol.com/
 
 import { spawn } from "node:child_process";
@@ -120,6 +127,121 @@ export const ARG_VARIABLE_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
+ * Tokenize a single `agent.args` entry into zero-or-more argv
+ * entries using POSIX shell-style quoting rules. Necessary because
+ * YAML scalars are opaque strings — an operator who writes
+ *
+ * ```yaml
+ *   args:
+ *     - --auto true run "do-kanban $taskId"
+ * ```
+ *
+ * expects four argv entries, but pre-tokenization the entry is one
+ * opaque string (`--auto true run "do-kanban T-1003"`) that gets
+ * passed verbatim to `child_process.spawn`, so the agent binary
+ * sees a single malformed flag. Surfacing this mismatch required
+ * operators to manually split their YAML into one entry per token
+ * (s-1238).
+ *
+ * Supported grammar (subset of POSIX shell):
+ *
+ *   * Single quotes — wrap a literal token with no escape
+ *     processing inside. `'\$HOME'` stays as `$HOME`.
+ *   * Double quotes — wrap a token, honour `\"` and `\\` so the
+ *     operator can embed a literal quote / backslash. Other
+ *     backslashes are kept literal (matches `sh` / `bash`).
+ *   * Backslash outside quotes — escapes the next character
+ *     unconditionally (so a backslash can split on a space with
+ *     `--key=a\ b`).
+ *   * Whitespace (` `, `\t`, `\n`, `\r`) separates tokens and is
+ *     otherwise discarded.
+ *
+ * Fast path: when the input has **no** whitespace and no quote /
+ * backslash, return it as a single token. This keeps the common
+ * `args: ["--flag", "value"]` shape exactly as written — no
+ * accidental splitting, no state-machine cost, and `$name`
+ * substitution sees the same string the operator typed.
+ *
+ * Throws on an unterminated quote so a stale config fails loudly at
+ * load time instead of silently swallowing the rest of the line
+ * (s-1238 — the previous behaviour silently passed the raw string to
+ * the agent, which then exited non-zero with a confusing help banner).
+ */
+export function splitShellArgs(input: string): string[] {
+  if (!/[\s'"\\]/.test(input)) {
+    return [input];
+  }
+  const tokens: string[] = [];
+  let current = "";
+  let hasToken = false;
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < input.length; i++) {
+    const c = input[i];
+    if (inSingle) {
+      if (c === "'") {
+        inSingle = false;
+      } else {
+        current += c;
+      }
+      continue;
+    }
+    if (inDouble) {
+      if (c === '"') {
+        inDouble = false;
+        continue;
+      }
+      if (
+        c === "\\" &&
+        i + 1 < input.length &&
+        (input[i + 1] === '"' || input[i + 1] === "\\")
+      ) {
+        current += input[i + 1];
+        i++;
+        continue;
+      }
+      current += c;
+      continue;
+    }
+    if (c === "'") {
+      inSingle = true;
+      hasToken = true;
+      continue;
+    }
+    if (c === '"') {
+      inDouble = true;
+      hasToken = true;
+      continue;
+    }
+    if (c === "\\" && i + 1 < input.length) {
+      current += input[i + 1];
+      hasToken = true;
+      i++;
+      continue;
+    }
+    if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+      if (hasToken) {
+        tokens.push(current);
+        current = "";
+        hasToken = false;
+      }
+      continue;
+    }
+    current += c;
+    hasToken = true;
+  }
+  if (inSingle || inDouble) {
+    throw new Error(
+      `unterminated ${inSingle ? "single" : "double"} quote in agent.args entry: ${input}`
+    );
+  }
+  if (hasToken) {
+    tokens.push(current);
+  }
+  return tokens;
+}
+
+/**
  * Substitute every supported `$name` token in `args` with the value
  * supplied in `variables`. Missing values (or `""` entries) become
  * literal empty strings so the operator's argv keeps its shape — e.g.
@@ -139,6 +261,28 @@ export function expandArgs(
 ): string[] {
   if (args.length === 0) return [];
   return args.map((arg) => substituteVariables(arg, variables));
+}
+
+/**
+ * Flatten `agent.args` through `splitShellArgs` so a single YAML
+ * scalar containing multiple shell tokens becomes multiple argv
+ * entries. Unmatched-quote errors throw here so a stale config
+ * fails at spawn time with a clear pointer to the offending entry,
+ * instead of silently handing the raw string to the agent (s-1238).
+ *
+ * The output preserves order and never drops entries — an entry
+ * with no whitespace / quoting returns a one-element array, which
+ * `flat()` happily keeps intact.
+ */
+function tokeniseArgs(args: readonly string[]): string[] {
+  if (args.length === 0) return [];
+  const out: string[] = [];
+  for (const arg of args) {
+    for (const token of splitShellArgs(arg)) {
+      out.push(token);
+    }
+  }
+  return out;
 }
 
 function substituteVariables(
@@ -491,12 +635,23 @@ export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
     ...(opts.env ?? process.env),
     ...(cfg.env ?? {}),
   };
+  // Step 0: tokenize each `agent.args` entry using shell-style
+  // quoting rules (s-1238). YAML scalars are opaque strings, so an
+  // operator who writes
+  //
+  //   args:
+  //     - --auto true run "do-kanban $taskId"
+  //
+  // sees four argv entries at spawn time, not one malformed flag.
+  // Fast path keeps the common `args: ["--flag", "value"]` shape
+  // untouched (no whitespace / quoting → no state-machine cost).
+  const tokenised = tokeniseArgs(cfg.args ?? []);
   // Step 1: substitute `$name` tokens in the operator's args. Done
   // before the prompt splice so the prompt flag (which never carries
   // a `$name`) is never affected and so an operator who sets
   // `promptPosition: replace` with a `$name` token alongside
   // `{prompt}` still sees the prompt pair land in the right slot.
-  const baseArgs = expandArgs(cfg.args ?? [], opts.variables ?? {});
+  const baseArgs = expandArgs(tokenised, opts.variables ?? {});
   const createdFiles: string[] = [];
   let pipeStdin = false;
   let stdinPayload: string | undefined;

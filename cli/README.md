@@ -535,6 +535,30 @@ recognised — `${HOME}`, `$1`, `$$`, `$?` pass through unchanged.
 See [`cli/man/kanban-run.1.md`](./man/kanban-run.1.md) §"Variable
 substitution in agent.args" for the full token list and edge cases.
 
+### Shell-style tokenisation of `agent.args` (s-1238)
+
+Each entry in `agent.args` is run through a POSIX shell-style
+tokeniser before variable substitution and the prompt splice, so an
+operator can write a multi-token CLI invocation as a single YAML
+scalar instead of one entry per flag:
+
+```yaml
+agent:
+  args:
+    - --auto true run "do-kanban $taskId"
+```
+
+renders as the four argv entries `--auto`, `true`, `run`,
+`do-kanban <taskId>` at spawn time. Single quotes are fully literal
+(no escape sequences inside), double quotes honour `\"` and `\\`
+escapes, and a backslash outside quotes escapes the next character
+(so `--key=a\ b` lands as one argv slot). Entries with no whitespace
+and no quoting are returned untouched, so the common
+`args: ["--flag", "value"]` shape has zero behaviour change.
+Unterminated quotes fail loudly at spawn time with a
+`RunnerConfigError` pointing at `agent.args` rather than silently
+handing a malformed string to the agent binary.
+
 ### Signals
 
 The loop installs `SIGINT` and `SIGTERM` handlers that call

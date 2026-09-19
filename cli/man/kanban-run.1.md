@@ -205,6 +205,36 @@ Only the narrow \fB$name\fR form is recognised. POSIX shell-style
 references (\fB${HOME}\fR, \fB$1\fR, \fB$$\fR, \fB$?\fR) pass through
 unchanged.
 
+.SS "Shell-style tokenisation of agent.args (s-1238)"
+Each entry in \fBagent.args\fR is run through a POSIX shell-style
+tokeniser before variable substitution and the prompt splice. This
+lets operators write a multi-token CLI invocation as a single YAML
+scalar instead of one entry per flag:
+
+.RS
+.IP
+.nf
+agent:
+  args:
+    - --auto true run "do-kanban $taskId"
+.fi
+
+.IP
+becomes the four argv entries
+\fB--auto\fR, \fBtrue\fR, \fBrun\fR, \fBdo-kanban <taskId>\fR at spawn
+time, with single/double quotes honoured (text inside \fB'...\fR is
+literal; \fB\\"\fR and \fB\\\\\fR escape inside \fB"..."\fR), and a
+backslash outside quotes escaping the next character (so
+\fB--key=a\\ b\fR produces \fB--key=a b\fR as one argv slot).
+
+.RE
+
+Entries with no whitespace and no quoting are returned untouched,
+so the common \fBargs: ["--flag", "value"]\fR shape has zero
+behaviour change. Unterminated quotes fail loudly with a
+\fBRunnerConfigError\fR pointing at \fBagent.args\fR rather than
+silently handing a malformed string to the agent binary.
+
 .SS "Agent Client Protocol (s-1235)"
 The runner speaks the
 .IR "Agent Client Protocol"
