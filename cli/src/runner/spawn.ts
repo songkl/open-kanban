@@ -37,6 +37,17 @@
 //     with its help banner because `--prompt` is not a `run` flag.
 //     Subject to the OS argv size limit (32 KiB on Windows,
 //     effectively unlimited on macOS / Linux).
+//   * `promptMode === "acp"` (s-1235): talk to the agent over the
+//     [Agent Client Protocol]. The runner appends `agent.acpFlag`
+//     (default `--acp`) to argv, opens the child's stdio as
+//     pipe/pipe/pipe, and drives the full handshake
+//     (`initialize` → `session/new` → `session/prompt`) via the
+//     helper in `acp.ts`. Streamed text chunks are aggregated into
+//     `result.stdout` so the existing finish-pipe code path can
+//     forward the reply verbatim. The prompt is **not** written to
+//     disk and never appears in argv, so the OS argv cap is irrelevant.
+//
+// [Agent Client Protocol]: https://agentclientprotocol.com/
 
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -57,6 +68,7 @@ import {
   type ArgVariable,
   type ArgVariableValues,
 } from "./types.js";
+import { AcpClient, LineJsonTransport } from "./acp.js";
 
 /** Hard cap on the stderr payload the loop forwards to `/finish`. */
 export const STDERR_TRUNCATE_BYTES = 64 * 1024;
@@ -489,6 +501,29 @@ export function prepareSpawn(opts: PrepareSpawnOptions): PreparedSpawn {
   let pipeStdin = false;
   let stdinPayload: string | undefined;
   let promptArg = cfg.promptArg ?? "--prompt";
+  if (mode === "acp") {
+    // s-1235: the ACP path needs the child's stdio fully piped so
+    // the JSON-RPC client can drive the handshake. The prompt
+    // content travels inside the `session/prompt` JSON-RPC payload,
+    // not via argv, so we have nothing to write to disk and nothing
+    // to splice into the agent's command line besides the opt-in
+    // flag. We still expand `$name` tokens above so an operator who
+    // embeds per-task data in their pre-flag args keeps the same
+    // semantics they get from every other mode.
+    const acpFlag = cfg.acpFlag ?? "--acp";
+    baseArgs.push(acpFlag);
+    pipeStdin = true;
+    stdinPayload = undefined;
+    return {
+      bin: cfg.binPath ?? cfg.bin,
+      args: baseArgs,
+      cwd,
+      env,
+      pipeStdin,
+      stdinPayload,
+      cleanup: () => undefined,
+    };
+  }
   if (mode === "stdin") {
     pipeStdin = true;
     stdinPayload = opts.prompt;
@@ -623,6 +658,22 @@ export class AgentSpawner {
   }
 
   spawn(opts: PrepareSpawnOptions): { process: AgentProcess; cleanup: () => void } {
+    // s-1235: ACP needs bidirectional control of the child's stdio
+    // so the existing `ProcessSpawner` shape (fire-and-forget) does
+    // not fit. The ACP path bypasses `prepareSpawn` for the spawn
+    // step but still reuses its argv + env + cwd resolution by
+    // delegating to `spawnAcpAgent` with the same resolved values.
+    if ((this.cfg.promptMode ?? "arg") === "acp") {
+      const prepared = prepareSpawn({ ...opts, cfg: this.cfg });
+      return spawnAcpAgent({
+        bin: prepared.bin,
+        args: prepared.args,
+        cwd: prepared.cwd,
+        env: prepared.env,
+        timeoutMs: this.cfg.timeoutMs ?? 1_800_000,
+        prompt: opts.prompt,
+      });
+    }
     const prepared = prepareSpawn({ ...opts, cfg: this.cfg });
     const out = this.spawner.spawn({
       bin: prepared.bin,
@@ -641,6 +692,265 @@ export class AgentSpawner {
       },
     };
   }
+}
+
+/**
+ * Spawn a child process that speaks the Agent Client Protocol and
+ * drive the full handshake → prompt round-trip via `AcpClient`. The
+ * returned `AgentProcess` resolves with an `AgentResult` shaped
+ * exactly like the non-ACP paths so the loop's `wait()` / `kill()`
+ * contract is identical regardless of how the prompt was delivered.
+ *
+ * `spawnAcpAgent` is intentionally **not** wrapped behind the
+ * `ProcessSpawner` interface: we need synchronous access to the
+ * child's stdin / stdout streams so the JSON-RPC client can write
+ * requests and parse responses, which the fire-and-forget spawner
+ * does not expose. Tests substitute a `LineJsonTransport` against
+ * a fake `child_process.spawn` to drive the same code path.
+ */
+export interface SpawnAcpOptions {
+  bin: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  /** Per-task hard ceiling in milliseconds. */
+  timeoutMs: number;
+  /** Rendered prompt content sent via the ACP `session/prompt` request. */
+  prompt: string;
+  /**
+   * Cancel signal — fired when the runner wants to abort the agent.
+   * Wired to the loop's `AbortController` so SIGINT/SIGTERM tear
+   * down the handshake cleanly instead of leaving the child alive.
+   */
+  cancelSignal?: AbortSignal;
+}
+
+/**
+ * Spawn the agent and drive the full ACP round-trip. Mirrors the
+ * `ChildProcessSpawner` timeout / signal semantics so a hung agent
+ * is reaped the same way the non-ACP path would reap it.
+ */
+export function spawnAcpAgent(opts: SpawnAcpOptions): {
+  process: AgentProcess;
+  cleanup: () => void;
+} {
+  const { bin, args, cwd, env, timeoutMs, prompt } = opts;
+  let child: ReturnType<typeof spawn>;
+  try {
+    child = spawn(bin, args, {
+      cwd,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (err) {
+    const reason: AgentResult = {
+      exitCode: null,
+      signal: null,
+      stderr: `spawn failed: ${(err as Error).message}`,
+      stdout: "",
+      reason: "spawn_error",
+    };
+    return {
+      process: createResolvedProcess(reason),
+      cleanup: () => undefined,
+    };
+  }
+  if (!child.pid) {
+    const reason: AgentResult = {
+      exitCode: null,
+      signal: null,
+      stderr: "spawn returned a process without a pid",
+      stdout: "",
+      reason: "spawn_error",
+    };
+    return {
+      process: createResolvedProcess(reason),
+      cleanup: () => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // already dead
+        }
+      },
+    };
+  }
+  // Stderr capture — kept in lock-step with `ChildProcessSpawner`
+  // so the JSON-RPC fail path populates `result.stderr` the same
+  // way a non-ACP agent would.
+  let stderrBytes = 0;
+  let stderrChunks: Buffer[] = [];
+  let stderrTruncated = false;
+  if (child.stderr) {
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      if (stderrTruncated) return;
+      const buf =
+        typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+      const remaining = STDERR_TRUNCATE_BYTES - stderrBytes;
+      if (buf.length <= remaining) {
+        stderrChunks.push(buf);
+        stderrBytes += buf.length;
+        return;
+      }
+      if (remaining > 0) {
+        stderrChunks.push(buf.subarray(0, remaining));
+        stderrBytes = STDERR_TRUNCATE_BYTES;
+      }
+      stderrTruncated = true;
+    });
+  }
+
+  // Wire the ACP client over the child's stdio. We close stdin at
+  // the end of the handshake so the agent sees a clean EOF; agents
+  // use that as the cue to release any background work and exit.
+  const transport = new LineJsonTransport(child.stdin!, child.stdout!);
+  const client = new AcpClient({
+    transport,
+    cwd,
+    cancelSignal: opts.cancelSignal,
+  });
+  let waitPromise: Promise<AgentResult> | null = null;
+  let settled = false;
+  let resolveWait: ((r: AgentResult) => void) | null = null;
+  const settle = (result: AgentResult): void => {
+    if (settled) return;
+    settled = true;
+    if (deadline) clearTimeout(deadline);
+    if (graceTimer) clearTimeout(graceTimer);
+    resolveWait?.(result);
+  };
+  let deadline: NodeJS.Timeout | null = null;
+  let graceTimer: NodeJS.Timeout | null = null;
+  child.on("error", (err) => {
+    const stderrText = stderrChunks.length
+      ? Buffer.concat(stderrChunks).toString("utf8") +
+        (stderrTruncated ? "\n[truncated]" : "")
+      : `spawn error: ${err.message}`;
+    settle({
+      exitCode: null,
+      signal: null,
+      stderr: stderrText,
+      stdout: "",
+      reason: "spawn_error",
+    });
+  });
+  child.on("close", (code, signal) => {
+    const stderrText = stderrChunks.length
+      ? Buffer.concat(stderrChunks).toString("utf8") +
+        (stderrTruncated ? "\n[truncated]" : "")
+      : stderrTruncated
+        ? "[truncated]"
+        : "";
+    const reason: AgentResult["reason"] = signal
+      ? signal === "SIGKILL" && graceTimer
+        ? "timeout"
+        : "signal"
+      : "exit";
+    // Only override an in-flight ACP result with the close signal
+    // when the handshake hasn't already produced a usable result.
+    settle({
+      exitCode: code,
+      signal: signal as NodeJS.Signals | null,
+      stderr: stderrText,
+      stdout: "",
+      reason,
+    });
+  });
+  deadline = setTimeout(() => {
+    if (settled) return;
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // already dead
+    }
+    graceTimer = setTimeout(() => {
+      if (settled) return;
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // already dead
+      }
+    }, 15_000);
+  }, timeoutMs);
+  waitPromise = new Promise<AgentResult>((resolve) => {
+    resolveWait = resolve;
+  });
+  // Kick off the handshake. We deliberately don't await it here so
+  // the loop can register `kill()` / `wait()` immediately; the
+  // promise chain resolves the wait promise when the handshake
+  // completes (or with a spawn_error if the agent rejected the
+  // handshake).
+  void (async () => {
+    let result: AgentResult;
+    try {
+      const acpResult = await client.run(prompt);
+      // Merge the agent's stderr capture with anything the ACP
+      // handshake layer surfaced (initialise failures, malformed
+      // JSON frames, etc.) so the finish pipe sees the same shape
+      // it would for a non-ACP agent.
+      const stderrText = stderrChunks.length
+        ? Buffer.concat(stderrChunks).toString("utf8") +
+          (stderrTruncated ? "\n[truncated]" : "")
+        : stderrTruncated
+          ? "[truncated]"
+          : "";
+      result = {
+        exitCode: acpResult.exitCode,
+        signal: acpResult.signal,
+        stderr: acpResult.stderr
+          ? stderrText
+            ? `${acpResult.stderr}\n${stderrText}`
+            : acpResult.stderr
+          : stderrText,
+        stdout: acpResult.stdout,
+        reason: acpResult.reason,
+      };
+    } catch (err) {
+      const stderrText = stderrChunks.length
+        ? Buffer.concat(stderrChunks).toString("utf8") +
+          (stderrTruncated ? "\n[truncated]" : "")
+        : stderrTruncated
+          ? "[truncated]"
+          : "";
+      result = {
+        exitCode: null,
+        signal: null,
+        stderr: stderrText || `ACP handshake failed: ${(err as Error).message}`,
+        stdout: "",
+        reason: "spawn_error",
+      };
+    }
+    // Close stdin so the agent can shut down cleanly; the close
+    // event will eventually arrive but we don't want to wait on it
+    // before resolving the wait promise — the handshake result is
+    // already authoritative.
+    try {
+      child.stdin?.end();
+    } catch {
+      // already closed
+    }
+    settle(result);
+  })();
+  const agent: AgentProcess = {
+    kill: (signal: NodeJS.Signals = "SIGTERM") => {
+      try {
+        return child.kill(signal);
+      } catch {
+        return false;
+      }
+    },
+    wait: () => waitPromise!,
+    pid: child.pid,
+  };
+  return {
+    process: agent,
+    cleanup: () => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // ignore
+      }
+    },
+  };
 }
 
 function sanitiseTaskId(taskId: string): string {

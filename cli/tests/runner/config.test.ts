@@ -642,6 +642,27 @@ describe("validate — §4.6 strict checks", () => {
     }
   });
 
+  // s-1235: promptMode=acp opts the agent into the Agent Client
+  // Protocol handshake. The validator must accept it as a first-
+  // class mode alongside arg/stdin/file/argv.
+  it("accepts promptMode=acp as a valid mode", () => {
+    const cfg = baseConfig({
+      agent: { promptMode: "acp", args: [] },
+    });
+    expect(validate(cfg)).toBe(cfg);
+  });
+
+  it("accepts promptMode=acp with a custom acpFlag override", () => {
+    const cfg = baseConfig({
+      agent: {
+        promptMode: "acp",
+        acpFlag: "--agent-client-protocol",
+        args: [],
+      },
+    });
+    expect(validate(cfg).agent.acpFlag).toBe("--agent-client-protocol");
+  });
+
   it("rejects promptPosition=replace when {prompt} is missing", () => {
     const cfg = baseConfig({
       agent: {

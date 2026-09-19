@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Features
+  - feat: add `agent.promptMode: "acp"` so `kanban run` drives mainstream agents over the [Agent Client Protocol](https://agentclientprotocol.com/) (s-1235). The runner appends `agent.acpFlag` (default `--acp`) to argv, opens the child's stdio as pipe/pipe/pipe, and runs the full `initialize` → `session/new` → `session/prompt` handshake over line-delimited JSON-RPC. Streamed `session/update` text chunks are aggregated into `result.stdout` and forwarded to `/api/v1/runs/:taskId/finish` so the existing task detail page picks up the agent's reply without any UI work. Pick this for `claude --acp`, `opencode acp`, `gemini --acp`, and any other ACP-compatible binary; override `agent.acpFlag` when the agent uses a different opt-in.
   - feat: add `kanban auth agent login` to drive the OAuth device flow, launch the verification page in the default browser, and bind the CLI to the Agent identity (existing or freshly created) the human approver picks on the approval page (s-1222). Refuses to persist when the bound user is HUMAN and restores the previous credentials on every failure path so the operator is never stranded mid-migration.
   - feat: add column workflow trigger (migration 011) so column_agents.transition_trigger (none / on_enter / on_exit / both) fires the bound Agent automatically when a task crosses the column boundary (s-1214)
   - feat: extend columns management UI with a per-column Agent binding + auto-trigger toggle (s-1214)
@@ -19,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
   - i18n: add settings.notifications.* keys (en + zh) for the new Notifications section
+  - test: cover the new ACP runner path (s-1235) — JSON-RPC framing, the `initialize` → `session/new` → `session/prompt` handshake, streamed text-chunk aggregation, byte-cap truncation, error-frame forwarding, abort-signal propagation, and the `prepareSpawn` argv shape for `promptMode: "acp"` with default and custom `acpFlag`
   - test: cover the new notifications-preferences endpoints (handler + migration), the admin-gated OAuth tab, the Notifications tab visibility, the theme toggle, and the partial-PUT contract
   - feat: make board header wrap and hide secondary buttons on mobile so the action bar fits at 375px (s-1192)
   - feat: add mobile icon-only filter and create buttons with 36px tap targets (s-1192)

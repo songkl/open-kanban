@@ -331,6 +331,43 @@ describe("prepareSpawn", () => {
     out.cleanup();
   });
 
+  // s-1235: promptMode=acp appends the agent.acpFlag (default
+  // `--acp`) to argv and forces pipeStdin=true so the spawn layer
+  // opens the child's stdio for the JSON-RPC handshake. The prompt
+  // itself never reaches disk or argv; it travels inside the
+  // `session/prompt` request issued by `acp.ts`.
+  it("appends the default --acp flag for promptMode=acp and forces pipeStdin", () => {
+    const cfg: AgentConfig = { ...BASE_AGENT, promptMode: "acp", args: [] };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "ACP PROMPT",
+      taskId: "s-acp",
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual(["--acp"]);
+    expect(out.pipeStdin).toBe(true);
+    expect(out.stdinPayload).toBeUndefined();
+    expect(out.promptFile).toBeUndefined();
+    out.cleanup();
+  });
+
+  it("honours a custom agent.acpFlag for promptMode=acp", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptMode: "acp",
+      acpFlag: "--agent-client-protocol",
+      args: [],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "ACP",
+      taskId: "s-acp-custom",
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual(["--agent-client-protocol"]);
+    out.cleanup();
+  });
+
   it("falls back to append when promptPosition=replace is missing the placeholder", () => {
     // The strict validation in config.ts rejects this combo at load
     // time, but the spawn path itself must not throw — runtime safety

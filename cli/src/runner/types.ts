@@ -39,8 +39,20 @@ export type RunnerClaimMode = "claim" | "move";
  *                 (e.g. `opencode run [message..]`). Subject to the
  *                 operating system's argv size limit (32 KiB on
  *                 Windows, effectively unlimited on macOS / Linux).
+ *   * `"acp"`    — talk to the agent over the [Agent Client Protocol]
+ *                 (s-1235). The runner spawns the agent with an
+ *                 ACP-enabling flag (defaults to `--acp`, configurable
+ *                 via `agent.acpFlag`), then drives a JSON-RPC session
+ *                 over the child's stdio: `initialize` → `newSession`
+ *                 → `prompt`, collecting `session/update` chunks into
+ *                 the final reply. The prompt content is **not** written
+ *                 to disk and never appears in the child's argv — the
+ *                 full payload travels over the JSON-RPC `prompt`
+ *                 request, so the OS argv cap is irrelevant.
+ *
+ * [Agent Client Protocol]: https://agentclientprotocol.com/
  */
-export type AgentPromptMode = "arg" | "stdin" | "file" | "argv";
+export type AgentPromptMode = "arg" | "stdin" | "file" | "argv" | "acp";
 
 /**
  * Where the `--prompt <path>` (or `--prompt-file <path>`) pair is
@@ -136,7 +148,18 @@ export interface AgentConfig {
    * See `AgentPromptPosition` for the three supported modes.
    */
   promptPosition?: AgentPromptPosition;
-  /** Working directory when spawning the agent. */
+  /**
+   * When `promptMode === "acp"`, this flag (default `"--acp"`) is
+   * appended to `agent.args` so the child binary knows to speak the
+   * Agent Client Protocol instead of its default non-interactive
+   * mode. Different agents expose different opt-ins (`--acp`,
+   * `--agent-client-protocol`, a positional subcommand, …) so the
+   * string is configurable.
+   */
+  acpFlag?: string;
+  /**
+   * Working directory when spawning the agent.
+   */
   cwd?: string;
   /** Extra arguments appended after the prompt. Replaced wholesale on merge. */
   args?: string[];
@@ -192,6 +215,7 @@ export const RUNNER_DEFAULTS = Object.freeze({
     promptMode: "arg" as AgentPromptMode,
     promptArg: "--prompt",
     promptPosition: "append" as AgentPromptPosition,
+    acpFlag: "--acp",
     cwd: ".",
     args: [] as string[],
     env: {} as Record<string, string>,
