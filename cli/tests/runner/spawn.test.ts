@@ -360,6 +360,39 @@ describe("prepareSpawn", () => {
     out.cleanup();
   });
 
+  // User reproduction from the s-1238 ticket: the operator's
+  // `.kanban-runner.yaml` writes a single YAML scalar
+  //   args:
+  //     - --auto true run "do-kanban $taskId"
+  // and expects the four-argv shape `opencode --auto true run
+  // do-kanban <taskId>`. This test pins down the full pipeline —
+  // shell-tokenise, then `$taskId` substitute, then positional
+  // prompt append for `promptMode: "argv"` — so a regression in
+  // any stage surfaces here before reaching the operator.
+  it("tokenises then expands $taskId inside a multi-token arg (s-1238 repro)", () => {
+    const cfg: AgentConfig = {
+      ...BASE_AGENT,
+      promptMode: "argv",
+      promptPosition: "append",
+      args: ['--auto true run "do-kanban $taskId"'],
+    };
+    const out = prepareSpawn({
+      cfg,
+      prompt: "PROMPT",
+      taskId: "s-1238-repro",
+      variables: { taskId: "T-1003" },
+      tmpDir: tmpRoot,
+    });
+    expect(out.args).toEqual([
+      "--auto",
+      "true",
+      "run",
+      "do-kanban T-1003",
+      "PROMPT",
+    ]);
+    out.cleanup();
+  });
+
   it("tokenises args before the {prompt} placeholder check (s-1238)", () => {
     // The placeholder can now live inside a single tokenised entry,
     // so `promptPosition: replace` with the placeholder next to
