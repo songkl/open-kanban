@@ -1,10 +1,22 @@
 #!/bin/bash
 # release.sh — build open-kanban release artifacts.
 #
+# Default behavior: BUILD ALL
+#   When invoked with no arguments (or with the explicit `all` subcommand),
+#   release.sh builds every component of the release: the frontend
+#   (npm install + vite build + dist copy), the MCP server (npm install +
+#   build), the backend cross-compiled for every supported platform (both
+#   the SQLite-default and the MySQL-only variants), the web.tar.gz
+#   tarball of the built frontend, and the skill/ directory. This is the
+#   behaviour the project's README documents as "Cross-platform release"
+#   (`./scripts/release.sh`) and matches the original pre-subcommand
+#   implementation; the `backend` subcommand below is an opt-in shortcut
+#   for backend-only iterations and does NOT change the default.
+#
 # Subcommands:
-#   (none) / all                 Build everything: frontend, MCP server,
-#                                backend for all platforms, web.tar.gz, skill
-#                                (the original behavior).
+#   (none) / all                 Build everything (DEFAULT): frontend, MCP
+#                                server, backend for all platforms,
+#                                web.tar.gz, skill.
 #   backend [TARGETS...]         Build only the backend binaries. Optional
 #                                TARGETS are GOOS values (linux, darwin,
 #                                windows) or full "GOOS GOARCH" pairs to
@@ -48,7 +60,7 @@ ALL_PLATFORMS=(
 )
 
 print_help() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # parse_backend_args filters ALL_PLATFORMS by the remaining positional
@@ -179,6 +191,7 @@ esac
 echo "=== Building open-kanban (subcommand: ${SUBCMD:-all}) ==="
 echo "Output dir: $RELEASE_DIR"
 echo "Targets:    ${PLATFORMS[*]}"
+echo "Components: frontend=$([ "$DO_FRONTEND" = 1 ] && echo yes || echo no) mcp=$([ "$DO_MCP" = 1 ] && echo yes || echo no) backend=$([ "$DO_BACKEND" = 1 ] && echo yes || echo no) web.tar.gz=$([ "$DO_WEB_TARBALL" = 1 ] && echo yes || echo no) skill=$([ "$DO_SKILL" = 1 ] && echo yes || echo no)"
 echo
 
 # Check UPX
@@ -400,6 +413,38 @@ echo ""
 echo "Contents:"
 ls -lh "$RELEASE_DIR/"
 echo ""
+
+# Post-build sanity check for the default `all` subcommand: every component
+# the default promises to build must have produced an artifact. Catches
+# silent partial-build failures (e.g. an `npm install` that errored out
+# without `set -e` propagating) so the user does not upload a release that
+# is missing the frontend, MCP, web.tar.gz, or skill. The check is gated
+# on the DO_* flags so it does not run for `backend`, where the other
+# artifacts are intentionally absent.
+MISSING=()
+if [ "$DO_FRONTEND" = 1 ] && [ ! -f "$RELEASE_DIR/web/index.html" ]; then
+  MISSING+=("web/index.html (frontend)")
+fi
+if [ "$DO_MCP" = 1 ] && [ ! -f "$PROJECT_DIR/mcp-server/dist/index.js" ]; then
+  MISSING+=("mcp-server/dist/index.js (mcp)")
+fi
+if [ "$DO_BACKEND" = 1 ] && ! ls "$RELEASE_DIR"/kanban-server-*-mysql >/dev/null 2>&1; then
+  MISSING+=("kanban-server-*-mysql (backend)")
+fi
+if [ "$DO_WEB_TARBALL" = 1 ] && [ ! -f "$RELEASE_DIR/web.tar.gz" ]; then
+  MISSING+=("web.tar.gz")
+fi
+if [ "$DO_SKILL" = 1 ] && [ ! -d "$RELEASE_DIR/skill" ]; then
+  MISSING+=("skill/")
+fi
+if [ "${#MISSING[@]}" -gt 0 ]; then
+  echo "ERROR: default build is incomplete; missing artifacts:" >&2
+  for m in "${MISSING[@]}"; do
+    echo "  - $m" >&2
+  done
+  exit 1
+fi
+
 if [ "$DO_BACKEND" = 1 ]; then
   echo "Upload to GitHub Release:"
   echo "  - kanban-server-darwin-amd64"
