@@ -76,3 +76,9 @@ test/
 backend/web/
 devDoc/
 opencode.json
+
+# Local debug / smoke artifacts
+e2e-debug/
+run-out.txt
+smoke-run.cjs
+/node_modules/
