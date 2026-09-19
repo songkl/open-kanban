@@ -674,8 +674,8 @@ export function BoardPage() {
           <Link
             to={`/columns?boardId=${boardIdFromUrl}`}
             className="hidden sm:flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-            title={t('column.manageColumns')}
-            aria-label={t('column.manageColumns')}
+            title={t('nav.columnManagement')}
+            aria-label={t('nav.columnManagement')}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -754,8 +754,8 @@ export function BoardPage() {
           <Link
             to="/agent-activity"
             className="hidden sm:flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1.5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-            title={t('agentActivity')}
-            aria-label={t('agentActivity')}
+            title={t('nav.agentActivity')}
+            aria-label={t('nav.agentActivity')}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -776,8 +776,8 @@ export function BoardPage() {
               type="button"
               onClick={() => setShowShareModal(true)}
               className="hidden sm:flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 px-2.5 py-1.5 text-sm text-white"
-              title={t('share.menu', 'Share')}
-              aria-label={t('share.menu', 'Share')}
+              title={t('share.menu')}
+              aria-label={t('share.menu')}
               data-testid="board-share-button"
             >
               <svg

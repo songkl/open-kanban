@@ -50,7 +50,7 @@ export function BoardCard({
   const ownerLabel = board.ownerNickname?.trim() || (board.isOwner ? t('board.ownerBadge') : '');
 
   return (
-    <div className="group rounded-2xl bg-white dark:bg-zinc-700 p-5 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:shadow-xl dark:hover:border-zinc-600 transition-all duration-300">
+    <div className="group rounded-2xl bg-white dark:bg-zinc-800 p-5 shadow-sm border border-zinc-100 dark:border-zinc-700 hover:shadow-xl dark:hover:border-zinc-600 transition-all duration-300">
       <div className="mb-4 flex items-center gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/10 text-blue-600">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -112,10 +112,10 @@ export function BoardCard({
         </div>
         <div className="flex flex-col">
           <span className="text-[10px] uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-            {t('board.taskCount', { count: 0 })}
+            {t('board.taskCount_other', { count: 0 })}
           </span>
           <span className="truncate" data-testid="board-task-count">
-            {taskCount === null ? '—' : t('board.taskCount', { count: taskCount })}
+            {taskCount === null ? '—' : t('board.taskCount_other', { count: taskCount })}
           </span>
         </div>
       </div>
@@ -203,6 +203,8 @@ export function BoardCard({
         <button
           onClick={() => onDelete(board.id, board.name)}
           className="flex items-center justify-center rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-600 border border-red-100 hover:bg-red-100 hover:border-red-200 transition-all"
+          title={t('board.deleteBoard')}
+          aria-label={t('board.deleteBoard')}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>

@@ -387,7 +387,7 @@ export function SettingsPage() {
           </div>
 
           <div
-            className="flex-1 rounded-lg bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800"
+            className="flex-1 rounded-lg bg-white dark:bg-zinc-800 p-6 shadow"
             role="tabpanel"
             id={`settings-panel-${activeTab}`}
             aria-labelledby={`settings-tab-${activeTab}`}

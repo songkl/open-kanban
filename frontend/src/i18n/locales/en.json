@@ -862,10 +862,14 @@
       "COMPLETE_TASK": "Completed task",
       "ADD_COMMENT": "Added comment",
       "LOGIN": "Logged in",
+      "LOGIN_FAIL": "Login failed",
       "LOGOUT": "Logged out",
+      "EXPORT": "Exported data",
+      "IMPORT": "Imported data",
       "BOARD_CREATE": "Created board",
       "BOARD_UPDATE": "Updated board",
       "BOARD_DELETE": "Deleted board",
+      "BOARD_IMPORT": "Imported board",
       "COLUMN_CREATE": "Created column",
       "COLUMN_UPDATE": "Updated column",
       "COLUMN_DELETE": "Deleted column",
@@ -874,7 +878,11 @@
       "BOARD_COPY": "Copied board",
       "TEMPLATE_CREATE": "Created template",
       "TEMPLATE_DELETE": "Deleted template",
-      "BOARD_IMPORT": "Imported board"
+      "PERMISSION_GRANT": "Permission granted",
+      "PERMISSION_REVOKE": "Permission revoked",
+      "PERMISSION_BULK_GRANT": "Bulk permission grant",
+      "PERMISSION_TRANSFER": "Ownership transferred",
+      "OTHER": "Other"
     },
     "shortcuts": "Keyboard Shortcuts",
     "shortcutsDescription": "Use keyboard shortcuts to improve efficiency",
@@ -1152,7 +1160,9 @@
       "clientDeleted": "Application removed.",
       "consentRevoked": "Permission revoked.",
       "configSaved": "Settings saved.",
-      "dynamicRegistration": "Dynamic registration is {{enabled}}."
+      "dynamicRegistration": "Dynamic registration is {{enabled}}.",
+      "dynamicRegistrationOn": "Dynamic registration: enabled.",
+      "dynamicRegistrationOff": "Dynamic registration: disabled."
     }
   },
   "publicBoard": {

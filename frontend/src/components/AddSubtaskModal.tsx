@@ -48,7 +48,7 @@ export function AddSubtaskModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-subtask-modal-title"
-        className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 outline-none"
+        className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 outline-none"
       >
         <h2 id="add-subtask-modal-title" className="mb-4 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('subtask.add')}</h2>
 

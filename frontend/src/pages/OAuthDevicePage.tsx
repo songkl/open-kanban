@@ -144,8 +144,8 @@ export function OAuthDevicePage() {
 
   if (needsLogin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">
-        <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 text-center shadow-lg dark:bg-zinc-800">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-900 px-4">
+        <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6 text-center shadow-lg">
           <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
             {t('oauth.device.title')}
           </h1>
@@ -155,7 +155,12 @@ export function OAuthDevicePage() {
           <button
             type="button"
             className="w-full rounded-md bg-blue-500 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-600"
-            onClick={() => navigate('/login?return=/oauth/device?user_code=' + encodeURIComponent(code))}
+            onClick={() => {
+              const params = new URLSearchParams({
+                return: `/oauth/device?user_code=${encodeURIComponent(code)}`,
+              });
+              navigate(`/login?${params.toString()}`);
+            }}
           >
             {t('oauth.device.goLogin')}
           </button>
@@ -170,8 +175,8 @@ export function OAuthDevicePage() {
   const hasAgentSelection = showPicker && (agents.length > 0 || defaultId);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-700 px-4 dark:bg-zinc-900">
-      <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800">
+<div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-900 px-4">
+        <div className="w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6 shadow">
         <h1 className="mb-2 text-xl font-semibold text-zinc-800 dark:text-zinc-100">
           {t('oauth.device.title')}
         </h1>

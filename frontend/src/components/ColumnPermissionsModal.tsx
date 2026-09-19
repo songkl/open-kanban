@@ -58,7 +58,7 @@ export function ColumnPermissionsModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 max-h-[80vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center gap-3">

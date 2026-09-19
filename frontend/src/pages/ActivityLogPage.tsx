@@ -461,7 +461,7 @@ export function ActivityLogPage() {
           )}
         </header>
 
-        <div className="mb-4 rounded-lg bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800">
+        <div className="mb-4 rounded-lg bg-white dark:bg-zinc-800 p-4 shadow">
           <h3 className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-400">{t('settings.filterConditions')}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
@@ -571,7 +571,7 @@ export function ActivityLogPage() {
             className="mb-4 flex flex-wrap items-center gap-2"
             data-testid="activity-log-applied-filters"
             role="list"
-            aria-label={t('filter.appliedCount', { count: appliedChips.length })}
+            aria-label={t('filter.appliedCount_other', { count: appliedChips.length })}
           >
             <button
               type="button"
@@ -594,7 +594,7 @@ export function ActivityLogPage() {
               >
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
               </svg>
-              <span>{t('filter.appliedCount', { count: appliedChips.length })}</span>
+              <span>{t('filter.appliedCount_other', { count: appliedChips.length })}</span>
             </button>
             {appliedChips.map((chip) => (
               <span
@@ -645,7 +645,7 @@ export function ActivityLogPage() {
               return (
                 <div
                   key={activity.id}
-                  className={`flex items-start gap-4 rounded-lg bg-white dark:bg-zinc-700 p-4 shadow dark:bg-zinc-800 ${isClickable ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-600 dark:bg-zinc-700 dark:hover:bg-zinc-700' : ''}`}
+                  className={`flex items-start gap-4 rounded-lg bg-white dark:bg-zinc-800 p-4 shadow ${isClickable ? 'cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-700' : ''}`}
                   onClick={() => handleActivityClick(activity)}
                 >
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">

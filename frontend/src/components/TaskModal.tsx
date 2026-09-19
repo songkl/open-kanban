@@ -1012,7 +1012,7 @@ export function TaskModal({
                         }}
                         className="text-xs text-red-500"
                       >
-                        {t('taskModal.deleteMeta')}
+                        {t('common.deleteMeta')}
                       </button>
                     )}
                   </div>
@@ -1309,7 +1309,7 @@ export function TaskModal({
             aria-modal="true"
             aria-labelledby="task-modal-delete-title"
             aria-describedby="task-modal-delete-desc"
-            className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-700 p-6 shadow dark:bg-zinc-800"
+            className="relative z-10 w-full max-w-md rounded-xl bg-white dark:bg-zinc-800 p-6 shadow"
           >
             <h3 id="task-modal-delete-title" className="mb-2 text-lg font-semibold text-zinc-800 dark:text-zinc-100">{t('taskModal.confirmDeleteTitle')}</h3>
             <p id="task-modal-delete-desc" className="mb-6 text-sm text-zinc-600 dark:text-zinc-300">{t('taskModal.confirmDelete')}</p>

@@ -37,6 +37,11 @@ export interface BoardRecord extends Record<string, unknown> {
   deleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  isPublic?: boolean;
+  isOwner?: boolean;
+  effectiveAccess?: string;
+  taskCount?: number;
+  lastActiveAt?: string;
   _count?: { columns?: number };
 }
 
@@ -58,6 +63,11 @@ export const BOARDS_LIST_AVAILABLE_FIELDS = [
   "shortAlias",
   "createdAt",
   "updatedAt",
+  "isPublic",
+  "isOwner",
+  "effectiveAccess",
+  "taskCount",
+  "lastActiveAt",
   "columnCount",
 ] as const;
 export const BOARDS_GET_DEFAULT_FIELDS = [
@@ -67,6 +77,11 @@ export const BOARDS_GET_DEFAULT_FIELDS = [
   "shortAlias",
   "createdAt",
   "updatedAt",
+  "isPublic",
+  "isOwner",
+  "effectiveAccess",
+  "taskCount",
+  "lastActiveAt",
   "columnCount",
 ] as const;
 
@@ -108,6 +123,21 @@ function projectBoard(board: BoardRecord, fields: readonly string[]): BoardRecor
       case "updatedAt":
         out.updatedAt = board.updatedAt;
         break;
+      case "isPublic":
+        out.isPublic = board.isPublic ?? false;
+        break;
+      case "isOwner":
+        out.isOwner = board.isOwner ?? false;
+        break;
+      case "effectiveAccess":
+        out.effectiveAccess = board.effectiveAccess ?? "";
+        break;
+      case "taskCount":
+        out.taskCount = board.taskCount ?? 0;
+        break;
+      case "lastActiveAt":
+        out.lastActiveAt = board.lastActiveAt ?? "";
+        break;
       case "columnCount":
         out._count = { columns: board._count?.columns ?? 0 };
         break;
@@ -130,6 +160,16 @@ function renderBoardCell(b: BoardRecord, field: string): string {
       return defaultCell(b.createdAt);
     case "updatedAt":
       return defaultCell(b.updatedAt);
+    case "isPublic":
+      return b.isPublic ? "yes" : "no";
+    case "isOwner":
+      return b.isOwner ? "yes" : "no";
+    case "effectiveAccess":
+      return defaultCell(b.effectiveAccess);
+    case "taskCount":
+      return String(b.taskCount ?? 0);
+    case "lastActiveAt":
+      return defaultCell(b.lastActiveAt);
     case "columnCount":
       return String(b._count?.columns ?? 0);
     default:

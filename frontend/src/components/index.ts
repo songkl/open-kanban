@@ -10,7 +10,6 @@ export { BatchOperationBar } from './BatchOperationBar';
 export { BoardActionsMenu } from './BoardActionsMenu';
 export { BoardCard } from './BoardCard';
 export { BoardColumnPermissionsModal } from './BoardColumnPermissionsModal';
-export { BoardHeader } from './BoardHeader';
 export { BoardPermissionsModal } from './BoardPermissionsModal';
 export { BoardSelector } from './BoardSelector';
 export { BoardToolbar } from './BoardToolbar';

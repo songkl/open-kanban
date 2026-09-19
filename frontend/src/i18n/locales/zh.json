@@ -862,10 +862,14 @@
       "COMPLETE_TASK": "完成任务",
       "ADD_COMMENT": "添加评论",
       "LOGIN": "登录",
+      "LOGIN_FAIL": "登录失败",
       "LOGOUT": "登出",
+      "EXPORT": "导出数据",
+      "IMPORT": "导入数据",
       "BOARD_CREATE": "创建看板",
       "BOARD_UPDATE": "更新看板",
       "BOARD_DELETE": "删除看板",
+      "BOARD_IMPORT": "导入看板",
       "COLUMN_CREATE": "创建列",
       "COLUMN_UPDATE": "更新列",
       "COLUMN_DELETE": "删除列",
@@ -874,7 +878,11 @@
       "BOARD_COPY": "复制看板",
       "TEMPLATE_CREATE": "创建模板",
       "TEMPLATE_DELETE": "删除模板",
-      "BOARD_IMPORT": "导入看板"
+      "PERMISSION_GRANT": "授予权限",
+      "PERMISSION_REVOKE": "撤销权限",
+      "PERMISSION_BULK_GRANT": "批量授权",
+      "PERMISSION_TRANSFER": "转移所有权",
+      "OTHER": "其他"
     },
     "shortcuts": "键盘快捷键",
     "shortcutsDescription": "使用键盘快捷键可以大大提高操作效率",
@@ -1152,7 +1160,9 @@
       "clientDeleted": "应用已删除。",
       "consentRevoked": "授权已撤销。",
       "configSaved": "设置已保存。",
-      "dynamicRegistration": "动态注册当前{{enabled}}。"
+      "dynamicRegistration": "动态注册当前{{enabled}}。",
+      "dynamicRegistrationOn": "动态注册：已开启。",
+      "dynamicRegistrationOff": "动态注册：已关闭。"
     }
   },
   "publicBoard": {

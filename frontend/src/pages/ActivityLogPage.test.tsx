@@ -7,9 +7,13 @@ import { ActivityLogPage } from './ActivityLogPage';
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, unknown>) => {
-      if (key === 'filter.appliedCount' && params) {
+      if (key === 'filter.appliedCount_other' && params) {
         const count = params.count as number;
-        return `${count} filters applied`;
+        return `${count} ${count === 1 ? 'filter' : 'filters'} applied`;
+      }
+      if (key === 'filter.appliedCount_one' && params) {
+        const count = params.count as number;
+        return `${count} filter applied`;
       }
       if (key === 'filter.removeFilter' && params) {
         return `Remove ${params.label}`;
@@ -128,7 +132,7 @@ describe('ActivityLogPage scope filters + CSV export (s-1208)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('activity-log-applied-filters')).toBeInTheDocument();
     });
-    expect(screen.getByText('1 filters applied')).toBeInTheDocument();
+    expect(screen.getByText('1 filter applied')).toBeInTheDocument();
 
     vi.mocked(apiModule.activitiesApi.getAll).mockClear();
     const columnSelect = screen.getByTestId('activity-log-filter-column') as HTMLSelectElement;
