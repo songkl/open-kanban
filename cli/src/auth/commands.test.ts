@@ -403,10 +403,47 @@ describe("runLogin (agent mode)", () => {
     expect(stored?.clientId).toBe("agent:agent-1");
     expect(stored?.clientName).toBe("kanban-cli/agent-token");
     expect(stored?.accessToken).toBe("at-agent");
-    const { stderr } = cap.read();
+    const { stderr, stdout: agentStdout } = cap.read();
     expect(stderr).toMatch(/agent authorization/i);
     expect(stderr).toMatch(/bind existing agent|create new agent/i);
-    expect(stderr).toMatch(/Logged in to/);
+    // s-1232: the success line lives on stdout (matches the human-mode
+    // contract so `--json` consumers + the e2e agent-selection test
+    // can capture it without scraping stderr).
+    expect(agentStdout).toMatch(/Logged in to/);
+    expect(agentStdout).toMatch(/Agent ci-runner/);
+    expect(agentStdout).toMatch(/type=AGENT/);
+  });
+
+  // s-1232: lock down the stream contract — the device-flow prompt +
+  // identity-selection hint stay on stderr (operator-facing UX) while
+  // the "Logged in to ..." success line lands on stdout. This matches
+  // the human-mode behaviour and is the contract the e2e
+  // `agent-selection.test.ts` suite asserts.
+  it("keeps the device-flow prompt on stderr and writes the success line to stdout", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(
+        JSON.stringify({ user: { id: "agent-9", type: "AGENT", nickname: "alice-bot" } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    const oauth = makeAgentReadyOAuth();
+    const cap = makeCapture();
+    await runLogin(
+      { apiUrl: "http://localhost:8080" },
+      { oauth, http: new HttpClient({ apiUrl: "http://localhost:8080" }), io: cap.io }
+    );
+    const { stderr, stdout: agentStdout } = cap.read();
+    // Device-flow UX (verification URL, user code, scope, picker hint,
+    // expiry countdown) stays on stderr.
+    expect(stderr).toContain("Open Kanban agent authorization required");
+    expect(stderr).toContain("Visit:");
+    expect(stderr).toContain("ABCD-EFGH");
+    expect(stderr).toContain("?code=ABCD-EFGH");
+    expect(stderr).toContain("Waiting for approval");
+    // Success line lives on stdout only — not duplicated to stderr.
+    expect(stderr).not.toMatch(/Logged in to/);
+    expect(agentStdout).toContain("Logged in to http://localhost:8080 as Agent alice-bot");
+    expect(agentStdout).toContain("type=AGENT");
   });
 
   it("skips the browser launch when openBrowser=false", async () => {

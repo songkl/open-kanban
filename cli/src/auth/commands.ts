@@ -277,6 +277,7 @@ async function runLoginAsAgent(
   deps: RunLoginDeps
 ): Promise<RunLoginResult> {
   const stderr = deps.io?.stderr ?? process.stderr;
+  const stdout = deps.io?.stdout ?? process.stdout;
   if (!deps.http) {
     throw new Error(
       "kanban auth login (agent mode) requires the HTTP client; pass deps.http"
@@ -344,7 +345,15 @@ async function runLoginAsAgent(
     accessToken: token,
   };
   deps.oauth.secretProvider.write(stored);
-  stderr.write(
+  // s-1232: write the success line to stdout so it matches the
+  // human-mode contract (`Logged in to ...` on stdout, device-flow
+  // prompt + warnings on stderr). The previous stderr placement broke
+  // `kanban auth login --json`-style consumers and the
+  // `agent-selection.test.ts` e2e assertion that expects the success
+  // line to surface on stdout. The device-flow prompt above still
+  // uses stderr so a redirected stdout stream stays free of the
+  // verification URL / user code.
+  stdout.write(
     chalk.green(
       `Logged in to ${apiUrl} as Agent ${agent.nickname ?? agent.id ?? "unknown"} (type=${agent.type ?? "AGENT"})\n`
     )
