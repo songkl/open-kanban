@@ -1,0 +1,9 @@
+[
+  "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+  "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+  "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+  "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+  "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+  "error: WebSocket connection to 'ws://localhost:8080/ws' failed: HTTP Authentication failed; no valid credentials available",
+  "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+]
