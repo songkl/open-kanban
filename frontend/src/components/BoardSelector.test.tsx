@@ -69,4 +69,13 @@ describe('BoardSelector', () => {
     const boardOneButton = screen.getByRole('button', { name: 'Board One' });
     expect(boardOneButton).toHaveClass('bg-blue-50');
   });
+
+  it('uses a wider max-w on the picker button so long board names are not truncated (s-1257 P1-7)', () => {
+    render(<BoardSelector {...defaultProps} currentBoard={{ id: 'board-1', name: 'A very long board name that should not be truncated', createdAt: '2024-01-01', updatedAt: '2024-01-01' }} />);
+    const picker = screen.getByRole('button', { name: /A very long board name/ });
+    expect(picker.className).toContain('max-w-56');
+    const label = picker.querySelector('span[title]');
+    expect(label).not.toBeNull();
+    expect(label?.getAttribute('title')).toContain('A very long board name');
+  });
 });

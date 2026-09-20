@@ -1071,6 +1071,63 @@ func TestFinishRun_FailedStillRecordsOutput(t *testing.T) {
 	}
 }
 
+// TestFinishRun_StripsAnsiFromOutput covers s-1257 P1-3: runners
+// emit colourised output by default; the activity feed + run
+// history render the payload as plain text, so a stray \x1b[0m
+// reads as garbage. The handler must scrub CSI escape sequences
+// from both `output` and `error` before persisting.
+func TestFinishRun_StripsAnsiFromOutput(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
+		('c-next-ansi', 'Next', 'review', 3, 'b1')`); err != nil {
+		t.Fatalf("seed next column: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-ansi', 'ansi out', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+	repo := repositories.NewRunRepository(db)
+	if _, err := repo.ClaimRun("b1", "t-ansi", "c-todo", "u-admin", "opencoder", "c-doing", 60000); err != nil {
+		t.Fatalf("seed claim: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "POST", "/api/v1/runs/t-ansi/finish", "admin-token", map[string]interface{}{
+		"runnerId": "u-admin",
+		"status":   "completed",
+		"exitCode": 0,
+		"output":   "\x1b[0m\n> build · deepseek-v4-flash\n\x1b[0m$ date \"+%Y-%m-%d\" > run.log\n2026-09-20\n\x1b[0m\n",
+		"error":    "\x1b[31;1mfatal\x1b[0m: tool returned 500",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var output, errMsg sql.NullString
+	if err := db.QueryRow("SELECT output, error FROM task_runs WHERE task_id='t-ansi'").Scan(&output, &errMsg); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if !output.Valid {
+		t.Fatalf("expected output to be set, got NULL")
+	}
+	if strings.Contains(output.String, "\x1b[") {
+		t.Errorf("output still contains ANSI escape: %q", output.String)
+	}
+	if output.String != "\n> build · deepseek-v4-flash\n$ date \"+%Y-%m-%d\" > run.log\n2026-09-20\n\n" {
+		t.Errorf("output stripped incorrectly: %q", output.String)
+	}
+	if !errMsg.Valid {
+		t.Fatalf("expected error to be set, got NULL")
+	}
+	if strings.Contains(errMsg.String, "\x1b[") {
+		t.Errorf("error still contains ANSI escape: %q", errMsg.String)
+	}
+	if errMsg.String != "fatal: tool returned 500" {
+		t.Errorf("error stripped incorrectly: %q", errMsg.String)
+	}
+}
+
 // TestGetRun_ReturnsOutputField exercises the read path: a
 // terminal task_runs row carrying a non-null `output` is
 // surfaced verbatim through GET /api/v1/runs/:taskId so the

@@ -146,7 +146,7 @@ export function BoardCard({
         </Link>
         <button
           onClick={() => onEdit(board)}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-600 border border-amber-100 hover:bg-amber-100 hover:border-amber-200 transition-all"
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-xs font-medium text-amber-600 dark:text-amber-300 border border-amber-100 dark:border-amber-800/50 hover:bg-amber-100 dark:hover:bg-amber-900/50 hover:border-amber-200 dark:hover:border-amber-700/50 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
@@ -155,7 +155,7 @@ export function BoardCard({
         </button>
         <button
           onClick={() => onCopy(board.id, board.name)}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-purple-50 px-3 py-2 text-xs font-medium text-purple-600 border border-purple-100 hover:bg-purple-100 hover:border-purple-200 transition-all"
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-purple-50 dark:bg-purple-900/30 px-3 py-2 text-xs font-medium text-purple-600 dark:text-purple-300 border border-purple-100 dark:border-purple-800/50 hover:bg-purple-100 dark:hover:bg-purple-900/50 hover:border-purple-200 dark:hover:border-purple-700/50 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -164,7 +164,7 @@ export function BoardCard({
         </button>
         <button
           onClick={() => onSaveAsTemplate(board.id, board.name)}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-orange-50 px-3 py-2 text-xs font-medium text-orange-600 border border-orange-100 hover:bg-orange-100 hover:border-orange-200 transition-all"
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-orange-50 dark:bg-orange-900/30 px-3 py-2 text-xs font-medium text-orange-600 dark:text-orange-300 border border-orange-100 dark:border-orange-800/50 hover:bg-orange-100 dark:hover:bg-orange-900/50 hover:border-orange-200 dark:hover:border-orange-700/50 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
@@ -175,7 +175,7 @@ export function BoardCard({
       <div className="flex items-center gap-2 pt-4 border-t border-zinc-100">
         <button
           onClick={() => onExport(board.id, board.name, 'csv')}
-          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-600 border border-emerald-100 hover:bg-emerald-100 hover:border-emerald-200 transition-all"
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:border-emerald-200 dark:hover:border-emerald-700/50 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
@@ -184,7 +184,7 @@ export function BoardCard({
         </button>
         <button
           onClick={() => onExport(board.id, board.name, 'json')}
-          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-600 border border-emerald-100 hover:bg-emerald-100 hover:border-emerald-200 transition-all"
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:border-emerald-200 dark:hover:border-emerald-700/50 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
@@ -193,7 +193,7 @@ export function BoardCard({
         </button>
         <button
           onClick={onImport}
-          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-xs font-medium text-sky-600 border border-sky-100 hover:bg-sky-100 hover:border-sky-200 transition-all"
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-sky-50 dark:bg-sky-900/30 px-3 py-2 text-xs font-medium text-sky-600 dark:text-sky-300 border border-sky-100 dark:border-sky-800/50 hover:bg-sky-100 dark:hover:bg-sky-900/50 hover:border-sky-200 dark:hover:border-sky-700/50 transition-all"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>

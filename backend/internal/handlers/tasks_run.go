@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -494,6 +495,30 @@ func AttachRun(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// ansiEscapePattern matches the CSI SGR / cursor-control sequences
+// most shells emit (e.g. `\x1b[0m`, `\x1b[31;1m`). Capturing the full
+// CSI parameter block (`[0-9;?]*`) keeps a future "256-colour" or
+// hyperlink escape (`\x1b]8;;url\x1b\\`) from sneaking past the
+// stripper.
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+// stripAnsi removes CSI escape sequences from a runner's stdout /
+// stderr payload before persisting it. The CLI surfaces coloured
+// output by default, but the activity feed + run history render the
+// payload as plain text — without stripping the literal `\x1b[0m`
+// bytes leak through as garbage (`"device_code approved for
+// client=\x1b[0m..."`).
+//
+// We strip rather than escape so the persisted value matches what
+// the operator already sees in the terminal-less views. Empty
+// payloads are returned as-is so callers can rely on the no-op path.
+func stripAnsi(s string) string {
+	if s == "" {
+		return s
+	}
+	return ansiEscapePattern.ReplaceAllString(s, "")
+}
+
 // FinishRun handles POST /api/v1/runs/:taskId/finish.
 // When status='completed' the handler invokes
 // task_service.CompleteTask so the task advances to its next
@@ -555,6 +580,20 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 		default:
 			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'completed' or 'failed'"})
 			return
+		}
+
+		// Strip CSI escape sequences (s-1257 P1-3) before
+		// persisting. Runners emit colourised output by default;
+		// the activity feed and run history render the payload as
+		// plain text, so a stray `\x1b[0m` reads as garbage to
+		// non-terminal viewers.
+		if req.Error != nil {
+			s := stripAnsi(*req.Error)
+			req.Error = &s
+		}
+		if req.Output != nil {
+			s := stripAnsi(*req.Output)
+			req.Output = &s
 		}
 
 		repo := repositories.NewRunRepository(db)

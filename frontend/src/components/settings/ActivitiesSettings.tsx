@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { activitiesApi } from '../../services/api';
+import { resolveActivityActionLabel } from '../../utils/activityActions';
 
 interface Activity {
   id: string;
@@ -21,7 +22,7 @@ interface ActivitiesSettingsProps {
 }
 
 export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesSettingsProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [activityFilterAction, setActivityFilterAction] = useState('');
   const [activityFilterStartTime, setActivityFilterStartTime] = useState('');
@@ -149,7 +150,7 @@ export function ActivitiesSettings({ currentUser, userNicknameMap }: ActivitiesS
               </div>
               <div className="flex-1">
                 <div className="font-medium text-zinc-800 dark:text-zinc-100">
-                  {typeof t(`settings.activities.${activity.action}`) === 'string' ? t(`settings.activities.${activity.action}`) : activity.action}
+                  {resolveActivityActionLabel(activity.action, t, i18n)}
                 </div>
                 {activity.targetTitle && (
                   <div className="text-sm text-zinc-600 dark:text-zinc-300">{activity.targetTitle}</div>

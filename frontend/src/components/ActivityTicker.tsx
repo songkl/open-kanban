@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { activitiesApi } from '@/services/api';
+import { resolveActivityActionLabel } from '@/utils/activityActions';
 
 interface Activity {
   id: string;
@@ -28,7 +29,7 @@ const actionIcons: Record<string, string> = {
 };
 
 export function ActivityTicker() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,9 +85,7 @@ export function ActivityTicker() {
             >
               <span className="text-base">{actionIcons[activity.action] || '📌'}</span>
               <span className="text-zinc-300">
-                {typeof t(`settings.activities.${activity.action}`) === 'string'
-                  ? t(`settings.activities.${activity.action}`)
-                  : activity.action}
+                {resolveActivityActionLabel(activity.action, t, i18n)}
               </span>
               {activity.targetTitle && (
                 <span className="text-blue-300 truncate max-w-32">{activity.targetTitle}</span>
