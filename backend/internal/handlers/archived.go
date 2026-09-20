@@ -111,6 +111,14 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
+		// s-1260 (PM review s-1258 P2-2): return `[]` instead of
+		// `null` for callers with no archived rows, matching the
+		// CLAUDE.md list-response convention so the SPA doesn't
+		// render a `null` literal when piping through curl.
+		if tasks == nil {
+			tasks = []gin.H{}
+		}
+
 		c.JSON(http.StatusOK, tasks)
 	}
 }
@@ -215,6 +223,12 @@ if len(columnIDs) > 0 {
 					"subtasks":    subtasks,
 				})
 			}
+		}
+
+		// s-1260: match GetArchivedTasks and return `[]` (not
+		// `null`) so curl users see a clean empty array.
+		if tasks == nil {
+			tasks = []gin.H{}
 		}
 
 		c.JSON(http.StatusOK, tasks)

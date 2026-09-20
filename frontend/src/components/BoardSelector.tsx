@@ -74,7 +74,7 @@ export const BoardSelector = forwardRef<HTMLDivElement, BoardSelectorProps>(
           </svg>
         </button>
         {showDropdown && (
-          <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50">
+          <div className="absolute left-0 top-full mt-1 w-48 min-w-[14rem] rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 py-1 shadow-lg z-50">
             {boards.map((board) => (
               <button
                 key={board.id}

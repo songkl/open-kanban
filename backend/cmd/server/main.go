@@ -411,16 +411,25 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.DELETE("/oauth/providers/:id", oauth.DeleteAdminProviderHandler(db))
 	}
 
-	// Permission audit log endpoint: surfaces PERMISSION_GRANT /
-	// REVOKE / TRANSFER rows to global admins and board owners.
-	// Lives at /api/v1/activities (not under /api/v1/auth) so the
-	// audit surface area is independent from the per-user activity
-	// feed at /api/v1/auth/activities.
-	r.GET("/api/v1/activities",
+// Permission audit log endpoint: surfaces PERMISSION_GRANT /
+// REVOKE / TRANSFER rows to global admins and board owners.
+// Lives at /api/v1/activities (not under /api/v1/auth) so the
+// audit surface area is independent from the per-user activity
+// feed at /api/v1/auth/activities.
+r.GET("/api/v1/activities",
 		handlers.RequireSignatureVerification(),
 		handlers.RequireAuth(db),
 		handlers.GetPermissionActivities(db),
 	)
+
+	// /api/v1/origins/check answers "is the Origin header on this
+	// request on the allow-list?" so the SPA can surface a precise
+	// hint when the WebSocket fails with 403 (s-1260 / PM review
+	// s-1258 P2-11). The route is intentionally unauthenticated:
+	// the SPA calls it before connecting the socket so the user
+	// sees the hint on the very first failed handshake, not the
+	// fifth reconnect attempt.
+	r.GET("/api/v1/origins/check", handlers.CheckOriginAllowed(db))
 
 	boards := r.Group("/api/v1/boards")
 	{

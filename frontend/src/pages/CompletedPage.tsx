@@ -202,14 +202,18 @@ export function CompletedPage() {
 
         <button
           onClick={batchArchive}
-          className="rounded-md bg-orange-500 px-3 py-2 text-sm text-white hover:bg-orange-600"
+          disabled={selectedTasks.size === 0}
+          title={selectedTasks.size === 0 ? t('completed.selectFirst') : undefined}
+          className="rounded-md bg-orange-500 px-3 py-2 text-sm text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-500"
         >
           {t('completed.batchArchive')}
         </button>
 
         <button
           onClick={batchDelete}
-          className="rounded-md bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600"
+          disabled={selectedTasks.size === 0}
+          title={selectedTasks.size === 0 ? t('completed.selectFirst') : undefined}
+          className="rounded-md bg-red-500 px-3 py-2 text-sm text-white hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500 dark:disabled:bg-zinc-700 dark:disabled:text-zinc-500"
         >
           {t('completed.batchDelete')}
         </button>

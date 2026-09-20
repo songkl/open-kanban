@@ -333,7 +333,15 @@ export function UsersSettings({ currentUser, onLoadUsers }: UsersSettingsProps) 
                   });
                 }}
                 disabled={user.id === currentUser?.id}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${user.enabled ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'} ${user.id === currentUser?.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={user.id === currentUser?.id ? t('settings.cannotDisableSelf') : undefined}
+                aria-label={user.id === currentUser?.id ? t('settings.cannotDisableSelf') : undefined}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  user.id === currentUser?.id
+                    ? 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400 cursor-not-allowed'
+                    : user.enabled
+                      ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                      : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                }`}
               >
                 {user.enabled ? t('settings.disable') : t('settings.enable')}
               </button>

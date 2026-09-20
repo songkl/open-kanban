@@ -446,6 +446,7 @@
     "deselectAll": "Deselect All",
     "batchArchive": "Batch Archive",
     "batchDelete": "Batch Delete",
+    "selectFirst": "Select at least one task first",
     "loading": "Loading..."
   },
   "runComplete": {
@@ -954,6 +955,23 @@
       "BULK_PERMISSION_GRANT": "Bulk permission granted",
       "BULK_PERMISSION_REVOKE": "Bulk permission revoked",
       "OTHER": "Other"
+    },
+    "details": {
+      "statusFromTo": "Status: {{from}} → {{to}}",
+      "positionFromTo": "Position: {{from}} → {{to}}",
+      "ownerFromTo": "Assignee: {{from}} → {{to}}",
+      "reordered": "Reordered {{count}} tasks",
+      "attached": "attached via /api/v1/runs/:taskId/attach",
+      "permissionFromTo": "Permission: {{from}} → {{to}}",
+      "ownerTransferFromTo": "Ownership transferred: {{from}} → {{to}}",
+      "bulkColumnSummary": "Column: {{column}} Action: {{action}} Affected: {{affected}} Skipped: {{skipped}}",
+      "statusLabel": {
+        "todo": "Backlog",
+        "in_progress": "In Progress",
+        "testing": "Testing",
+        "review": "Review",
+        "done": "Done"
+      }
     },
     "webhooks": "Webhooks",
     "shortcuts": "Keyboard Shortcuts",
@@ -1479,7 +1497,7 @@
     "webhookEnabled": "Enabled",
     "webhookDisabled": "Disabled",
     "webhookConfigured": "Outbound notifications are configured",
-    "webhookNotConfigured": "WEBHOOK_ENABLED is not set to true",
+    "webhookNotConfigured": "Webhook delivery is not enabled. Set `WEBHOOK_ENABLED=true` in .env and restart the server.",
     "webhookFailures": "Failures (24h)",
     "lastFailure": "Last failure",
     "noFailures": "No recent failures",

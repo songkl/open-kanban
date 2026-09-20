@@ -202,7 +202,7 @@ export function BoardCard({
         </button>
         <button
           onClick={() => onDelete(board.id, board.name)}
-          className="flex items-center justify-center rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-600 border border-red-100 hover:bg-red-100 hover:border-red-200 transition-all"
+          className="flex items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/30 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-300 border border-red-100 dark:border-red-800/50 hover:bg-red-100 dark:hover:bg-red-900/50 hover:border-red-200 dark:hover:border-red-700/50 transition-all"
           title={t('board.deleteBoardTitle')}
           aria-label={t('board.deleteBoardTitle')}
         >

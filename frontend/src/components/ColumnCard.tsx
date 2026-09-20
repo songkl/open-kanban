@@ -76,7 +76,7 @@ export function ColumnCard({
       <span className="flex-1 font-semibold text-zinc-800 dark:text-zinc-100">{column.name}</span>
       {column.status && (
         <span className="rounded-full bg-zinc-50 dark:bg-zinc-700 px-3 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-500 border border-zinc-100">
-          {column.status}
+          {t(`settings.activities.details.statusLabel.${column.status}`, { defaultValue: column.status })}
         </span>
       )}
       <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">#{column.position + 1}</span>

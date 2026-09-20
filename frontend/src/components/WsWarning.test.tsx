@@ -35,7 +35,7 @@ describe('WsWarning', () => {
 
   it('shows reconnect count when greater than 0', () => {
     render(<WsWarning wsStatus="disconnected" reconnectCount={3} onConnectWebSocket={vi.fn()} />);
-    expect(screen.getByText(/Reconnecting \(3\/10\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Reconnecting \(3\/5\)/)).toBeInTheDocument();
   });
 
   it('calls onConnectWebSocket when retry button is clicked', () => {

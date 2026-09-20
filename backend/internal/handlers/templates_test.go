@@ -228,8 +228,8 @@ func TestGetTemplatesHandler(t *testing.T) {
 			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 		}
 
-		if w.Body.String() != "null" && w.Body.String() != "[]" {
-			t.Errorf("expected null or empty array, got %s", w.Body.String())
+		if w.Body.String() != "[]" {
+			t.Errorf("expected empty array, got %s", w.Body.String())
 		}
 	})
 }

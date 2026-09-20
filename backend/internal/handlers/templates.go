@@ -71,6 +71,15 @@ func GetTemplates(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
+		// s-1260 (PM review s-1258 P2-1): return `[]` rather than
+		// `null` when the caller has no templates, per CLAUDE.md
+		// ("Prefer returning empty arrays `[]` over `null` for list
+		// responses"). Without the explicit initialiser a Go
+		// `nil []gin.H` serialises to the JSON literal `null`.
+		if templates == nil {
+			templates = []gin.H{}
+		}
+
 		c.JSON(http.StatusOK, templates)
 	}
 }

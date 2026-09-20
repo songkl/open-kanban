@@ -7,6 +7,8 @@ import { UserAvatar } from '../components/UserAvatar';
 import { TaskModal } from '../components/TaskModal';
 import type { User, Task, Board, Column } from '../types/kanban';
 import { useSetupGuard } from '../hooks/useSetupGuard';
+import { resolveActivityActionLabel } from '../utils/activityActions';
+import { localizeActivityDetails } from '../utils/activityDetails';
 
 interface Activity {
   id: string;
@@ -71,7 +73,7 @@ const emptyScopeFilters: ScopeFilters = {
 };
 
 export function ActivityLogPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   useSetupGuard();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -654,13 +656,13 @@ export function ActivityLogPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`font-medium ${isClickable ? 'text-blue-600' : 'text-zinc-800 dark:text-zinc-100'}`}>
-                        {typeof t(`settings.activities.${activity.action}`) === 'string' ? t(`settings.activities.${activity.action}`) : activity.action}
+                        {resolveActivityActionLabel(activity.action, t, i18n)}
                       </span>
                       {activity.targetTitle && (
                         <span className="text-sm text-zinc-600 dark:text-zinc-300 truncate">- {activity.targetTitle}</span>
                       )}
                       {activity.details && (
-                        <span className="text-sm text-blue-600">{activity.details}</span>
+                        <span className="text-sm text-blue-600">{localizeActivityDetails(activity.details, t)}</span>
                       )}
                       {isClickable && (
                         <span className="text-xs text-blue-500">{t('settings.clickToView')}</span>

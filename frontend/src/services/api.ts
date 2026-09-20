@@ -1166,7 +1166,9 @@ export const notificationsApi = {
     if (typeof opts?.limit === 'number') params.set('limit', String(opts.limit));
     if (typeof opts?.offset === 'number') params.set('offset', String(opts.offset));
     const qs = params.toString();
-    return fetchApi<NotificationListResult>(`notifications${qs ? `?${qs}` : ''}`);
+    return fetchApi<NotificationListResult>(`notifications${qs ? `?${qs}` : ''}`, {
+      skip401Handling: true,
+    });
   },
   /**
    * Mark a single notification read. Idempotent — a second call on

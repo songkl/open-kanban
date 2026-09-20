@@ -519,6 +519,26 @@ func stripAnsi(s string) string {
 	return ansiEscapePattern.ReplaceAllString(s, "")
 }
 
+// runOutputHostPattern matches IPv4 hosts inside http(s):// URLs so
+// the runner can't leak a previous developer's LAN address into the
+// shared audit trail (s-1260 / PM review s-1258 P1-6). The pattern
+// is intentionally narrow — IPv4 + port — because that was the leak
+// the PM review captured (`http://192.168.0.102:8080`). Hostnames
+// (`localhost`, `kanban.internal`) are left intact so the operator
+// still sees something useful in the output.
+var runOutputHostPattern = regexp.MustCompile(`https?://\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?`)
+
+// redactRunOutputHosts replaces bare IPv4 hosts inside http(s) URLs
+// with `<redacted-host>` so legacy LAN addresses can't surface in the
+// run-history audit trail. Returns the input verbatim when no match
+// is found.
+func redactRunOutputHosts(s string) string {
+	if s == "" {
+		return s
+	}
+	return runOutputHostPattern.ReplaceAllString(s, "<redacted-host>")
+}
+
 // FinishRun handles POST /api/v1/runs/:taskId/finish.
 // When status='completed' the handler invokes
 // task_service.CompleteTask so the task advances to its next
@@ -588,11 +608,11 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 		// plain text, so a stray `\x1b[0m` reads as garbage to
 		// non-terminal viewers.
 		if req.Error != nil {
-			s := stripAnsi(*req.Error)
+			s := redactRunOutputHosts(stripAnsi(*req.Error))
 			req.Error = &s
 		}
 		if req.Output != nil {
-			s := stripAnsi(*req.Output)
+			s := redactRunOutputHosts(stripAnsi(*req.Output))
 			req.Output = &s
 		}
 
@@ -847,6 +867,24 @@ func ListRunsHistory(db *sql.DB) gin.HandlerFunc {
 
 		if rows == nil {
 			rows = []*models.TaskRun{}
+		}
+		// s-1260 (PM review s-1258 P1-5): legacy rows persisted
+		// before s-1257 may still carry raw `\x1b[0m` bytes in
+		// their `error` field. Apply stripAnsi as a read-side
+		// backstop so an admin viewing the audit trail never sees
+		// the escape literal — matching what FinishRun writes
+		// from now on. redactRunOutputHosts covers P1-6 so a
+		// LAN host URL written by an older runner is also
+		// scrubbed before the row leaves the server.
+		for _, r := range rows {
+			if r.Error != nil {
+				cleaned := redactRunOutputHosts(stripAnsi(*r.Error))
+				r.Error = &cleaned
+			}
+			if r.Output != nil {
+				cleaned := redactRunOutputHosts(stripAnsi(*r.Output))
+				r.Output = &cleaned
+			}
 		}
 		c.JSON(http.StatusOK, rows)
 	}
