@@ -102,6 +102,28 @@ function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+// staleRelative returns a localised "Ns / Nm / Nh ago" string when
+// the page has been empty for more than 60s, so the agent-activity
+// header no longer reads "0 records · auto-refreshing" on a quiet
+// system (PM review s-1261 P1-1). Returns null for fresher rows so
+// the header can keep the original auto-refresh suffix.
+function staleRelative(
+  lastFetchedAt: number,
+  now: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string | null {
+  const diffMs = Math.max(0, now - lastFetchedAt);
+  if (diffMs < 60 * 1000) return null;
+  if (diffMs < 60 * 60 * 1000) {
+    return t('settings.agentActivity.lastUpdatedMinutes', {
+      count: Math.floor(diffMs / (60 * 1000)),
+    });
+  }
+  return t('settings.agentActivity.lastUpdatedHours', {
+    count: Math.floor(diffMs / (60 * 60 * 1000)),
+  });
+}
+
 function formatHeartbeatRelative(lastHeartbeatAt: string | null | undefined, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (!lastHeartbeatAt) return t('settings.neverActive');
   const date = new Date(lastHeartbeatAt);
@@ -151,6 +173,17 @@ export function AgentActivityPage() {
   const [agentSearchQuery, setAgentSearchQuery] = useState('');
   const [agentSortKey, setAgentSortKey] = useState<AgentSortKey>('lastActive');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  // lastFetchedAt drives the "0 records · updated 5 minutes ago"
+  // hint the agent-activity header shows when the page has been
+  // empty for more than 60s. Without it the chrome reads as
+  // "0 条记录 · 自动刷新中" even when nothing has happened in
+  // an hour — i.e. "stuck" (PM review s-1261 P1-1 / s-1257 P2-7
+  // / s-1258 P2-7).
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+  // now ticks once a second so the "updated N minutes ago" hint
+  // stays fresh while the page sits open. Without it the hint
+  // would read "5 minutes ago" forever even after an hour.
+  const [now, setNow] = useState<number>(() => Date.now());
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -171,6 +204,7 @@ export function AgentActivityPage() {
       }
       setHasMore(data.hasMore ?? false);
       setTotal(data.total ?? 0);
+      setLastFetchedAt(Date.now());
     } catch (err) {
       console.error('Failed to load activities:', err);
     }
@@ -213,6 +247,11 @@ export function AgentActivityPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const handle = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(handle);
+  }, []);
 
   useEffect(() => {
     const MAX_RECONNECT_ATTEMPTS = 10;
@@ -535,7 +574,10 @@ export function AgentActivityPage() {
                 {total > 0
                   ? `${t('settings.agentActivity.recordCountWithTotal', { count: activities.length, total })} ${t('nav.records')}`
                   : `${t('settings.agentActivity.recordCount', { count: activities.length })} ${t('nav.records')}`}
-                {autoRefresh && ` ${t('settings.agentActivity.separator')} ${t('settings.agentActivity.autoRefreshOn')}`}
+                {autoRefresh && activities.length > 0 && ` ${t('settings.agentActivity.separator')} ${t('settings.agentActivity.autoRefreshOn')}`}
+                {activities.length === 0 && lastFetchedAt && staleRelative(lastFetchedAt, now, t) && (
+                  <> {t('settings.agentActivity.separator')} {t('settings.agentActivity.lastUpdated', { relative: staleRelative(lastFetchedAt, now, t) })}</>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-3">

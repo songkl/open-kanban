@@ -412,6 +412,86 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 	})
 }
 
+// TestCreateTaskDefaultsToPublished (s-1262, PM review s-1261 P0-3)
+// locks in the new contract that POST /api/v1/tasks with no
+// `published` field lands the row on the board instead of silently
+// routing it into /drafts. The review found that the CLI,
+// `kanban tasks create`, and any HTTP client that omitted the
+// field would end up with a draft and have to make a second
+// round-trip to publish the row.
+func TestCreateTaskDefaultsToPublished(t *testing.T) {
+	handlers.ResetRateLimitMapForTest()
+	handlers.ResetGlobalRateLimitMapForTest()
+	handlers.ResetTokenCacheForTest()
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/tasks", handlers.CreateTask(db))
+
+	postTask := func(t *testing.T, body map[string]interface{}) map[string]interface{} {
+		t.Helper()
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", "/api/tasks", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return resp
+	}
+
+	readPublished := func(t *testing.T, taskID string) bool {
+		t.Helper()
+		var published bool
+		if err := db.QueryRow("SELECT published FROM tasks WHERE id = ?", taskID).Scan(&published); err != nil {
+			t.Fatalf("read published: %v", err)
+		}
+		return published
+	}
+
+	t.Run("omitted published field lands on the board", func(t *testing.T) {
+		resp := postTask(t, map[string]interface{}{"title": "Default-published task", "columnId": "c1"})
+		if id, ok := resp["id"].(string); !ok || id == "" {
+			t.Fatalf("expected id in response, got %v", resp)
+		}
+		if pub, ok := resp["published"].(bool); !ok || !pub {
+			t.Errorf("expected published=true in response, got %v", resp["published"])
+		}
+		if !readPublished(t, resp["id"].(string)) {
+			t.Errorf("expected published=true in DB row")
+		}
+	})
+
+	t.Run("explicit published=true is honoured", func(t *testing.T) {
+		resp := postTask(t, map[string]interface{}{"title": "Explicit-published task", "columnId": "c1", "published": true})
+		if pub, ok := resp["published"].(bool); !ok || !pub {
+			t.Errorf("expected published=true, got %v", resp["published"])
+		}
+		if !readPublished(t, resp["id"].(string)) {
+			t.Errorf("expected published=true in DB row")
+		}
+	})
+
+	t.Run("explicit published=false creates a draft", func(t *testing.T) {
+		resp := postTask(t, map[string]interface{}{"title": "Draft task", "columnId": "c1", "published": false})
+		if pub, ok := resp["published"].(bool); !ok || pub {
+			t.Errorf("expected published=false, got %v", resp["published"])
+		}
+		if readPublished(t, resp["id"].(string)) {
+			t.Errorf("expected published=false in DB row")
+		}
+	})
+}
+
 // TestCreateTaskHandlerWithDueDateAndAttachments (T-1207 / s-1207)
 // pins the two newest columns on the create-task payload:
 //   - dueAt round-trips through the handler into the DB and back

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, startTransition } from 'react
 import { useTranslation } from 'react-i18next';
 import { activitiesApi } from '@/services/api';
 import { resolveActivityActionLabel } from '@/utils/activityActions';
+import { localizeActivityDetails } from '@/utils/activityDetails';
 
 interface Activity {
   id: string;
@@ -78,21 +79,34 @@ export function ActivityTicker() {
             width: 'max-content',
           }}
         >
-          {[...activities, ...activities].map((activity, idx) => (
-            <div
-              key={`${activity.id}-${idx}`}
-              className="flex items-center gap-2 whitespace-nowrap text-sm"
-            >
-              <span className="text-base">{actionIcons[activity.action] || '📌'}</span>
-              <span className="text-zinc-300">
-                {resolveActivityActionLabel(activity.action, t, i18n)}
-              </span>
-              {activity.targetTitle && (
-                <span className="text-blue-300 truncate max-w-32">{activity.targetTitle}</span>
-              )}
-              <span className="text-zinc-500 dark:text-zinc-500">{formatTime(activity.createdAt)}</span>
-            </div>
-          ))}
+          {[...activities, ...activities].map((activity, idx) => {
+            // s-1262, PM review s-1261 P2-3: pipe `details` through
+            // localizeActivityDetails so the marquee renders the
+            // same localised sentence as the /activities page
+            // ("Status: In progress → Review" instead of "Status:
+            // 'in_progress' → 'review'"). The helper falls back to
+            // the raw value for unknown shapes so older rows still
+            // render.
+            const localized = localizeActivityDetails(activity.details, t);
+            return (
+              <div
+                key={`${activity.id}-${idx}`}
+                className="flex items-center gap-2 whitespace-nowrap text-sm"
+              >
+                <span className="text-base">{actionIcons[activity.action] || '📌'}</span>
+                <span className="text-zinc-300">
+                  {resolveActivityActionLabel(activity.action, t, i18n)}
+                </span>
+                {activity.targetTitle && (
+                  <span className="max-w-32 truncate text-blue-300">{activity.targetTitle}</span>
+                )}
+                {localized && (
+                  <span className="text-zinc-400 dark:text-zinc-500">· {localized}</span>
+                )}
+                <span className="text-zinc-500 dark:text-zinc-500">{formatTime(activity.createdAt)}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
       <style>{`

@@ -11,6 +11,14 @@ export function LoginPage() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [requirePassword, setRequirePassword] = useState(false);
+  // isReturning flips the welcome / button copy from the
+  // first-time-setup default to a "Welcome back" / "Sign In"
+  // pair when the system already has at least one user. The
+  // LoginPage useEffect redirects to /setup when `needsSetup`
+  // is true, so reaching this render implies the instance has
+  // been initialised already (PM review s-1261 P1-4 / s-1257
+  // P2-4 / s-1258 P2-4).
+  const [isReturning, setIsReturning] = useState(false);
 
   useEffect(() => {
     authApi.me().then((data) => {
@@ -21,6 +29,12 @@ export function LoginPage() {
       if (data.requirePassword !== undefined) {
         setRequirePassword(data.requirePassword);
       }
+      // If the backend already returned a populated `user`, the
+      // cookie session is alive and we're effectively a
+      // returning visitor even if no one's signed in for a
+      // while. The redirect chain in HomeRedirect handles the
+      // board resolution; here we just adjust the chrome.
+      setIsReturning(Boolean(data.user) || !data.needsSetup);
     }).catch(console.error);
   }, [navigate]);
 
@@ -85,7 +99,9 @@ export function LoginPage() {
         <div className="mb-6 flex items-start justify-between">
           <div className="flex-1 text-center">
             <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">{t('login.title')}</h1>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">{t('login.welcome')}</p>
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">
+              {isReturning ? t('login.welcomeReturning') : t('login.welcome')}
+            </p>
           </div>
           <button
             type="button"
@@ -157,7 +173,7 @@ export function LoginPage() {
             aria-busy={loginLoading}
             className="w-full rounded-md bg-blue-500 py-3 font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-zinc-300 dark:disabled:bg-zinc-600"
           >
-            {loginLoading ? t('login.loggingIn') : t('login.start')}
+            {loginLoading ? t('login.loggingIn') : isReturning ? t('login.signIn') : t('login.start')}
           </button>
         </form>
       </div>

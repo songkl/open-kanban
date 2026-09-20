@@ -147,7 +147,11 @@ type CreateTaskInput struct {
 	Meta        interface{}
 	ColumnID    string
 	Position    int
-	Published   bool
+	// Published is a tri-state flag. nil means "use the API
+	// default" (true at the time of writing, see PM review s-1261
+	// P0-3); non-nil values are passed through verbatim so the
+	// draft flow can still opt in via `published=false`.
+	Published   *bool
 	// DueAt is the optional deadline the create-task modal
 	// forwards (T-1207 / s-1207, PM_REVIEW §3.12). The service
 	// passes it through to the repository; nil means "no due
@@ -185,6 +189,15 @@ func (s *TaskService) CreateTask(input CreateTaskInput) (*models.Task, error) {
 		metaStr = &s
 	}
 
+	// Published defaults to true so the implicit "create → appears on
+	// the board" contract holds when the client omits the field. An
+	// explicit `false` keeps the draft flow intact (PM review s-1261
+	// P0-3).
+	published := true
+	if input.Published != nil {
+		published = *input.Published
+	}
+
 	task := &models.Task{
 		ID:          taskID,
 		Title:       input.Title,
@@ -194,7 +207,7 @@ func (s *TaskService) CreateTask(input CreateTaskInput) (*models.Task, error) {
 		Meta:        metaStr,
 		ColumnID:    input.ColumnID,
 		Position:    position,
-		Published:   input.Published,
+		Published:   published,
 		Archived:    false,
 		DueAt:       input.DueAt,
 		AgentID:     input.AgentID,

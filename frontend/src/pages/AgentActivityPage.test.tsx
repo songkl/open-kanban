@@ -193,4 +193,46 @@ describe('AgentActivityPage UI (s-1209)', () => {
     await screen.findByTestId(`agent-list-item-${HEALTHY_AGENT.id}`);
     expect(screen.queryByTestId('agent-health-panel')).not.toBeInTheDocument();
   });
+
+  // s-1262 / PM review s-1261 P1-1: the activity-log header must
+  // not read "0 records · auto-refreshing" on a quiet system.
+  // Instead it should surface a localised "updated N minutes ago"
+  // hint once the page has been empty for more than 60 s.
+  it('surfaces an "updated N minutes ago" hint when the page has been empty for over a minute', async () => {
+    apiMock.authApi.getAgents.mockResolvedValue([HEALTHY_AGENT]);
+    apiMock.activitiesApi.getByAgent.mockResolvedValue({ activities: [], hasMore: false, total: 0 });
+
+    // Pin "now" so the per-second interval can advance the
+    // displayed relative time without waiting on the real
+    // wall clock.
+    const start = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => start);
+    try {
+      render(
+        <MemoryRouter>
+          <AgentActivityPage />
+        </MemoryRouter>,
+      );
+
+      // Wait until the page has finished loading and
+      // lastFetchedAt is set.
+      await screen.findByTestId(`agent-list-item-${HEALTHY_AGENT.id}`);
+      await waitFor(() => {
+        expect(apiMock.activitiesApi.getByAgent).toHaveBeenCalled();
+      });
+
+      // Advance the clock past the 60s stale threshold. The
+      // interval fires every second, so the relative label
+      // should pick up the new "now" within ~1s.
+      nowSpy.mockImplementation(() => start + 5 * 60 * 1000);
+      await waitFor(
+        () => {
+          expect(screen.getByText(/settings.agentActivity.lastUpdated/)).toBeInTheDocument();
+        },
+        { timeout: 4000 },
+      );
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
 });

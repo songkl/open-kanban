@@ -295,7 +295,7 @@ func TestCreateTask(t *testing.T) {
 				Assignee:    &assignee,
 				Meta:        meta,
 				ColumnID:    "c1",
-				Published:   true,
+				Published:   &[]bool{true}[0],
 				CreatedBy:   "u1",
 			},
 			wantErr: false,

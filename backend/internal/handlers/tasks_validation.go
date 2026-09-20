@@ -10,7 +10,12 @@ type CreateTaskRequest struct {
 	Meta           interface{} `json:"meta"`
 	ColumnID       string      `json:"columnId" validate:"required"`
 	Position       int         `json:"position"`
-	Published      bool        `json:"published"`
+	// Published defaults to true when the client omits the field so
+	// the implicit "create → it appears on the board" contract holds
+	// for `kanban tasks create`, the CLI, and the create-task modal
+	// alike. Callers that want the legacy draft flow send an
+	// explicit `false` (PM review s-1261 P0-3 / s-1258 P2-4).
+	Published      *bool       `json:"published"`
 	// DueAt is the optional deadline the create-task modal
 	// sends (T-1207 / s-1207, PM_REVIEW §3.12). Accepts RFC3339
 	// via Go's time.Time json decoder; an empty / null value

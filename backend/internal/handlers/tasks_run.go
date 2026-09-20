@@ -736,15 +736,23 @@ func GetRun(db *sql.DB) gin.HandlerFunc {
 		repo := repositories.NewRunRepository(db)
 		run, err := repo.GetRun(taskID)
 		if err != nil {
+			// "No run yet" is the normal state for the vast majority
+			// of tasks. Return a 200 envelope instead of a 404 so the
+			// SPA and CLI can poll /runs/:taskId on every board paint
+			// without flooding the browser console with red error
+			// lines (PM review s-1261 P1-2, s-1257 P1-2, s-1258
+			// P1-2). The envelope mirrors the live shape so callers
+			// can treat the absent row identically to the present
+			// one: `data.run` is null, `data.hasRun` is false.
 			if err == repositories.ErrNoRunRow {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Run not found"})
+				c.JSON(http.StatusOK, gin.H{"run": nil, "hasRun": false})
 				return
 			}
 			ServerError(c, "Failed to load run", err)
 			return
 		}
 
-		c.JSON(http.StatusOK, run)
+		c.JSON(http.StatusOK, gin.H{"run": run, "hasRun": true})
 	}
 }
 

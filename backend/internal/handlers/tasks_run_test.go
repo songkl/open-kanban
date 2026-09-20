@@ -1160,18 +1160,26 @@ func TestGetRun_ReturnsOutputField(t *testing.T) {
 		t.Fatalf("get: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var run models.TaskRun
-	if err := json.Unmarshal(w.Body.Bytes(), &run); err != nil {
+	// The handler now answers { run, hasRun } (PM review s-1261
+	// P1-2), so the run row is nested under the `run` key.
+	var envelope struct {
+		Run    models.TaskRun `json:"run"`
+		HasRun bool           `json:"hasRun"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if run.Output == nil {
+	if !envelope.HasRun {
+		t.Fatalf("expected hasRun=true, got body %s", w.Body.String())
+	}
+	if envelope.Run.Output == nil {
 		t.Fatalf("expected output to be present in JSON response, got %s", w.Body.String())
 	}
-	if *run.Output != "delivered: the file is patched" {
-		t.Errorf("expected output %q, got %q", "delivered: the file is patched", *run.Output)
+	if *envelope.Run.Output != "delivered: the file is patched" {
+		t.Errorf("expected output %q, got %q", "delivered: the file is patched", *envelope.Run.Output)
 	}
-	if run.Error != nil {
-		t.Errorf("expected error to be omitted from JSON for clean run, got %q", *run.Error)
+	if envelope.Run.Error != nil {
+		t.Errorf("expected error to be omitted from JSON for clean run, got %q", *envelope.Run.Error)
 	}
 }
 
@@ -1279,14 +1287,47 @@ func TestReleaseRuns_ScopedByTaskIDs(t *testing.T) {
 	}
 }
 
-func TestGetRun_NotFound(t *testing.T) {
+func TestGetRun_TaskMissingReturns404(t *testing.T) {
 	db := setupRunsDB(t)
 	defer db.Close()
 
 	router := runsRouter(db)
 	w := doRequest(router, "GET", "/api/v1/runs/no-such", "admin-token", nil)
+	// A task id that doesn't exist is genuinely not found and
+	// still warrants a 404. The "no run yet" envelope only kicks
+	// in for tasks that exist but have no run row — that's the
+	// case the SPA polls on every board paint.
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestGetRun_NoRunYetReturnsEnvelope locks in PM review s-1261
+// P1-2: a task that exists but has never been claimed answers
+// 200 + { run: nil, hasRun: false } so the SPA and CLI can poll
+// /runs/:taskId on every paint without logging a red error.
+func TestGetRun_NoRunYetReturnsEnvelope(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-norow', 'never claimed', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/t-norow", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var envelope struct {
+		Run    *models.TaskRun `json:"run"`
+		HasRun bool            `json:"hasRun"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if envelope.Run != nil || envelope.HasRun {
+		t.Errorf("expected run=nil hasRun=false, got %+v", envelope)
 	}
 }
 
@@ -1308,12 +1349,18 @@ func TestGetRun_ReturnsRow(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var run models.TaskRun
-	if err := json.Unmarshal(w.Body.Bytes(), &run); err != nil {
+	var envelope struct {
+		Run    *models.TaskRun `json:"run"`
+		HasRun bool            `json:"hasRun"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if run.TaskID != "t-get" || run.Status != models.RunStatusClaimed {
-		t.Errorf("unexpected run row: %+v", run)
+	if !envelope.HasRun || envelope.Run == nil {
+		t.Fatalf("expected run=present hasRun=true, got %+v", envelope)
+	}
+	if envelope.Run.TaskID != "t-get" || envelope.Run.Status != models.RunStatusClaimed {
+		t.Errorf("unexpected run row: %+v", envelope.Run)
 	}
 }
 
@@ -1613,12 +1660,20 @@ func TestGetRun_JSONShapeMatchesTaskRunModel(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var raw map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+	// The handler now answers { run, hasRun } (PM review s-1261
+	// P1-2), so the row shape assertions live under the `run` key.
+	var envelope struct {
+		Run map[string]any `json:"run"`
+		HasRun bool        `json:"hasRun"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	if !envelope.HasRun || envelope.Run == nil {
+		t.Fatalf("expected run envelope with hasRun=true, got %+v", envelope)
+	}
 	for _, key := range []string{"taskId", "runnerId", "agentId", "boardId", "columnId", "status", "claimedAt", "lastHeartbeatAt", "expiresAt"} {
-		if _, ok := raw[key]; !ok {
+		if _, ok := envelope.Run[key]; !ok {
 			t.Errorf("response missing required key %q: %s", key, w.Body.String())
 		}
 	}

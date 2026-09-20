@@ -88,7 +88,7 @@ export function TaskRunIndicator({ run, compact = false }: TaskRunIndicatorProps
   if (compact) {
     return (
       <span
-        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BG[run.status]} ${STATUS_BORDER[run.status]}`}
+        className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BG[run.status]} ${STATUS_BORDER[run.status]}`}
         data-testid="task-run-indicator-compact"
         data-status={run.status}
         title={t('taskCard.runnerBadgeAria', { runnerId: run.runnerId, elapsed: elapsedLabel })}
@@ -96,16 +96,16 @@ export function TaskRunIndicator({ run, compact = false }: TaskRunIndicatorProps
       >
         {isLive ? (
           <span
-            className="inline-block h-2 w-2 animate-spin rounded-full border-2 border-current border-t-transparent"
+            className="inline-block h-2 w-2 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
             aria-hidden
           />
         ) : (
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${STATUS_DOT[run.status]}`} aria-hidden />
+          <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[run.status]}`} aria-hidden />
         )}
-        <span className="text-zinc-600 dark:text-zinc-300">🤖</span>
+        <span className="shrink-0 text-zinc-600 dark:text-zinc-300">🤖</span>
         <span className="max-w-[7rem] truncate font-mono text-zinc-700 dark:text-zinc-200">{runnerShort}</span>
-        <span className="text-zinc-400 dark:text-zinc-500">·</span>
-        <span className="tabular-nums text-zinc-600 dark:text-zinc-300">{elapsedLabel}</span>
+        <span className="shrink-0 text-zinc-400 dark:text-zinc-500">·</span>
+        <span className="shrink-0 tabular-nums text-zinc-600 dark:text-zinc-300">{elapsedLabel}</span>
       </span>
     );
   }

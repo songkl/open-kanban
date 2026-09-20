@@ -82,4 +82,28 @@ describe('BoardCard', () => {
     expect(importButton?.className).toContain('dark:bg-sky-900/30');
     expect(importButton?.className).toContain('dark:text-sky-300');
   });
+
+  // s-1262 / PM review s-1261 P1-3: the public-board badge
+  // surfaces a 🔗 link icon for shareable boards instead of
+  // letting the old lock badge bleed in for `isPublic: true`
+  // rows. Private boards should not render the badge.
+  it('shows a shareable badge on public boards and hides it for private ones', () => {
+    const { rerender } = renderCard({ board: { ...baseBoard, isPublic: true } });
+    expect(screen.getByTestId('board-public-badge')).toHaveTextContent('board.publicBadge');
+
+    rerender(
+      <MemoryRouter>
+        <BoardCard
+          board={{ ...baseBoard, isPublic: false }}
+          onEdit={noop}
+          onCopy={noop}
+          onSaveAsTemplate={noop}
+          onExport={noop}
+          onImport={noop}
+          onDelete={noop}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('board-public-badge')).toBeNull();
+  });
 });
