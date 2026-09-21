@@ -81,7 +81,7 @@ export function AppShell({ children }: AppShellProps) {
     <div className="flex h-screen w-screen bg-zinc-100 dark:bg-zinc-900">
       <Sidebar items={items} />
       <div className="relative flex flex-1 flex-col overflow-hidden">
-        <div className="absolute right-6 top-4 z-40 flex items-center gap-2">
+        <div className="absolute right-12 top-10 z-40 flex items-center gap-2">
           <button
             type="button"
             onClick={() => toggleDarkMode()}
