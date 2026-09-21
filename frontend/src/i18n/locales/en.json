@@ -961,23 +961,23 @@
       "WEBHOOK_ROTATE": "Webhook secret rotated",
       "BULK_PERMISSION_GRANT": "Bulk permission granted",
       "BULK_PERMISSION_REVOKE": "Bulk permission revoked",
-      "OTHER": "Other"
-    },
-    "details": {
-      "statusFromTo": "Status: {{from}} → {{to}}",
-      "positionFromTo": "Position: {{from}} → {{to}}",
-      "ownerFromTo": "Assignee: {{from}} → {{to}}",
-      "reordered": "Reordered {{count}} tasks",
-      "attached": "attached via /api/v1/runs/:taskId/attach",
-      "permissionFromTo": "Permission: {{from}} → {{to}}",
-      "ownerTransferFromTo": "Ownership transferred: {{from}} → {{to}}",
-      "bulkColumnSummary": "Column: {{column}} Action: {{action}} Affected: {{affected}} Skipped: {{skipped}}",
-      "statusLabel": {
-        "todo": "Backlog",
-        "in_progress": "In Progress",
-        "testing": "Testing",
-        "review": "Review",
-        "done": "Done"
+      "OTHER": "Other",
+      "details": {
+        "statusFromTo": "Status: {{from}} → {{to}}",
+        "positionFromTo": "Position: {{from}} → {{to}}",
+        "ownerFromTo": "Assignee: {{from}} → {{to}}",
+        "reordered": "Reordered {{count}} tasks",
+        "attached": "attached via /api/v1/runs/:taskId/attach",
+        "permissionFromTo": "Permission: {{from}} → {{to}}",
+        "ownerTransferFromTo": "Ownership transferred: {{from}} → {{to}}",
+        "bulkColumnSummary": "Column: {{column}} Action: {{action}} Affected: {{affected}} Skipped: {{skipped}}",
+        "statusLabel": {
+          "todo": "Backlog",
+          "in_progress": "In Progress",
+          "testing": "Testing",
+          "review": "Review",
+          "done": "Done"
+        }
       }
     },
     "webhooks": "Webhooks",

@@ -961,23 +961,23 @@
 "WEBHOOK_ROTATE": "轮换 Webhook 密钥",
       "BULK_PERMISSION_GRANT": "批量授予权限",
       "BULK_PERMISSION_REVOKE": "批量撤销权限",
-      "OTHER": "其他"
-    },
-    "details": {
-      "statusFromTo": "状态：{{from}} → {{to}}",
-      "positionFromTo": "位置：{{from}} → {{to}}",
-      "ownerFromTo": "负责人：{{from}} → {{to}}",
-      "reordered": "已重排 {{count}} 个任务",
-      "attached": "通过 /api/v1/runs/:taskId/attach 附加",
-      "permissionFromTo": "权限：{{from}} → {{to}}",
-      "ownerTransferFromTo": "所有权已转移：{{from}} → {{to}}",
-      "bulkColumnSummary": "列：{{column}} 动作：{{action}} 影响：{{affected}} 跳过：{{skipped}}",
-      "statusLabel": {
-        "todo": "待办",
-        "in_progress": "进行中",
-        "testing": "待测试",
-        "review": "审核",
-        "done": "已完成"
+      "OTHER": "其他",
+      "details": {
+        "statusFromTo": "状态：{{from}} → {{to}}",
+        "positionFromTo": "位置：{{from}} → {{to}}",
+        "ownerFromTo": "负责人：{{from}} → {{to}}",
+        "reordered": "已重排 {{count}} 个任务",
+        "attached": "通过 /api/v1/runs/:taskId/attach 附加",
+        "permissionFromTo": "权限：{{from}} → {{to}}",
+        "ownerTransferFromTo": "所有权已转移：{{from}} → {{to}}",
+        "bulkColumnSummary": "列：{{column}} 动作：{{action}} 影响：{{affected}} 跳过：{{skipped}}",
+        "statusLabel": {
+          "todo": "待办",
+          "in_progress": "进行中",
+          "testing": "待测试",
+          "review": "审核",
+          "done": "已完成"
+        }
       }
     },
     "webhooks": "Webhooks",
