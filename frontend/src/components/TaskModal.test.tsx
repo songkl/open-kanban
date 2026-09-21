@@ -187,6 +187,20 @@ describe('TaskModal', () => {
       expect(screen.getByText('taskModal.noDescription')).toBeInTheDocument();
     });
 
+    it('renders description empty state with edit hint when user can edit', () => {
+      const taskNoDesc = { ...mockTask, description: null };
+      render(<TaskModal {...defaultProps} task={taskNoDesc} canEdit={true} />);
+      expect(screen.getByTestId('description-empty-state')).toBeInTheDocument();
+      expect(screen.getByText('taskModal.noDescriptionHint')).toBeInTheDocument();
+    });
+
+    it('hides the description edit hint when user cannot edit', () => {
+      const taskNoDesc = { ...mockTask, description: null };
+      render(<TaskModal {...defaultProps} task={taskNoDesc} canEdit={false} />);
+      expect(screen.getByTestId('description-empty-state')).toBeInTheDocument();
+      expect(screen.queryByText('taskModal.noDescriptionHint')).not.toBeInTheDocument();
+    });
+
     it('shows no subtasks text when subtasks are empty', () => {
       const taskNoSubtasks = { ...mockTask, subtasks: [] };
       render(<TaskModal {...defaultProps} task={taskNoSubtasks} />);
@@ -248,6 +262,28 @@ describe('TaskModal', () => {
         expect(defaultProps.onUpdate).toHaveBeenCalled();
       });
     });
+
+    it('shows the editing badge when entering edit mode', async () => {
+      render(<TaskModal {...defaultProps} canEdit={true} />);
+      expect(screen.queryByTestId('editing-badge')).not.toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByText('taskModal.editTask'));
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('editing-badge')).toBeInTheDocument();
+        expect(screen.getByText('taskModal.editingBadge')).toBeInTheDocument();
+      });
+    });
+
+    it('shows the keyboard save shortcut hint in edit mode', async () => {
+      render(<TaskModal {...defaultProps} canEdit={true} />);
+      await act(async () => {
+        fireEvent.click(screen.getByText('taskModal.editTask'));
+      });
+      await waitFor(() => {
+        expect(screen.getByText('taskModal.saveShortcutHint')).toBeInTheDocument();
+      });
+    });
   });
 
   describe('subtasks', () => {
@@ -277,6 +313,29 @@ describe('TaskModal', () => {
       await waitFor(() => {
         expect(screen.getByText('+ taskModal.addSubtask')).toBeInTheDocument();
       });
+    });
+
+    it('renders the subtask progress bar with completion ratio', () => {
+      // mockTask has 2 subtasks, 1 completed → 50%
+      render(<TaskModal {...defaultProps} />);
+      const progress = screen.getByTestId('subtask-progress');
+      expect(progress).toBeInTheDocument();
+      expect(progress).toHaveAttribute('aria-valuenow', '1');
+      expect(progress).toHaveAttribute('aria-valuemax', '2');
+      expect(screen.getByText('50%')).toBeInTheDocument();
+    });
+
+    it('hides the subtask progress bar when there are no subtasks', () => {
+      const taskNoSubtasks = { ...mockTask, subtasks: [] };
+      render(<TaskModal {...defaultProps} task={taskNoSubtasks} />);
+      expect(screen.queryByTestId('subtask-progress')).not.toBeInTheDocument();
+    });
+
+    it('shows the subtasks empty state when there are no subtasks', () => {
+      const taskNoSubtasks = { ...mockTask, subtasks: [] };
+      render(<TaskModal {...defaultProps} task={taskNoSubtasks} />);
+      expect(screen.getByTestId('subtasks-empty-state')).toBeInTheDocument();
+      expect(screen.getByText('taskModal.noSubtasksTitle')).toBeInTheDocument();
     });
   });
 
@@ -410,6 +469,14 @@ describe('TaskModal', () => {
 
       expect(screen.getByText(/taskModal\.comments/)).toHaveTextContent(/\(13\)/);
       expect(screen.getByText('My optimistic comment')).toBeInTheDocument();
+    });
+
+    it('renders comments empty state when task has zero comments', () => {
+      const taskNoComments = { ...mockTask, comments: [] };
+      render(<TaskModal {...defaultProps} task={taskNoComments} />);
+      expect(screen.getByTestId('comments-empty-state')).toBeInTheDocument();
+      expect(screen.getByText('taskModal.noCommentsTitle')).toBeInTheDocument();
+      expect(screen.getByText('taskModal.noCommentsBody')).toBeInTheDocument();
     });
   });
 

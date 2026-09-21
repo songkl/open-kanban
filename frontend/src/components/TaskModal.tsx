@@ -669,6 +669,16 @@ export function TaskModal({
                 {columnName}
               </span>
             )}
+            {isEditing && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+                data-testid="editing-badge"
+                aria-live="polite"
+              >
+                <span aria-hidden>✏️</span>
+                {t('taskModal.editingBadge')}
+              </span>
+            )}
             {!isEditing && (
               <div>
                 <h2 id="task-modal-title" className="text-xl font-bold text-zinc-800 dark:text-zinc-100">{task.title}</h2>
@@ -811,13 +821,22 @@ export function TaskModal({
                   </Suspense>
                 </div>
               ) : (
-                <div className="prose prose-sm max-w-none rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-4">
-                  {task.description ? (
+                task.description ? (
+                  <div className="prose prose-sm max-w-none rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-4">
                     <SafeMarkdown>{task.description}</SafeMarkdown>
-                  ) : (
-                    <span className="text-zinc-400 dark:text-zinc-400">{t('taskModal.noDescription')}</span>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div
+                    className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30 px-4 py-6 text-center"
+                    data-testid="description-empty-state"
+                  >
+                    <div className="mb-1 text-2xl" aria-hidden>📝</div>
+                    <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.noDescription')}</p>
+                    {canEdit && (
+                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t('taskModal.noDescriptionHint')}</p>
+                    )}
+                  </div>
+                )
               )}
             </div>
 
@@ -1066,6 +1085,35 @@ export function TaskModal({
                   </button>
                 )}
               </div>
+              {subtasks.length > 0 && (() => {
+                const completedCount = subtasks.filter(s => s.completed).length;
+                const ratio = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+                return (
+                  <div
+                    className="mb-3 flex items-center gap-3"
+                    data-testid="subtask-progress"
+                    role="progressbar"
+                    aria-valuenow={completedCount}
+                    aria-valuemin={0}
+                    aria-valuemax={subtasks.length}
+                    aria-label={t('taskModal.subtasks')}
+                  >
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-700">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          ratio === 100
+                            ? 'bg-green-500 dark:bg-green-500'
+                            : 'bg-blue-500 dark:bg-blue-400'
+                        }`}
+                        style={{ width: `${ratio}%` }}
+                      />
+                    </div>
+                    <span className="min-w-[3rem] text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      {ratio}%
+                    </span>
+                  </div>
+                );
+              })()}
               <div className="space-y-2">
                 {subtasks.map((subtask) => (
                   <div key={subtask.id} className="flex items-center gap-2">
@@ -1104,7 +1152,14 @@ export function TaskModal({
                   </div>
                 ))}
                 {subtasks.length === 0 && (
-                  <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('taskModal.noSubtasks')}</p>
+                  <div
+                    className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30 px-4 py-6 text-center"
+                    data-testid="subtasks-empty-state"
+                  >
+                    <div className="mb-1 text-2xl" aria-hidden>☑️</div>
+                    <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.noSubtasksTitle')}</p>
+                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{t('taskModal.noSubtasks')}</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1123,7 +1178,13 @@ export function TaskModal({
                   canDelete={canEdit}
                 />
               ) : (
-                <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('taskModal.noAttachments')}</p>
+                <div
+                  className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30 px-4 py-5 text-center"
+                  data-testid="attachments-empty-state"
+                >
+                  <div className="mb-1 text-2xl" aria-hidden>📎</div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('taskModal.noAttachments')}</p>
+                </div>
               )}
               {uploadingInProgress && (
                 <p className="mt-2 text-sm text-blue-500">{t('taskModal.uploading')}</p>
@@ -1142,7 +1203,8 @@ export function TaskModal({
               )}
             </div>
             <div ref={commentsRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-              {(taskComments || []).slice((commentsPage - 1) * COMMENTS_PER_PAGE, commentsPage * COMMENTS_PER_PAGE).map((comment) => (
+              {(taskComments && taskComments.length > 0) ? (
+                (taskComments || []).slice((commentsPage - 1) * COMMENTS_PER_PAGE, commentsPage * COMMENTS_PER_PAGE).map((comment) => (
                 <div key={comment.id} className="rounded-lg bg-zinc-50 dark:bg-zinc-700/50 p-3">
                   <div className="mb-1 flex items-center gap-2">
                     <UserAvatar username={comment.author} size="sm" />
@@ -1163,7 +1225,17 @@ export function TaskModal({
                     </div>
                   )}
                 </div>
-              ))}
+              ))
+              ) : (
+                <div
+                  className="flex h-full flex-col items-center justify-center text-center"
+                  data-testid="comments-empty-state"
+                >
+                  <div className="mb-3 text-4xl" aria-hidden>💬</div>
+                  <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">{t('taskModal.noCommentsTitle')}</p>
+                  <p className="mt-1 max-w-[14rem] text-xs text-zinc-500 dark:text-zinc-400">{t('taskModal.noCommentsBody')}</p>
+                </div>
+              )}
               {taskComments && taskComments.length > COMMENTS_PER_PAGE && (
                 <div className="flex justify-center gap-2 pt-2">
                   <button
@@ -1252,19 +1324,29 @@ export function TaskModal({
         {/* Footer */}
         <div className="flex-shrink-0 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-700 px-6 py-4">
           {isEditing ? (
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
-              >
-                {t('taskModal.save')}
-              </button>
-              <button
-                onClick={() => setIsEditing(false)}
-                className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
-              >
-                {t('taskModal.cancel')}
-              </button>
+            <div className="flex w-full items-center justify-between gap-2">
+              <span className="hidden text-xs text-zinc-400 dark:text-zinc-500 sm:inline" aria-hidden>
+                <kbd className="rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 dark:text-zinc-400">⌘</kbd>
+                <span className="mx-1">/</span>
+                <kbd className="rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 dark:text-zinc-400">Ctrl</kbd>
+                <span className="mx-1">+</span>
+                <kbd className="rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-500 dark:text-zinc-400">Enter</kbd>
+                <span className="ml-2">{t('taskModal.saveShortcutHint')}</span>
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="rounded-md bg-zinc-200 dark:bg-zinc-700 px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                >
+                  {t('taskModal.cancel')}
+                </button>
+                <button
+                  onClick={handleSave}
+                  className="rounded-md bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
+                >
+                  {t('taskModal.save')}
+                </button>
+              </div>
             </div>
           ) : canEdit ? (
             <div className="flex gap-3">
