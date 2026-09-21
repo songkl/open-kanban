@@ -146,7 +146,7 @@ export function UserDetailPage() {
 
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-900 p-6">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-6 flex items-center gap-4">
           <Link
             to="/settings?tab=users"
