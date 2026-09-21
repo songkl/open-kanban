@@ -277,6 +277,7 @@ func buildRouter(db *sql.DB, signer *oauth.Signer, adminToken string) *gin.Engin
 		tasks.POST("", handlers.CreateTask(db))
 		tasks.PUT("/:id", handlers.UpdateTask(db))
 		tasks.POST("/:id/complete", handlers.CompleteTask(db))
+		tasks.POST("/:id/advance", handlers.AdvanceTask(db))
 		tasks.DELETE("/:id", handlers.DeleteTask(db))
 	}
 

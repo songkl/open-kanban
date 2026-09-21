@@ -476,6 +476,53 @@ func (s *TaskService) CompleteTask(taskID string) (*models.Task, error) {
 	return s.taskRepo.GetTaskByID(taskID)
 }
 
+// MoveTaskToDoneColumn moves the task to the column whose status is
+// "done" on the same board, regardless of the task's current column.
+// Implements the verb semantics the HTTP /tasks/:id/complete endpoint
+// promises: "complete" means "mark as done", not "advance one column".
+// Returns ErrNoDoneColumn when the task's board has no column with
+// status='done' — callers should treat that as a configuration error
+// and surface a clear message rather than a generic 400.
+func (s *TaskService) MoveTaskToDoneColumn(taskID string) (*models.Task, error) {
+	currentColumnID, err := s.taskRepo.GetColumnIDForTask(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task column: %w", err)
+	}
+
+	_, boardID, err := s.taskRepo.GetColumnPositionAndBoardID(currentColumnID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get column info: %w", err)
+	}
+
+	doneColumnID, err := s.taskRepo.GetDoneColumn(boardID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find done column: %w", err)
+	}
+	if doneColumnID == "" {
+		return nil, ErrNoDoneColumn
+	}
+	if doneColumnID == currentColumnID {
+		return s.taskRepo.GetTaskByID(taskID)
+	}
+
+	maxPos, err := s.taskRepo.GetMaxPosition(doneColumnID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get max position: %w", err)
+	}
+
+	if err := s.taskRepo.MoveTaskToColumn(taskID, doneColumnID, maxPos+1); err != nil {
+		return nil, fmt.Errorf("failed to move task: %w", err)
+	}
+
+	return s.taskRepo.GetTaskByID(taskID)
+}
+
+// ErrNoDoneColumn is returned by MoveTaskToDoneColumn when the task's
+// board has no column with status='done'. The HTTP handler maps it to
+// 409 Conflict with a configuration-error message so the operator can
+// add a "done" column to the board rather than seeing a generic 500.
+var ErrNoDoneColumn = fmt.Errorf("board has no column with status 'done'")
+
 type ReorderTasksInput struct {
 	Items []ReorderTaskItem
 }

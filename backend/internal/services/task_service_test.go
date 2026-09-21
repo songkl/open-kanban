@@ -737,6 +737,73 @@ func TestCompleteTaskLastColumn(t *testing.T) {
 	}
 }
 
+func TestMoveTaskToDoneColumn(t *testing.T) {
+	// s-1271: the HTTP /complete endpoint delegates here so the task
+	// jumps directly to the done column regardless of where it started.
+	db := setupServiceTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	svc := services.NewTaskService(db)
+
+	// Task in c1 (todo) — should jump to c3 (done), skipping c2.
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('t1', 'From Todo', 'c1', 'u1')`)
+	// Task in c2 (in_progress) — should still jump to c3 (done).
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('t2', 'From In Progress', 'c2', 'u1')`)
+	// Task already in c3 (done) — should be a no-op and not error.
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('t3', 'Already Done', 'c3', 'u1')`)
+
+	tests := []struct {
+		name       string
+		taskID     string
+		wantErr    error
+		wantColumn string
+	}{
+		{name: "from todo jumps to done", taskID: "t1", wantColumn: "c3"},
+		{name: "from in_progress jumps to done", taskID: "t2", wantColumn: "c3"},
+		{name: "already in done is a no-op", taskID: "t3", wantColumn: "c3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task, err := svc.MoveTaskToDoneColumn(tt.taskID)
+			if tt.wantErr != nil {
+				if err != tt.wantErr {
+					t.Errorf("MoveTaskToDoneColumn() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("MoveTaskToDoneColumn() unexpected error: %v", err)
+			}
+			if task == nil {
+				t.Fatal("MoveTaskToDoneColumn() returned nil task")
+			}
+			if task.ColumnID != tt.wantColumn {
+				t.Errorf("columnID = %v, want %v", task.ColumnID, tt.wantColumn)
+			}
+		})
+	}
+}
+
+func TestMoveTaskToDoneColumnNoDoneColumn(t *testing.T) {
+	// Board without status='done' returns ErrNoDoneColumn so the HTTP
+	// handler can map it to a 409 with a configuration message.
+	db := setupServiceTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	// Remove the done column from the test schema.
+	if _, err := db.Exec("DELETE FROM columns WHERE id = 'c3'"); err != nil {
+		t.Fatalf("failed to delete c3: %v", err)
+	}
+
+	svc := services.NewTaskService(db)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('t1', 'No Done Column', 'c1', 'u1')`)
+
+	_, err := svc.MoveTaskToDoneColumn("t1")
+	if err != services.ErrNoDoneColumn {
+		t.Errorf("expected ErrNoDoneColumn, got %v", err)
+	}
+}
+
 func TestUpdateTaskPositionSameColumn(t *testing.T) {
 	db := setupServiceTestDB(t)
 	defer func() { _ = db.Close() }()

@@ -392,6 +392,21 @@ func (r *TaskRepository) MoveTaskToColumn(taskID, columnID string, position int)
 	return err
 }
 
+// GetDoneColumn returns the id of the column whose status is "done" for the
+// given board. Returns an empty string when no such column exists. The
+// status filter is exact-match (not LIKE) so an arbitrary board that uses
+// "shipped" or "complete" as its terminal status keeps its existing
+// semantics — only boards whose canonical terminal column is "done" get
+// the auto-complete behaviour the HTTP /complete handler promises.
+func (r *TaskRepository) GetDoneColumn(boardID string) (string, error) {
+	var columnID string
+	err := r.db.QueryRow("SELECT id FROM columns WHERE board_id = ? AND status = 'done' ORDER BY position ASC LIMIT 1", boardID).Scan(&columnID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return columnID, err
+}
+
 func (r *TaskRepository) GetColumnPositionAndBoardID(columnID string) (int, string, error) {
 	var position int
 	var boardID string

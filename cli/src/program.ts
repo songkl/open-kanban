@@ -52,6 +52,7 @@ import {
   runTaskUpdate,
   runTaskDelete,
   runTaskComplete,
+  runTaskAdvance,
   runTaskMove,
   parseMetaArgs,
   type DateRange,
@@ -997,12 +998,34 @@ export function createProgram(
   tasksCmd
     .command("complete <id>")
     .description(
-      "advance a task to the next column (POST /api/v1/tasks/:id/complete)"
+      "mark a task as complete by moving it to the board's done column (POST /api/v1/tasks/:id/complete)"
     )
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
         await runTaskComplete(
+          {
+            apiUrl: opts.apiUrl,
+            format: resolveOutputFormat(o.output),
+            http,
+          },
+          id
+        );
+      } catch (err) {
+        process.stderr.write(`${(err as Error).message}\n`);
+        process.exit(tasksExitCode(err));
+      }
+    });
+
+  tasksCmd
+    .command("advance <id>")
+    .description(
+      "advance a task one column forward (POST /api/v1/tasks/:id/advance)"
+    )
+    .action(async (id: string) => {
+      const o = program.opts<{ output?: string }>();
+      try {
+        await runTaskAdvance(
           {
             apiUrl: opts.apiUrl,
             format: resolveOutputFormat(o.output),

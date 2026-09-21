@@ -1,27 +1,36 @@
-// End-to-end test for the `kanban tasks complete` command against a real
-// Go HTTP server backed by an in-memory SQLite (the `kanban-e2e-runner`
-// binary, built from `backend/cmd/e2e-runner`).
+// End-to-end test for the `kanban tasks complete` and `kanban tasks
+// advance` commands against a real Go HTTP server backed by an
+// in-memory SQLite (the `kanban-e2e-runner` binary, built from
+// `backend/cmd/e2e-runner`).
 //
 // The unit suite in src/commands/tasks.test.ts already covers the
-// underlying `runTaskComplete` function via mocked fetch; this file
-// proves the wired-up CLI binary -- the version users actually run --
-// advances a task from one column to the next end-to-end. Specifically:
+// underlying `runTaskComplete` / `runTaskAdvance` functions via mocked
+// fetch; this file proves the wired-up CLI binary -- the version users
+// actually run -- moves tasks between columns end-to-end.
 //
+// s-1271 split the previous single `/complete` verb into a verb-noun
+// pair:
+//   * `kanban tasks complete <id>` jumps the task to the board's done
+//     column, regardless of where it started.
+//   * `kanban tasks advance <id>` advances the task one column forward
+//     (the previous behaviour of `tasks complete`).
+//
+// Specifically:
 //   1. `kanban tasks create --column <id>` creates a task in the Todo
 //      column and returns the new id (see tasks-create.test.ts for the
 //      create-side coverage; this file reuses the same helper binary).
 //   2. `kanban tasks complete <id>` exits 0, posts to
 //      /api/v1/tasks/:id/complete, and the returned record shows the
-//      task's columnId flipped to the next column (Doing in the
-//      e2e-runner seed, which orders columns by position 0/1/2/3 =
+//      task's columnId flipped to Done in a single hop -- the verb
+//      semantics that were broken before s-1271.
+//   3. `kanban tasks advance <id>` exits 0, posts to
+//      /api/v1/tasks/:id/advance, and the returned record shows the
+//      task's columnId advanced one column (Doing in the e2e-runner
+//      seed, which orders columns by position 0/1/2/3 =
 //      Todo/Doing/Review/Done).
-//   3. The new column id is also observable via the public
-//      /api/v1/tasks/:id endpoint, proving the row was actually moved
-//      rather than just echoed back from POST.
-//   4. A second `kanban tasks complete <id>` call advances the task
-//      through to Review, then Done, mirroring the documented
-//      "advance to the next column" behaviour. The fourth call fails
-//      with a non-zero exit (no next column).
+//   4. Repeated `kanban tasks advance <id>` walks Todo → Doing →
+//      Review → Done; the fifth call fails with a non-zero exit (no
+//      next column).
 //
 // The helper binary is rebuilt by the suite via `go build`; CI can
 // override the path with `KANBAN_E2E_RUNNER_BIN` to skip the build.
@@ -293,7 +302,7 @@ async function createTaskViaCli(opts: {
 
 const helperBin = resolveHelperBin();
 
-describe("CLI `kanban tasks complete` e2e (against a real Go server)", () => {
+describe("CLI `kanban tasks complete` / `kanban tasks advance` e2e (against a real Go server)", () => {
   let workDir: string;
   let xdgHome: string;
   let helper: HelperHandle | null = null;
@@ -318,7 +327,7 @@ describe("CLI `kanban tasks complete` e2e (against a real Go server)", () => {
   });
 
   it(
-    "advances a Todo task to Doing and the move is persisted on the server",
+    "complete jumps a Todo task to Done regardless of source column",
     async () => {
       const port = await freePort();
       helper = await startHelper(port, helperBin, join(workDir, "helper.log"));
@@ -364,10 +373,75 @@ describe("CLI `kanban tasks complete` e2e (against a real Go server)", () => {
         );
       }
       expect(parsed.task.id).toBe(created.taskId);
-      expect(parsed.task.columnId).toBe(DOING_COLUMN_ID);
+      // The verb semantics that the bug report (s-1271) called out:
+      // complete must jump straight to the done column, not advance
+      // one column forward from Todo to Doing.
+      expect(parsed.task.columnId).toBe(DONE_COLUMN_ID);
 
       // Round-trip via the public GET endpoint to prove the row was
       // actually moved (not just echoed back from POST /complete).
+      const getRes = await fetchJson(`${apiUrl}/api/v1/tasks/${created.taskId}`, {
+        headers: { Authorization: `Bearer ${helper.adminToken}` },
+      });
+      expect(getRes.status).toBe(200);
+      const got = getRes.body as CompletedTask["task"];
+      expect(got.id).toBe(created.taskId);
+      expect(got.columnId).toBe(DONE_COLUMN_ID);
+    },
+    30_000
+  );
+
+  it(
+    "advance moves a Todo task to Doing and the move is persisted on the server",
+    async () => {
+      const port = await freePort();
+      helper = await startHelper(port, helperBin, join(workDir, "helper.log"));
+      const apiUrl = helper.apiUrl;
+
+      writeBotCredentials({
+        apiUrl,
+        tokenFilePath: credentialsPath(apiUrl, xdgHome),
+      });
+
+      const created = await createTaskViaCli({
+        apiUrl,
+        xdgHome,
+        workDir,
+        title: "advance-me",
+        columnId: TODO_COLUMN_ID,
+      });
+
+      const result = await runCli({
+        cwd: workDir,
+        args: ["tasks", "advance", created.taskId, "--output", "json"],
+        env: { KANBAN_API_URL: apiUrl, XDG_CONFIG_HOME: xdgHome },
+      });
+
+      // eslint-disable-next-line no-console
+      console.log("kanban tasks advance stdout:\n" + result.stdout);
+      // eslint-disable-next-line no-console
+      console.log("kanban tasks advance stderr:\n" + result.stderr);
+      // eslint-disable-next-line no-console
+      console.log("helper log:\n" + readFileSync(helper.logFile, "utf8"));
+
+      expect(
+        result.code,
+        `CLI exited with non-zero status.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
+      ).toBe(0);
+
+      let parsed: CompletedTask;
+      try {
+        parsed = JSON.parse(result.stdout) as CompletedTask;
+      } catch (err) {
+        throw new Error(
+          `failed to parse --output json payload: ${(err as Error).message}\nstdout:\n${result.stdout}`
+        );
+      }
+      expect(parsed.task.id).toBe(created.taskId);
+      expect(parsed.task.columnId).toBe(DOING_COLUMN_ID);
+
+      // Round-trip via the public GET endpoint to prove the row was
+      // actually moved (not just echoed back from POST /advance).
       const getRes = await fetchJson(`${apiUrl}/api/v1/tasks/${created.taskId}`, {
         headers: { Authorization: `Bearer ${helper.adminToken}` },
       });
@@ -380,7 +454,7 @@ describe("CLI `kanban tasks complete` e2e (against a real Go server)", () => {
   );
 
   it(
-    "walks Todo → Doing → Review → Done when called repeatedly",
+    "walks Todo → Doing → Review → Done when tasks advance is called repeatedly",
     async () => {
       const port = await freePort();
       helper = await startHelper(port, helperBin, join(workDir, "helper.log"));
@@ -403,7 +477,7 @@ describe("CLI `kanban tasks complete` e2e (against a real Go server)", () => {
       for (const expected of expectedColumns) {
         const result = await runCli({
           cwd: workDir,
-          args: ["tasks", "complete", created.taskId, "--output", "json"],
+          args: ["tasks", "advance", created.taskId, "--output", "json"],
           env: { KANBAN_API_URL: apiUrl, XDG_CONFIG_HOME: xdgHome },
         });
         expect(
@@ -415,22 +489,62 @@ describe("CLI `kanban tasks complete` e2e (against a real Go server)", () => {
         expect(parsed.task.columnId).toBe(expected);
       }
 
-      // After three complete calls the task is already in Done. A
+      // After three advance calls the task is already in Done. A
       // fourth call must fail with a non-zero exit because the
-      // backend's CompleteTask rejects "task is already in the last
+      // backend's advance path rejects "task is already in the last
       // column".
       const final = await runCli({
         cwd: workDir,
-        args: ["tasks", "complete", created.taskId],
+        args: ["tasks", "advance", created.taskId],
         env: { KANBAN_API_URL: apiUrl, XDG_CONFIG_HOME: xdgHome },
       });
       expect(
         final.code,
-        `expected non-zero exit when completing past Done, got 0.\nstdout:\n${final.stdout}\nstderr:\n${final.stderr}`
+        `expected non-zero exit when advancing past Done, got 0.\nstdout:\n${final.stdout}\nstderr:\n${final.stderr}`
       ).not.toBe(0);
-      expect(final.stderr.toLowerCase()).toMatch(/failed|column|complete/);
+      expect(final.stderr.toLowerCase()).toMatch(/failed|column|advance/);
     },
     45_000
+  );
+
+  it(
+    "complete on a task already in Done is a no-op",
+    async () => {
+      // The handler short-circuits when the task is already in the
+      // done column so that webhooks (task.completed) only fire once
+      // per real transition. This is the contract callers should be
+      // able to rely on.
+      const port = await freePort();
+      helper = await startHelper(port, helperBin, join(workDir, "helper.log"));
+      const apiUrl = helper.apiUrl;
+
+      writeBotCredentials({
+        apiUrl,
+        tokenFilePath: credentialsPath(apiUrl, xdgHome),
+      });
+
+      const created = await createTaskViaCli({
+        apiUrl,
+        xdgHome,
+        workDir,
+        title: "already-done",
+        columnId: DONE_COLUMN_ID,
+      });
+
+      const result = await runCli({
+        cwd: workDir,
+        args: ["tasks", "complete", created.taskId, "--output", "json"],
+        env: { KANBAN_API_URL: apiUrl, XDG_CONFIG_HOME: xdgHome },
+      });
+      expect(
+        result.code,
+        `expected exit 0 completing an already-done task, got ${result.code}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
+      ).toBe(0);
+      const parsed = JSON.parse(result.stdout) as CompletedTask;
+      expect(parsed.task.id).toBe(created.taskId);
+      expect(parsed.task.columnId).toBe(DONE_COLUMN_ID);
+    },
+    30_000
   );
 });
 

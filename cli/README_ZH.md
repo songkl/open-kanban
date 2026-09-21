@@ -92,7 +92,8 @@ kanban tasks create --title "发布文档" --priority high
 
 # 5. 推动任务流转
 kanban tasks move <id> --status in_progress
-kanban tasks complete <id>      # 推进到下一列
+kanban tasks complete <id>      # 移动到已完成列
+kanban tasks advance <id>       # 向前推进一列
 ```
 
 > **给 `kanban run` 运维者的提示：** 自 s-1231 起，`kanban auth login`

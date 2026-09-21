@@ -99,7 +99,7 @@ npx vitest run
 | `create_task` | Create a new task |
 | `update_task` | Update task (title, description, priority, assignee, etc.) |
 | `delete_task` | Delete task |
-| `complete_task` | Mark task complete and move to next column |
+| `complete_task` | Mark task complete and move to done column |
 
 ### Task Publishing
 | Tool | Description |

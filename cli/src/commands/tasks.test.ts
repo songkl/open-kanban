@@ -21,6 +21,7 @@ import {
   runTaskUpdate,
   runTaskDelete,
   runTaskComplete,
+  runTaskAdvance,
   runTaskMove,
   parseMetaArgs,
 } from "./tasks.js";
@@ -1017,6 +1018,53 @@ describe("runTaskComplete", () => {
     const cap = makeCapture();
     await expect(
       runTaskComplete(
+        { apiUrl: "http://kanban.example.com", http, io: cap.io },
+        "t1"
+      )
+    ).rejects.toBeInstanceOf(NotLoggedInError);
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Not logged in/i);
+  });
+});
+
+describe("runTaskAdvance", () => {
+  beforeEach(() => {
+    delete process.env.KANBAN_API_URL;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("POSTs to /api/v1/tasks/:id/advance with a bearer token", async () => {
+    const { calls } = scriptFetch([{ status: 200, body: SINGLE_TASK_PAYLOAD }]);
+    const http = makeAuthedClient();
+    const report = await runTaskAdvance(
+      { apiUrl: "http://kanban.example.com", http },
+      "t1"
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(
+      "http://kanban.example.com/api/v1/tasks/t1/advance"
+    );
+    expect(calls[0].init?.method).toBe("POST");
+    const headers = calls[0].init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer at-fresh");
+    expect(report.task.id).toBe("t1");
+  });
+
+  it("requires a task id", async () => {
+    const http = makeAuthedClient();
+    await expect(
+      runTaskAdvance({ apiUrl: "http://kanban.example.com", http }, "")
+    ).rejects.toBeInstanceOf(InvalidUsageError);
+  });
+
+  it("maps a 401 to NotLoggedInError", async () => {
+    scriptFetch([{ status: 401, body: { error: "unauthorized" } }]);
+    const http = makeAuthedClient();
+    const cap = makeCapture();
+    await expect(
+      runTaskAdvance(
         { apiUrl: "http://kanban.example.com", http, io: cap.io },
         "t1"
       )

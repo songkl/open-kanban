@@ -187,8 +187,13 @@ always skipped in current handlers.
 
 .TP
 .B kanban tasks complete \fIID\fR
-Advance a task to the next column
+Mark a task complete by moving it to the board's done column
 (\fBPOST /api/v1/tasks/:id/complete\fR).
+
+.TP
+.B kanban tasks advance \fIID\fR
+Advance a task one column forward
+(\fBPOST /api/v1/tasks/:id/advance\fR).
 
 .TP
 .B kanban tasks move \fIID\fR

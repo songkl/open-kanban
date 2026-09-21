@@ -224,6 +224,16 @@ export interface RunTaskCompleteOptions {
   http: HttpClient;
 }
 
+export interface RunTaskAdvanceOptions {
+  apiUrl: string;
+  format?: OutputFormat;
+  io?: {
+    stdout?: NodeJS.WritableStream;
+    stderr?: NodeJS.WritableStream;
+  };
+  http: HttpClient;
+}
+
 export interface RunTaskMoveOptions {
   apiUrl: string;
   status?: TaskStatus;
@@ -806,8 +816,11 @@ export async function runTaskDelete(
   return result;
 }
 
-// runTaskComplete advances a task to the next column via the
-// /api/v1/tasks/:id/complete endpoint and prints the resulting record.
+// runTaskComplete marks a task as complete by moving it to the board's
+// done column via the /api/v1/tasks/:id/complete endpoint and prints
+// the resulting record. The previous behaviour (advance one column) is
+// now exposed as runTaskAdvance / POST /tasks/:id/advance so the verb
+// semantics of "complete" match its user-visible meaning (s-1271).
 export async function runTaskComplete(
   opts: RunTaskCompleteOptions,
   id: string
@@ -825,6 +838,45 @@ export async function runTaskComplete(
   try {
     task = await opts.http.apiPost<TaskRecord>(
       `/api/v1/tasks/${encodeURIComponent(id)}/complete`,
+      {}
+    );
+  } catch (err) {
+    if (err instanceof NotFoundError) {
+      stderr.write(chalk.red(`task not found: ${id}\n`));
+    }
+    throw await mapAuthError(err, stderr);
+  }
+  const report: TaskReport = { apiUrl, task };
+  const structured = formatStructured(report, format);
+  if (structured) {
+    stdout.write(structured);
+  } else {
+    stdout.write(formatTaskTable(report) + "\n");
+  }
+  return report;
+}
+
+// runTaskAdvance advances a task one column forward via the
+// /api/v1/tasks/:id/advance endpoint. This used to be the behaviour of
+// `tasks complete` before s-1271 split the surface into a verb-noun
+// pair: complete = "mark as done", advance = "one column forward".
+export async function runTaskAdvance(
+  opts: RunTaskAdvanceOptions,
+  id: string
+): Promise<TaskReport> {
+  const stderr = opts.io?.stderr ?? process.stderr;
+  const stdout = opts.io?.stdout ?? process.stdout;
+  const apiUrl = stripTrailingSlash(opts.apiUrl);
+  const format: OutputFormat = opts.format ?? "table";
+
+  if (!id || !id.trim()) {
+    throw new InvalidUsageError("kanban tasks advance requires a task id");
+  }
+
+  let task: TaskRecord;
+  try {
+    task = await opts.http.apiPost<TaskRecord>(
+      `/api/v1/tasks/${encodeURIComponent(id)}/advance`,
       {}
     );
   } catch (err) {

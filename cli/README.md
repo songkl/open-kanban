@@ -106,7 +106,8 @@ kanban tasks create --title "Ship docs" --priority high
 
 # 5. Drive it through the board
 kanban tasks move <id> --status in_progress
-kanban tasks complete <id>      # advances to the next column
+kanban tasks complete <id>      # moves to the board's done column
+kanban tasks advance <id>       # advances one column forward (no jump to done)
 ```
 
 > **Heads-up for `kanban run` operators:** since s-1231, the default

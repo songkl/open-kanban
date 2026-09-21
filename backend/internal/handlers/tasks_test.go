@@ -861,9 +861,17 @@ func TestCompleteTaskHandler(t *testing.T) {
 	db := setupTasksDB(t)
 	defer db.Close()
 
-	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'Next Column', 'b1', 1)`)
+	// s-1271: /complete now means "move to done column" (not "advance one
+	// column"). The board needs a done column for the happy path; an
+	// intermediate c2 is added so we can also assert the task jumped over
+	// it to the terminal column rather than stepping one forward.
+	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c2', 'In Progress', 'b1', 1, 'in_progress')`)
 	if err != nil {
 		t.Fatalf("failed to insert test column c2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c3', 'Done', 'b1', 2, 'done')`)
+	if err != nil {
+		t.Fatalf("failed to insert test column c3: %v", err)
 	}
 	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by, updated_at) VALUES ('task1', 'Task to Complete', 'c1', 'u1', datetime('now'))`)
 	if err != nil {
@@ -885,7 +893,7 @@ func TestCompleteTaskHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("complete task with valid data returns 200", func(t *testing.T) {
+	t.Run("complete task moves to done column regardless of current position", func(t *testing.T) {
 		req, _ := http.NewRequest("POST", "/api/tasks/task1/complete", nil)
 		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
 
@@ -893,12 +901,144 @@ func TestCompleteTaskHandler(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var columnID string
+		if err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", "task1").Scan(&columnID); err != nil {
+			t.Fatalf("failed to read task column: %v", err)
+		}
+		if columnID != "c3" {
+			t.Errorf("expected task to be moved to done column c3, got %q", columnID)
 		}
 	})
 
 	t.Run("complete non-existent task returns 404", func(t *testing.T) {
 		req, _ := http.NewRequest("POST", "/api/tasks/nonexistent/complete", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestCompleteTaskHandlerNoDoneColumn(t *testing.T) {
+	// Board without a status='done' column: /complete returns 409 so the
+	// operator can configure the board instead of seeing a generic 500.
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'In Progress', 'b1', 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert test column c2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'No Done Column', 'c1', 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/tasks/:id/complete", handlers.CompleteTask(db))
+
+	req, _ := http.NewRequest("POST", "/api/tasks/task1/complete", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAdvanceTaskHandler(t *testing.T) {
+	// /advance replaces the old /complete semantics — task moves one
+	// column forward regardless of destination status.
+	db := setupTasksDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'Next Column', 'b1', 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert test column c2: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c3', 'Done', 'b1', 2, 'done')`)
+	if err != nil {
+		t.Fatalf("failed to insert test column c3: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Advance Task', 'c1', 'u1')`)
+	if err != nil {
+		t.Fatalf("failed to insert test task: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(handlers.RequireAuth(db))
+	router.POST("/api/tasks/:id/advance", handlers.AdvanceTask(db))
+
+	t.Run("advance task without auth returns 401", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/tasks/task1/advance", nil)
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// The "last column" subtest runs before the happy-path subtest so
+	// the handler's fire-and-forget publish goroutine (which reads
+	// from db after the response is written) can't race with the
+	// later UPDATE on the in-memory SQLite db during cleanup.
+	t.Run("advance task in last column returns 400", func(t *testing.T) {
+		if _, err := db.Exec("UPDATE tasks SET column_id = 'c3' WHERE id = 'task1'"); err != nil {
+			t.Fatalf("failed to move task1 to c3: %v", err)
+		}
+		// Reset back to c1 so the next subtest starts from the
+		// expected column.
+		defer func() {
+			if _, err := db.Exec("UPDATE tasks SET column_id = 'c1' WHERE id = 'task1'"); err != nil {
+				t.Fatalf("failed to reset task1 to c1: %v", err)
+			}
+		}()
+
+		req, _ := http.NewRequest("POST", "/api/tasks/task1/advance", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("advance task moves one column forward", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/tasks/task1/advance", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var columnID string
+		if err := db.QueryRow("SELECT column_id FROM tasks WHERE id = ?", "task1").Scan(&columnID); err != nil {
+			t.Fatalf("failed to read task column: %v", err)
+		}
+		if columnID != "c2" {
+			t.Errorf("expected task to be advanced one column to c2, got %q", columnID)
+		}
+	})
+
+	t.Run("advance non-existent task returns 404", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/tasks/nonexistent/advance", nil)
 		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "test-token"})
 
 		w := httptest.NewRecorder()

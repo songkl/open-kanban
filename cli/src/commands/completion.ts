@@ -53,7 +53,7 @@ export const SUBCOMMANDS: Record<string, readonly string[]> = {
   auth: ["login", "status", "logout", "whoami"],
   boards: ["list", "get"],
   columns: ["list", "get"],
-  tasks: ["list", "get", "create", "update", "delete", "complete", "move", "batch"],
+  tasks: ["list", "get", "create", "update", "delete", "complete", "advance", "move", "batch"],
   "tasks batch": ["create", "update", "delete"],
   drafts: ["list", "publish", "unpublish"],
   archived: ["list", "archive", "restore"],
@@ -163,6 +163,7 @@ export const FLAGS_PER_COMMAND: Record<string, readonly string[]> = {
   ],
   "tasks delete": ["--yes", ...GLOBAL_FLAGS],
   "tasks complete": GLOBAL_FLAGS,
+  "tasks advance": GLOBAL_FLAGS,
   "tasks move": ["--column", "--status", ...GLOBAL_FLAGS],
   "tasks batch": GLOBAL_FLAGS,
   "tasks batch create": [
@@ -265,6 +266,7 @@ export const DYNAMIC_ID_TASKS: readonly DynamicIdTask[] = [
   { command: "tasks update", argIndex: 0, fetcher: "tasks" },
   { command: "tasks delete", argIndex: 0, fetcher: "tasks" },
   { command: "tasks complete", argIndex: 0, fetcher: "tasks" },
+  { command: "tasks advance", argIndex: 0, fetcher: "tasks" },
   { command: "tasks move", argIndex: 0, fetcher: "tasks" },
   {
     command: "tasks create",

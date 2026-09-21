@@ -113,12 +113,136 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		taskService := services.NewTaskService(db)
-		_, err = taskService.CompleteTask(id)
+		_, err = taskService.MoveTaskToDoneColumn(id)
 		if err != nil {
+			if err == services.ErrNoDoneColumn {
+				c.JSON(http.StatusConflict, gin.H{
+					"error":  "Board has no 'done' column; add a column with status='done' before completing tasks",
+					"detail": err.Error(),
+				})
+				return
+			}
 			if gin.Mode() == gin.DebugMode {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to complete task", "detail": err.Error()})
 			} else {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to complete task"})
+			}
+			return
+		}
+
+		var taskTitle string
+		if err := db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle); err != nil {
+			taskTitle = ""
+		}
+		var oldStatus, newStatus sql.NullString
+		if err := db.QueryRow("SELECT status FROM columns WHERE id = ?", columnID).Scan(&oldStatus); err != nil {
+			oldStatus = sql.NullString{Valid: false}
+		}
+
+		newColumnID, err := getColumnIDForTask(db, id)
+		if err != nil {
+			newColumnID = ""
+		}
+		if newColumnID != "" {
+			if err := db.QueryRow("SELECT status FROM columns WHERE id = ?", newColumnID).Scan(&newStatus); err != nil {
+				newStatus = sql.NullString{Valid: false}
+			}
+		}
+
+		oldStatusVal := ""
+		if oldStatus.Valid {
+			oldStatusVal = oldStatus.String
+		}
+		newStatusVal := ""
+		if newStatus.Valid {
+			newStatusVal = newStatus.String
+		}
+		details := fmt.Sprintf("Status: '%s' → '%s'", oldStatusVal, newStatusVal)
+		LogActivity(db, user.ID, "COMPLETE_TASK", "TASK", id, taskTitle, details, c.ClientIP(), getRequestSource(c))
+
+		broadcast()
+		GetTask(db)(c)
+
+		// Single emission point per HTTP request: task.moved
+		// (always, because the completion transitions the task
+		// across a column boundary) and task.completed
+		// (conditional on the new column's status == "done").
+		// The previous webhookSvc.NotifyXxx calls fired both
+		// from one goroutine; the new code splits them into
+		// two publishEvent calls so each call site publishes
+		// exactly once per request (spec "同一 HTTP 请求只
+		// publish 一次").
+		go func() {
+			var priority string
+			var assigneeVal sql.NullString
+			if err := db.QueryRow("SELECT priority, assignee FROM tasks WHERE id = ?", id).Scan(&priority, &assigneeVal); err != nil {
+				priority = ""
+				assigneeVal = sql.NullString{}
+			}
+			var assigneePtr *string
+			if assigneeVal.Valid {
+				v := assigneeVal.String
+				assigneePtr = &v
+			}
+			assignee := derefString(assigneePtr)
+			publishTaskMoved(db, id, taskTitle, newColumnID, columnID, priority, assignee)
+			if newStatusVal == "done" {
+				publishTaskCompleted(db, id, taskTitle, newColumnID, priority, assignee)
+			}
+		}()
+	}
+}
+
+// AdvanceTask advances the task one column forward (s-1271). Previously
+// this behaviour lived on POST /tasks/:id/complete but the verb
+// semantics were wrong: "complete" now moves the task to the board's
+// done column (see CompleteTask), so callers that want the kanban-style
+// one-step-advance transition use POST /tasks/:id/advance instead. This
+// preserves the previous behaviour for internal callers (bulk column
+// actions, run-finish webhook) which already treat "advance" as the
+// unit operation.
+func AdvanceTask(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := getCurrentUser(c, db)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not logged in"})
+			return
+		}
+
+		if requireNonViewer(c, user) {
+			return
+		}
+
+		id := c.Param("id")
+		if id == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID is required"})
+			return
+		}
+
+		columnID, err := getColumnIDForTask(db, id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+			return
+		}
+
+		if !checkColumnAccessWithBoardFallback(db, user.ID, columnID, "WRITE", user.Role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No permission to operate on this task"})
+			return
+		}
+
+		allowed, err := canModifyTask(db, user, id)
+		if err != nil || !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Can only advance tasks you created"})
+			return
+		}
+
+		taskService := services.NewTaskService(db)
+		_, err = taskService.CompleteTask(id)
+		if err != nil {
+			if gin.Mode() == gin.DebugMode {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to advance task", "detail": err.Error()})
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to advance task"})
 			}
 			return
 		}
@@ -156,15 +280,6 @@ func CompleteTask(db *sql.DB) gin.HandlerFunc {
 		broadcast()
 		GetTask(db)(c)
 
-		// Single emission point per HTTP request: task.moved
-		// (always, because the completion transitions the task
-		// across a column boundary) and task.completed
-		// (conditional on the new column's status == "done").
-		// The previous webhookSvc.NotifyXxx calls fired both
-		// from one goroutine; the new code splits them into
-		// two publishEvent calls so each call site publishes
-		// exactly once per request (spec "同一 HTTP 请求只
-		// publish 一次").
 		go func() {
 			var priority string
 			var assigneeVal sql.NullString

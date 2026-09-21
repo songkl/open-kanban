@@ -284,7 +284,7 @@ export function delete_task(srv: McpServer) {
 
 export function complete_task(srv: McpServer) {
   srv.registerTool("complete_task", {
-    description: "标记任务完成并自动流转到下一列",
+    description: "标记任务完成并移动到已完成列",
     inputSchema: z.object({
       id: z.string().describe("任务ID"),
     }),

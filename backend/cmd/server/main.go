@@ -541,6 +541,7 @@ r.GET("/api/v1/activities",
 		tasks.DELETE("/:id", handlers.DeleteTask(db))
 		tasks.POST("/:id/archive", handlers.ArchiveTask(db))
 		tasks.POST("/:id/complete", handlers.CompleteTask(db))
+		tasks.POST("/:id/advance", handlers.AdvanceTask(db))
 		tasks.GET("/:id/attachments", handlers.RequireAuth(db), handlers.GetTaskAttachments(db))
 	}
 
