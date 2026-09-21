@@ -576,6 +576,62 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("topAgentsByActivity includes heartbeat-only agents via last_active_at (s-1276)", func(t *testing.T) {
+		// Use a fresh DB so heartbeat-only "Iteration Bot" doesn't get
+		// outranked by the agents inserted in earlier subtests.
+		freshDB := setupDashboardDB(t)
+		defer freshDB.Close()
+
+		freshRouter := gin.New()
+		freshRouter.Use(handlers.RequireAuth(freshDB))
+		freshRouter.GET("/api/dashboard/stats", handlers.GetDashboardStats(freshDB))
+
+		// "Iteration Bot" only heartbeats: it has last_active_at within the
+		// last 7 days but no activities rows. It must still surface in the
+		// top 3 so /agent-activity and the dashboard stay in sync.
+		_, err := freshDB.Exec(`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled, last_active_at)
+			VALUES ('a-iter', 'iter', 'Iteration Bot', 'pass', '🤖', 'AGENT', 'MEMBER', 1, datetime('now', '-1 hour'))`)
+		if err != nil {
+			t.Fatalf("failed to insert heartbeat-only agent: %v", err)
+		}
+
+		req, _ := http.NewRequest("GET", "/api/dashboard/stats", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+		w := httptest.NewRecorder()
+		freshRouter.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+
+		agentsRaw := resp["topAgentsByActivity"].([]interface{})
+		if len(agentsRaw) == 0 {
+			t.Fatalf("expected topAgentsByActivity to be non-empty when a heartbeat-only agent exists, got %d entries", len(agentsRaw))
+		}
+
+		var found bool
+		for _, item := range agentsRaw {
+			entry := item.(map[string]interface{})
+			if entry["userId"] == "a-iter" {
+				found = true
+				if int(entry["activityCount"].(float64)) < 1 {
+					t.Errorf("expected Iteration Bot activityCount >= 1, got %v", entry["activityCount"])
+				}
+				if entry["nickname"] != "Iteration Bot" {
+					t.Errorf("expected Iteration Bot nickname, got %v", entry["nickname"])
+				}
+			}
+		}
+		if !found {
+			t.Errorf("expected Iteration Bot (heartbeat-only) to appear in topAgentsByActivity, got %+v", agentsRaw)
+		}
+	})
+
 	t.Run("longestBlockedCards returns oldest non-done, published, non-archived tasks", func(t *testing.T) {
 		// Insert tasks with controlled updated_at to verify ordering.
 		_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, priority, published, archived, updated_at) VALUES ('bt-old', 'Oldest Stale', 'c1', 'high', 1, 0, datetime('now', '-20 days'))`)

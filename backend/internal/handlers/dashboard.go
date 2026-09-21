@@ -105,13 +105,22 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 		`).Scan(&stats.TasksCompletedLast7d)
 
 		agentRows, err := db.Query(`
-			SELECT u.id, u.nickname, COALESCE(u.avatar, ''), COUNT(a.id) as activity_count
-			FROM activities a
-			JOIN users u ON u.id = a.user_id
-			WHERE u.type = 'AGENT'
-			  AND a.created_at >= datetime('now', '-7 days')
-			GROUP BY u.id, u.nickname, u.avatar
-			ORDER BY activity_count DESC, u.nickname ASC
+			SELECT user_id, nickname, avatar, COUNT(*) AS activity_count
+			FROM (
+				SELECT u.id AS user_id, u.nickname, COALESCE(u.avatar, '') AS avatar
+				FROM activities a
+				JOIN users u ON u.id = a.user_id
+				WHERE u.type = 'AGENT'
+				  AND a.created_at >= datetime('now', '-7 days')
+				UNION ALL
+				SELECT u.id AS user_id, u.nickname, COALESCE(u.avatar, '') AS avatar
+				FROM users u
+				WHERE u.type = 'AGENT'
+				  AND u.last_active_at IS NOT NULL
+				  AND u.last_active_at >= datetime('now', '-7 days')
+			) AS combined
+			GROUP BY user_id, nickname, avatar
+			ORDER BY activity_count DESC, nickname ASC
 			LIMIT 3
 		`)
 		if err == nil {
