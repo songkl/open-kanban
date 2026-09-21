@@ -967,6 +967,7 @@
         "positionFromTo": "位置：{{from}} → {{to}}",
         "ownerFromTo": "负责人：{{from}} → {{to}}",
         "reordered": "已重排 {{count}} 个任务",
+        "deviceApprove": "已批准设备码，客户端 {{client}}",
         "attached": "通过 /api/v1/runs/:taskId/attach 附加",
         "permissionFromTo": "权限：{{from}} → {{to}}",
         "ownerTransferFromTo": "所有权已转移：{{from}} → {{to}}",

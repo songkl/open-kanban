@@ -967,6 +967,7 @@
         "positionFromTo": "Position: {{from}} → {{to}}",
         "ownerFromTo": "Assignee: {{from}} → {{to}}",
         "reordered": "Reordered {{count}} tasks",
+        "deviceApprove": "Device code approved for client {{client}}",
         "attached": "attached via /api/v1/runs/:taskId/attach",
         "permissionFromTo": "Permission: {{from}} → {{to}}",
         "ownerTransferFromTo": "Ownership transferred: {{from}} → {{to}}",

@@ -77,6 +77,26 @@ function tryParseReordered(text: string, t: Translator): string | null {
 }
 
 /**
+ * Parse the `device_code approved for client=<id>` shape that the
+ * OAuth device-flow approve handler writes. The `<id>` is whatever
+ * the OAuth client registered as `client_id` (often a slug like
+ * `kanban-cli`, sometimes a URL), so we accept any non-empty
+ * sequence of characters that isn't whitespace and stop at the
+ * trailing punctuation the handler appends. The truncated
+ * case is handled by leaving the suffix empty — there is no
+ * fixed length to enforce on the client.
+ */
+function tryParseDeviceApprove(text: string, t: Translator): string | null {
+  const match = text.match(/^[\s]*device_code approved for client=(\S+?)\s*$/);
+  if (!match) return null;
+  const [, clientID] = match;
+  if (!clientID) return null;
+  const template = t('settings.activities.details.deviceApprove', { client: clientID });
+  if (template.startsWith('settings.activities.details.')) return null;
+  return template;
+}
+
+/**
  * Best-effort translation for an activity row's `details` field.
  * Returns the original `details` value when nothing in the sentence
  * matches a known shape so unknown formats stay readable.
@@ -86,6 +106,7 @@ export function localizeActivityDetails(details: string | undefined, t: Translat
   const parsed =
     tryParseStatusFromTo(details, t) ??
     tryParsePositionFromTo(details, t) ??
-    tryParseReordered(details, t);
+    tryParseReordered(details, t) ??
+    tryParseDeviceApprove(details, t);
   return parsed ?? details;
 }

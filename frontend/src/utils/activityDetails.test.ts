@@ -16,6 +16,7 @@ describe('localizeActivityDetails (s-1260 / PM review s-1258 P1-2)', () => {
     'settings.activities.details.statusFromTo': 'Status: {{from}} → {{to}}',
     'settings.activities.details.positionFromTo': 'Position: {{from}} → {{to}}',
     'settings.activities.details.reordered': 'Reordered {{count}} tasks',
+    'settings.activities.details.deviceApprove': 'Device code approved for client {{client}}',
     'settings.activities.details.statusLabel.todo': 'Backlog',
     'settings.activities.details.statusLabel.in_progress': 'In Progress',
     'settings.activities.details.statusLabel.testing': 'Testing',
@@ -53,8 +54,18 @@ describe('localizeActivityDetails (s-1260 / PM review s-1258 P1-2)', () => {
     expect(got).toBe('Reordered 7 tasks');
   });
 
+  it('localizes DEVICE_APPROVE rows with a normal client_id (s-1273 / PM review s-1264 P0-3)', () => {
+    const got = localizeActivityDetails('device_code approved for client=kanban-cli', t);
+    expect(got).toBe('Device code approved for client kanban-cli');
+  });
+
+  it('localizes DEVICE_APPROVE rows with a truncated / short client_id (s-1273 / PM review s-1264 P0-3)', () => {
+    const got = localizeActivityDetails('device_code approved for client=ab', t);
+    expect(got).toBe('Device code approved for client ab');
+  });
+
   it('leaves unknown shapes untouched', () => {
-    const raw = "device_code approved for client=kanban-cli";
+    const raw = 'something we still do not recognise';
     expect(localizeActivityDetails(raw, t)).toBe(raw);
   });
 });
