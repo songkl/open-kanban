@@ -664,7 +664,7 @@ export function BoardPage() {
       />
 
       <header
-        className="p-3 pr-24 sm:p-6 sm:pr-32 sm:pb-0 mb-3 sm:mb-6 flex items-center justify-between gap-2 sm:gap-4 flex-wrap"
+        className="p-3 sm:p-6 sm:pb-0 mb-3 sm:mb-6 flex items-center justify-between gap-2 sm:gap-4 flex-wrap"
         role="banner"
       >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">

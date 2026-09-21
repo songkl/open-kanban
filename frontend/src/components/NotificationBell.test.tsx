@@ -122,4 +122,32 @@ describe('NotificationBell', () => {
     expect(after.unreadCount).toBe(0);
     expect(after.notifications.every((n) => Boolean(n.readAt))).toBe(true);
   });
+
+  // s-1283: the bell lives in the sidebar footer (s-1282), which is
+  // anchored to the bottom of the screen via `mt-auto`. The dropdown
+  // must therefore open UPWARD from the bell's bottom edge — opening
+  // downward would push the panel below the viewport and force a
+  // scrollbar to reach the first row. Pin the anchor so a future
+  // regression to `top-0` is caught by a test instead of a bug
+  // report.
+  it('anchors the dropdown to the bell bottom edge so it opens upward (s-1283)', () => {
+    useNotificationStore.setState({
+      notifications: [seedNotification],
+      unreadCount: 1,
+    });
+    render(
+      <MemoryRouter>
+        <NotificationBell />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByTestId('notification-bell'));
+    const panel = screen.getByTestId('notification-center');
+    // Opens to the RIGHT of the bell (sidebar footer placement).
+    expect(panel.className).toMatch(/\bleft-full\b/);
+    // Anchored to the BOTTOM of the bell, not the top — opens upward.
+    expect(panel.className).toMatch(/\bbottom-0\b/);
+    expect(panel.className).not.toMatch(/\btop-0\b/);
+    // Still viewport-capped as a guard for short screens.
+    expect(panel.className).toMatch(/max-h-\[calc\(100vh-2rem\)\]/);
+  });
 });

@@ -96,10 +96,14 @@ export function NotificationCenter({ open, onClose, onSelect }: NotificationCent
       // The bell lives in the left sidebar footer (s-1282), so the
       // dropdown opens to the RIGHT of the bell (`left-full`) rather
       // than to the LEFT (`right-0` was correct when the bell sat
-      // in the top-right header). We also bound the height to the
-      // viewport so the panel never grows past the screen when the
-      // bell sits near the bottom of the sidebar.
-      className="absolute left-full top-0 z-50 ml-2 max-h-[calc(100vh-2rem)] w-[360px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+      // in the top-right header). The sidebar footer anchors the
+      // bell to the bottom of the screen via `mt-auto`, so the panel
+      // also opens UPWARD (`bottom-0`) from the bell's bottom edge —
+      // opening downward (`top-0`) would push the panel below the
+      // viewport and force a scrollbar to reach the first row
+      // (s-1283). We still cap the height with `max-h-[calc(100vh-2rem)]`
+      // as a belt-and-suspenders guard for short viewports.
+      className="absolute left-full bottom-0 z-50 ml-2 max-h-[calc(100vh-2rem)] w-[360px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
     >
       <header className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-700">
         <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">

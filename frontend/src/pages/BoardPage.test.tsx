@@ -316,29 +316,22 @@ describe('BoardPage', () => {
     expect(document.body).toBeInTheDocument();
   });
 
-  // s-1226: the AppShell renders the dark-mode toggle and notification
-  // bell at top-4 right-4 over the page content. The board header is
-  // dense (BoardSelector + BoardToolbar + user menu) and the create
-  // button lives in the toolbar, so without right padding the toolbar
-  // would slide under the floating overlay. Reserve enough right padding
-  // on the header so the page-level controls stay clear of the overlay.
-  // s-1230: bumped mobile right padding from pr-20 (80px) to pr-24
-  // (96px) and desktop from sm:pr-24 (96px) to sm:pr-32 (128px) so the
-  // create button + right-side action group stop crowding the floating
-  // overlay (theme toggle + notification bell) above them.
-  it('reserves right padding on the board header to clear the AppShell overlay (s-1226)', () => {
+  // s-1226 / s-1230 used to reserve right padding on the header so
+  // the BoardToolbar wouldn't slide under the floating theme-toggle
+  // + notification-bell overlay that lived at top-4 right-4. s-1282
+  // moved both controls to the bottom of the persistent sidebar, so
+  // the overlay no longer overlaps the header and the right padding
+  // is unnecessary — keep this test as a guard so a future regression
+  // that re-adds pr-24 / sm:pr-32 forces a deliberate update.
+  it('does not reserve right padding for the legacy floating overlay (s-1283)', () => {
     renderBoardPage();
 
     const banner = screen.getByRole('banner');
     expect(banner).toBeInTheDocument();
     const className = banner.className;
-    // Mobile (< 640px) — no AppShell sidebar, but the overlay is still
-    // there, so we still need padding.
-    expect(className).toMatch(/\bpr-24\b/);
-    // Desktop (>= 640px) — need a bit more room because the BoardToolbar
-    // (search / filter / density / create button) also lives in the
-    // header on the same row as the overlay.
-    expect(className).toMatch(/\bsm:pr-32\b/);
+    expect(className).not.toMatch(/\bpr-24\b/);
+    expect(className).not.toMatch(/\bsm:pr-32\b/);
+    expect(className).not.toMatch(/\bsm:pr-24\b/);
   });
 
   it('invokes fetchBoards when retry button is clicked in loadError state', async () => {
