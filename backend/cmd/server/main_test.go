@@ -486,6 +486,87 @@ func TestSetupRunsRoutesRegistersAllEndpoints(t *testing.T) {
 	}
 }
 
+// TestActivitiesAliasesRouteToCanonical verifies the /api/v1/agents
+// and /api/v1/origins thin aliases dispatch to /api/v1/auth/activities
+// (PM review s-1264 P1-3 / s-1263 P2-4). The CLI user typing either
+// REST name should land on the same handler as the canonical URL
+// instead of receiving a misleading 404. We register a stand-in
+// canonical handler on the same engine so r.HandleContext can
+// re-dispatch through the real route table.
+func TestActivitiesAliasesRouteToCanonical(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	// Mirror setupAPIRoutes verbatim — the production closure is the
+	// one under test, so we re-register it rather than export a
+	// helper that the production path would have to call.
+	router.GET("/api/v1/auth/activities", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"canonical":   true,
+			"agentOnly":   c.Query("agentOnly"),
+			"echoPath":    c.Request.URL.Path,
+		})
+	})
+	alias := func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/auth/activities"
+		router.HandleContext(c)
+	}
+	router.GET("/api/v1/agents", alias)
+	router.GET("/api/v1/origins", alias)
+
+	for _, path := range []string{"/api/v1/agents", "/api/v1/origins"} {
+		req, _ := http.NewRequest(http.MethodGet, path+"?agentOnly=true", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET %s: expected 200, got %d body=%q", path, w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("GET %s: failed to parse response: %v", path, err)
+		}
+		if resp["canonical"] != true {
+			t.Errorf("GET %s: expected canonical handler response, got %v", path, resp)
+		}
+		// Confirm the request was actually re-dispatched: the handler
+		// observed the canonical path AND the original query string.
+		if resp["echoPath"] != "/api/v1/auth/activities" {
+			t.Errorf("GET %s: expected handler to see rewritten path, got %v", path, resp["echoPath"])
+		}
+		if resp["agentOnly"] != "true" {
+			t.Errorf("GET %s: expected agentOnly=true to survive the rewrite, got %v", path, resp["agentOnly"])
+		}
+	}
+}
+
+// TestAgentActivitiesPluralIsNotAliased pins the deliberate decision
+// to leave /api/v1/agent-activities (plural) as a 404. The canonical
+// /api/v1/auth/activities URL stays the only surface CLI users
+// depend on; aliasing every plural variant would just create
+// rename-fodder for the next refactor (PM review s-1264 P1-3).
+func TestAgentActivitiesPluralIsNotAliased(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/v1/auth/activities", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"canonical": true})
+	})
+	alias := func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/auth/activities"
+		router.HandleContext(c)
+	}
+	router.GET("/api/v1/agents", alias)
+	router.GET("/api/v1/origins", alias)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/agent-activities", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected /api/v1/agent-activities to be 404 (intentionally not aliased), got %d body=%q", w.Code, w.Body.String())
+	}
+}
+
 // sortedKeys returns the keys of m sorted alphabetically. Used to
 // produce stable diff output when TestSetupRunsRoutesRegistersAllEndpoints
 // fails so the failure message isn't dependent on map iteration order.

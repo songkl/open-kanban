@@ -364,6 +364,27 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	// (CLI, OAuth agents) using the REST-style /users/me URL don't 404.
 	r.GET("/api/v1/users/me", handlers.GetMe(db))
 
+	// /api/v1/agents and /api/v1/origins are thin aliases for
+	// /api/v1/auth/activities (PM review s-1264 P1-3, carryover from
+	// s-1263 P2-4). The frontend AgentActivityPage hits the canonical
+	// /auth/activities?agentOnly=true URL, but a CLI user scripting
+	// against the obvious REST names /agents or /origins gets a 404
+	// and assumes the feature is missing. We rewrite the path and
+	// re-dispatch so both aliases reuse the canonical handler + auth
+	// chain (RequireSignatureVerification + RequireAuth + GetActivities)
+	// without a second copy of the activity SQL.
+	//
+	// Note: /api/v1/agent-activities (plural) is intentionally NOT
+	// aliased — the canonical URL stays the only one CLI users should
+	// depend on, and aliasing every plural variant would just create
+	// rename-fodder for the next refactor.
+	agentsOrOriginsToActivities := func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/auth/activities"
+		r.HandleContext(c)
+	}
+	r.GET("/api/v1/agents", agentsOrOriginsToActivities)
+	r.GET("/api/v1/origins", agentsOrOriginsToActivities)
+
 	authProtected := r.Group("/api/v1/auth")
 	authProtected.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))
 	{
