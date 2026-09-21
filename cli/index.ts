@@ -7,22 +7,32 @@ import { Command } from "commander";
 import { buildOAuthClient, createProgram } from "./src/program.js";
 import { HttpClient } from "./src/http/client.js";
 import { resolveRootConfig } from "./src/config.js";
+import {
+  parseLangFlag,
+  resetLocaleCache,
+  setLocale,
+  t,
+} from "./src/i18n/index.js";
 
 // extractEarlyFlags scans argv for the global flags Commander consumes at
-// root level (`--api-url`, `--profile`) *before* Commander sees them.
-// Without this, the shared OAuth + Http clients would always be
-// constructed against the env-var defaults — even when the user
+// root level (`--api-url`, `--profile`, `--lang`) *before* Commander
+// sees them. Without this, the shared OAuth + Http clients would always
+// be constructed against the env-var defaults — even when the user
 // explicitly passed `--api-url` on the command line — because action
 // handlers read `program.opts()` after parsing, but the shared clients
 // are wired at boot.
+//
+// `--lang` lives here too so the locale resolution runs before we
+// translate any Commander help text. The shared i18n state is initialised
+// once at module load and applies to every command description afterwards.
 //
 // `--output` is intentionally not extracted here; the bootstrap layer
 // only needs apiUrl + profile. The output format is consulted per-action
 // via `program.opts()`.
 function extractEarlyFlags(
   argv: string[]
-): { apiUrl?: string; profile?: string } {
-  const out: { apiUrl?: string; profile?: string } = {};
+): { apiUrl?: string; profile?: string; lang?: string } {
+  const out: { apiUrl?: string; profile?: string; lang?: string } = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--api-url") {
@@ -41,12 +51,37 @@ function extractEarlyFlags(
       }
     } else if (a.startsWith("--profile=")) {
       out.profile = a.slice("--profile=".length);
+    } else if (a === "--lang") {
+      const v = argv[i + 1];
+      if (v && !v.startsWith("--")) {
+        out.lang = v;
+        i++;
+      }
+    } else if (a.startsWith("--lang=")) {
+      out.lang = a.slice("--lang=".length);
     }
   }
   return out;
 }
 
+// Resolve the locale as early as possible so every translated string the
+// bootstrap emits (warning lines, etc.) is rendered in the operator's
+// preferred language. Priority:
+//
+//   1. The `--lang` CLI flag, which lets a one-off override be applied
+//      without touching the environment (handy in CI / smoke scripts).
+//   2. `process.env.KANBAN_LANG` (operator override)
+//   3. POSIX `LC_ALL` then `LANG`
+//
+// `resetLocaleCache` clears any cached env-derived locale so a stale
+// value from a previous run (e.g. the interactive shell REPL) does not
+// leak into this invocation.
 const early = extractEarlyFlags(process.argv);
+const flagLang = parseLangFlag(early.lang);
+resetLocaleCache();
+if (flagLang) {
+  setLocale(flagLang);
+}
 // Resolve through the shared priority chain so the bootstrap honours the
 // same rules (`config set apiUrl …`, KANBAN_API_URL, etc.) that the
 // `kanban config get` command prints.
@@ -72,9 +107,9 @@ try {
   );
 } catch (err) {
   process.stderr.write(
-    `[kanban] warning: failed to resolve config (${
-      (err as Error).message
-    }); falling back to built-in defaults\n`
+    `[kanban] warning: ${t("cli.bootstrap.warning.configResolve", {
+      reason: (err as Error).message,
+    })}\n`
   );
   resolved = resolveRootConfig({
     apiUrl: early.apiUrl,

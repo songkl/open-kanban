@@ -136,6 +136,7 @@ import {
   runAgentDelete,
   runAgentLogin,
 } from "./commands/agents.js";
+import { t } from "./i18n/index.js";
 
 const DEFAULT_APP_NAME = "kanban-cli";
 const PROGRAM_VERSION = "0.1.0";
@@ -194,19 +195,17 @@ export async function resolveLoginMode(
   const prompt = deps.prompt;
   if (!prompt) return "agent";
   const choice = await prompt<"human" | "agent">(
-    "Bind this CLI to which identity?",
+    t("cli.auth.login.prompt.identity"),
     [
       {
         value: "agent",
-        name: "Agent (recommended for unattended runners)",
-        description:
-          "Bind the token to an Agent identity — the CLI will run as that Agent (long-lived API token).",
+        name: t("cli.auth.login.prompt.identity.agent"),
+        description: t("cli.auth.login.prompt.identity.agentDesc"),
       },
       {
         value: "human",
-        name: "My account (Human)",
-        description:
-          "Bind the token to the human approver's account — useful when driving the dashboard from the terminal.",
+        name: t("cli.auth.login.prompt.identity.human"),
+        description: t("cli.auth.login.prompt.identity.humanDesc"),
       },
     ],
     "agent"
@@ -248,13 +247,14 @@ export function createProgram(
 
   program
     .name("kanban")
-    .description("Open Kanban CLI - command-line client for the Open Kanban board")
+    .description(t("cli.description"))
     .version(version)
-    .option("--api-url <url>", "Kanban API base URL", opts.apiUrl)
-    .option("--profile <name>", "credential profile to use", opts.profile)
-    .option("--output <format>", "output format (table|json|yaml)", "table")
-    .option("--no-color", "disable ANSI color in table output")
-    .option("--color <mode>", "force color on/off (on|off|auto)", "auto");
+    .option("--api-url <url>", t("cli.option.apiUrl"), opts.apiUrl)
+    .option("--profile <name>", t("cli.option.profile"), opts.profile)
+    .option("--output <format>", t("cli.option.output"), "table")
+    .option("--no-color", t("cli.option.noColor"))
+    .option("--color <mode>", t("cli.option.color"), "auto")
+    .option("--lang <locale>", t("cli.option.lang"));
 
   // Apply the resolved colour override once, after Commander has parsed
   // argv. Doing it here keeps every command file agnostic of Commander.
@@ -264,37 +264,17 @@ export function createProgram(
   });
 
   // ---- auth ----
-  const authCmd = program.command("auth").description("manage CLI authentication");
+  const authCmd = program.command("auth").description(t("cli.auth.description"));
 
   authCmd
     .command("login")
-    .description(
-      "authenticate the CLI. Default: start the OAuth 2.1 device authorization grant (browser-based). When run from a TTY with no explicit mode flag, interactively asks whether to bind to an Agent or to your own account (s-1246). Pass --as-human / --as-agent to skip the prompt. Shortcut: --user <username> --password <password> exchanges the legacy username/password login for a long-lived bearer token (s-1275) without opening a browser; --password-stdin reads the password from stdin instead of the command line."
-    )
-    .option(
-      "--as-human",
-      "bind the token to the human approver's account instead of the default Agent identity (s-1231)"
-    )
-    .option(
-      "--as-agent",
-      "explicitly bind the token to an Agent identity; skips the interactive identity picker when stdin is a TTY (s-1246)"
-    )
-    .option(
-      "--no-open",
-      "do not launch the verification URL in the default browser (agent mode only)"
-    )
-    .option(
-      "--user <username>",
-      "exchange username + password for a long-lived bearer token via POST /api/auth/login (s-1275); --password is also required. Cannot be combined with --as-human / --as-agent."
-    )
-    .option(
-      "--password <password>",
-      "password for --user (s-1275). Avoid shell history by piping: read -s PW && kanban auth login --user admin --password \"$PW\", or use --password-stdin / KANBAN_CLI_PASSWORD."
-    )
-    .option(
-      "--password-stdin",
-      "read the password from stdin (one line) instead of --password (s-1275)"
-    )
+    .description(t("cli.auth.login.description"))
+    .option("--as-human", t("cli.auth.login.opt.asHuman"))
+    .option("--as-agent", t("cli.auth.login.opt.asAgent"))
+    .option("--no-open", t("cli.auth.login.opt.noOpen"))
+    .option("--user <username>", t("cli.auth.login.opt.user"))
+    .option("--password <password>", t("cli.auth.login.opt.password"))
+    .option("--password-stdin", t("cli.auth.login.opt.passwordStdin"))
     .action(
       async (cmdOpts: {
         asHuman?: boolean;
@@ -317,14 +297,14 @@ export function createProgram(
           if (wantsPasswordLogin) {
             if (cmdOpts.asHuman || cmdOpts.asAgent) {
               process.stderr.write(
-                "Cannot pass --user/--password together with --as-human / --as-agent; the password shortcut always binds to the username it was given.\n"
+                `${t("cli.auth.login.err.mixPasswordWithMode")}\n`
               );
               process.exit(1);
             }
             const username = cmdOpts.user?.trim();
             if (!username) {
               process.stderr.write(
-                "kanban auth login --user <username> --password <password>: --user is required\n"
+                `${t("cli.auth.login.err.missingUser")}\n`
               );
               process.exit(1);
             }
@@ -372,7 +352,7 @@ export function createProgram(
           }
           if (cmdOpts.asHuman && cmdOpts.asAgent) {
             process.stderr.write(
-              "Cannot pass both --as-human and --as-agent; pick one.\n"
+              `${t("cli.auth.login.err.mixAsHumanAsAgent")}\n`
             );
             process.exit(1);
           }
@@ -406,7 +386,7 @@ export function createProgram(
 
   authCmd
     .command("status")
-    .description("show current profile, host, scope, and token lifetime")
+    .description(t("cli.auth.status.description"))
     .action(async () => {
       try {
         await runAuthStatus({ apiUrl: opts.apiUrl, profile: opts.profile }, { oauth });
@@ -418,7 +398,7 @@ export function createProgram(
 
   authCmd
     .command("logout")
-    .description("delete stored credentials")
+    .description(t("cli.auth.logout.description"))
     .action(async () => {
       try {
         await runLogout({ apiUrl: opts.apiUrl, profile: opts.profile }, { oauth });
@@ -430,8 +410,8 @@ export function createProgram(
 
   authCmd
     .command("whoami")
-    .description("call GET /api/v1/users/me and show the current user")
-    .option("--path <path>", "override the whoami endpoint path", "/api/v1/users/me")
+    .description(t("cli.auth.whoami.description"))
+    .option("--path <path>", t("cli.auth.whoami.opt.path"), "/api/v1/users/me")
     .action(async (cmdOpts: { path?: string }) => {
       try {
         await runWhoami(
@@ -451,13 +431,13 @@ export function createProgram(
   // session, so `kanban auth login` no longer leaks the admin identity
   // into unattended automation. See `auth agent create / bind` below.
 
-  const agentCmd = authCmd.command("agent").description(
-    "manage the Agent identity bound to the CLI (unattended / automation use)"
-  );
+  const agentCmd = authCmd
+    .command("agent")
+    .description(t("cli.auth.agent.description"));
 
   agentCmd
     .command("list")
-    .description("list configured Agents on the server (admin OAuth session required)")
+    .description(t("cli.auth.agent.list.description"))
     .action(async () => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -474,15 +454,10 @@ export function createProgram(
 
   agentCmd
     .command("create <nickname>")
-    .description(
-      "create a new Agent on the server and bind its API token to the CLI profile (admin OAuth session required)"
-    )
-    .option("--avatar <url>", "avatar URL for the new Agent")
-    .option("--role <role>", "role for the new Agent (ADMIN|MEMBER|VIEWER)", "ADMIN")
-    .option(
-      "--no-bind",
-      "do not persist the new token to the credential store (dry run)"
-    )
+    .description(t("cli.auth.agent.create.description"))
+    .option("--avatar <url>", t("cli.auth.agent.create.opt.avatar"))
+    .option("--role <role>", t("cli.auth.agent.create.opt.role"), "ADMIN")
+    .option("--no-bind", t("cli.auth.agent.create.opt.noBind"))
     .action(
       async (
         nickname: string,
@@ -493,7 +468,9 @@ export function createProgram(
           const role = (cmdOpts.role ?? "ADMIN").toUpperCase();
           if (role !== "ADMIN" && role !== "MEMBER" && role !== "VIEWER") {
             process.stderr.write(
-              `Invalid --role: ${cmdOpts.role}. Use one of ADMIN, MEMBER, VIEWER.\n`
+              `${t("cli.auth.agent.create.err.invalidRole", {
+                value: String(cmdOpts.role),
+              })}\n`
             );
             process.exit(1);
           }
@@ -519,10 +496,8 @@ export function createProgram(
 
   agentCmd
     .command("bind")
-    .description(
-      "bind the CLI to an existing Agent API token (issued via the web UI or `kanban auth agent create`)"
-    )
-    .option("--token <token>", "Agent API token to persist (else KANBAN_AGENT_TOKEN, else prompt)")
+    .description(t("cli.auth.agent.bind.description"))
+    .option("--token <token>", t("cli.auth.agent.bind.opt.token"))
     .action(async (cmdOpts: { token?: string }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -534,9 +509,11 @@ export function createProgram(
           oauth,
           prompt: async () =>
             inquirerPassword({
-              message: "Agent API token:",
+              message: t("cli.auth.agent.bind.prompt.token"),
               validate: (v: string) =>
-                v && v.trim().length > 0 ? true : "Token is required",
+                v && v.trim().length > 0
+                  ? true
+                  : t("cli.auth.agent.bind.prompt.tokenRequired"),
             }),
         });
       } catch (err) {
@@ -556,10 +533,8 @@ export function createProgram(
   // pre-issued token).
   agentCmd
     .command("login")
-    .description(
-      "start the OAuth device flow and bind the CLI to an Agent identity chosen on the approval page"
-    )
-    .option("--no-open", "do not launch the verification URL in the default browser")
+    .description(t("cli.auth.agent.login.description"))
+    .option("--no-open", t("cli.auth.agent.login.opt.noOpen"))
     .action(async (cmdOpts: { open?: boolean }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -578,7 +553,7 @@ export function createProgram(
 
   agentCmd
     .command("delete <agentId>")
-    .description("delete an Agent (admin OAuth session required)")
+    .description(t("cli.auth.agent.delete.description"))
     .action(async (agentId: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -599,7 +574,7 @@ export function createProgram(
   // ---- status / dashboard ----
   program
     .command("status")
-    .description("probe the Kanban API and report latency / boardsCount / apiUrl")
+    .description(t("cli.status.description"))
     .action(async () => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -616,7 +591,7 @@ export function createProgram(
 
   program
     .command("dashboard")
-    .description("fetch GET /api/v1/dashboard/stats and print a tabular summary")
+    .description(t("cli.dashboard.description"))
     .action(async () => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -632,12 +607,12 @@ export function createProgram(
     });
 
   // ---- boards ----
-  const boardsCmd = program.command("boards").description("manage boards");
+  const boardsCmd = program.command("boards").description(t("cli.boards.description"));
 
   boardsCmd
     .command("list")
-    .description("list non-deleted boards (GET /api/v1/boards)")
-    .option("--fields <fields>", "comma-separated list of fields to show", (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean))
+    .description(t("cli.boards.list.description"))
+    .option("--fields <fields>", t("cli.boards.list.opt.fields"), (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean))
     .action(async (cmdOpts: { fields?: string[] }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -655,8 +630,8 @@ export function createProgram(
 
   boardsCmd
     .command("get <id>")
-    .description("fetch a single board by id (GET /api/v1/boards/:id)")
-    .option("--fields <fields>", "comma-separated list of fields to show", (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean))
+    .description(t("cli.boards.get.description"))
+    .option("--fields <fields>", t("cli.boards.get.opt.fields"), (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean))
     .action(async (id: string, cmdOpts: { fields?: string[] }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -679,15 +654,15 @@ export function createProgram(
     });
 
   // ---- columns ----
-  const columnsCmd = program.command("columns").description("manage columns");
+  const columnsCmd = program.command("columns").description(t("cli.columns.description"));
 
   columnsCmd
     .command("list")
-    .description("list columns (GET /api/v1/columns)")
-    .option("--board <id>", "filter by board id")
+    .description(t("cli.columns.list.description"))
+    .option("--board <id>", t("cli.columns.list.opt.board"))
     .option(
       "--positions <list>",
-      "comma-separated list of positions to include (e.g. 1,3,5)",
+      t("cli.columns.list.opt.positions"),
       (v: string) =>
         v
           .split(",")
@@ -696,7 +671,7 @@ export function createProgram(
     )
     .option(
       "--fields <fields>",
-      "comma-separated list of fields to show",
+      t("cli.columns.list.opt.fields"),
       (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean)
     )
     .action(
@@ -727,10 +702,10 @@ export function createProgram(
 
   columnsCmd
     .command("get <id>")
-    .description("fetch a single column by id (GET /api/v1/columns/:id)")
+    .description(t("cli.columns.get.description"))
     .option(
       "--fields <fields>",
-      "comma-separated list of fields to show",
+      t("cli.columns.get.opt.fields"),
       (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean)
     )
     .action(async (id: string, cmdOpts: { fields?: string[] }) => {
@@ -755,7 +730,7 @@ export function createProgram(
     });
 
   // ---- tasks ----
-  const tasksCmd = program.command("tasks").description("manage tasks");
+  const tasksCmd = program.command("tasks").description(t("cli.tasks.description"));
 
   function tasksExitCode(err: unknown): number {
     if (err instanceof TasksInvalidUsageError) return 1;
@@ -765,41 +740,28 @@ export function createProgram(
 
   tasksCmd
     .command("list")
-    .description("list tasks (filters client-side over GET /api/v1/columns)")
-    .option("--board <id>", "filter by board id")
-    .option("--column <id>", "filter by column id (mutually exclusive with --status)")
-    .option(
-      "--status <status>",
-      "filter by status (todo|in_progress|review|done); mutually exclusive with --column"
-    )
-    .option("--agent-type <type>", "filter by column agentConfig.agentTypes")
-    .option(
-      "--priority <priority>",
-      "filter by priority (low|medium|high)"
-    )
-    .option("--assignee <username>", "filter by assignee username")
-    .option("--search <query>", "free-text search across title and description")
-    .option(
-      "--since <range>",
-      "filter by creation date (today|thisWeek|thisMonth)"
-    )
-    .option("--tag <tag>", "filter by a meta value (substring match)")
-    .option(
-      "--lightweight",
-      "return only id/title/priority/assignee/createdAt (default behaviour)",
-      false
-    )
+    .description(t("cli.tasks.list.description"))
+    .option("--board <id>", t("cli.tasks.list.opt.board"))
+    .option("--column <id>", t("cli.tasks.list.opt.column"))
+    .option("--status <status>", t("cli.tasks.list.opt.status"))
+    .option("--agent-type <type>", t("cli.tasks.list.opt.agentType"))
+    .option("--priority <priority>", t("cli.tasks.list.opt.priority"))
+    .option("--assignee <username>", t("cli.tasks.list.opt.assignee"))
+    .option("--search <query>", t("cli.tasks.list.opt.search"))
+    .option("--since <range>", t("cli.tasks.list.opt.since"))
+    .option("--tag <tag>", t("cli.tasks.list.opt.tag"))
+    .option("--lightweight", t("cli.tasks.list.opt.lightweight"), false)
     .option(
       "--fields <set>",
-      "field set for change-detection (id|id+updated)",
+      t("cli.tasks.list.opt.fields"),
       (v: string): TaskFields => {
-        const t = v.trim();
-        if (t !== "id" && t !== "id+updated") {
+        const localT = v.trim();
+        if (localT !== "id" && localT !== "id+updated") {
           throw new TasksInvalidUsageError(
-            `invalid --fields value: ${v} (allowed: id, id+updated)`
+            t("cli.tasks.list.err.invalidFields", { value: v })
           );
         }
-        return t as TaskFields;
+        return localT as TaskFields;
       }
     )
     .action(
@@ -843,7 +805,7 @@ export function createProgram(
 
   tasksCmd
     .command("get <id>")
-    .description("fetch a single task by id (GET /api/v1/tasks/:id)")
+    .description(t("cli.tasks.get.description"))
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -863,25 +825,16 @@ export function createProgram(
 
   tasksCmd
     .command("create")
-    .description("create a task (POST /api/v1/tasks)")
-    .requiredOption("--title <title>", "task title (required)")
-    .option("--description <description>", "task description")
-    .option("--column <id>", "target column id (mutually exclusive with --status)")
-    .option(
-      "--status <status>",
-      "target status (todo|in_progress|review|done); mutually exclusive with --column"
-    )
-    .option("--board <id>", "default board for status→column resolution")
-    .option(
-      "--priority <priority>",
-      "task priority (low|medium|high); defaults to medium"
-    )
-    .option("--assignee <username>", "task assignee username")
-    .option(
-      "--meta <kv...>",
-      "metadata key=value pairs (repeatable or comma-separated)"
-    )
-    .option("--no-publish", "create as a draft instead of a published task")
+    .description(t("cli.tasks.create.description"))
+    .requiredOption("--title <title>", t("cli.tasks.create.opt.title"))
+    .option("--description <description>", t("cli.tasks.create.opt.description"))
+    .option("--column <id>", t("cli.tasks.create.opt.column"))
+    .option("--status <status>", t("cli.tasks.create.opt.status"))
+    .option("--board <id>", t("cli.tasks.create.opt.board"))
+    .option("--priority <priority>", t("cli.tasks.create.opt.priority"))
+    .option("--assignee <username>", t("cli.tasks.create.opt.assignee"))
+    .option("--meta <kv...>", t("cli.tasks.create.opt.meta"))
+    .option("--no-publish", t("cli.tasks.create.opt.noPublish"))
     .action(
       async (cmdOpts: {
         title: string;
@@ -919,23 +872,14 @@ export function createProgram(
 
   tasksCmd
     .command("update <id>")
-    .description("update a task (PUT /api/v1/tasks/:id)")
-    .option("--title <title>", "new title")
-    .option("--description <description>", "new description")
-    .option(
-      "--priority <priority>",
-      "new priority (low|medium|high)"
-    )
-    .option("--assignee <username>", "new assignee username")
-    .option(
-      "--meta <kv...>",
-      "new metadata key=value pairs (repeatable or comma-separated)"
-    )
-    .option("--column <id>", "move task to this column (mutually exclusive with --status)")
-    .option(
-      "--status <status>",
-      "move task to the column with this status (todo|in_progress|review|done); mutually exclusive with --column"
-    )
+    .description(t("cli.tasks.update.description"))
+    .option("--title <title>", t("cli.tasks.update.opt.title"))
+    .option("--description <description>", t("cli.tasks.update.opt.description"))
+    .option("--priority <priority>", t("cli.tasks.update.opt.priority"))
+    .option("--assignee <username>", t("cli.tasks.update.opt.assignee"))
+    .option("--meta <kv...>", t("cli.tasks.update.opt.meta"))
+    .option("--column <id>", t("cli.tasks.update.opt.column"))
+    .option("--status <status>", t("cli.tasks.update.opt.status"))
     .action(
       async (
         id: string,
@@ -975,8 +919,8 @@ export function createProgram(
 
   tasksCmd
     .command("delete <id>")
-    .description("delete a task (DELETE /api/v1/tasks/:id); --yes skips confirmation")
-    .option("--yes", "skip confirmation prompt (default behaviour)", false)
+    .description(t("cli.tasks.delete.description"))
+    .option("--yes", t("cli.tasks.delete.opt.yes"), false)
     .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -997,9 +941,7 @@ export function createProgram(
 
   tasksCmd
     .command("complete <id>")
-    .description(
-      "mark a task as complete by moving it to the board's done column (POST /api/v1/tasks/:id/complete)"
-    )
+    .description(t("cli.tasks.complete.description"))
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1019,9 +961,7 @@ export function createProgram(
 
   tasksCmd
     .command("advance <id>")
-    .description(
-      "advance a task one column forward (POST /api/v1/tasks/:id/advance)"
-    )
+    .description(t("cli.tasks.advance.description"))
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1041,14 +981,9 @@ export function createProgram(
 
   tasksCmd
     .command("move <id>")
-    .description(
-      "move a task to a target column or status (PUT /api/v1/tasks/:id with columnId)"
-    )
-    .option("--column <id>", "target column id (mutually exclusive with --status)")
-    .option(
-      "--status <status>",
-      "target status (todo|in_progress|review|done); mutually exclusive with --column"
-    )
+    .description(t("cli.tasks.move.description"))
+    .option("--column <id>", t("cli.tasks.move.opt.column"))
+    .option("--status <status>", t("cli.tasks.move.opt.status"))
     .action(
       async (
         id: string,
@@ -1076,7 +1011,7 @@ export function createProgram(
   // ---- tasks batch ----
   const tasksBatchCmd = tasksCmd
     .command("batch")
-    .description("batch task operations (create / update / delete)");
+    .description(t("cli.tasks.batch.description"));
 
   function tasksBatchExitCode(err: unknown): number {
     if (err instanceof TasksInvalidUsageError) return 1;
@@ -1086,32 +1021,15 @@ export function createProgram(
 
   tasksBatchCmd
     .command("create")
-    .description(
-      "create multiple tasks (POST /api/v1/tasks/batch); input from --file or repeated --title/--column flags"
-    )
-    .option(
-      "--file <path>",
-      "read tasks from a JSON or YAML file (single object or array of objects)"
-    )
-    .option(
-      "--title <title>",
-      "task title; repeat for multiple tasks",
-      splitFlagValues
-    )
-    .option("--description <description>", "task description", splitFlagValues)
-    .option("--column <id>", "target column id", splitFlagValues)
-    .option(
-      "--status <status>",
-      "target status (todo|in_progress|review|done)",
-      splitFlagValues
-    )
-    .option(
-      "--priority <priority>",
-      "task priority (low|medium|high)",
-      splitFlagValues
-    )
-    .option("--assignee <username>", "task assignee username", splitFlagValues)
-    .option("--published", "publish each task (default behaviour)", splitFlagValues)
+    .description(t("cli.tasks.batch.create.description"))
+    .option("--file <path>", t("cli.tasks.batch.create.opt.file"))
+    .option("--title <title>", t("cli.tasks.batch.create.opt.title"), splitFlagValues)
+    .option("--description <description>", t("cli.tasks.batch.create.opt.description"), splitFlagValues)
+    .option("--column <id>", t("cli.tasks.batch.create.opt.column"), splitFlagValues)
+    .option("--status <status>", t("cli.tasks.batch.create.opt.status"), splitFlagValues)
+    .option("--priority <priority>", t("cli.tasks.batch.create.opt.priority"), splitFlagValues)
+    .option("--assignee <username>", t("cli.tasks.batch.create.opt.assignee"), splitFlagValues)
+    .option("--published", t("cli.tasks.batch.create.opt.published"), splitFlagValues)
     .action(
       async (cmdOpts: {
         file?: string;
@@ -1154,20 +1072,12 @@ export function createProgram(
 
   tasksBatchCmd
     .command("update <ids...>")
-    .description(
-      "update multiple tasks (PUT /api/v1/tasks/batch) with the same column/status/priority/assignee"
-    )
-    .option(
-      "--file <path>",
-      "read ids from a UTF-8 text file (one id per line, # comments allowed)"
-    )
-    .option("--column <id>", "move tasks to this column (mutually exclusive with --status)")
-    .option(
-      "--status <status>",
-      "move tasks to the column with this status (todo|in_progress|review|done); mutually exclusive with --column"
-    )
-    .option("--priority <priority>", "new priority (low|medium|high)")
-    .option("--assignee <username>", "new assignee username")
+    .description(t("cli.tasks.batch.update.description"))
+    .option("--file <path>", t("cli.tasks.batch.update.opt.file"))
+    .option("--column <id>", t("cli.tasks.batch.update.opt.column"))
+    .option("--status <status>", t("cli.tasks.batch.update.opt.status"))
+    .option("--priority <priority>", t("cli.tasks.batch.update.opt.priority"))
+    .option("--assignee <username>", t("cli.tasks.batch.update.opt.assignee"))
     .action(
       async (
         ids: string[],
@@ -1202,14 +1112,9 @@ export function createProgram(
 
   tasksBatchCmd
     .command("delete <ids...>")
-    .description(
-      "delete multiple tasks (DELETE /api/v1/tasks/batch); --yes is the default and can be omitted"
-    )
-    .option(
-      "--file <path>",
-      "read ids from a UTF-8 text file (one id per line, # comments allowed)"
-    )
-    .option("--yes", "skip confirmation prompt (default behaviour)", false)
+    .description(t("cli.tasks.batch.delete.description"))
+    .option("--file <path>", t("cli.tasks.batch.delete.opt.file"))
+    .option("--yes", t("cli.tasks.batch.delete.opt.yes"), false)
     .action(
       async (
         ids: string[],
@@ -1235,17 +1140,19 @@ export function createProgram(
 
   function coerceBooleans(values: string[]): boolean[] {
     return values.map((v) => {
-      const t = String(v).trim().toLowerCase();
-      if (t === "true" || t === "1" || t === "yes") return true;
-      if (t === "false" || t === "0" || t === "no") return false;
+      const localT = String(v).trim().toLowerCase();
+      if (localT === "true" || localT === "1" || localT === "yes") return true;
+      if (localT === "false" || localT === "0" || localT === "no") return false;
       throw new TasksInvalidUsageError(
-        `invalid boolean value: ${v} (allowed: true|false)`
+        t("cli.tasks.batch.err.invalidBoolean", { value: v })
       );
     });
   }
 
   // ---- drafts ----
-  const draftsCmd = program.command("drafts").description("manage draft tasks");
+  const draftsCmd = program
+    .command("drafts")
+    .description(t("cli.drafts.description"));
 
   function draftsExitCode(err: unknown): number {
     if (err instanceof TasksInvalidUsageError) return 1;
@@ -1255,8 +1162,8 @@ export function createProgram(
 
   draftsCmd
     .command("list")
-    .description("list draft tasks (GET /api/v1/drafts)")
-    .option("--board <id>", "filter by board id")
+    .description(t("cli.drafts.list.description"))
+    .option("--board <id>", t("cli.drafts.list.opt.board"))
     .action(async (cmdOpts: { board?: string }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1274,7 +1181,7 @@ export function createProgram(
 
   draftsCmd
     .command("publish <id>")
-    .description("publish a draft task (PUT /api/v1/tasks/:id with { published: true })")
+    .description(t("cli.drafts.publish.description"))
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1294,9 +1201,7 @@ export function createProgram(
 
   draftsCmd
     .command("unpublish <id>")
-    .description(
-      "unpublish a task back into drafts (PUT /api/v1/tasks/:id with { published: false })"
-    )
+    .description(t("cli.drafts.unpublish.description"))
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1315,7 +1220,9 @@ export function createProgram(
     });
 
   // ---- archived ----
-  const archivedCmd = program.command("archived").description("manage archived tasks");
+  const archivedCmd = program
+    .command("archived")
+    .description(t("cli.archived.description"));
 
   function archivedExitCode(err: unknown): number {
     if (err instanceof TasksInvalidUsageError) return 1;
@@ -1325,8 +1232,8 @@ export function createProgram(
 
   archivedCmd
     .command("list")
-    .description("list archived tasks (GET /api/v1/archived)")
-    .option("--board <id>", "filter by board id")
+    .description(t("cli.archived.list.description"))
+    .option("--board <id>", t("cli.tasks.list.opt.board"))
     .action(async (cmdOpts: { board?: string }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1344,10 +1251,8 @@ export function createProgram(
 
   archivedCmd
     .command("archive <id>")
-    .description(
-      "archive a task (POST /api/v1/tasks/:id/archive with { archived: true }); --yes is the default"
-    )
-    .option("--yes", "skip confirmation prompt (default behaviour)", false)
+    .description(t("cli.archived.archive.description"))
+    .option("--yes", t("cli.tasks.delete.opt.yes"), false)
     .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1368,9 +1273,7 @@ export function createProgram(
 
   archivedCmd
     .command("restore <id>")
-    .description(
-      "restore an archived task (POST /api/v1/tasks/:id/archive with { archived: false })"
-    )
+    .description(t("cli.archived.restore.description"))
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1389,7 +1292,9 @@ export function createProgram(
     });
 
   // ---- comments ----
-  const commentsCmd = program.command("comments").description("manage task comments");
+  const commentsCmd = program
+    .command("comments")
+    .description(t("cli.comments.description"));
 
   function commentsExitCode(err: unknown): number {
     if (err instanceof TasksInvalidUsageError) return 1;
@@ -1399,14 +1304,12 @@ export function createProgram(
 
   commentsCmd
     .command("add <taskId>")
-    .description(
-      "add a comment to a task (POST /api/v1/comments); pass --body - to read the body from stdin"
-    )
+    .description(t("cli.comments.add.description"))
     .requiredOption(
       "--body <text>",
-      `comment body, or "${STDIN_BODY_SENTINEL}" to read from stdin`
+      `${t("cli.comments.add.opt.body")}, 或 "${STDIN_BODY_SENTINEL}" 从 stdin 读取`
     )
-    .option("--author <name>", "optional author override (server uses authenticated user by default)")
+    .option("--author <name>", t("cli.comments.add.opt.author"))
     .action(async (taskId: string, cmdOpts: { body: string; author?: string }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1428,7 +1331,7 @@ export function createProgram(
 
   commentsCmd
     .command("list <taskId>")
-    .description("list comments for a task (GET /api/v1/comments?taskId=...)")
+    .description(t("cli.comments.list.description"))
     .action(async (taskId: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1447,7 +1350,9 @@ export function createProgram(
     });
 
   // ---- subtasks ----
-  const subtasksCmd = program.command("subtasks").description("manage task subtasks");
+  const subtasksCmd = program
+    .command("subtasks")
+    .description(t("cli.subtasks.description"));
 
   function subtasksExitCode(err: unknown): number {
     if (err instanceof TasksInvalidUsageError) return 1;
@@ -1457,7 +1362,7 @@ export function createProgram(
 
   subtasksCmd
     .command("list <taskId>")
-    .description("list subtasks for a task (GET /api/v1/subtasks?taskId=...)")
+    .description(t("cli.subtasks.list.description"))
     .action(async (taskId: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1477,8 +1382,8 @@ export function createProgram(
 
   subtasksCmd
     .command("create <taskId>")
-    .description("create a subtask on a task (POST /api/v1/subtasks)")
-    .requiredOption("--title <title>", "subtask title (required)")
+    .description(t("cli.subtasks.create.description"))
+    .requiredOption("--title <title>", t("cli.subtasks.create.opt.title"))
     .action(async (taskId: string, cmdOpts: { title: string }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1499,13 +1404,11 @@ export function createProgram(
 
   subtasksCmd
     .command("update <id>")
-    .description(
-      "update a subtask (PUT /api/v1/subtasks/:id); pass --title and/or --completed/--no-completed"
-    )
-    .option("--title <title>", "new subtask title")
+    .description(t("cli.subtasks.update.description"))
+    .option("--title <title>", t("cli.tasks.update.opt.title"))
     .option(
       "--completed",
-      "mark the subtask as completed (use --no-completed to mark as incomplete)"
+      t("cli.subtasks.update.opt.completed")
     )
     .action(
       async (
@@ -1533,8 +1436,8 @@ export function createProgram(
 
   subtasksCmd
     .command("delete <id>")
-    .description("delete a subtask (DELETE /api/v1/subtasks/:id); --yes is the default")
-    .option("--yes", "skip confirmation prompt (default behaviour)", false)
+    .description(t("cli.subtasks.delete.description"))
+    .option("--yes", t("cli.tasks.delete.opt.yes"), false)
     .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1556,11 +1459,11 @@ export function createProgram(
   // ---- mine ----
   const mineCmd = program
     .command("mine")
-    .description("list tasks assigned to (or routed to) the current agent (GET /api/v1/mcp/my-tasks)")
-    .option("--board <id>", "client-side filter: only include tasks from this board")
+    .description(t("cli.mine.description"))
+    .option("--board <id>", t("cli.mine.opt.board"))
     .option(
       "--lightweight",
-      "return only id/title/priority/assignee/createdAt",
+      t("cli.tasks.list.opt.lightweight"),
       false
     );
 
@@ -1616,33 +1519,13 @@ export function createProgram(
   // wired to the same handler.
   const runCmd = program
     .command("run")
-    .description(
-      "run the runner loop (start) or scaffold its config (init)"
-    )
-    .option(
-      "--config <file>",
-      "explicit path to a .kanban-runner{.local}.yaml; overrides the discovery walk-up"
-    )
-    .option(
-      "--board <id>",
-      "mode-1 board id to watch (must pair with --status)"
-    )
-    .option(
-      "--status <status>",
-      "mode-1 column status to watch (todo|in_progress|review|done); must pair with --board"
-    )
-    .option(
-      "--mine",
-      "mode-2: pick tasks assigned to (or routed to) the authenticated agent"
-    )
-    .option(
-      "--once",
-      "process a single task and exit; useful for cron / smoke tests"
-    )
-    .option(
-      "--debug",
-      "emit verbose trace logs to stderr (claim attempts, polling delays, spawn details, hydration, results)"
-    );
+    .description(t("cli.run.description"))
+    .option("--config <file>", t("cli.run.opt.config"))
+    .option("--board <id>", t("cli.run.opt.board"))
+    .option("--status <status>", t("cli.run.opt.status"))
+    .option("--mine", t("cli.run.opt.mine"))
+    .option("--once", t("cli.run.opt.once"))
+    .option("--debug", t("cli.run.opt.debug"));
 
   const runStartAction = async (cmdOpts: {
     config?: string;
@@ -1686,33 +1569,13 @@ export function createProgram(
 
   runCmd
     .command("start")
-    .description(
-      "start the runner loop (claim → spawn agent → heartbeat → finish)"
-    )
-    .option(
-      "--config <file>",
-      "explicit path to a .kanban-runner{.local}.yaml; overrides the discovery walk-up"
-    )
-    .option(
-      "--board <id>",
-      "mode-1 board id to watch (must pair with --status)"
-    )
-    .option(
-      "--status <status>",
-      "mode-1 column status to watch (todo|in_progress|review|done); must pair with --board"
-    )
-    .option(
-      "--mine",
-      "mode-2: pick tasks assigned to (or routed to) the authenticated agent"
-    )
-    .option(
-      "--once",
-      "process a single task and exit; useful for cron / smoke tests"
-    )
-    .option(
-      "--debug",
-      "emit verbose trace logs to stderr (claim attempts, polling delays, spawn details, hydration, results)"
-    )
+    .description(t("cli.run.start.description"))
+    .option("--config <file>", t("cli.run.opt.config"))
+    .option("--board <id>", t("cli.run.opt.board"))
+    .option("--status <status>", t("cli.run.opt.status"))
+    .option("--mine", t("cli.run.opt.mine"))
+    .option("--once", t("cli.run.opt.once"))
+    .option("--debug", t("cli.run.opt.debug"))
     .action(runStartAction);
 
   // ---- run init ----
@@ -1721,9 +1584,7 @@ export function createProgram(
   // flag surface stays untouched.
   runCmd
     .command("init")
-    .description(
-      "interactively create a .kanban-runner{.local}.yaml (mode, agent, runner)"
-    )
+    .description(t("cli.run-init.description"))
     .action(async () => {
       try {
         await runRunnerInitCommand(
@@ -1780,7 +1641,7 @@ export function createProgram(
   // future per-run verbs (get, cancel, …) have an obvious home.
   const runsCmd = program
     .command("runs")
-    .description("list terminal task-run history (GET /api/v1/runs/history)");
+    .description(t("cli.runs.description"));
 
   function runsExitCode(err: unknown): number {
     if (err instanceof RunsInvalidUsageError) return 1;
@@ -1789,31 +1650,20 @@ export function createProgram(
 
   runsCmd
     .command("list")
-    .description(
-      "list past task runs (auth required); supports --runner-id, --since, --status, --task, --board, --limit, --offset"
-    )
-    .option(
-      "--runner-id <id>",
-      "filter by exact runner identifier (forwards to ?runnerId=)"
-    )
-    .option(
-      "--since <duration>",
-      "lower bound on finished_at; accepts relative durations like 1d/2h/30m or an absolute RFC3339/YYYY-MM-DD timestamp"
-    )
-    .option(
-      "--status <status>",
-      "filter by terminal status (completed|failed|released)"
-    )
-    .option("--task <id>", "filter by task id (forwards to ?taskId=)")
-    .option("--board <id>", "filter by board id (forwards to ?boardId=)")
+    .description(t("cli.runs.list.description"))
+    .option("--runner-id <id>", t("cli.runs.list.opt.runnerId"))
+    .option("--since <duration>", t("cli.runs.list.opt.since"))
+    .option("--status <status>", t("cli.runs.list.opt.status"))
+    .option("--task <id>", t("cli.runs.list.opt.task"))
+    .option("--board <id>", t("cli.runs.list.opt.board"))
     .option(
       "--limit <n>",
-      "pagination size; server defaults to 50, capped at 200",
+      t("cli.runs.list.opt.limit"),
       (v: string) => {
         const n = Number(v);
         if (!Number.isFinite(n) || !Number.isInteger(n)) {
           throw new RunsInvalidUsageError(
-            `invalid --limit value: ${v} (must be an integer)`
+            t("cli.runs.err.invalidLimit", { value: v })
           );
         }
         return n;
@@ -1821,12 +1671,12 @@ export function createProgram(
     )
     .option(
       "--offset <n>",
-      "pagination offset",
+      t("cli.runs.list.opt.offset"),
       (v: string) => {
         const n = Number(v);
         if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
           throw new RunsInvalidUsageError(
-            `invalid --offset value: ${v} (must be a non-negative integer)`
+            t("cli.runs.err.invalidOffset", { value: v })
           );
         }
         return n;
@@ -1876,34 +1726,23 @@ export function createProgram(
   // caller has no access to.
   program
     .command("attach <taskId>")
-    .description(
-      "attach the calling runner to a specific task by id (POST /api/v1/runs/:taskId/attach); AI-first entry point that does not require owning the surrounding column"
-    )
-    .option(
-      "--runner-id <id>",
-      "stable runner identity (defaults to <host>-<pid>-<uuid>); used by heartbeat/finish to verify ownership"
-    )
-    .option(
-      "--agent-type <type>",
-      "agent class the runner is willing to pick up; defaults to KANBAN_RUNNER_AGENT_TYPE or 'opencode'"
-    )
+    .description(t("cli.attach.description"))
+    .option("--runner-id <id>", t("cli.attach.opt.runnerId"))
+    .option("--agent-type <type>", t("cli.attach.opt.agentType"))
     .option(
       "--lock-timeout-ms <ms>",
-      "lock TTL in milliseconds (defaults to server's DefaultRunLockTimeoutMs)",
+      t("cli.attach.opt.lockTimeoutMs"),
       (v: string) => {
         const n = Number(v);
         if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
           throw new AttachInvalidUsageError(
-            `invalid --lock-timeout-ms value: ${v} (must be a positive integer)`
+            t("cli.attach.err.invalidLockTimeout", { value: v })
           );
         }
         return n;
       }
     )
-    .option(
-      "--reason <text>",
-      "free-form note attached to the audit activity so the operator can tell apart manual escalation from a scanner grab"
-    )
+    .option("--reason <text>", t("cli.attach.opt.reason"))
     .action(
       async (
         taskId: string,
@@ -1940,7 +1779,7 @@ export function createProgram(
   // ---- workspace ----
   const workspaceCmd = program
     .command("workspace")
-    .description("manage workspace files");
+    .description(t("cli.workspace.description"));
 
   function workspaceExitCode(err: unknown): number {
     if (err instanceof TasksInvalidUsageError) return 1;
@@ -1950,13 +1789,8 @@ export function createProgram(
 
   workspaceCmd
     .command("upload <file>")
-    .description(
-      "upload a local text file to the workspace (POST /api/v1/workspace/upload)"
-    )
-    .option(
-      "--path <remotePath>",
-      "workspace-relative path for the uploaded file (defaults to the local basename)"
-    )
+    .description(t("cli.workspace.upload.description"))
+    .option("--path <remotePath>", t("cli.workspace.upload.opt.path"))
     .action(async (file: string, cmdOpts: { path?: string }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1975,9 +1809,7 @@ export function createProgram(
 
   workspaceCmd
     .command("batch-upload <files...>")
-    .description(
-      "upload multiple local text files in one request (POST /api/v1/workspace/batch-upload)"
-    )
+    .description(t("cli.workspace.batch.description"))
     .action(async (files: string[]) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -1995,8 +1827,8 @@ export function createProgram(
 
   workspaceCmd
     .command("list")
-    .description("list workspace files (GET /api/v1/workspace/files)")
-    .option("--path <sub>", "filter to a workspace-relative subdirectory")
+    .description(t("cli.workspace.list.description"))
+    .option("--path <sub>", t("cli.workspace.list.opt.path"))
     .action(async (cmdOpts: { path?: string }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -2014,9 +1846,7 @@ export function createProgram(
 
   workspaceCmd
     .command("read <id>")
-    .description(
-      "read a workspace file (GET /api/v1/workspace/files/<id>); default writes the raw content to stdout, --output json emits a base64 payload"
-    )
+    .description(t("cli.workspace.read.description"))
     .action(async (id: string) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -2036,10 +1866,8 @@ export function createProgram(
 
   workspaceCmd
     .command("delete <id>")
-    .description(
-      "delete a workspace file (DELETE /api/v1/workspace/files/<id>); --yes is the default"
-    )
-    .option("--yes", "skip confirmation prompt (default behaviour)", false)
+    .description(t("cli.workspace.delete.description"))
+    .option("--yes", t("cli.tasks.delete.opt.yes"), false)
     .action(async (id: string, _cmdOpts: { yes?: boolean }) => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -2060,7 +1888,7 @@ export function createProgram(
 
   workspaceCmd
     .command("stats")
-    .description("show workspace stats (GET /api/v1/workspace/stats)")
+    .description(t("cli.workspace.stats.description"))
     .action(async () => {
       const o = program.opts<{ output?: string }>();
       try {
@@ -2078,9 +1906,7 @@ export function createProgram(
   // ---- shell ----
   program
     .command("shell")
-    .description(
-      "start an interactive REPL; type `exit` (or Ctrl-D) to leave"
-    )
+    .description(t("cli.shell.description"))
     .action(async () => {
       await runShell(
         { apiUrl: opts.apiUrl, profile: opts.profile },
@@ -2102,11 +1928,11 @@ export function createProgram(
   // stumble on it.
   const completionCmd = program
     .command("completion")
-    .description("emit a shell completion script (bash|zsh|fish)");
+    .description(t("cli.completion.description"));
 
   completionCmd
     .command("bash")
-    .description("emit a bash completion script to stdout")
+    .description(t("cli.completion.bash.description"))
     .action(() => {
       try {
         runCompletion({ shell: "bash" });
@@ -2121,7 +1947,7 @@ export function createProgram(
 
   completionCmd
     .command("zsh")
-    .description("emit a zsh completion script to stdout")
+    .description(t("cli.completion.zsh.description"))
     .action(() => {
       try {
         runCompletion({ shell: "zsh" });
@@ -2136,7 +1962,7 @@ export function createProgram(
 
   completionCmd
     .command("fish")
-    .description("emit a fish completion script to stdout")
+    .description(t("cli.completion.fish.description"))
     .action(() => {
       try {
         runCompletion({ shell: "fish" });
@@ -2156,7 +1982,7 @@ export function createProgram(
   // offset so partial tokens don't get treated as completed words.
   const completeCmd = program
     .command("__complete <line> [point]")
-    .description("internal: dynamic completion used by the shell scripts")
+    .description(t("cli.complete.description"))
     .action(async (line: string, pointRaw?: string) => {
       const point = pointRaw !== undefined ? Number(pointRaw) : undefined;
       try {
@@ -2181,13 +2007,11 @@ export function createProgram(
   // facing verbs (`get` / `set`) to that module.
   const configCmd = program
     .command("config")
-    .description("view or update CLI configuration (API URL, profile, output, timeout)");
+    .description(t("cli.config.description"));
 
   configCmd
     .command("get [key]")
-    .description(
-      "print the effective value for <key> (apiUrl|output|profile|timeout); with no key, prints every supported key alongside its source"
-    )
+    .description(t("cli.config.get.description"))
     .action(async (key?: string) => {
       // We scan the original argv instead of reading program.opts()
       // because Commander reports the *default* value (the resolved
@@ -2212,9 +2036,7 @@ export function createProgram(
 
   configCmd
     .command("set <key> <value>")
-    .description(
-      "write <key>=<value> to ~/.config/kanban-cli/config.json; supported keys: apiUrl, output, profile, timeout"
-    )
+    .description(t("cli.config.set.description"))
     .action(async (key: string, value: string) => {
       try {
         await runConfigSet({ key, value });

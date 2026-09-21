@@ -85,13 +85,15 @@ const SUBCOMMANDS: Record<string, string[]> = {
 };
 
 // GLOBAL_FLAGS are surfaced by the completer when the user starts typing
-// `--` at any level.
+// `--` at any level. Mirrors the flags declared on the root program in
+// `cli/src/program.ts`; keep in sync when adding new globals.
 const GLOBAL_FLAGS = [
   "--api-url",
   "--profile",
   "--output",
   "--color",
   "--no-color",
+  "--lang",
 ];
 
 const BANNER = [
