@@ -171,6 +171,51 @@ func TestGetActivitiesReturnsRows(t *testing.T) {
 	})
 }
 
+// TestGetActivitiesEmptyReturnsArray covers s-1268 (PM review
+// s-1263 P1-2): when the activities table has zero matching rows
+// for the caller, GetActivities must serialise an explicit `[]`
+// rather than the JSON `null` literal. CLAUDE.md mandates empty
+// arrays for list responses so SPA consumers don't choke on
+// `null` and `curl | jq` users get a real empty array to diff
+// against.
+func TestGetActivitiesEmptyReturnsArray(t *testing.T) {
+	t.Run("empty log returns activities:[] and total:0", func(t *testing.T) {
+		db := setupTestDB(t)
+		defer db.Close()
+
+		userID := setupTestUser(t, db, "alice", "", "ADMIN")
+		tokenKey := "alice-empty-token"
+		setupTestToken(t, db, userID, tokenKey)
+
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+		router.GET("/api/activities", handlers.GetActivities(db))
+
+		req, _ := http.NewRequest("GET", "/api/activities", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenKey)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+		}
+
+		body := strings.TrimSpace(w.Body.String())
+		if !strings.Contains(body, `"activities":[]`) {
+			t.Errorf("expected activities:[] in body, got %s", body)
+		}
+		if strings.Contains(body, `"activities":null`) {
+			t.Errorf("activities must not serialise to null, got %s", body)
+		}
+		if !strings.Contains(body, `"total":0`) {
+			t.Errorf("expected total:0 in body, got %s", body)
+		}
+		if !strings.Contains(body, `"hasMore":false`) {
+			t.Errorf("expected hasMore:false in body, got %s", body)
+		}
+	})
+}
+
 func TestLogActivityUsesValidTimestamp(t *testing.T) {
 	t.Run("activity and last_active_at are written within a reasonable time window", func(t *testing.T) {
 		db := setupTestDB(t)

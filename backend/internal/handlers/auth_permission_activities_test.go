@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -568,5 +569,53 @@ func TestGetPermissionActivities_EmptyActionsDefaultsToThree(t *testing.T) {
 	want := []string{"act-grant", "act-revoke", "act-transfer"}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("expected default action set %v, got %v (PERMISSION_BULK_GRANT must be excluded)", want, got)
+	}
+}
+
+// TestGetPermissionActivities_EmptyReturnsArray covers s-1268 (PM
+// review s-1263 P1-2): when the audit log has zero matching rows
+// for the caller, GetPermissionActivities must serialise an
+// explicit `[]` rather than the JSON `null` literal. CLAUDE.md
+// mandates empty arrays for list responses; the SPA previously
+// hit `null` for empty audit logs which broke rendering.
+func TestGetPermissionActivities_EmptyReturnsArray(t *testing.T) {
+	ResetTokenCacheForTest()
+	ResetPermissionCacheForTest()
+
+	db := setupAuditDB(t)
+	defer db.Close()
+
+	// Seed a non-permission activity so the table isn't literally
+	// empty (regression guard for the WHERE action IN (...) path).
+	// admin1 + PERMISSION_GRANT would count toward the response, so
+	// we intentionally seed a non-audit action instead.
+	seedAuditActivity(t, db, "act-login", "admin1", "LOGIN", "USER", "admin1", "admin")
+
+	router := gin.New()
+	router.Use(RequireAuth(db))
+	router.GET("/api/v1/activities", GetPermissionActivities(db))
+
+	req, _ := http.NewRequest("GET", "/api/v1/activities", nil)
+	req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "admin-token"})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	body := strings.TrimSpace(w.Body.String())
+	if !strings.Contains(body, `"activities":[]`) {
+		t.Errorf("expected activities:[] in body, got %s", body)
+	}
+	if strings.Contains(body, `"activities":null`) {
+		t.Errorf("activities must not serialise to null, got %s", body)
+	}
+	if !strings.Contains(body, `"total":0`) {
+		t.Errorf("expected total:0 in body, got %s", body)
+	}
+	if !strings.Contains(body, `"hasMore":false`) {
+		t.Errorf("expected hasMore:false in body, got %s", body)
 	}
 }

@@ -154,6 +154,15 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
+		// s-1268 (PM review s-1263 P1-2): return `[]` instead of
+		// `null` for callers with no rows, matching CLAUDE.md's
+		// "Prefer returning empty arrays `[]` over `null` for list
+		// responses" rule. A nil slice serialises to JSON `null`
+		// which breaks SPA consumers and `curl` pipelines.
+		if activities == nil {
+			activities = []Activity{}
+		}
+
 		hasMore := offset+len(activities) < total
 		c.JSON(200, gin.H{"activities": activities, "hasMore": hasMore, "total": total})
 	}
@@ -546,6 +555,14 @@ func GetPermissionActivities(db *sql.DB) gin.HandlerFunc {
 		}
 		if err := rows.Err(); err != nil {
 			slog.Error("GetPermissionActivities: rows iteration", "error", err)
+		}
+
+		// s-1268 (PM review s-1263 P1-2): mirror the
+		// GetActivities fix above and serialise an explicit
+		// `[]Activity{}` instead of letting `gin.H` emit the
+		// JSON `null` literal for an empty permission audit log.
+		if activities == nil {
+			activities = []Activity{}
 		}
 
 		countQuery := fmt.Sprintf(`
