@@ -18,6 +18,15 @@ export interface SidebarItem {
 
 interface SidebarProps {
   items: SidebarItem[];
+  /**
+   * Optional content rendered at the bottom of the sidebar
+   * (pushed below the navigation items with `mt-auto`). Use
+   * for utility actions that should stay one click away from
+   * any authenticated surface but must not overlap page
+   * content — e.g. the theme toggle and notification bell
+   * (s-1282). Omit to render the legacy nav-only sidebar.
+   */
+  footer?: React.ReactNode;
 }
 
 /**
@@ -35,8 +44,12 @@ interface SidebarProps {
  * Active state is computed by React Router's `NavLink`, so the
  * sidebar works correctly with deep-link navigation without any
  * extra wiring on the page side.
+ *
+ * The optional `footer` slot hosts secondary actions (theme
+ * toggle, notification bell) anchored to the bottom of the
+ * sidebar so they never collide with page content (s-1282).
  */
-export function Sidebar({ items }: SidebarProps) {
+export function Sidebar({ items, footer }: SidebarProps) {
   const { t } = useTranslation();
 
   return (
@@ -90,6 +103,14 @@ export function Sidebar({ items }: SidebarProps) {
           </NavLink>
         );
       })}
+      {footer !== undefined && (
+        <div
+          data-testid="sidebar-footer"
+          className="mt-auto flex flex-col items-center gap-1 pt-2"
+        >
+          {footer}
+        </div>
+      )}
     </aside>
   );
 }

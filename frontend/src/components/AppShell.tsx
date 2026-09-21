@@ -9,17 +9,21 @@ import { useUIStore } from '../store/uiStore';
  * AppShell — top-level layout for every authenticated route
  * (s-1194, PM_REVIEW_2026-09-17 §5.2 ROI #2).
  *
- * Wraps the page content with the persistent 64px sidebar and
- * mounts the notification bell in the top-right corner. The shell
- * is intentionally minimal — it does not own the WebSocket
- * itself; that responsibility lives in {@link useNotifications},
- * which opens a single socket per page and feeds both the
- * notification subscription and the existing board refresh
- * handler.
+ * Wraps the page content with the persistent 64px sidebar. The
+ * shell is intentionally minimal — it does not own the
+ * WebSocket itself; that responsibility lives in
+ * {@link useNotifications}, which opens a single socket per
+ * page and feeds both the notification subscription and the
+ * existing board refresh handler.
  *
- * s-1203 also surfaces the theme toggle in the header so the
- * switch is one click from anywhere (instead of two clicks deep
- * inside Settings → Theme).
+ * s-1282 anchors the theme toggle and the notification bell
+ * to the bottom of the sidebar (via the Sidebar's `footer`
+ * slot) instead of the top-right corner. The old position
+ * overlapped with several pages — Boards, Dashboard, and the
+ * per-board toolbar — making the chrome elements unreliable.
+ * The sidebar footer is reserved exclusively for these two
+ * actions so they stay one click away on every authenticated
+ * route without colliding with page content.
  *
  * Children are rendered inside a scroll container so individual
  * pages don't need to repeat the h-screen + overflow boilerplate.
@@ -79,71 +83,75 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="flex h-screen w-screen bg-zinc-100 dark:bg-zinc-900">
-      <Sidebar items={items} />
+      <Sidebar
+        items={items}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => toggleDarkMode()}
+              aria-label={darkMode ? t('darkMode.switchToLight') : t('darkMode.switchToDark')}
+              aria-pressed={darkMode}
+              title={darkMode ? t('darkMode.switchToLight') : t('darkMode.switchToDark')}
+              data-testid="sidebar-theme-toggle"
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              {darkMode ? (
+                <svg
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-orange-400"
+                >
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="5.64" />
+                </svg>
+              ) : (
+                <svg
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-zinc-500 dark:text-zinc-400"
+                >
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
+            <NotificationBell
+              onSelect={(n) => {
+                if (n.targetType === 'TASK' && n.targetId) {
+                  navigate(`/board/_/tasks/${n.targetId}`);
+                }
+                if (isSearchRoute) {
+                  navigate('/boards');
+                }
+              }}
+            />
+          </>
+        }
+      />
       <div className="relative flex flex-1 flex-col overflow-hidden">
-        <div className="absolute right-12 top-10 z-40 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => toggleDarkMode()}
-            aria-label={darkMode ? t('darkMode.switchToLight') : t('darkMode.switchToDark')}
-            aria-pressed={darkMode}
-            title={darkMode ? t('darkMode.switchToLight') : t('darkMode.switchToDark')}
-            data-testid="header-theme-toggle"
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-          >
-            {darkMode ? (
-              <svg
-                aria-hidden="true"
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-orange-400"
-              >
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="5.64" />
-              </svg>
-            ) : (
-              <svg
-                aria-hidden="true"
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-zinc-500 dark:text-zinc-400"
-              >
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
-          <NotificationBell
-            onSelect={(n) => {
-              if (n.targetType === 'TASK' && n.targetId) {
-                navigate(`/board/_/tasks/${n.targetId}`);
-              }
-              if (isSearchRoute) {
-                navigate('/boards');
-              }
-            }}
-          />
-        </div>
         <div className="flex-1 overflow-auto">{children}</div>
       </div>
     </div>
