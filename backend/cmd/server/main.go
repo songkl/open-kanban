@@ -374,6 +374,15 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	// chain (RequireSignatureVerification + RequireAuth + GetActivities)
 	// without a second copy of the activity SQL.
 	//
+	// /api/v1/agent-activity (singular, no s) is a third thin alias
+	// for /api/v1/auth/activities?agentOnly=true (PM review s-1272).
+	// The frontend AgentActivityPage calls the canonical URL with
+	// agentOnly=true, but a CLI user typing the obvious REST name
+	// /agent-activity gets a 404 and assumes the feature is missing.
+	// We default agentOnly=true so the alias lands on the same feed
+	// the SPA renders; the caller's value still wins if they pass
+	// their own agentOnly=... query string.
+	//
 	// Note: /api/v1/agent-activities (plural) is intentionally NOT
 	// aliased — the canonical URL stays the only one CLI users should
 	// depend on, and aliasing every plural variant would just create
@@ -384,6 +393,16 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 	}
 	r.GET("/api/v1/agents", agentsOrOriginsToActivities)
 	r.GET("/api/v1/origins", agentsOrOriginsToActivities)
+	agentActivityToActivities := func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/auth/activities"
+		if c.Query("agentOnly") == "" {
+			q := c.Request.URL.Query()
+			q.Set("agentOnly", "true")
+			c.Request.URL.RawQuery = q.Encode()
+		}
+		r.HandleContext(c)
+	}
+	r.GET("/api/v1/agent-activity", agentActivityToActivities)
 
 	authProtected := r.Group("/api/v1/auth")
 	authProtected.Use(handlers.RequireSignatureVerification(), handlers.RequireAuth(db))

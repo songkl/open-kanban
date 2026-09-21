@@ -567,6 +567,71 @@ func TestAgentActivitiesPluralIsNotAliased(t *testing.T) {
 	}
 }
 
+// TestAgentActivityAliasRoutesToCanonicalWithAgentOnly verifies the
+// /api/v1/agent-activity (singular) thin alias added in PM review
+// s-1272. It dispatches to /api/v1/auth/activities and defaults
+// agentOnly=true so a CLI user typing the obvious REST name for the
+// AgentActivityPage feed gets the same response as the SPA, instead
+// of a misleading 404. The caller's explicit agentOnly value (here
+// agentOnly=false) must still win over the default.
+func TestAgentActivityAliasRoutesToCanonicalWithAgentOnly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	router.GET("/api/v1/auth/activities", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"canonical": true,
+			"agentOnly": c.Query("agentOnly"),
+			"echoPath":  c.Request.URL.Path,
+		})
+	})
+	alias := func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/auth/activities"
+		if c.Query("agentOnly") == "" {
+			q := c.Request.URL.Query()
+			q.Set("agentOnly", "true")
+			c.Request.URL.RawQuery = q.Encode()
+		}
+		router.HandleContext(c)
+	}
+	router.GET("/api/v1/agent-activity", alias)
+
+	// No query string: alias must inject agentOnly=true.
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/agent-activity", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/agent-activity: expected 200, got %d body=%q", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("GET /api/v1/agent-activity: failed to parse response: %v", err)
+	}
+	if resp["canonical"] != true {
+		t.Errorf("GET /api/v1/agent-activity: expected canonical handler response, got %v", resp)
+	}
+	if resp["echoPath"] != "/api/v1/auth/activities" {
+		t.Errorf("GET /api/v1/agent-activity: expected rewritten path, got %v", resp["echoPath"])
+	}
+	if resp["agentOnly"] != "true" {
+		t.Errorf("GET /api/v1/agent-activity: expected default agentOnly=true, got %v", resp["agentOnly"])
+	}
+
+	// Caller-supplied agentOnly=false must win over the default.
+	req, _ = http.NewRequest(http.MethodGet, "/api/v1/agent-activity?agentOnly=false", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/agent-activity?agentOnly=false: expected 200, got %d body=%q", w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("GET /api/v1/agent-activity?agentOnly=false: failed to parse response: %v", err)
+	}
+	if resp["agentOnly"] != "false" {
+		t.Errorf("GET /api/v1/agent-activity?agentOnly=false: expected caller value to win, got %v", resp["agentOnly"])
+	}
+}
+
 // sortedKeys returns the keys of m sorted alphabetically. Used to
 // produce stable diff output when TestSetupRunsRoutesRegistersAllEndpoints
 // fails so the failure message isn't dependent on map iteration order.
