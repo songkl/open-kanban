@@ -126,11 +126,11 @@ export function TaskRunIndicator({ run, compact = false }: TaskRunIndicatorProps
         ) : (
           <span className={`inline-block h-2 w-2 rounded-full ${STATUS_DOT[run.status]}`} aria-hidden />
         )}
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
+        <span className="whitespace-nowrap shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
           {t(`taskModal.runStatus.${statusKey}`)}
         </span>
-        <span className="text-zinc-400 dark:text-zinc-500">·</span>
-        <span className="truncate text-xs text-zinc-600 dark:text-zinc-300" title={run.runnerId}>
+        <span className="shrink-0 text-zinc-400 dark:text-zinc-500">·</span>
+        <span className="min-w-0 max-w-[7rem] truncate whitespace-nowrap text-xs text-zinc-600 dark:text-zinc-300" title={run.runnerId}>
           {t('taskCard.runnerLabel', { runnerId: runnerShort })}
         </span>
         <span className="ml-auto text-xs tabular-nums text-zinc-500 dark:text-zinc-400" data-testid="run-elapsed">

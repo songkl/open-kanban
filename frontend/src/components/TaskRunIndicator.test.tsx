@@ -101,6 +101,24 @@ describe('TaskRunIndicator', () => {
     expect(screen.getByTestId('run-elapsed').textContent).toBe('taskCard.runnerElapsedMinutes');
   });
 
+  it('keeps the status pill and runner label on a single line in full mode (s-1269)', () => {
+    const longRunner = 'a-very-long-runner-id-over-18-chars';
+    render(<TaskRunIndicator run={{ ...baseRun, runnerId: longRunner }} />);
+    const badge = screen.getByTestId('task-run-indicator');
+    expect(badge).toBeInTheDocument();
+    // Status pill + dot separator must not break onto a second line
+    // (s-1262 fixed compact, this guards the full mode rendered by
+    // TaskCard.tsx:383).
+    const statusPill = screen.getByText('taskModal.runStatus.claimed');
+    expect(statusPill).toHaveClass('whitespace-nowrap');
+    expect(statusPill).toHaveClass('shrink-0');
+    // Runner label should also stay on one line and be truncated when
+    // the runner id is long enough to overflow the card.
+    const runnerLabel = screen.getByText(`taskCard.runnerLabel`);
+    expect(runnerLabel).toHaveClass('whitespace-nowrap');
+    expect(runnerLabel).toHaveClass('truncate');
+  });
+
   it('ticks the elapsed counter every second while live', async () => {
     vi.useFakeTimers();
     const startMs = new Date('2026-09-17T10:00:00.000Z').getTime();
