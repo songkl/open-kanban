@@ -137,20 +137,25 @@ export function RunsPage() {
   return (
     <div
       className={`min-h-screen bg-zinc-100 dark:bg-zinc-900 ${
-        isFullscreen ? 'p-0' : 'p-6'
+        isFullscreen ? 'p-3' : 'p-6'
       }`}
     >
-      <div className="mx-auto max-w-6xl">
+      {/* s-1281: fullscreen mode hides the page chrome (title, subtitle,
+          back link) so the screen is usable as a wall display. The exit
+          button stays visible so the operator can leave fullscreen. */}
+      <div className={isFullscreen ? 'w-full' : 'mx-auto max-w-6xl'}>
         <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">
-              {t('runs.pageTitle')}
-            </h1>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {t('runs.subtitle')}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
+          {!isFullscreen && (
+            <div>
+              <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">
+                {t('runs.pageTitle')}
+              </h1>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                {t('runs.subtitle')}
+              </p>
+            </div>
+          )}
+          <div className={`flex items-center gap-3 ${isFullscreen ? 'ml-auto' : ''}`}>
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
                 wsConnected
@@ -171,12 +176,14 @@ export function RunsPage() {
             >
               {isFullscreen ? t('runs.exitFullscreen') : t('runs.enterFullscreen')}
             </button>
-            <Link
-              to="/boards"
-              className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-            >
-              ← {t('nav.back')}
-            </Link>
+            {!isFullscreen && (
+              <Link
+                to="/boards"
+                className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+              >
+                ← {t('nav.back')}
+              </Link>
+            )}
           </div>
         </div>
 
@@ -195,7 +202,13 @@ export function RunsPage() {
               </p>
             </div>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <ul
+              className={`grid gap-3 ${
+                isFullscreen
+                  ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                  : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+              }`}
+            >
               {liveEntries.map((run) => (
                 <RunLiveCard key={run.id} run={run} />
               ))}
