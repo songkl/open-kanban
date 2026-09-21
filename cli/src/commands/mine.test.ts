@@ -266,6 +266,36 @@ describe("runMine", () => {
     expect(stderr).toMatch(/Not logged in/i);
   });
 
+  // s-1275: when no refresh token is available, the http client
+  // raises an AuthError whose message is the internal OAuth refresh
+  // failure ("failed to refresh access token: no refresh token
+  // available"). The user-facing surface should be the single
+  // "Not logged in" line — the internal error must not leak into
+  // the thrown NotLoggedInError's message (program.ts echoes that
+  // message after the friendly line, producing a two-line chain).
+  it("throws a NotLoggedInError with an empty message so program.ts does not echo the OAuth refresh error", async () => {
+    scriptFetch([{ status: 401, body: { error: "unauthorized" } }]);
+    const http = makeAuthedClient();
+    const cap = makeCapture();
+    let thrown: unknown;
+    try {
+      await runMine({ apiUrl: "http://kanban.example.com", http, io: cap.io });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(NotLoggedInError);
+    // The thrown error's message must NOT carry the internal OAuth
+    // refresh failure that triggered the AuthError.
+    expect((thrown as Error).message).not.toMatch(/refresh access token/);
+    expect((thrown as Error).message).not.toMatch(/no refresh token/);
+    // The friendly line still lands on stderr so existing UX keeps
+    // working; program.ts detects NotLoggedInError and skips the
+    // echo so users see exactly one line.
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Not logged in/i);
+    expect(stderr).not.toMatch(/refresh access token/);
+  });
+
   it("propagates non-auth ApiErrors unchanged (network / server)", async () => {
     scriptFetch([{ status: 500, body: { error: "boom" } }]);
     const http = makeAuthedClient();

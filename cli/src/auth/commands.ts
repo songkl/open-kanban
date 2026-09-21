@@ -40,7 +40,7 @@ export interface CommandOptions {
 // the admin identity into long-running daemons (s-1231). Operators
 // who genuinely need a human-bound session opt in with `--as-human`
 // (or by calling `kanban auth agent login` for the agent path).
-export type LoginMode = "human" | "agent";
+export type LoginMode = "human" | "agent" | "password";
 
 export interface RunLoginOptions extends CommandOptions {
   // mode defaults to 'agent' (s-1231). Pass 'human' to restore the
@@ -130,6 +130,179 @@ export interface RunLoginResult {
     nickname?: string;
     username?: string;
     type?: string;
+  };
+}
+
+// CLIENT_NAME_PASSWORD marks credential-store entries written by the
+// password-login shortcut (`kanban auth login --user <name> --password
+// <pwd>`). Surfaces in `kanban auth status` as a "Human (password
+// login)" identity so an operator can tell at a glance that the token
+// came from a direct credential exchange rather than the OAuth device
+// flow. Kept distinct from CLIENT_NAME_AGENT / open-kanban-cli so
+// future refresh-token heuristics don't accidentally re-bind a
+// password token to the device flow.
+export const CLIENT_NAME_PASSWORD = "kanban-cli/password-login";
+
+// runLoginPasswordShortageError is thrown when the operator passes one
+// of --user / --password but not the other. Surfaced as InvalidUsage
+// (exit 1) by program.ts so a typo doesn't silently fall back to the
+// device flow.
+export class InvalidUsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidUsageError";
+  }
+}
+
+// PasswordLoginUser is the trimmed subset of the user envelope
+// returned by POST /api/auth/login that we need to populate the
+// success block (identity, nickname, role) and persist the
+// credential. The full user object is much richer on the server
+// (avatar, last_active_at, …); we keep this interface narrow so the
+// CLI doesn't start depending on fields it doesn't render.
+export interface PasswordLoginUser {
+  id?: string;
+  username?: string;
+  nickname?: string;
+  type?: string;
+  role?: string;
+}
+
+export interface PasswordLoginResponse {
+  user?: PasswordLoginUser;
+  token?: string;
+  error?: string;
+  requirePassword?: boolean;
+}
+
+// RunPasswordLoginOptions parameterises the --user/--password shortcut
+// (s-1275, Fix Option A). The shortcut calls POST /api/auth/login —
+// the same endpoint the legacy web login page uses — and persists the
+// returned token to the credential store under CLIENT_NAME_PASSWORD so
+// subsequent commands dispatch as the resolved user. There is no
+// refresh-token exchange because the backend's password-login tokens
+// are long-lived bearer tokens (see backend/internal/handlers/auth_handlers.go
+// LoginResponse).
+export interface RunPasswordLoginOptions extends CommandOptions {
+  username: string;
+  password: string;
+}
+
+// RunPasswordLoginDeps mirrors RunLoginDeps but additionally requires
+// a fetchImpl override for tests. The password login does not use the
+// device flow at all, so the OAuthClient only matters for
+// secretProvider.write(); oauth.secretProvider must be writable.
+export interface RunPasswordLoginDeps {
+  oauth: OAuthClient;
+  fetchImpl?: typeof fetch;
+  io?: CommandIO;
+}
+
+// runPasswordLogin exchanges --user/--password for a long-lived
+// bearer token via POST /api/auth/login. Unlike the OAuth device
+// flow it does not require a browser interaction; the trade-off is
+// that the token lives in the shell history and on the credential
+// store, so operators who care about that should prefer the device
+// flow (`kanban auth login` with no flags, s-1231/s-1246).
+//
+// s-1275: this function is the implementation behind the
+// --user/--password shortcut that was previously missing. The CLI
+// only gained the device flow (s-1231) which prints
+// "unknown option --user" when invoked with the legacy flag pair.
+// Fix Option A: keep the device flow as the default, add this
+// shortcut as a parallel path. The CLI top-level dispatches based
+// on which flags the operator passed.
+export async function runPasswordLogin(
+  opts: RunPasswordLoginOptions,
+  deps: RunPasswordLoginDeps
+): Promise<RunLoginResult> {
+  const stderr = deps.io?.stderr ?? process.stderr;
+  const stdout = deps.io?.stdout ?? process.stdout;
+  const apiUrl = stripTrailingSlash(opts.apiUrl);
+  const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
+  const username = opts.username.trim();
+  if (!username) {
+    throw new InvalidUsageError(
+      "kanban auth login --user <username> --password <password>: --user is required"
+    );
+  }
+  if (!opts.password) {
+    throw new InvalidUsageError(
+      "kanban auth login --user <username> --password <password>: --password is required"
+    );
+  }
+  const url = `${apiUrl}/api/auth/login`;
+  let res: Response;
+  try {
+    res = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ username, password: opts.password }),
+    });
+  } catch (err) {
+    const reason = (err as Error).message ?? String(err);
+    stderr.write(
+      chalk.red(`Network error contacting ${apiUrl}: ${reason}\n`)
+    );
+    throw new NetworkError(reason);
+  }
+  let body: PasswordLoginResponse = {};
+  try {
+    body = (await res.json()) as PasswordLoginResponse;
+  } catch {
+    // Non-JSON response: fall through with the empty body so the
+    // generic error path below can surface the HTTP status.
+  }
+  if (!res.ok || !body.token || !body.user?.id) {
+    const reason = body.error ?? `HTTP ${res.status}`;
+    stderr.write(chalk.red(`Login failed: ${reason}\n`));
+    if (res.status === 401 || res.status === 403) {
+      // 401 typically means wrong password or password required for
+      // an account that previously had none. Surface as a generic
+      // invalid-credentials error so the CLI prints a clean single
+      // line rather than leaking the OAuth internal error chain.
+      throw new Error(`kanban auth login: ${reason}`);
+    }
+    if (res.status === 429) {
+      // Rate-limited (login:<ip> or login:<username>). Surface as a
+      // network-ish error so the CLI exits 6 instead of 1.
+      throw new NetworkError(`kanban auth login: ${reason}`);
+    }
+    throw new ApiError(
+      "unknown",
+      `kanban auth login: ${reason}`,
+      { status: res.status, path: "/api/auth/login", body }
+    );
+  }
+  const user = body.user;
+  const stored: StoredCredentials = {
+    apiUrl,
+    clientId: `password:${(user.id ?? "").trim() || "user-unknown"}`,
+    clientName: CLIENT_NAME_PASSWORD,
+    accessToken: body.token,
+  };
+  deps.oauth.secretProvider.write(stored);
+  stdout.write(
+    formatLoginSuccess({
+      apiUrl,
+      mode: "password",
+      credentials: stored,
+      profile: opts.profile,
+      user: {
+        id: user.id,
+        username: user.username,
+        nickname: user.nickname,
+        type: user.type,
+        role: user.role,
+      },
+    })
+  );
+  return {
+    credentials: stored,
+    agent: undefined,
   };
 }
 
@@ -406,6 +579,13 @@ async function runLoginAsAgent(
 // Subsequent lines add host / identity / client id / scope / next
 // steps so an operator immediately knows what they just bound to
 // (s-1246).
+//
+// s-1275 adds the `password` mode (used by the --user/--password
+// shortcut). The headline still follows "Logged in to <url> as ..."
+// but renders the username the operator typed instead of the agent
+// nickname or device-flow clientId. The next-steps mirror the human
+// mode because a password-bound token behaves like a long-lived
+// human session: read / write tasks, no unattended-runner wiring.
 export function formatLoginSuccess(input: {
   apiUrl: string;
   mode: LoginMode;
@@ -418,6 +598,13 @@ export function formatLoginSuccess(input: {
     username?: string;
     type?: string;
   };
+  user?: {
+    id?: string;
+    username?: string;
+    nickname?: string;
+    type?: string;
+    role?: string;
+  };
 }): string {
   const apiUrl = stripTrailingSlash(input.apiUrl);
   const stored = input.credentials;
@@ -425,13 +612,21 @@ export function formatLoginSuccess(input: {
   const headline =
     input.mode === "agent"
       ? `Logged in to ${apiUrl} as Agent ${input.agent?.nickname ?? input.agent?.id ?? "unknown"} (type=${input.agent?.type ?? "AGENT"})`
-      : `Logged in to ${apiUrl} as ${stored?.clientId ?? "unknown client"} (scope: ${scope})`;
+      : input.mode === "password"
+        ? `Logged in to ${apiUrl} as ${input.user?.nickname ?? input.user?.username ?? stored?.clientId ?? "user"} (password login)`
+        : `Logged in to ${apiUrl} as ${stored?.clientId ?? "unknown client"} (scope: ${scope})`;
   const identityParts: string[] = [];
   if (input.mode === "agent" && input.agent) {
     const nick = input.agent.nickname ?? input.agent.username ?? input.agent.id;
     if (nick) identityParts.push(String(nick));
     if (input.agent.type) identityParts.push(`type=${input.agent.type}`);
     if (input.agent.id) identityParts.push(`id=${input.agent.id}`);
+  } else if (input.mode === "password" && input.user) {
+    const name = input.user.nickname ?? input.user.username ?? input.user.id;
+    if (name) identityParts.push(String(name));
+    if (input.user.type) identityParts.push(`type=${input.user.type}`);
+    if (input.user.id) identityParts.push(`id=${input.user.id}`);
+    if (input.user.role) identityParts.push(`role=${input.user.role}`);
   } else if (stored?.clientId) {
     identityParts.push(`Human (clientId=${stored.clientId})`);
   }

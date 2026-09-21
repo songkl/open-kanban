@@ -28,8 +28,10 @@ import {
   authExitCodeForError,
   runLogin,
   runLogout,
+  runPasswordLogin,
   runStatus as runAuthStatus,
   runWhoami,
+  InvalidUsageError as AuthInvalidUsageError,
 } from "./auth/commands.js";
 import { exitCodeForError } from "./http/client.js";
 import { runStatus } from "./commands/status.js";
@@ -266,7 +268,7 @@ export function createProgram(
   authCmd
     .command("login")
     .description(
-      "start the OAuth device flow and bind the CLI to an Agent identity (s-1231). When run from a TTY with no explicit mode flag, interactively asks whether to bind to an Agent or to your own account (s-1246). Pass --as-human / --as-agent to skip the prompt."
+      "authenticate the CLI. Default: start the OAuth 2.1 device authorization grant (browser-based). When run from a TTY with no explicit mode flag, interactively asks whether to bind to an Agent or to your own account (s-1246). Pass --as-human / --as-agent to skip the prompt. Shortcut: --user <username> --password <password> exchanges the legacy username/password login for a long-lived bearer token (s-1275) without opening a browser; --password-stdin reads the password from stdin instead of the command line."
     )
     .option(
       "--as-human",
@@ -280,36 +282,126 @@ export function createProgram(
       "--no-open",
       "do not launch the verification URL in the default browser (agent mode only)"
     )
-    .action(async (cmdOpts: { asHuman?: boolean; asAgent?: boolean; open?: boolean }) => {
-      try {
-        if (cmdOpts.asHuman && cmdOpts.asAgent) {
-          process.stderr.write(
-            "Cannot pass both --as-human and --as-agent; pick one.\n"
+    .option(
+      "--user <username>",
+      "exchange username + password for a long-lived bearer token via POST /api/auth/login (s-1275); --password is also required. Cannot be combined with --as-human / --as-agent."
+    )
+    .option(
+      "--password <password>",
+      "password for --user (s-1275). Avoid shell history by piping: read -s PW && kanban auth login --user admin --password \"$PW\", or use --password-stdin / KANBAN_CLI_PASSWORD."
+    )
+    .option(
+      "--password-stdin",
+      "read the password from stdin (one line) instead of --password (s-1275)"
+    )
+    .action(
+      async (cmdOpts: {
+        asHuman?: boolean;
+        asAgent?: boolean;
+        open?: boolean;
+        user?: string;
+        password?: string;
+        passwordStdin?: boolean;
+      }) => {
+        try {
+          // s-1275: the --user/--password shortcut bypasses the OAuth
+          // device flow entirely. Reject mixing with the device-flow
+          // mode flags so the operator doesn't accidentally trigger
+          // both paths.
+          const wantsPasswordLogin =
+            Boolean(cmdOpts.user) ||
+            Boolean(cmdOpts.password) ||
+            cmdOpts.passwordStdin === true ||
+            Boolean(process.env.KANBAN_CLI_PASSWORD);
+          if (wantsPasswordLogin) {
+            if (cmdOpts.asHuman || cmdOpts.asAgent) {
+              process.stderr.write(
+                "Cannot pass --user/--password together with --as-human / --as-agent; the password shortcut always binds to the username it was given.\n"
+              );
+              process.exit(1);
+            }
+            const username = cmdOpts.user?.trim();
+            if (!username) {
+              process.stderr.write(
+                "kanban auth login --user <username> --password <password>: --user is required\n"
+              );
+              process.exit(1);
+            }
+            let password = cmdOpts.password ?? "";
+            if (!password && cmdOpts.passwordStdin === true) {
+              const stdin = process.stdin;
+              stdin.setEncoding("utf8");
+              const chunks: string[] = [];
+              const readAll = async (): Promise<string> =>
+                new Promise<string>((resolve, reject) => {
+                  const onEnd = (): void => resolve(chunks.join(""));
+                  const onError = (err: Error): void => reject(err);
+                  stdin.once("end", onEnd);
+                  stdin.once("error", onError);
+                  stdin.on("data", (chunk: string) => {
+                    chunks.push(chunk);
+                    // Honour the "first line is the password"
+                    // convention so `echo pw | kanban auth login ...`
+                    // doesn't accidentally swallow trailing input.
+                    if (chunk.includes("\n")) {
+                      const idx = chunks.join("").indexOf("\n");
+                      const full = chunks.join("");
+                      stdin.removeListener("data", () => {});
+                      stdin.removeListener("end", onEnd);
+                      stdin.removeListener("error", onError);
+                      resolve(full.slice(0, idx));
+                    }
+                  });
+                });
+              password = (await readAll()).trimEnd();
+            }
+            if (!password && process.env.KANBAN_CLI_PASSWORD) {
+              password = process.env.KANBAN_CLI_PASSWORD;
+            }
+            await runPasswordLogin(
+              {
+                apiUrl: opts.apiUrl,
+                profile: opts.profile,
+                username,
+                password,
+              },
+              { oauth }
+            );
+            return;
+          }
+          if (cmdOpts.asHuman && cmdOpts.asAgent) {
+            process.stderr.write(
+              "Cannot pass both --as-human and --as-agent; pick one.\n"
+            );
+            process.exit(1);
+          }
+          const mode = await resolveLoginMode(cmdOpts, {
+            prompt: async (message, choices, defaultValue) =>
+              inquirerSelect({
+                message,
+                choices,
+                default: defaultValue,
+              }),
+          });
+          await runLogin(
+            {
+              apiUrl: opts.apiUrl,
+              profile: opts.profile,
+              mode,
+              openBrowser: cmdOpts.open !== false,
+            },
+            { oauth, http }
           );
-          process.exit(1);
+        } catch (err) {
+          if (err instanceof AuthInvalidUsageError) {
+            process.stderr.write(`${(err as Error).message}\n`);
+            process.exit(1);
+          }
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(authExitCodeForError(err));
         }
-        const mode = await resolveLoginMode(cmdOpts, {
-          prompt: async (message, choices, defaultValue) =>
-            inquirerSelect({
-              message,
-              choices,
-              default: defaultValue,
-            }),
-        });
-        await runLogin(
-          {
-            apiUrl: opts.apiUrl,
-            profile: opts.profile,
-            mode,
-            openBrowser: cmdOpts.open !== false,
-          },
-          { oauth, http }
-        );
-      } catch (err) {
-        process.stderr.write(`${(err as Error).message}\n`);
-        process.exit(authExitCodeForError(err));
       }
-    });
+    );
 
   authCmd
     .command("status")
@@ -1467,6 +1559,16 @@ export function createProgram(
           http,
         });
       } catch (err) {
+        // s-1275: when `runMine` already wrote a friendly "Not logged
+        // in" line to stderr, do NOT also echo the error message —
+        // which would otherwise be the internal OAuth refresh failure
+        // ("failed to refresh access token: no refresh token
+        // available"). The friendly line is the single user-facing
+        // message; the exit code stays 2 (authExitCodeForError) so
+        // shell scripts continue to detect the not-logged-in state.
+        if (err instanceof TasksNotLoggedInError) {
+          process.exit(mineExitCode(err));
+        }
         process.stderr.write(`${(err as Error).message}\n`);
         process.exit(mineExitCode(err));
       }

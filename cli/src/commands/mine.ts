@@ -121,7 +121,16 @@ export async function runMine(opts: RunMineOptions): Promise<MineReport> {
   } catch (err) {
     if (err instanceof AuthError) {
       stderr.write(chalk.red("Not logged in. Run 'kanban auth login' first.\n"));
-      throw new NotLoggedInError(err.message);
+      // s-1275: throw a NotLoggedInError with an empty message so the
+      // CLI top-level catch (program.ts) does not echo the underlying
+      // AuthError message — which is the internal OAuth refresh
+      // failure ("failed to refresh access token: no refresh token
+      // available") — after our friendly "Not logged in" line. The
+      // empty message is intentional: the friendly line above is the
+      // single user-facing line for this failure mode, and program.ts
+      // sees NotLoggedInError and exits 2 without re-writing the
+      // message.
+      throw new NotLoggedInError("");
     }
     throw err;
   }

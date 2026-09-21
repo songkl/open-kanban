@@ -22,6 +22,7 @@ import {
   isUnknownClientIdError,
   runLogin,
   runLogout,
+  runPasswordLogin,
   runStatus,
   runWhoami,
 } from "./commands.js";
@@ -1047,5 +1048,242 @@ describe("formatLoginSuccess", () => {
     });
     expect(text).toContain("Identity:");
     expect(text).not.toContain("Profile:");
+  });
+
+  // s-1275: the --user/--password shortcut (Fix Option A) reuses
+  // formatLoginSuccess with mode="password" so the post-login
+  // headline / identity block / next-step hints stay in sync with
+  // the device-flow branches. Lock the password-mode headline down
+  // so a future refactor doesn't accidentally revert to the
+  // clientId-as-headline rendering the device flow uses.
+  it("renders the password-mode success block with the typed username", () => {
+    const text = formatLoginSuccess({
+      apiUrl: "http://localhost:8080",
+      mode: "password",
+      profile: "default",
+      credentials: {
+        apiUrl: "http://localhost:8080",
+        clientId: "password:user-9",
+        clientName: "kanban-cli/password-login",
+        accessToken: "at-9",
+      },
+      user: {
+        id: "user-9",
+        username: "admin",
+        nickname: "Admin",
+        type: "HUMAN",
+        role: "ADMIN",
+      },
+    });
+    // The password-mode headline shows the typed username (not the
+    // clientId) so operators can confirm at a glance what they
+    // bound to.
+    expect(text).toMatch(/Logged in to http:\/\/localhost:8080 as Admin/);
+    expect(text).toMatch(/password login/);
+    expect(text).toContain("Identity:");
+    expect(text).toContain("Admin");
+    expect(text).toContain("type=HUMAN");
+    expect(text).toContain("role=ADMIN");
+    expect(text).toContain("id=user-9");
+    expect(text).toContain("Client ID:");
+    expect(text).toContain("password:user-9");
+    // Next-steps mirror the human-mode list because a password-bound
+    // token behaves like a long-lived human session: read / write
+    // tasks, no unattended-runner wiring.
+    expect(text).toContain("kanban auth status");
+    expect(text).toContain("kanban whoami");
+    expect(text).toContain("kanban tasks list");
+    expect(text).not.toContain("kanban mine");
+    expect(text).not.toContain("kanban run init");
+  });
+});
+
+// s-1275: runPasswordLogin backs the new --user/--password shortcut.
+// The contract is:
+//   - happy path: POST /api/auth/login succeeds, token persists to
+//     the credential store under the password-login marker, stdout
+//     receives the success block.
+//   - 401/403:    server rejected the credentials, surface as a
+//     generic error (exit 1 via ApiError mapping) without leaking
+//     the OAuth internal refresh-token error.
+//   - 429:        rate-limited, surface as NetworkError (exit 6).
+//   - invalid input: blank --user or blank --password throws
+//     InvalidUsageError so the CLI bootstrap can map to exit 1.
+describe("runPasswordLogin", () => {
+  beforeEach(() => {
+    delete process.env.KANBAN_API_URL;
+    delete process.env.KANBAN_CLI_PROFILE;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function scriptFetch(responses: Array<{ status: number; body?: unknown }>) {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const spy = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      const r = responses.shift() ?? responses[responses.length - 1];
+      return new Response(
+        r.body === undefined ? "" : JSON.stringify(r.body),
+        { status: r.status, headers: { "Content-Type": "application/json" } }
+      );
+    });
+    return { calls, spy };
+  }
+
+  it("exchanges --user/--password for a long-lived token and persists it to the credential store", async () => {
+    const { calls, spy } = scriptFetch([
+      {
+        status: 200,
+        body: {
+          user: {
+            id: "user-9",
+            username: "admin",
+            nickname: "Admin",
+            type: "HUMAN",
+            role: "ADMIN",
+          },
+          token: "tok-pass-1",
+          requirePassword: false,
+        },
+      },
+    ]);
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    const result = await runPasswordLogin(
+      {
+        apiUrl: "http://localhost:8080",
+        username: "admin",
+        password: "admin123",
+        profile: "default",
+      },
+      { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("http://localhost:8080/api/auth/login");
+    expect(calls[0].init?.method).toBe("POST");
+    const headers = calls[0].init?.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(headers.Accept).toBe("application/json");
+    expect(calls[0].init?.body).toBe(
+      JSON.stringify({ username: "admin", password: "admin123" })
+    );
+    const stored = oauth.loadCredentials();
+    expect(stored?.accessToken).toBe("tok-pass-1");
+    expect(stored?.clientId).toBe("password:user-9");
+    expect(stored?.clientName).toBe("kanban-cli/password-login");
+    expect(result.credentials?.accessToken).toBe("tok-pass-1");
+    const { stdout } = cap.read();
+    // The password-mode success block puts the typed username in the
+    // headline (matches formatLoginSuccess's password branch).
+    expect(stdout).toMatch(/Logged in to http:\/\/localhost:8080 as Admin/);
+    expect(stdout).toMatch(/password login/);
+    expect(stdout).toContain("Identity:");
+    expect(stdout).toContain("role=ADMIN");
+  });
+
+  it("rejects empty --user without contacting the server", async () => {
+    const { spy } = scriptFetch([]);
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    await expect(
+      runPasswordLogin(
+        { apiUrl: "http://localhost:8080", username: "  ", password: "p" },
+        { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+      )
+    ).rejects.toThrow(/--user is required/);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty --password without contacting the server", async () => {
+    const { spy } = scriptFetch([]);
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    await expect(
+      runPasswordLogin(
+        { apiUrl: "http://localhost:8080", username: "admin", password: "" },
+        { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+      )
+    ).rejects.toThrow(/--password is required/);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("maps a 401 (wrong password) to a clean error without leaking OAuth internals", async () => {
+    const { spy } = scriptFetch([
+      { status: 401, body: { error: "Incorrect password" } },
+    ]);
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    await expect(
+      runPasswordLogin(
+        { apiUrl: "http://localhost:8080", username: "admin", password: "wrong" },
+        { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+      )
+    ).rejects.toThrow(/Incorrect password/);
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Login failed/);
+    // Must not echo the OAuth internal refresh error chain.
+    expect(stderr).not.toMatch(/refresh access token|no refresh token/);
+    // Credential store stays untouched on failure.
+    expect(oauth.loadCredentials()?.accessToken).toBeUndefined();
+  });
+
+  it("maps a 429 (rate-limited) to NetworkError so the CLI exits 6", async () => {
+    const { spy } = scriptFetch([
+      {
+        status: 429,
+        body: { error: "Too many requests, please try again later" },
+      },
+    ]);
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    await expect(
+      runPasswordLogin(
+        { apiUrl: "http://localhost:8080", username: "admin", password: "p" },
+        { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+      )
+    ).rejects.toBeInstanceOf(NetworkError);
+  });
+
+  it("maps a 500 (server error) to ApiError so the CLI exits 4", async () => {
+    const { spy } = scriptFetch([
+      { status: 500, body: { error: "Login failed" } },
+    ]);
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    await expect(
+      runPasswordLogin(
+        { apiUrl: "http://localhost:8080", username: "admin", password: "p" },
+        { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+      )
+    ).rejects.toThrow(/kanban auth login/);
+  });
+
+  it("maps a fetch rejection (network down) to NetworkError", async () => {
+    const spy = vi.fn(async () => {
+      throw new Error("fetch failed: ECONNREFUSED");
+    });
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    await expect(
+      runPasswordLogin(
+        { apiUrl: "http://localhost:8080", username: "admin", password: "p" },
+        { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+      )
+    ).rejects.toBeInstanceOf(NetworkError);
+    const { stderr } = cap.read();
+    expect(stderr).toMatch(/Network error/);
+  });
+
+  it("falls back to a generic error message when the server returns non-JSON", async () => {
+    const spy = vi.fn(async () => new Response("not json", { status: 502 }));
+    const oauth = makeFakeOAuth();
+    const cap = makeCapture();
+    await expect(
+      runPasswordLogin(
+        { apiUrl: "http://localhost:8080", username: "admin", password: "p" },
+        { oauth, fetchImpl: spy as unknown as typeof fetch, io: cap.io }
+      )
+    ).rejects.toThrow(/kanban auth login: HTTP 502/);
   });
 });
