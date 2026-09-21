@@ -1082,7 +1082,14 @@ func TestUsersMeAlias(t *testing.T) {
 		}
 	})
 
-	t.Run("unauthorized without any credential", func(t *testing.T) {
+	t.Run("anonymous visitor (no credential) returns 200 with anon body", func(t *testing.T) {
+		// PM review s-1263 P2-2: GetMe used to return 401 for any anonymous
+		// request, which forced Chrome to log "Failed to load resource:
+		// 401" for every first paint of /, /login, /templates/marketplace,
+		// /status. The handler now differentiates "no credential presented"
+		// (200 + {user:null, needsSetup:false, requirePassword:...}) from
+		// "credential presented but invalid" (401, preserves the CLI's
+		// verifyAgentToken rejection path).
 		db := setupTestDB(t)
 		defer db.Close()
 
@@ -1096,8 +1103,96 @@ func TestUsersMeAlias(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200 for anonymous request, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		if resp["user"] != nil {
+			t.Errorf("expected nil user, got %v", resp["user"])
+		}
+		if resp["needsSetup"] != false {
+			t.Errorf("expected needsSetup=false (DB already has users), got %v", resp["needsSetup"])
+		}
+	})
+
+	t.Run("anonymous /auth/me (no credential) returns 200 with anon body", func(t *testing.T) {
+		// Mirrors the /api/v1/users/me case for the SPA-facing
+		// /api/auth/me route used by the frontend's authApi.me().
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.GET("/api/auth/me", handlers.GetMe(db))
+
+		db.Exec("DELETE FROM users")
+		setupTestUser(t, db, "bob", "", "MEMBER")
+
+		req, _ := http.NewRequest("GET", "/api/auth/me", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected status 200 for anonymous request, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		if resp["user"] != nil {
+			t.Errorf("expected nil user, got %v", resp["user"])
+		}
+		if resp["needsSetup"] != false {
+			t.Errorf("expected needsSetup=false, got %v", resp["needsSetup"])
+		}
+	})
+
+	t.Run("invalid bearer header still returns 401", func(t *testing.T) {
+		// Belt-and-braces: when credentials ARE presented but fail to
+		// resolve, GetMe must keep returning 401 so the CLI's
+		// verifyAgentToken helper still surfaces "Token rejected by
+		// server. Re-run `kanban auth login`." to the operator.
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.GET("/api/v1/users/me", handlers.GetMe(db))
+
+		db.Exec("DELETE FROM users")
+		setupTestUser(t, db, "carol", "", "MEMBER")
+
+		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
+		req.Header.Set("Authorization", "Bearer not-a-real-token")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
 		if w.Code != http.StatusUnauthorized {
-			t.Fatalf("expected status 401, got %d: %s", w.Code, w.Body.String())
+			t.Fatalf("expected status 401 for invalid bearer, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("invalid kanban-token cookie still returns 401", func(t *testing.T) {
+		// Same regression guard for the cookie path: a stale /
+		// tampered cookie still resolves to 401, so the frontend's
+		// LoginPage keeps redirecting the visitor away.
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.GET("/api/auth/me", handlers.GetMe(db))
+
+		db.Exec("DELETE FROM users")
+		setupTestUser(t, db, "dave", "", "MEMBER")
+
+		req, _ := http.NewRequest("GET", "/api/auth/me", nil)
+		req.AddCookie(&http.Cookie{Name: "kanban-token", Value: "stale-token-value"})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401 for invalid cookie, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 

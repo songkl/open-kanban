@@ -701,7 +701,25 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 
 		user := getCurrentUserFromRequest(c, db)
 		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			// Anonymous visitors (no `Authorization: Bearer` header, no
+			// `kanban-token` cookie) hit this branch on every first paint
+			// of /, /login, /templates/marketplace, /status. Returning 401
+			// here forces Chrome to log "Failed to load resource: 401" for
+			// each one (PM review s-1263 P2-2). Return 200 + the anon body
+			// in that case so the browser stays quiet. When credentials
+			// were presented but failed to resolve (e.g. expired /
+			// tampered CLI token) we still return 401 so the CLI's
+			// verifyAgentToken helper keeps its "Token rejected by
+			// server. Re-run `kanban auth login`." path.
+			authAttempted := strings.HasPrefix(c.GetHeader("Authorization"), "Bearer ")
+			if _, err := c.Cookie("kanban-token"); err == nil {
+				authAttempted = true
+			}
+			status := http.StatusOK
+			if authAttempted {
+				status = http.StatusUnauthorized
+			}
+			c.JSON(status, gin.H{
 				"user":            nil,
 				"needsSetup":      false,
 				"requirePassword": isRequirePassword,
