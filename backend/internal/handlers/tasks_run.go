@@ -539,6 +539,21 @@ func redactRunOutputHosts(s string) string {
 	return runOutputHostPattern.ReplaceAllString(s, "<redacted-host>")
 }
 
+// cleanRunPayload applies the read-side sanitiser pair
+// (`stripAnsi` + `redactRunOutputHosts`) to a run's `error` or
+// `output` payload. Both helpers are pure no-ops on empty input,
+// so the function is safe to call on either field without a nil
+// check at the call site.
+//
+// Centralising the pair here means every code path that hands a
+// run payload back to a client — `GetRun`, `ListRunsHistory`, and
+// the write-side `FinishRun` — stays in lockstep. PM review s-1267
+// P1-1 found `GetRun` had drifted from the s-1260 history fix; this
+// helper makes that drift impossible to reintroduce.
+func cleanRunPayload(s string) string {
+	return redactRunOutputHosts(stripAnsi(s))
+}
+
 // FinishRun handles POST /api/v1/runs/:taskId/finish.
 // When status='completed' the handler invokes
 // task_service.CompleteTask so the task advances to its next
@@ -606,13 +621,15 @@ func FinishRun(db *sql.DB) gin.HandlerFunc {
 		// persisting. Runners emit colourised output by default;
 		// the activity feed and run history render the payload as
 		// plain text, so a stray `\x1b[0m` reads as garbage to
-		// non-terminal viewers.
+		// non-terminal viewers. Routed through `cleanRunPayload`
+		// (PM review s-1267 P1-1) so the write side and the read
+		// side agree on the sanitiser pair.
 		if req.Error != nil {
-			s := redactRunOutputHosts(stripAnsi(*req.Error))
+			s := cleanRunPayload(*req.Error)
 			req.Error = &s
 		}
 		if req.Output != nil {
-			s := redactRunOutputHosts(stripAnsi(*req.Output))
+			s := cleanRunPayload(*req.Output)
 			req.Output = &s
 		}
 
@@ -752,6 +769,21 @@ func GetRun(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// PM review s-1267 P1-1: legacy rows persisted before s-1257
+		// may carry raw `\x1b[0m` bytes in `error`/`output`, and
+		// older runners may have written LAN-host URLs that s-1260
+		// already scrubs from the history endpoint. Apply the same
+		// backstop here so the task card never renders escape
+		// literals or leaks a previous developer's LAN address.
+		if run.Error != nil {
+			cleaned := cleanRunPayload(*run.Error)
+			run.Error = &cleaned
+		}
+		if run.Output != nil {
+			cleaned := cleanRunPayload(*run.Output)
+			run.Output = &cleaned
+		}
+
 		c.JSON(http.StatusOK, gin.H{"run": run, "hasRun": true})
 	}
 }
@@ -884,13 +916,17 @@ func ListRunsHistory(db *sql.DB) gin.HandlerFunc {
 		// from now on. redactRunOutputHosts covers P1-6 so a
 		// LAN host URL written by an older runner is also
 		// scrubbed before the row leaves the server.
+		//
+		// PM review s-1267 P1-1: routed through the shared
+		// `cleanRunPayload` helper so GetRun + ListRunsHistory +
+		// FinishRun stay in lockstep.
 		for _, r := range rows {
 			if r.Error != nil {
-				cleaned := redactRunOutputHosts(stripAnsi(*r.Error))
+				cleaned := cleanRunPayload(*r.Error)
 				r.Error = &cleaned
 			}
 			if r.Output != nil {
-				cleaned := redactRunOutputHosts(stripAnsi(*r.Output))
+				cleaned := cleanRunPayload(*r.Output)
 				r.Output = &cleaned
 			}
 		}

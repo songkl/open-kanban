@@ -1183,6 +1183,102 @@ func TestGetRun_ReturnsOutputField(t *testing.T) {
 	}
 }
 
+// TestGetRun_LegacyRowIsStripped (PM review s-1267 P1-1) is the
+// regression guard for the read-side sanitiser on the single-row
+// endpoint. Prior to the fix, GetRun returned the task_runs row
+// verbatim — so a legacy row written by a pre-s-1257 runner that
+// persisted a literal `\x1b[0m` (or a LAN-host URL) leaked through
+// the GET /api/v1/runs/:taskId response and ended up rendered as
+// garbage / a prior developer's network address in the SPA.
+//
+// The fix routes the row through `cleanRunPayload` (the same
+// helper ListRunsHistory + FinishRun share) before serialising,
+// so this test seeds a raw row with both kinds of contamination
+// and asserts the response is clean.
+func TestGetRun_LegacyRowIsStripped(t *testing.T) {
+	db := setupRunsDB(t)
+	defer db.Close()
+
+	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-legacy', 'legacy row', 'c-todo', 1, 'u-admin')`); err != nil {
+		t.Fatalf("seed task: %v", err)
+	}
+
+	// Bypass FinishRun's own sanitiser and write a raw,
+	// pre-s-1257 row straight into the table — the exact
+	// shape the PM review captured in the curl repro.
+	const (
+		dirtyError = "\x1b[0m\n> build · deepseek-v4-flash\n\x1b[0m\x1b[36mhttp://192.168.0.102:8080\x1b[0m failed\n"
+		wantError  = "\n> build · deepseek-v4-flash\n<redacted-host> failed\n"
+
+		dirtyOutput = "\x1b[0m$ \x1b[0mdate \"+%Y-%m-%d\" > run.log && cat run.log\n2026-09-20\n\x1b[0m"
+		wantOutput  = "$ date \"+%Y-%m-%d\" > run.log && cat run.log\n2026-09-20\n"
+	)
+	if _, err := db.Exec(`INSERT INTO task_runs (
+		task_id, runner_id, agent_id, board_id, column_id, status,
+		claimed_at, last_heartbeat_at, expires_at, finished_at,
+		exit_code, error, output
+	) VALUES (
+		't-legacy', 'u-admin', 'opencoder', 'b1', 'c-todo', 'failed',
+		CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, DATETIME('now', '+1 hour'), CURRENT_TIMESTAMP,
+		1, ?, ?
+	)`, dirtyError, dirtyOutput); err != nil {
+		t.Fatalf("seed legacy task_runs row: %v", err)
+	}
+
+	router := runsRouter(db)
+	w := doRequest(router, "GET", "/api/v1/runs/t-legacy", "admin-token", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var envelope struct {
+		Run    models.TaskRun `json:"run"`
+		HasRun bool           `json:"hasRun"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	if !envelope.HasRun || envelope.Run.TaskID != "t-legacy" {
+		t.Fatalf("expected envelope to surface the seeded row, got %+v", envelope)
+	}
+
+	if envelope.Run.Error == nil {
+		t.Fatalf("expected error to be present, got nil")
+	}
+	if got := *envelope.Run.Error; got != wantError {
+		t.Errorf("error not sanitised: got %q, want %q", got, wantError)
+	}
+	if strings.Contains(*envelope.Run.Error, "\x1b[") {
+		t.Errorf("error still contains an ANSI escape: %q", *envelope.Run.Error)
+	}
+	if strings.Contains(*envelope.Run.Error, "192.168.0.102") {
+		t.Errorf("error still leaks the LAN host: %q", *envelope.Run.Error)
+	}
+
+	if envelope.Run.Output == nil {
+		t.Fatalf("expected output to be present, got nil")
+	}
+	if got := *envelope.Run.Output; got != wantOutput {
+		t.Errorf("output not sanitised: got %q, want %q", got, wantOutput)
+	}
+	if strings.Contains(*envelope.Run.Output, "\x1b[") {
+		t.Errorf("output still contains an ANSI escape: %q", *envelope.Run.Output)
+	}
+
+	// Belt and braces: also confirm the underlying row in the
+	// DB still carries the original (un-sanitised) bytes — the
+	// fix is read-side only, so an admin restoring a backup or
+	// re-deriving the row from a migration should still see the
+	// raw data.
+	var storedError, storedOutput string
+	if err := db.QueryRow(`SELECT error, output FROM task_runs WHERE task_id='t-legacy'`).Scan(&storedError, &storedOutput); err != nil {
+		t.Fatalf("read back row: %v", err)
+	}
+	if storedError != dirtyError || storedOutput != dirtyOutput {
+		t.Errorf("read-side sanitiser must not mutate the persisted row; got error=%q output=%q", storedError, storedOutput)
+	}
+}
+
 func TestReleaseRuns_BulkRestore(t *testing.T) {
 	db := setupRunsDB(t)
 	defer db.Close()
