@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -139,6 +140,50 @@ func RegisterClient(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Normalize scopes the same way we persist them so a request that
+		// omits `scope` (and therefore expands to the full supported set) is
+		// treated as equivalent to a future request that supplies the same
+		// full set explicitly. dedup + canonical sort keep the comparison
+		// stable across the JSON wire format.
+		scopesAllowed := scope
+		if scopesAllowed == "" {
+			scopesAllowed = strings.Join(SupportedScopes(), " ")
+		}
+		scopeList := normalizeScopes(scopesAllowed)
+
+		// s-1284: deduplicate by (name, auth_method, grant_types, scopes).
+		//
+		// RFC 7591 does not require an AS to reuse an existing client_id
+		// when the same client_name re-registers, but in practice our CLI
+		// and MCP server are the dominant callers and they always send a
+		// fixed `client_name` per tool ("open-kanban-cli", "open-kanban-mcp",
+		// "kanban-cli/agent-token"). Without dedup every lost credential
+		// file or fresh install spawns a brand new oauth_clients row, so
+		// the admin "OAuth → Clients" tab fills up with stale identities
+		// (e.g. four "open-kanban-cli" rows for a single operator). When
+		// the request matches an existing client on the (name, auth
+		// method, grant types, scopes) tuple — i.e. the caller is asking
+		// for exactly the same identity they already have — we return the
+		// existing client_id instead of minting a new one. The match is
+		// a strict subset on grant_types and scopes so a caller asking
+		// for a *different* identity still gets a fresh row.
+		if existing, matchErr := findExistingMatchingClient(
+			db, req.ClientName, method, grantTypes, scopeList,
+		); matchErr == nil && existing != nil {
+			c.Header("Cache-Control", "no-store")
+			c.Header("Pragma", "no-cache")
+			c.JSON(http.StatusCreated, models.OAuthClientRegistrationResponse{
+				ClientID:                existing.ClientID,
+				ClientIDIssuedAt:        existing.CreatedAt.Unix(),
+				RedirectURIs:            existing.RedirectURIs,
+				GrantTypes:              existing.GrantTypes,
+				TokenEndpointAuthMethod: existing.TokenEndpointAuthMethod,
+				Scope:                   strings.Join(existing.Scopes, " "),
+				ClientName:              existing.Name,
+			})
+			return
+		}
+
 		clientID, err := randomClientID()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, models.OAuthErrorResponse{
@@ -166,12 +211,6 @@ func RegisterClient(db *sql.DB) gin.HandlerFunc {
 		rowID := generateOpaqueID()
 		redirectJSON, _ := json.Marshal(redirectURIs)
 		grantJSON, _ := json.Marshal(grantTypes)
-		// Store scopes as canonical space-separated string for easy matching.
-		scopesAllowed := scope
-		if scopesAllowed == "" {
-			scopesAllowed = strings.Join(SupportedScopes(), " ")
-		}
-		scopeList := strings.Fields(scopesAllowed)
 		scopeJSON, _ := json.Marshal(scopeList)
 
 		_, err = db.Exec(
@@ -200,7 +239,7 @@ func RegisterClient(db *sql.DB) gin.HandlerFunc {
 			RedirectURIs:            redirectURIs,
 			GrantTypes:              grantTypes,
 			TokenEndpointAuthMethod: method,
-			Scope:                   scopesAllowed,
+			Scope:                   strings.Join(scopeList, " "),
 			ClientName:              req.ClientName,
 		})
 	}
@@ -341,6 +380,94 @@ func dedupNonEmpty(in []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+// normalizeScopes returns a de-duplicated, sorted slice of scope tokens
+// parsed from a space-separated string. Sorting makes the resulting slice
+// stable for storage and for the dedup comparison in
+// findExistingMatchingClient — callers can use the slice both as the
+// `scopes` column value and as the matching key.
+func normalizeScopes(scope string) []string {
+	tokens := ParseScopes(scope).Tokens()
+	sort.Strings(tokens)
+	return tokens
+}
+
+// findExistingMatchingClient looks up an oauth_clients row whose (name,
+// token_endpoint_auth_method) matches the candidate and whose
+// grant_types and scopes contain the requested sets as subsets. The
+// match is intentionally subset-only: a caller that asks for a
+// *narrower* identity than what is already on file still binds to the
+// existing client, while a caller that asks for a wider grant or scope
+// — e.g. a future "tasks:delete" scope the original registration did
+// not request — falls through and gets a fresh row. Returns
+// (nil, nil) when no match is found so callers can use a plain
+// `if existing != nil` check.
+func findExistingMatchingClient(
+	db *sql.DB,
+	name, authMethod string,
+	grants, scopes []string,
+) (*models.OAuthClient, error) {
+	rows, err := db.Query(
+		`SELECT id, client_id, client_secret_hash, name, redirect_uris, grant_types,
+		        token_endpoint_auth_method, scopes, is_first_party, created_at, updated_at
+		 FROM oauth_clients
+		 WHERE name = ? AND token_endpoint_auth_method = ?
+		 ORDER BY created_at ASC`,
+		name, authMethod,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	grantSet := make(map[string]struct{}, len(grants))
+	for _, g := range grants {
+		grantSet[g] = struct{}{}
+	}
+	scopeSet := make(map[string]struct{}, len(scopes))
+	for _, s := range scopes {
+		scopeSet[s] = struct{}{}
+	}
+
+	for rows.Next() {
+		var (
+			c            models.OAuthClient
+			redirectJSON string
+			grantJSON    string
+			scopeJSON    string
+		)
+		if err := rows.Scan(&c.ID, &c.ClientID, &c.ClientSecretHash, &c.Name, &redirectJSON,
+			&grantJSON, &c.TokenEndpointAuthMethod, &scopeJSON, &c.IsFirstParty,
+			&c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(redirectJSON), &c.RedirectURIs)
+		_ = json.Unmarshal([]byte(grantJSON), &c.GrantTypes)
+		_ = json.Unmarshal([]byte(scopeJSON), &c.Scopes)
+		if !containsAll(c.GrantTypes, grantSet) {
+			continue
+		}
+		if !containsAll(c.Scopes, scopeSet) {
+			continue
+		}
+		return &c, nil
+	}
+	return nil, nil
+}
+
+// containsAll reports whether every entry in `want` is present in `have`.
+// `have` is iterated as a slice because the dedup loop already has the
+// existing row's grant_types / scopes decoded in that shape; using a
+// map would force an allocation per row for what is typically a
+// 2–4-element list.
+func containsAll(have []string, want map[string]struct{}) bool {
+	for k := range want {
+		if !containsString(have, k) {
+			return false
+		}
+	}
+	return true
 }
 
 // HashToken returns a hex SHA-256 of the input suitable for storing refresh

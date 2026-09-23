@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -346,5 +347,200 @@ func TestRegisterBodyBufferReset(t *testing.T) {
 		if w.Code != http.StatusCreated {
 			t.Fatalf("iter %d: expected 201, got %d: %s", i, w.Code, w.Body.String())
 		}
+	}
+}
+
+// s-1284: re-registering the same CLI / MCP client with the same
+// (name, auth method, grants, scopes) tuple must return the existing
+// client_id instead of minting a new oauth_clients row. This is the
+// fix for the duplicate-client symptom where a single operator could
+// end up with four separate "open-kanban-cli" entries on the admin
+// OAuth tab after the local credential store was wiped a few times.
+func TestRegisterDedupesByNameAuthMethodGrantsScopes(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	r := newRegisterServer(t, db)
+
+	body := `{
+		"client_name": "open-kanban-cli",
+		"token_endpoint_auth_method": "none",
+		"grant_types": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+		"scope": "kanban:read tasks:write comments:write"
+	}`
+
+	// First registration: a new client_id is issued.
+	w1 := doRegister(t, r, body)
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first register: expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+	var first map[string]interface{}
+	if err := json.Unmarshal(w1.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decode first: %v", err)
+	}
+	firstID, _ := first["client_id"].(string)
+	if firstID == "" {
+		t.Fatal("first register: client_id missing")
+	}
+
+	// Second registration with the same shape: dedup must kick in.
+	w2 := doRegister(t, r, body)
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("second register: expected 201, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var second map[string]interface{}
+	if err := json.Unmarshal(w2.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decode second: %v", err)
+	}
+	secondID, _ := second["client_id"].(string)
+	if secondID != firstID {
+		t.Fatalf("expected dedup to return existing client_id %q, got %q", firstID, secondID)
+	}
+	// The dedup response must not invent a new client_secret on every
+	// call: if the original was a public client, no secret is ever
+	// minted, and a "re-registration" that re-uses the same row must
+	// keep that invariant.
+	if _, ok := second["client_secret"]; ok {
+		t.Errorf("dedup response leaked client_secret: %v", second["client_secret"])
+	}
+
+	// And there should be exactly one row in the table for this name.
+	var rows int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM oauth_clients WHERE name = 'open-kanban-cli'`,
+	).Scan(&rows); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if rows != 1 {
+		t.Errorf("expected 1 oauth_clients row for deduped name, got %d", rows)
+	}
+}
+
+// s-1284: dedup must be a strict match on the (name, auth_method) tuple
+// AND a subset match on grants + scopes. A caller asking for a wider
+// scope set than what is on file should still get a fresh row so we
+// don't silently widen an existing identity's privileges.
+func TestRegisterDoesNotDedupWhenScopeIsWider(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	r := newRegisterServer(t, db)
+
+	first := `{
+		"client_name": "open-kanban-cli",
+		"token_endpoint_auth_method": "none",
+		"grant_types": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+		"scope": "kanban:read"
+	}`
+	second := `{
+		"client_name": "open-kanban-cli",
+		"token_endpoint_auth_method": "none",
+		"grant_types": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+		"scope": "kanban:read tasks:write"
+	}`
+
+	w1 := doRegister(t, r, first)
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first register: expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+	var firstBody map[string]interface{}
+	_ = json.Unmarshal(w1.Body.Bytes(), &firstBody)
+	firstID, _ := firstBody["client_id"].(string)
+
+	w2 := doRegister(t, r, second)
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("second register: expected 201, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var secondBody map[string]interface{}
+	_ = json.Unmarshal(w2.Body.Bytes(), &secondBody)
+	secondID, _ := secondBody["client_id"].(string)
+	if secondID == firstID {
+		t.Errorf("expected a fresh client_id for a wider scope set, but got the same %q", firstID)
+	}
+
+	var rows int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM oauth_clients WHERE name = 'open-kanban-cli'`,
+	).Scan(&rows); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if rows != 2 {
+		t.Errorf("expected 2 rows after non-matching re-register, got %d", rows)
+	}
+}
+
+// s-1284: a different client_name keeps the dedup contract — two tools
+// with distinct names must not collapse onto the same client_id, even
+// when grants and scopes happen to match.
+func TestRegisterDoesNotDedupAcrossNames(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	r := newRegisterServer(t, db)
+
+	makeBody := func(name string) string {
+		return fmt.Sprintf(`{
+			"client_name": %q,
+			"token_endpoint_auth_method": "none",
+			"grant_types": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+			"scope": "kanban:read tasks:write"
+		}`, name)
+	}
+
+	w1 := doRegister(t, r, makeBody("open-kanban-cli"))
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("cli register: expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+	w2 := doRegister(t, r, makeBody("open-kanban-mcp"))
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("mcp register: expected 201, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var cliBody, mcpBody map[string]interface{}
+	_ = json.Unmarshal(w1.Body.Bytes(), &cliBody)
+	_ = json.Unmarshal(w2.Body.Bytes(), &mcpBody)
+	if cliBody["client_id"] == mcpBody["client_id"] {
+		t.Errorf("expected distinct client_ids for distinct client_names, both got %v", cliBody["client_id"])
+	}
+}
+
+// s-1284: confidential clients must also dedup. A re-registration must
+// not mint a *new* client_secret on every call — only the original
+// registration returns the secret once; subsequent matches reuse the
+// existing client_id and never expose the stored bcrypt hash.
+func TestRegisterDedupesConfidentialClient(t *testing.T) {
+	db := setupRegisterDB(t)
+	defer db.Close()
+	r := newRegisterServer(t, db)
+
+	body := `{
+		"client_name": "backend-service",
+		"token_endpoint_auth_method": "client_secret_basic",
+		"redirect_uris": ["https://example.com/cb"],
+		"grant_types": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+		"scope": "kanban:read tasks:write"
+	}`
+
+	w1 := doRegister(t, r, body)
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first register: expected 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+	var first map[string]interface{}
+	_ = json.Unmarshal(w1.Body.Bytes(), &first)
+	firstID, _ := first["client_id"].(string)
+	if firstID == "" {
+		t.Fatal("first register: client_id missing")
+	}
+
+	w2 := doRegister(t, r, body)
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("second register: expected 201, got %d: %s", w2.Code, w2.Body.String())
+	}
+	var second map[string]interface{}
+	_ = json.Unmarshal(w2.Body.Bytes(), &second)
+	if secondID, _ := second["client_id"].(string); secondID != firstID {
+		t.Errorf("expected dedup to reuse %q, got %q", firstID, secondID)
+	}
+	// Critically: the dedup path must NOT re-issue a client_secret.
+	// Doing so would re-roll the secret and silently invalidate the
+	// operator's stored credential on every retry.
+	if _, ok := second["client_secret"]; ok {
+		t.Errorf("dedup response leaked a fresh client_secret: %v", second["client_secret"])
 	}
 }
