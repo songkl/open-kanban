@@ -324,6 +324,7 @@ jobs:
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
+    if: false # Skip: no Dockerfile in repository
     needs: [go-test, go-build, frontend-build, frontend-e2e]
     steps:
       - name: Checkout code
