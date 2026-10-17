@@ -52,15 +52,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: ./dist
 
       - name: Embed frontend into backend/web
         run: |
           mkdir -p backend/cmd/server/web
-          cp -r frontend/dist/. backend/cmd/server/web/
+          cp -r ./dist/. backend/cmd/server/web/
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63.4
 
       - name: Run golangci-lint
         run: |
@@ -89,12 +89,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: ./dist
 
       - name: Embed frontend into backend/web
         run: |
           mkdir -p backend/cmd/server/web
-          cp -r frontend/dist/. backend/cmd/server/web/
+          cp -r ./dist/. backend/cmd/server/web/
 
       - name: Run Go tests
         run: |
@@ -162,12 +162,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: ./dist
 
       - name: Embed frontend into backend/web
         run: |
           mkdir -p backend/cmd/server/web
-          cp -r frontend/dist/. backend/cmd/server/web/
+          cp -r ./dist/. backend/cmd/server/web/
 
       - name: Build Go backend
         run: |
@@ -188,12 +188,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd frontend
           npm ci
 
       - name: Run ESLint
         run: |
-          cd frontend
           npm run lint
 
   frontend-test:
@@ -210,19 +208,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd frontend
           npm ci
 
       - name: Run Vitest
         run: |
-          cd frontend
           npm run test:run -- --coverage
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
-          path: frontend/coverage/lcov.info
+          path: ./coverage/lcov.info
 
   frontend-build:
     name: Frontend Build
@@ -238,12 +234,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd frontend
           npm ci
 
       - name: Build frontend
         run: |
-          cd frontend
           npm run build
 
       # Upload the built SPA so downstream backend jobs (go-test,
@@ -253,7 +247,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: ./dist
           if-no-files-found: error
           retention-days: 1
 
@@ -272,12 +266,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd frontend
           npm ci
 
       - name: Install Playwright Browsers
         run: |
-          cd frontend
           npx playwright install --with-deps chromium
 
       # Download the frontend build artifact produced by the frontend-build
@@ -286,7 +278,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: ./dist
 
       # The //go:embed web directive in cmd/server/main.go requires actual
       # files in backend/cmd/server/web.  Copy the frontend build output so
@@ -294,7 +286,7 @@ jobs:
       - name: Embed frontend into backend/web
         run: |
           mkdir -p backend/cmd/server/web
-          cp -r frontend/dist/. backend/cmd/server/web/
+          cp -r ./dist/. backend/cmd/server/web/
 
       # Start Go server on port 8081 so the Vite dev server proxy
       # (configured in vite.config.ts -> server.proxy) can forward
@@ -311,7 +303,6 @@ jobs:
 
       - name: Run Playwright E2E tests
         run: |
-          cd frontend
           npx playwright test
 
       - name: Upload Playwright Report
@@ -319,7 +310,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: frontend/playwright-report/
+          path: ./playwright-report/
 
   docker-build:
     name: Docker Build
