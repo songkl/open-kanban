@@ -142,7 +142,7 @@ func withAllowPrivate(t *testing.T) {
 
 func TestWebhookConfigService_Create_Success(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	svc := services.NewWebhookConfigService(db)
 
@@ -190,7 +190,7 @@ func TestWebhookConfigService_Create_Success(t *testing.T) {
 
 func TestWebhookConfigService_Create_NonAdminForbidden(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	in := services.CreateWebhookInput{
@@ -208,7 +208,7 @@ func TestWebhookConfigService_Create_NonAdminForbidden(t *testing.T) {
 
 func TestWebhookConfigService_Create_EmptyActorForbidden(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	in := services.CreateWebhookInput{Name: "x", URL: "https://example.com/x"}
@@ -220,7 +220,7 @@ func TestWebhookConfigService_Create_EmptyActorForbidden(t *testing.T) {
 
 func TestWebhookConfigService_Create_ValidationErrors(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	tests := []struct {
@@ -337,7 +337,7 @@ func TestWebhookConfigService_Create_ValidationErrors(t *testing.T) {
 func TestWebhookConfigService_Create_PrivateAllowedWithEnvVar(t *testing.T) {
 	withAllowPrivate(t)
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	// 127.0.0.1 is loopback; with WEBHOOK_ALLOW_PRIVATE=1 the
@@ -355,7 +355,7 @@ func TestWebhookConfigService_Create_PrivateAllowedWithEnvVar(t *testing.T) {
 
 func TestWebhookConfigService_Create_DNSFailureWarnsButSucceeds(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	// Hostname that is RFC 1035-compliant but should not resolve
@@ -377,7 +377,7 @@ func TestWebhookConfigService_Create_DNSFailureWarnsButSucceeds(t *testing.T) {
 
 func TestWebhookConfigService_Get_RedactsSecret(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -404,7 +404,7 @@ func TestWebhookConfigService_Get_RedactsSecret(t *testing.T) {
 
 func TestWebhookConfigService_Get_NotFound(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	_, err := svc.Get("ghost")
@@ -415,7 +415,7 @@ func TestWebhookConfigService_Get_NotFound(t *testing.T) {
 
 func TestWebhookConfigService_List_RedactsSecrets(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	for i, name := range []string{"a", "b"} {
@@ -444,7 +444,7 @@ func TestWebhookConfigService_List_RedactsSecrets(t *testing.T) {
 
 func TestWebhookConfigService_List_Empty(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	got, err := svc.List()
@@ -465,7 +465,7 @@ func TestWebhookConfigService_List_Empty(t *testing.T) {
 
 func TestWebhookConfigService_Update_Success(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -505,7 +505,7 @@ func TestWebhookConfigService_Update_Success(t *testing.T) {
 
 func TestWebhookConfigService_Update_NonAdminForbidden(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -527,7 +527,7 @@ func TestWebhookConfigService_Update_NonAdminForbidden(t *testing.T) {
 
 func TestWebhookConfigService_Update_NotFound(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	newName := "x"
@@ -539,7 +539,7 @@ func TestWebhookConfigService_Update_NotFound(t *testing.T) {
 
 func TestWebhookConfigService_Update_RejectsBadURL(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -566,7 +566,7 @@ func TestWebhookConfigService_Update_RejectsBadURL(t *testing.T) {
 
 func TestWebhookConfigService_Delete_Success(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -589,7 +589,7 @@ func TestWebhookConfigService_Delete_Success(t *testing.T) {
 
 func TestWebhookConfigService_Delete_NonAdminForbidden(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -612,7 +612,7 @@ func TestWebhookConfigService_Delete_NonAdminForbidden(t *testing.T) {
 
 func TestWebhookConfigService_Delete_NotFound(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	if err := svc.Delete("u-admin", "ghost"); !errors.Is(err, services.ErrWebhookNotFound) {
@@ -626,7 +626,7 @@ func TestWebhookConfigService_Delete_NotFound(t *testing.T) {
 
 func TestWebhookConfigService_RotateSecret_ReturnsNewPlaintext(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -667,7 +667,7 @@ func TestWebhookConfigService_RotateSecret_ReturnsNewPlaintext(t *testing.T) {
 
 func TestWebhookConfigService_RotateSecret_NonAdminForbidden(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	res, err := svc.Create("u-admin", services.CreateWebhookInput{
@@ -688,7 +688,7 @@ func TestWebhookConfigService_RotateSecret_NonAdminForbidden(t *testing.T) {
 
 func TestWebhookConfigService_RotateSecret_NotFound(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	_, err := svc.RotateSecret("u-admin", "ghost")
@@ -712,7 +712,7 @@ func intPtr(n int) *int { return &n }
 
 func TestWebhookConfigService_Create_DNSWarningConcurrent(t *testing.T) {
 	db := setupWebhookServiceTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	svc := services.NewWebhookConfigService(db)
 
 	var wg sync.WaitGroup

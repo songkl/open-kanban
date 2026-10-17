@@ -289,7 +289,7 @@ func opensslLikeHMAC(secret, ts, body string) string {
 // opensslLikeHMAC above for the exact formula.
 func TestWebhookE2E_HappyPath_ReceiverGetsSignedPOST(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	const (
 		webhookID   = "wh-e2e-success"
@@ -437,7 +437,7 @@ func TestWebhookE2E_HappyPath_ReceiverGetsSignedPOST(t *testing.T) {
 //     round-trip
 func TestWebhookE2E_FailurePath_ExhaustedAfterMaxRetries(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	const (
 		webhookID   = "wh-e2e-fail"
@@ -550,7 +550,7 @@ func TestWebhookE2E_FailurePath_ExhaustedAfterMaxRetries(t *testing.T) {
 // the receiver observed exactly that hex string.
 func TestWebhookE2E_SignatureMatchesOpenSSL(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	const (
 		secretPlain = "feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface"

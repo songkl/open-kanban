@@ -35,7 +35,7 @@ func withEnvProviderSeed(t *testing.T, raw string) {
 func TestSeedExternalProvidersFromEnv_EmptyIsNoop(t *testing.T) {
 	withEnvProviderSeed(t, "")
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 		t.Fatalf("seed empty: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestSeedExternalProvidersFromEnv_HappyPath(t *testing.T) {
 		"scopes": "openid email profile"
 	}]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -110,7 +110,7 @@ func TestSeedExternalProvidersFromEnv_Idempotent(t *testing.T) {
 		"clientSecret": "shh"
 	}]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	for i := 0; i < 3; i++ {
 		if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 			t.Fatalf("seed pass %d: %v", i, err)
@@ -131,7 +131,7 @@ func TestSeedExternalProvidersFromEnv_Idempotent(t *testing.T) {
 func TestSeedExternalProvidersFromEnv_ExistingRowIsPreserved(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Simulate an admin-API write that happened earlier.
 	existing := []byte("encrypted-by-ui")
@@ -174,7 +174,7 @@ func TestSeedExternalProvidersFromEnv_MultipleProviders(t *testing.T) {
 		 "clientId": "gh", "clientSecret": "gh-secret"}
 	]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestSeedExternalProvidersFromEnv_InvalidJSONFails(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	withEnvProviderSeed(t, `{not json`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	err := oauth.SeedExternalProvidersFromEnv(db)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
@@ -224,7 +224,7 @@ func TestSeedExternalProvidersFromEnv_PartialFailure(t *testing.T) {
 		 "clientId": "x", "clientSecret": "y"}
 	]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	err := oauth.SeedExternalProvidersFromEnv(db)
 	if err == nil {
 		t.Fatal("expected aggregated error")
@@ -252,7 +252,7 @@ func TestSeedExternalProvidersFromEnv_LegacyAliases(t *testing.T) {
 		"clientSecret": "shh"
 	}]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestSeedExternalProvidersFromEnv_PublicClientHasNullSecret(t *testing.T) {
 		"clientId": "g"
 	}]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestSeedExternalProvidersFromEnv_MissingKeyFails(t *testing.T) {
 		"clientSecret": "shh"
 	}]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	err := oauth.SeedExternalProvidersFromEnv(db)
 	if err == nil {
 		t.Fatal("expected error when encryption key missing")
@@ -324,7 +324,7 @@ func TestSeedExternalProvidersFromEnv_Disabled(t *testing.T) {
 		"enabled": false
 	}]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestSeedExternalProvidersFromEnv_PositionHonoured(t *testing.T) {
 		 "clientId": "h", "clientSecret": "y", "position": 1}
 	]`)
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.SeedExternalProvidersFromEnv(db); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

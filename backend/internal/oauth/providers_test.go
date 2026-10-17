@@ -110,7 +110,7 @@ func init() {
 // admin gate.
 func TestAdminProviders_UnauthenticatedRejected(t *testing.T) {
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServer(t, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/oauth/providers", nil)
@@ -125,7 +125,7 @@ func TestAdminProviders_UnauthenticatedRejected(t *testing.T) {
 // truth for role enforcement.
 func TestAdminProviders_NonAdminForbidden(t *testing.T) {
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "MEMBER")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/oauth/providers", nil)
@@ -142,7 +142,7 @@ func TestAdminProviders_NonAdminForbidden(t *testing.T) {
 func TestAdminProviders_CreateRoundTrip(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -203,7 +203,7 @@ func TestAdminProviders_CreateRoundTrip(t *testing.T) {
 func TestAdminProviders_CreateWithoutEncryptionKeyFails(t *testing.T) {
 	withProviderSecretKey(t, "")
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -227,7 +227,7 @@ func TestAdminProviders_CreateWithoutEncryptionKeyFails(t *testing.T) {
 func TestAdminProviders_CreateRejectsUnknownType(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -253,7 +253,7 @@ func TestAdminProviders_CreateRejectsUnknownType(t *testing.T) {
 func TestAdminProviders_CreateRejectsBadSlug(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -276,7 +276,7 @@ func TestAdminProviders_CreateRejectsBadSlug(t *testing.T) {
 func TestAdminProviders_CreateOIDCRequiresIssuer(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -302,7 +302,7 @@ func TestAdminProviders_CreateOIDCRequiresIssuer(t *testing.T) {
 func TestAdminProviders_CreateRejectsInsecureURL(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -326,7 +326,7 @@ func TestAdminProviders_CreateRejectsInsecureURL(t *testing.T) {
 func TestAdminProviders_CreateAllowsLocalhostHTTP(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -353,7 +353,7 @@ func TestAdminProviders_CreateAllowsLocalhostHTTP(t *testing.T) {
 func TestAdminProviders_CreateRejectsDuplicateProviderID(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -381,7 +381,7 @@ func TestAdminProviders_CreateRejectsDuplicateProviderID(t *testing.T) {
 func TestAdminProviders_CreatePublicClientHasNoSecret(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -408,7 +408,7 @@ func TestAdminProviders_CreatePublicClientHasNoSecret(t *testing.T) {
 func TestAdminProviders_ListOrdersByPosition(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertProvider(t, db, "p1", "google", "Google", 1, "google-client", []byte("encrypted"))
 	insertProvider(t, db, "p2", "github", "GitHub", 0, "gh-client", nil)
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
@@ -442,7 +442,7 @@ func TestAdminProviders_ListOrdersByPosition(t *testing.T) {
 func TestAdminProviders_UpdatePartial(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertProvider(t, db, "p1", "google", "Google Old", 0, "client-1", []byte("old-cipher"))
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
@@ -480,7 +480,7 @@ func TestAdminProviders_UpdatePartial(t *testing.T) {
 func TestAdminProviders_UpdateKeepsSecret(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	original := []byte("encrypted-old-secret")
 	insertProvider(t, db, "p1", "google", "Google", 0, "client-1", original)
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
@@ -506,7 +506,7 @@ func TestAdminProviders_UpdateKeepsSecret(t *testing.T) {
 func TestAdminProviders_UpdateNotFound(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{"name": "Anything"}`
@@ -524,7 +524,7 @@ func TestAdminProviders_UpdateNotFound(t *testing.T) {
 func TestAdminProviders_UpdateRejectsInvalidMerged(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertProvider(t, db, "p1", "google", "Google", 0, "client-1", []byte("enc"))
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
@@ -542,7 +542,7 @@ func TestAdminProviders_UpdateRejectsInvalidMerged(t *testing.T) {
 func TestAdminProviders_DeleteRemovesRow(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertProvider(t, db, "p1", "google", "Google", 0, "client-1", []byte("enc"))
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
@@ -565,7 +565,7 @@ func TestAdminProviders_DeleteRemovesRow(t *testing.T) {
 func TestAdminProviders_DeleteNotFound(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/oauth/providers/missing", nil)
@@ -580,7 +580,7 @@ func TestAdminProviders_DeleteNotFound(t *testing.T) {
 func TestAdminProviders_GetReturnsRedacted(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertProvider(t, db, "p1", "google", "Google", 0, "client-1", []byte("enc"))
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
@@ -603,7 +603,7 @@ func TestAdminProviders_GetReturnsRedacted(t *testing.T) {
 func TestAdminProviders_GetNotFound(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/oauth/providers/missing", nil)
@@ -619,7 +619,7 @@ func TestAdminProviders_GetNotFound(t *testing.T) {
 func TestAdminProviders_CreateStampsCreatedBy(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// Seed an admin user with id "admin-1" so the FK has a target.
 	if _, err := db.Exec(
 		`INSERT INTO users (id, username, nickname, type, role, enabled)
@@ -664,7 +664,7 @@ func TestAdminProviders_CreateStampsCreatedBy(t *testing.T) {
 func TestAdminProviders_CreateRejectsNonObjectExtraConfig(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{
@@ -689,7 +689,7 @@ func TestAdminProviders_CreateRejectsNonObjectExtraConfig(t *testing.T) {
 func TestAdminProviders_EmptyListIsArray(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/oauth/providers", nil)
@@ -710,7 +710,7 @@ func TestAdminProviders_EmptyListIsArray(t *testing.T) {
 func TestAdminProviders_CreateRejectsBadScopeToken(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newProviderServerAsAdmin(t, db, "ADMIN")
 
 	body := `{

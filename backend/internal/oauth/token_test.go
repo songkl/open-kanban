@@ -88,7 +88,7 @@ func newTokenServer(t *testing.T, db *sql.DB) (*gin.Engine, *oauth.Signer) {
 
 func TestDeviceCodeGrantSuccess(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
 		[]string{"kanban:read", "tasks:write"})
@@ -161,7 +161,7 @@ func mustSigner(t *testing.T, db *sql.DB) *oauth.Signer {
 
 func TestDeviceCodeGrantPendingReturnsAuthorizationPending(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	if _, err := db.Exec(`INSERT INTO users (id, username, nickname) VALUES ('user-1', 'alice', 'Alice')`); err != nil {
@@ -197,7 +197,7 @@ func TestDeviceCodeGrantPendingReturnsAuthorizationPending(t *testing.T) {
 
 func TestDeviceCodeGrantMismatchedClientReturnsInvalidGrant(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertClient(t, db, "kanban-client-2", "", "other",
@@ -225,7 +225,7 @@ func TestDeviceCodeGrantMismatchedClientReturnsInvalidGrant(t *testing.T) {
 
 func TestRefreshTokenGrantRotatesAndRevokesOld(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
 		[]string{"kanban:read"})
@@ -275,7 +275,7 @@ func TestRefreshTokenGrantRotatesAndRevokesOld(t *testing.T) {
 
 func TestRefreshTokenReuseRejected(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"refresh_token"}, []string{"kanban:read"})
 	if _, err := db.Exec(`INSERT INTO users (id, username, nickname) VALUES ('user-1', 'a', 'A')`); err != nil {
@@ -309,7 +309,7 @@ func TestRefreshTokenReuseRejected(t *testing.T) {
 
 func TestClientCredentialsGrantRequiresSecret(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertPublicClient(t, db, "public-client", []string{"client_credentials"})
 	r, _ := newTokenServer(t, db)
 
@@ -341,7 +341,7 @@ func insertPublicClient(t *testing.T, db *sql.DB, id string, grantTypes []string
 
 func TestClientCredentialsGrantSuccessWithSecret(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	hash, err := bcrypt.GenerateFromPassword([]byte("svc-secret"), bcrypt.DefaultCost)
 	if err != nil {
 		t.Fatalf("bcrypt: %v", err)
@@ -371,7 +371,7 @@ func TestClientCredentialsGrantSuccessWithSecret(t *testing.T) {
 
 func TestClientCredentialsGrantBasicAuth(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	hash, err := bcrypt.GenerateFromPassword([]byte("svc-secret"), bcrypt.DefaultCost)
 	if err != nil {
 		t.Fatalf("bcrypt: %v", err)
@@ -393,7 +393,7 @@ func TestClientCredentialsGrantBasicAuth(t *testing.T) {
 
 func TestTokenEndpointRejectsUnsupportedGrant(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	r, _ := newTokenServer(t, db)
@@ -415,7 +415,7 @@ func TestTokenEndpointRejectsUnsupportedGrant(t *testing.T) {
 
 func TestTokenEndpointSlowDownOnRapidPolling(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	if _, err := db.Exec(`INSERT INTO users (id, username, nickname) VALUES ('user-1', 'a', 'A')`); err != nil {

@@ -217,7 +217,7 @@ func setupBulkColumnDB(t *testing.T) *sql.DB {
 
 func TestBulkColumnAction_RequiresAuth(t *testing.T) {
 	db := setupBulkColumnDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -238,7 +238,7 @@ func TestBulkColumnAction_RequiresAuth(t *testing.T) {
 
 func TestBulkColumnAction_Validation(t *testing.T) {
 	db := setupBulkColumnDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -285,7 +285,7 @@ func TestBulkColumnAction_Validation(t *testing.T) {
 
 func TestBulkColumnAction_Archive(t *testing.T) {
 	db := setupBulkColumnDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -364,7 +364,7 @@ func TestBulkColumnAction_Archive(t *testing.T) {
 
 func TestBulkColumnAction_CompleteAdvancesToNextColumn(t *testing.T) {
 	db := setupBulkColumnDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -421,7 +421,7 @@ func TestBulkColumnAction_CompleteAdvancesToNextColumn(t *testing.T) {
 
 func TestBulkColumnAction_Forbidden(t *testing.T) {
 	db := setupBulkColumnDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -451,7 +451,7 @@ func TestBulkColumnAction_Forbidden(t *testing.T) {
 
 func TestBulkColumnAction_EmptyColumn(t *testing.T) {
 	db := setupBulkColumnDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -501,7 +501,7 @@ func TestBulkColumnAction_EmptyColumn(t *testing.T) {
 
 func TestBulkColumnAction_UnknownColumn(t *testing.T) {
 	db := setupBulkColumnDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))

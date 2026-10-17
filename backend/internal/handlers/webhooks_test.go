@@ -363,7 +363,7 @@ func TestWebhooks_List(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupWebhooksDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			tc.setup(t, db)
 
 			r := webhooksRouter(db)
@@ -399,7 +399,7 @@ func TestWebhooks_Create(t *testing.T) {
 
 	t.Run("401 without auth", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks", bytes.NewBuffer(jsonBody(t, map[string]any{
 			"name": "x",
@@ -415,7 +415,7 @@ func TestWebhooks_Create(t *testing.T) {
 
 	t.Run("403 MEMBER cannot create", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks", bytes.NewBuffer(jsonBody(t, map[string]any{
 			"name": "x",
@@ -432,7 +432,7 @@ func TestWebhooks_Create(t *testing.T) {
 
 	t.Run("400 invalid JSON body", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks", bytes.NewBufferString("{not json"))
 		req.Header.Set("Content-Type", "application/json")
@@ -446,7 +446,7 @@ func TestWebhooks_Create(t *testing.T) {
 
 	t.Run("201 ADMIN happy path returns redacted view + plaintext", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		r := webhooksRouter(db)
 		body := map[string]any{
 			"name":       "primary",
@@ -558,7 +558,7 @@ func TestWebhooks_Create(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupWebhooksDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			r := webhooksRouter(db)
 			req, _ := http.NewRequest("POST", "/api/v1/webhooks", bytes.NewBuffer(jsonBody(t, tc.body)))
 			req.Header.Set("Content-Type", "application/json")
@@ -595,7 +595,7 @@ func TestWebhooks_Get(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 
 	db := setupWebhooksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 	r := webhooksRouter(db)
 
@@ -743,7 +743,7 @@ func TestWebhooks_Update(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupWebhooksDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			tc.setup(t, db)
 
 			r := webhooksRouter(db)
@@ -778,7 +778,7 @@ func TestWebhooks_Delete(t *testing.T) {
 
 	t.Run("401 without auth", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("DELETE", "/api/v1/webhooks/w1", nil)
@@ -791,7 +791,7 @@ func TestWebhooks_Delete(t *testing.T) {
 
 	t.Run("403 MEMBER cannot delete", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("DELETE", "/api/v1/webhooks/w1", nil)
@@ -805,7 +805,7 @@ func TestWebhooks_Delete(t *testing.T) {
 
 	t.Run("200 ADMIN removes row", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("DELETE", "/api/v1/webhooks/w1", nil)
@@ -833,7 +833,7 @@ func TestWebhooks_Delete(t *testing.T) {
 
 	t.Run("404 second delete", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		// first delete
@@ -865,7 +865,7 @@ func TestWebhooks_Rotate(t *testing.T) {
 
 	t.Run("401 without auth", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks/w1/rotate", nil)
@@ -878,7 +878,7 @@ func TestWebhooks_Rotate(t *testing.T) {
 
 	t.Run("403 MEMBER cannot rotate", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks/w1/rotate", nil)
@@ -892,7 +892,7 @@ func TestWebhooks_Rotate(t *testing.T) {
 
 	t.Run("404 unknown id", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks/ghost/rotate", nil)
 		withBearerAuth(req, webhookAdminTok)
@@ -905,7 +905,7 @@ func TestWebhooks_Rotate(t *testing.T) {
 
 	t.Run("200 ADMIN rotates + new plaintext differs", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks/w1/rotate", nil)
@@ -959,7 +959,7 @@ func TestWebhooks_Test(t *testing.T) {
 
 	t.Run("401 without auth", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		body := jsonBody(t, map[string]any{"event": "task.created"})
@@ -974,7 +974,7 @@ func TestWebhooks_Test(t *testing.T) {
 
 	t.Run("404 unknown id", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		r := webhooksRouter(db)
 		body := jsonBody(t, map[string]any{"event": "task.created"})
 		req, _ := http.NewRequest("POST", "/api/v1/webhooks/ghost/test", bytes.NewBuffer(body))
@@ -989,7 +989,7 @@ func TestWebhooks_Test(t *testing.T) {
 
 	t.Run("400 missing event", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		body := jsonBody(t, map[string]any{})
@@ -1005,7 +1005,7 @@ func TestWebhooks_Test(t *testing.T) {
 
 	t.Run("400 unknown event name", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		body := jsonBody(t, map[string]any{"event": "totally.bogus.event"})
@@ -1021,7 +1021,7 @@ func TestWebhooks_Test(t *testing.T) {
 
 	t.Run("400 webhook does not subscribe", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.deleted"]`)
 		r := webhooksRouter(db)
 		body := jsonBody(t, map[string]any{"event": "task.created"})
@@ -1037,7 +1037,7 @@ func TestWebhooks_Test(t *testing.T) {
 
 	t.Run("202 MEMBER publishes synthetic event", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 
 		teardown := drainEventBus(t)
@@ -1088,7 +1088,7 @@ func TestWebhooks_Deliveries(t *testing.T) {
 
 	t.Run("401 without auth", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("GET", "/api/v1/webhooks/w1/deliveries", nil)
@@ -1101,7 +1101,7 @@ func TestWebhooks_Deliveries(t *testing.T) {
 
 	t.Run("404 unknown webhook", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("GET", "/api/v1/webhooks/ghost/deliveries", nil)
 		withBearerAuth(req, webhookMemberTok)
@@ -1114,7 +1114,7 @@ func TestWebhooks_Deliveries(t *testing.T) {
 
 	t.Run("200 empty webhook returns []", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		r := webhooksRouter(db)
 		req, _ := http.NewRequest("GET", "/api/v1/webhooks/w1/deliveries", nil)
@@ -1131,7 +1131,7 @@ func TestWebhooks_Deliveries(t *testing.T) {
 
 	t.Run("200 returns paginated rows with hasMore/nextCursor", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		base := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 		for i := 0; i < 5; i++ {
@@ -1234,7 +1234,7 @@ func TestWebhooks_Deliveries(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupWebhooksDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 			r := webhooksRouter(db)
 			req, _ := http.NewRequest("GET", "/api/v1/webhooks/w1/deliveries"+tc.query, nil)
@@ -1249,7 +1249,7 @@ func TestWebhooks_Deliveries(t *testing.T) {
 
 	t.Run("200 limit larger than max is capped", func(t *testing.T) {
 		db := setupWebhooksDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
 		// Seed 3 deliveries; asking for limit=200 should cap
 		// at 100 (no effect here, but confirms the branch).

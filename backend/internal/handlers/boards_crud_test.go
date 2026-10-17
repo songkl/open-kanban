@@ -125,7 +125,7 @@ func setupBoardsCrudDB(t *testing.T) *sql.DB {
 
 func TestCreateBoardHandler(t *testing.T) {
 	db := setupBoardsCrudDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -211,7 +211,7 @@ func TestCreateBoardHandler(t *testing.T) {
 
 func TestUpdateBoardHandler(t *testing.T) {
 	db := setupBoardsCrudDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -273,7 +273,7 @@ func TestUpdateBoardHandler(t *testing.T) {
 
 func TestDeleteBoardHandler(t *testing.T) {
 	db := setupBoardsCrudDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))

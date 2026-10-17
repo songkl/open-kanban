@@ -569,7 +569,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 						var boardID string
 						if err := rows.Scan(&boardID); err == nil {
 							permID := generateID()
-							db.Exec(
+							_, _ = db.Exec(
 								"INSERT INTO board_permissions (id, user_id, board_id, access, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id, notes) VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, '')",
 								permID, userID, boardID, "ADMIN", userID,
 							)
@@ -803,7 +803,7 @@ func getCurrentUserFromToken(db *sql.DB, tokenKey string) *models.User {
 		return nil
 	}
 
-	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
+	_, _ = db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
 
 	tokenCache.Store(tokenKey, &cachedUser{
 		user:      &user,
@@ -890,7 +890,7 @@ func getCurrentUserFromBearerJWT(c *gin.Context, db *sql.DB, raw string) *models
 		return nil
 	}
 
-	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
+	_, _ = db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
 	tokenCache.Store(raw, &cachedUser{
 		user:      user,
 		expiresAt: time.Now().Add(tokenCacheDuration),

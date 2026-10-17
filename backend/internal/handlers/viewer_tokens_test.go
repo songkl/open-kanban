@@ -264,7 +264,7 @@ func hashForTest(plaintext string) string {
 // anonymous callers get 401; a deleted board yields 404.
 func TestViewerTokenMint(t *testing.T) {
 	db := setupViewerTokensDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resetCachesForTest()
 
 	router := viewerTokensRouter(db)
@@ -367,7 +367,7 @@ func TestViewerTokenMint(t *testing.T) {
 // never returned.
 func TestViewerTokenList(t *testing.T) {
 	db := setupViewerTokensDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resetCachesForTest()
 
 	// Seed two active + one revoked token directly via the same
@@ -421,7 +421,7 @@ func TestViewerTokenList(t *testing.T) {
 // non-owner cannot, double-revoke is 410, unknown token is 404.
 func TestViewerTokenRevoke(t *testing.T) {
 	db := setupViewerTokensDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resetCachesForTest()
 
 	plaintext := "vwt_revoke_target"
@@ -483,7 +483,7 @@ func TestViewerTokenRevoke(t *testing.T) {
 // only a GET handler (other methods are not wired).
 func TestPublicBoardRead(t *testing.T) {
 	db := setupViewerTokensDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resetCachesForTest()
 
 	plaintext := "vwt_public_view"
@@ -591,7 +591,7 @@ func TestPublicBoardRead(t *testing.T) {
 // probe cannot enumerate embed URLs.
 func TestEmbedSnippet(t *testing.T) {
 	db := setupViewerTokensDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resetCachesForTest()
 
 	router := viewerTokensRouter(db)

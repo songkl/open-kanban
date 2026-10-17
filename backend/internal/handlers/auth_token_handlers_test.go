@@ -83,7 +83,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -107,7 +107,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["token"] == nil {
 			t.Fatal("expected token in response")
 		}
@@ -121,7 +121,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -145,7 +145,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		token := resp["token"].(map[string]interface{})
 		if token["name"] != "New Token" {
 			t.Errorf("expected token name 'New Token', got %v", token["name"])
@@ -156,7 +156,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -182,7 +182,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		token := resp["token"].(map[string]interface{})
 		if token["expiresAt"] == nil {
 			t.Error("expected expiresAt in token")
@@ -193,7 +193,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -216,7 +216,7 @@ func TestCreateTokenHandlerFull(t *testing.T) {
 func TestUpdateTokenHandler(t *testing.T) {
 	t.Run("update token name successfully", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -240,7 +240,7 @@ func TestUpdateTokenHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["success"] != true {
 			t.Errorf("expected success=true, got %v", resp)
 		}
@@ -257,7 +257,7 @@ func TestUpdateTokenHandler(t *testing.T) {
 
 	t.Run("update token without id returns 400", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -283,7 +283,7 @@ func TestUpdateTokenHandler(t *testing.T) {
 
 	t.Run("update token not found returns 404", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -309,7 +309,7 @@ func TestUpdateTokenHandler(t *testing.T) {
 
 	t.Run("update other user's token returns 404", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -336,7 +336,7 @@ func TestUpdateTokenHandler(t *testing.T) {
 
 	t.Run("update token without auth returns 401", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -361,7 +361,7 @@ func TestUpdateTokenHandler(t *testing.T) {
 func TestDeleteTokenHandlerFull(t *testing.T) {
 	t.Run("delete token successfully", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -390,7 +390,7 @@ func TestDeleteTokenHandlerFull(t *testing.T) {
 
 	t.Run("delete other user's token returns 404", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -411,7 +411,7 @@ func TestDeleteTokenHandlerFull(t *testing.T) {
 
 	t.Run("delete token without id returns 400", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -431,7 +431,7 @@ func TestDeleteTokenHandlerFull(t *testing.T) {
 
 	t.Run("delete nonexistent token returns 404", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -451,7 +451,7 @@ func TestDeleteTokenHandlerFull(t *testing.T) {
 
 	t.Run("delete token without auth returns 401", func(t *testing.T) {
 		db := setupTokenTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))

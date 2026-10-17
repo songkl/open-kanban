@@ -186,7 +186,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "No upload file found"})
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		if header.Size > MaxFileSize {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "File too large, maximum supported size is 10MB"})
@@ -266,7 +266,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 			now, now)
 
 		if err != nil {
-			os.Remove(storagePath)
+			_ = os.Remove(storagePath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save attachment record"})
 			return
 		}

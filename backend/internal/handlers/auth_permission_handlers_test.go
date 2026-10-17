@@ -30,7 +30,7 @@ func TestTransferOwnership_OwnerCanTransfer(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -90,7 +90,7 @@ func TestTransferOwnership_AdminCanTransfer(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Use a different admin (not the owner) to verify global
 	// ADMINs can also drive the transfer.
@@ -121,7 +121,7 @@ func TestTransferOwnership_NonOwnerNonAdmin_Returns403(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -150,7 +150,7 @@ func TestTransferOwnership_NonOwnerAdminRowCannotTransfer(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Promote member1 to a per-board ADMIN row but NOT the owner.
 	// Per canManageBoardPermissions, a user with an ADMIN row but
@@ -190,7 +190,7 @@ func TestTransferOwnership_TargetWithoutPermission_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// viewer1 exists but has no permission row on board1, so a
 	// transfer targeting them must be rejected — the spec is
@@ -225,7 +225,7 @@ func TestTransferOwnership_TargetSameAsCurrent_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -254,7 +254,7 @@ func TestTransferOwnership_NonExistentTarget_Returns404(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -283,7 +283,7 @@ func TestTransferOwnership_NonExistentBoard_Returns404(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -312,7 +312,7 @@ func TestTransferOwnership_MissingFields_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -340,7 +340,7 @@ func TestTransferOwnership_OldOwnerStillHasAdminAccessAfterTransfer(t *testing.T
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -402,7 +402,7 @@ func TestTransferOwnership_InvalidatesPermissionCache(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Warm the permission cache for both users on board1 to make
 	// sure the handler's invalidation actually evicts them.
@@ -450,7 +450,7 @@ func TestTransferOwnership_LogsActivity(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupTransferOwnershipDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -499,7 +499,7 @@ func TestBulkSetPermissions_OwnerCanGrantBatch(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Add three fresh users that have no permission row on board1
 	// yet so the bulk grant has real work to do (existing rows
@@ -582,7 +582,7 @@ func TestBulkSetPermissions_AdminCanGrantBatch(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -612,7 +612,7 @@ func TestBulkSetPermissions_NonOwnerNonAdmin_Returns403(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -642,7 +642,7 @@ func TestBulkSetPermissions_NotLoggedIn_Returns401(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -671,7 +671,7 @@ func TestBulkSetPermissions_MissingFields_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -725,7 +725,7 @@ func TestBulkSetPermissions_InvalidAccess_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -755,7 +755,7 @@ func TestBulkSetPermissions_TooManyUsers_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -793,7 +793,7 @@ func TestBulkSetPermissions_OwnerInBatch_Returns403(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -826,7 +826,7 @@ func TestBulkSetPermissions_UnknownUsers_Returns400WithList(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -871,7 +871,7 @@ func TestBulkSetPermissions_NonExistentBoard_Returns404(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -901,7 +901,7 @@ func TestBulkSetPermissions_DedupesAndDropsEmptyIDs(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -944,7 +944,7 @@ func TestBulkSetPermissions_InvalidatesPermissionCache(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Warm the permission cache for both targets so the test can
 	// confirm the handler evicts them after the grant commits.
@@ -992,7 +992,7 @@ func TestBulkSetPermissions_LogsActivity(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -1042,7 +1042,7 @@ func TestBulkSetPermissions_PreservesOwnerRow(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -1125,7 +1125,7 @@ func TestBulkSetPermissions_UpsertExisting(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// member1 and member2 already have READ rows on board1 from
 	// the fixture. Bulk-grant WRITE — REPLACE INTO must update
@@ -1196,7 +1196,7 @@ func TestBulkSetPermissions_UpsertExisting_MixedNewAndExisting(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// member1 already has a READ row on board1; bulk-up2 is a
 	// fresh user with no row yet. The bulk grant must upsert
@@ -1262,7 +1262,7 @@ func TestBulkSetPermissions_TransactionRollbackOnMidFailure(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Install a trigger that aborts REPLACE INTO for one specific
 	// user. We deliberately put the failing user LAST in the
@@ -1408,7 +1408,7 @@ func TestDeletePermission_RevokeStampsAuditColumns(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -1530,7 +1530,7 @@ func TestDeletePermission_GrantResetsRevokeTombstone(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -1615,7 +1615,7 @@ func TestDeleteColumnPermission_RevokeStampsAuditColumns(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed a column on board1 and a column-permission row.
 	if _, err := db.Exec(

@@ -209,7 +209,7 @@ func idsFromResp(t *testing.T, resp []map[string]interface{}) []string {
 
 func TestGetBoards_Visibility(t *testing.T) {
 	db := setupBoardsVisibilityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.GET("/api/boards", handlers.GetBoards(db))
@@ -313,7 +313,7 @@ func TestGetBoards_Visibility(t *testing.T) {
 
 func TestCreateBoard_DefaultsIsPublicTrue(t *testing.T) {
 	db := setupBoardsCrudDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -405,7 +405,7 @@ func TestCreateBoard_DefaultsIsPublicTrue(t *testing.T) {
 
 func TestUpdateBoard_TogglesVisibility(t *testing.T) {
 	db := setupBoardsCrudDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -520,7 +520,7 @@ func TestGetBoards_VisibilityFlippedInvalidatesCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	schema := `
 	CREATE TABLE users (

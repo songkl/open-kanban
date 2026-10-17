@@ -584,7 +584,7 @@ func DeleteColumn(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var exists bool
-		db.QueryRow("SELECT EXISTS(SELECT 1 FROM columns WHERE id = ?)", id).Scan(&exists)
+		_ = db.QueryRow("SELECT EXISTS(SELECT 1 FROM columns WHERE id = ?)", id).Scan(&exists)
 		if !exists {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid column ID"})
 			return
@@ -740,7 +740,7 @@ func ReorderColumns(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		now := time.Now()
 		for _, col := range req.Columns {

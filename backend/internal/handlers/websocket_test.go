@@ -109,7 +109,7 @@ func TestIsOriginAllowed(t *testing.T) {
 func TestGetAllowedOrigins(t *testing.T) {
 	unsetEnv := func(key string) {
 		prev, had := os.LookupEnv(key)
-		os.Unsetenv(key)
+		_ = os.Unsetenv(key)
 		t.Cleanup(func() {
 			if had {
 				_ = os.Setenv(key, prev)
@@ -166,7 +166,7 @@ func TestGetAllowedOrigins(t *testing.T) {
 
 func TestIsOriginAllowedDefaultFallback(t *testing.T) {
 	prevOrigins, hadOrigins := os.LookupEnv("ALLOWED_ORIGINS")
-	os.Unsetenv("ALLOWED_ORIGINS")
+	_ = os.Unsetenv("ALLOWED_ORIGINS")
 	t.Cleanup(func() {
 		if hadOrigins {
 			_ = os.Setenv("ALLOWED_ORIGINS", prevOrigins)

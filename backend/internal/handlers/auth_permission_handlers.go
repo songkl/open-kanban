@@ -366,7 +366,7 @@ func SetPermission(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var boardName string
-		db.QueryRow("SELECT name FROM boards WHERE id = ?", req.BoardID).Scan(&boardName)
+		_ = db.QueryRow("SELECT name FROM boards WHERE id = ?", req.BoardID).Scan(&boardName)
 
 		// Invalidate every cached session for the target user so they
 		// see the new board access on the next request instead of
@@ -1313,9 +1313,9 @@ func TransferOwnership(db *sql.DB) gin.HandlerFunc {
 
 		var oldOwnerNickname, newOwnerNickname string
 		if oldOwnerID.Valid {
-			db.QueryRow("SELECT nickname FROM users WHERE id = ?", oldOwnerID.String).Scan(&oldOwnerNickname)
+			_ = db.QueryRow("SELECT nickname FROM users WHERE id = ?", oldOwnerID.String).Scan(&oldOwnerNickname)
 		}
-		db.QueryRow("SELECT nickname FROM users WHERE id = ?", req.NewOwnerUserID).Scan(&newOwnerNickname)
+		_ = db.QueryRow("SELECT nickname FROM users WHERE id = ?", req.NewOwnerUserID).Scan(&newOwnerNickname)
 
 		tx, err := db.Begin()
 		if err != nil {
@@ -1401,16 +1401,16 @@ func TransferOwnership(db *sql.DB) gin.HandlerFunc {
 
 func GetAppConfig(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var allowRegistration bool = true
-		var requirePassword bool = false
-		var authEnabled bool = true
-		var marketplaceEnabled bool = true
-		var frontendEventsEnabled bool = true
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowRegistration)
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePassword)
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'marketplaceEnabled'").Scan(&marketplaceEnabled)
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'frontendEventsEnabled'").Scan(&frontendEventsEnabled)
+		var allowRegistration = true
+		var requirePassword = false
+		var authEnabled = true
+		var marketplaceEnabled = true
+		var frontendEventsEnabled = true
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowRegistration)
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePassword)
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'marketplaceEnabled'").Scan(&marketplaceEnabled)
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'frontendEventsEnabled'").Scan(&frontendEventsEnabled)
 
 		c.JSON(http.StatusOK, gin.H{
 			"allowRegistration":     allowRegistration,

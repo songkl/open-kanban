@@ -183,7 +183,7 @@ func loadOrGenerateSalt() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to init database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var existingSalt string
 	err = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'password_salt'").Scan(&existingSalt)
@@ -275,7 +275,7 @@ func getCurrentUser(c *gin.Context, db *sql.DB) *models.User {
 		return nil
 	}
 
-	db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
+	_, _ = db.Exec("UPDATE users SET last_active_at = datetime('now') WHERE id = ?", user.ID)
 
 	tokenCache.Store(tokenKey, &cachedUser{
 		user:      &user,

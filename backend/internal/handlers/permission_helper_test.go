@@ -162,7 +162,7 @@ func setupPermissionTestDB(t *testing.T) *sql.DB {
 func TestIsAdmin(t *testing.T) {
 	t.Run("admin user returns true", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		user := &models.User{ID: "u1", Role: "ADMIN"}
 		if !isAdmin(user) {
@@ -172,7 +172,7 @@ func TestIsAdmin(t *testing.T) {
 
 	t.Run("non-admin user returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		user := &models.User{ID: "u2", Role: "MEMBER"}
 		if isAdmin(user) {
@@ -182,7 +182,7 @@ func TestIsAdmin(t *testing.T) {
 
 	t.Run("nil user returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if isAdmin(nil) {
 			t.Error("expected nil user to return false")
@@ -193,7 +193,7 @@ func TestIsAdmin(t *testing.T) {
 func TestCheckBoardAccess(t *testing.T) {
 	t.Run("admin has access to any board", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if !checkBoardAccess(db, "u1", "b1", "READ", "ADMIN") {
 			t.Error("expected admin to have access")
@@ -208,7 +208,7 @@ func TestCheckBoardAccess(t *testing.T) {
 
 	t.Run("user with proper access returns true", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if !checkBoardAccess(db, "u2", "b1", "READ", "MEMBER") {
 			t.Error("expected user with WRITE access to have READ access")
@@ -217,7 +217,7 @@ func TestCheckBoardAccess(t *testing.T) {
 
 	t.Run("user with insufficient access returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkBoardAccess(db, "u2", "b1", "ADMIN", "MEMBER") {
 			t.Error("expected user with WRITE access to NOT have ADMIN access")
@@ -226,7 +226,7 @@ func TestCheckBoardAccess(t *testing.T) {
 
 	t.Run("user without permission returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkBoardAccess(db, "u3", "b1", "READ", "VIEWER") {
 			t.Error("expected user without permission to return false")
@@ -235,7 +235,7 @@ func TestCheckBoardAccess(t *testing.T) {
 
 	t.Run("empty user id returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkBoardAccess(db, "", "b1", "READ", "MEMBER") {
 			t.Error("expected empty user id to return false")
@@ -244,7 +244,7 @@ func TestCheckBoardAccess(t *testing.T) {
 
 	t.Run("empty board id returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkBoardAccess(db, "u2", "", "READ", "MEMBER") {
 			t.Error("expected empty board id to return false")
@@ -255,7 +255,7 @@ func TestCheckBoardAccess(t *testing.T) {
 func TestCheckColumnAccess(t *testing.T) {
 	t.Run("admin has access to any column", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if !checkColumnAccess(db, "u1", "c1", "READ", "ADMIN") {
 			t.Error("expected admin to have column access")
@@ -264,7 +264,7 @@ func TestCheckColumnAccess(t *testing.T) {
 
 	t.Run("user with column permission returns true", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if !checkColumnAccess(db, "u2", "c1", "READ", "MEMBER") {
 			t.Error("expected user with READ column permission to return true")
@@ -273,7 +273,7 @@ func TestCheckColumnAccess(t *testing.T) {
 
 	t.Run("user with insufficient column access returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkColumnAccess(db, "u2", "c1", "WRITE", "MEMBER") {
 			t.Error("expected user with only READ access to NOT have WRITE access")
@@ -282,7 +282,7 @@ func TestCheckColumnAccess(t *testing.T) {
 
 	t.Run("user without column permission returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkColumnAccess(db, "u3", "c1", "READ", "VIEWER") {
 			t.Error("expected user without column permission to return false")
@@ -291,7 +291,7 @@ func TestCheckColumnAccess(t *testing.T) {
 
 	t.Run("empty user id returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkColumnAccess(db, "", "c1", "READ", "MEMBER") {
 			t.Error("expected empty user id to return false")
@@ -300,7 +300,7 @@ func TestCheckColumnAccess(t *testing.T) {
 
 	t.Run("empty column id returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkColumnAccess(db, "u2", "", "READ", "MEMBER") {
 			t.Error("expected empty column id to return false")
@@ -311,7 +311,7 @@ func TestCheckColumnAccess(t *testing.T) {
 func TestCheckColumnAccessWithBoardFallback(t *testing.T) {
 	t.Run("column access takes precedence", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if !checkColumnAccessWithBoardFallback(db, "u2", "c1", "READ", "MEMBER") {
 			t.Error("expected column READ access to take precedence")
@@ -320,7 +320,7 @@ func TestCheckColumnAccessWithBoardFallback(t *testing.T) {
 
 	t.Run("board fallback works when no column permission", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		_, err := db.Exec(`INSERT INTO columns (id, name, status, board_id) VALUES ('c2', 'Column 2', 'todo', 'b1')`)
 		if err != nil {
@@ -334,7 +334,7 @@ func TestCheckColumnAccessWithBoardFallback(t *testing.T) {
 
 	t.Run("board fallback provides correct access level", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		_, err := db.Exec(`INSERT INTO columns (id, name, status, board_id) VALUES ('c3', 'Column 3', 'todo', 'b1')`)
 		if err != nil {
@@ -348,7 +348,7 @@ func TestCheckColumnAccessWithBoardFallback(t *testing.T) {
 
 	t.Run("no access returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if checkColumnAccessWithBoardFallback(db, "u3", "c1", "READ", "VIEWER") {
 			t.Error("expected user with no permissions to return false")
@@ -364,7 +364,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("admin role always granted write", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		admin := &models.User{ID: "u1", Role: "ADMIN"}
 		if !HasColumnWrite(db, admin, "b1", "c1") {
@@ -379,7 +379,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("admin returns false on empty column id", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		admin := &models.User{ID: "u1", Role: "ADMIN"}
 		if HasColumnWrite(db, admin, "b1", "") {
@@ -389,7 +389,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("column WRITE permission satisfies the check", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Upgrade u2's existing c1 grant from READ to WRITE.
 		// The schema enforces UNIQUE(user_id, column_id) so we
@@ -406,7 +406,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("column ADMIN permission satisfies the check", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`UPDATE column_permissions SET access = 'ADMIN' WHERE user_id = 'u2' AND column_id = 'c1'`); err != nil {
 			t.Fatalf("failed to set column ADMIN permission: %v", err)
@@ -420,7 +420,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("column READ permission does not satisfy WRITE", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// u2 already has column READ on c1 from setup. With
 		// only a board READ grant (no board WRITE), the fallback
@@ -440,7 +440,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("board WRITE fallback satisfies the check", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// c4 has no per-column grant for u2, but the board grant
 		// is WRITE so the fallback should still satisfy. Make
@@ -463,7 +463,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("board READ does not satisfy WRITE", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`UPDATE board_permissions SET access = 'READ' WHERE user_id = 'u2' AND board_id = 'b1'`); err != nil {
 			t.Fatalf("failed to downgrade board permission: %v", err)
@@ -481,7 +481,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("no grants returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		user := &models.User{ID: "u3", Role: "VIEWER"}
 		if HasColumnWrite(db, user, "b1", "c1") {
@@ -491,7 +491,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("nil user returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if HasColumnWrite(db, nil, "b1", "c1") {
 			t.Error("expected nil user to return false")
@@ -500,7 +500,7 @@ func TestHasColumnWrite(t *testing.T) {
 
 	t.Run("empty column id returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		user := &models.User{ID: "u1", Role: "ADMIN"}
 		if HasColumnWrite(db, user, "b1", "") {
@@ -512,7 +512,7 @@ func TestHasColumnWrite(t *testing.T) {
 func TestGetBoardIDForTask(t *testing.T) {
 	t.Run("returns board id for task", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		boardID, err := getBoardIDForTask(db, "task1")
 		if err != nil {
@@ -525,7 +525,7 @@ func TestGetBoardIDForTask(t *testing.T) {
 
 	t.Run("returns error for nonexistent task", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		_, err := getBoardIDForTask(db, "nonexistent")
 		if err == nil {
@@ -537,7 +537,7 @@ func TestGetBoardIDForTask(t *testing.T) {
 func TestGetBoardIDForColumn(t *testing.T) {
 	t.Run("returns board id for column", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		boardID, err := getBoardIDForColumn(db, "c1")
 		if err != nil {
@@ -550,7 +550,7 @@ func TestGetBoardIDForColumn(t *testing.T) {
 
 	t.Run("returns error for nonexistent column", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		_, err := getBoardIDForColumn(db, "nonexistent")
 		if err == nil {
@@ -633,7 +633,7 @@ func TestRequireNonViewer(t *testing.T) {
 func TestIsLastAdmin(t *testing.T) {
 	t.Run("sole enabled admin returns true", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		last, err := IsLastAdmin(db, "u1")
 		if err != nil {
@@ -646,7 +646,7 @@ func TestIsLastAdmin(t *testing.T) {
 
 	t.Run("multiple enabled admins returns false", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, role, enabled) VALUES ('u4', 'admin2', 'admin2', 'ADMIN', 1)`); err != nil {
 			t.Fatalf("failed to insert second admin: %v", err)
@@ -663,7 +663,7 @@ func TestIsLastAdmin(t *testing.T) {
 
 	t.Run("disabled admin does not count", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, role, enabled) VALUES ('u4', 'admin2', 'admin2', 'ADMIN', 0)`); err != nil {
 			t.Fatalf("failed to insert disabled admin: %v", err)
@@ -680,7 +680,7 @@ func TestIsLastAdmin(t *testing.T) {
 
 	t.Run("non-admin user with no other admins returns true", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`UPDATE users SET enabled = 0 WHERE id = 'u1'`); err != nil {
 			t.Fatalf("failed to disable admin u1: %v", err)
@@ -697,7 +697,7 @@ func TestIsLastAdmin(t *testing.T) {
 
 	t.Run("agent with ADMIN role counts toward admin pool", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`INSERT INTO users (id, username, nickname, role, type, enabled) VALUES ('agent-admin', 'agent-admin', 'Agent Admin', 'ADMIN', 'AGENT', 1)`); err != nil {
 			t.Fatalf("failed to insert agent admin: %v", err)
@@ -716,7 +716,7 @@ func TestIsLastAdmin(t *testing.T) {
 func TestCanModifyTask(t *testing.T) {
 	t.Run("ADMIN 任意任务通过", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		admin := &models.User{ID: "u1", Role: "ADMIN"}
 		allowed, err := canModifyTask(db, admin, "task1")
@@ -730,7 +730,7 @@ func TestCanModifyTask(t *testing.T) {
 
 	t.Run("VIEWER 任意任务拒绝", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		viewer := &models.User{ID: "u3", Role: "VIEWER"}
 		allowed, err := canModifyTask(db, viewer, "task1")
@@ -744,7 +744,7 @@ func TestCanModifyTask(t *testing.T) {
 
 	t.Run("MEMBER 自己创建 通过", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		member := &models.User{ID: "u2", Role: "MEMBER"}
 		allowed, err := canModifyTask(db, member, "task1")
@@ -758,7 +758,7 @@ func TestCanModifyTask(t *testing.T) {
 
 	t.Run("MEMBER 他人创建 拒绝", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		member := &models.User{ID: "u2", Role: "MEMBER"}
 		allowed, err := canModifyTask(db, member, "task2")
@@ -772,7 +772,7 @@ func TestCanModifyTask(t *testing.T) {
 
 	t.Run("任务不存在 返回错误", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		member := &models.User{ID: "u2", Role: "MEMBER"}
 		_, err := canModifyTask(db, member, "nonexistent")
@@ -786,7 +786,7 @@ func TestCanModifyTask(t *testing.T) {
 
 	t.Run("MEMBER 任务无 created_by 拒绝", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id) VALUES ('task3', 'Orphan Task', 'c1')`); err != nil {
 			t.Fatalf("failed to insert orphan task: %v", err)
@@ -804,7 +804,7 @@ func TestCanModifyTask(t *testing.T) {
 
 	t.Run("nil 用户拒绝", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		allowed, err := canModifyTask(db, nil, "task1")
 		if err != nil {
@@ -819,7 +819,7 @@ func TestCanModifyTask(t *testing.T) {
 func TestCheckTaskModifyAccess(t *testing.T) {
 	t.Run("ADMIN 任意任务通过", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		admin := &models.User{ID: "u1", Role: "ADMIN"}
 		allowed, err := CheckTaskModifyAccess(db, admin, "task1", "c1", "WRITE")
@@ -833,7 +833,7 @@ func TestCheckTaskModifyAccess(t *testing.T) {
 
 	t.Run("VIEWER 任意任务拒绝", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		viewer := &models.User{ID: "u3", Role: "VIEWER"}
 		allowed, err := CheckTaskModifyAccess(db, viewer, "task1", "c1", "WRITE")
@@ -847,7 +847,7 @@ func TestCheckTaskModifyAccess(t *testing.T) {
 
 	t.Run("MEMBER 自己创建 通过", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		member := &models.User{ID: "u2", Role: "MEMBER"}
 		allowed, err := CheckTaskModifyAccess(db, member, "task1", "c1", "WRITE")
@@ -861,7 +861,7 @@ func TestCheckTaskModifyAccess(t *testing.T) {
 
 	t.Run("MEMBER 他人创建 拒绝", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		member := &models.User{ID: "u2", Role: "MEMBER"}
 		allowed, err := CheckTaskModifyAccess(db, member, "task2", "c1", "WRITE")
@@ -875,7 +875,7 @@ func TestCheckTaskModifyAccess(t *testing.T) {
 
 	t.Run("任务不存在 返回错误", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		member := &models.User{ID: "u2", Role: "MEMBER"}
 		_, err := CheckTaskModifyAccess(db, member, "nonexistent", "c1", "WRITE")
@@ -889,7 +889,7 @@ func TestCheckTaskModifyAccess(t *testing.T) {
 
 	t.Run("nil 用户拒绝", func(t *testing.T) {
 		db := setupPermissionTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		allowed, err := CheckTaskModifyAccess(db, nil, "task1", "c1", "WRITE")
 		if err != nil {

@@ -73,7 +73,7 @@ type deliveryPipelineCase struct {
 func runDeliveryPipelineCase(t *testing.T, tc deliveryPipelineCase) {
 	t.Helper()
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var (
 		mu     sync.Mutex
@@ -105,7 +105,7 @@ func runDeliveryPipelineCase(t *testing.T, tc deliveryPipelineCase) {
 	seedWebhookE2E(t, db, "wh-pipeline", srv.URL, "0011223344556677", 5)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -230,7 +230,7 @@ func TestDeliveryPipeline_ResultTable(t *testing.T) {
 func runDeliveryPipelineCaseWithTimeout(t *testing.T, tc deliveryPipelineCase, timeoutSec int) {
 	t.Helper()
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Block until either the client disconnects (which
@@ -259,7 +259,7 @@ func runDeliveryPipelineCaseWithTimeout(t *testing.T, tc deliveryPipelineCase, t
 	}
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -307,7 +307,7 @@ func runDeliveryPipelineCaseWithTimeout(t *testing.T, tc deliveryPipelineCase, t
 // exercised (rather than calling it directly).
 func TestDeliveryPipeline_BackoffMath(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rec := newReceiver(500, `{"err":"down"}`)
 	srv := httptest.NewServer(rec)
@@ -316,7 +316,7 @@ func TestDeliveryPipeline_BackoffMath(t *testing.T) {
 	seedWebhookE2E(t, db, "wh-backoff", srv.URL, "0011223344556677", 5)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -368,7 +368,7 @@ func TestDeliveryPipeline_BackoffMath(t *testing.T) {
 // part of a public contract.
 func TestDeliveryPipeline_ExhaustionLogsWarning(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rec := newReceiver(500, `{"err":"down"}`)
 	srv := httptest.NewServer(rec)
@@ -378,7 +378,7 @@ func TestDeliveryPipeline_ExhaustionLogsWarning(t *testing.T) {
 	seedWebhookE2E(t, db, "wh-exhaust", srv.URL, "0011223344556677", maxRetries)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -458,7 +458,7 @@ func TestDeliveryPipeline_ExhaustionLogsWarning(t *testing.T) {
 // limiter-specific coverage.
 func TestDeliveryPipeline_RateLimitShuffle(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Receiver that should NEVER see a request: the rate
 	// limiter is exhausted before the first POST is
@@ -470,7 +470,7 @@ func TestDeliveryPipeline_RateLimitShuffle(t *testing.T) {
 	seedWebhookE2E(t, db, "wh-rl", srv.URL, "0011223344556677", 5)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	// Cap the limiter at 1, exhaust it, and then verify the
 	// reschedule path.

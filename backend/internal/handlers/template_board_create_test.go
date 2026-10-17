@@ -23,7 +23,7 @@ func TestCreateBoardFromTemplate_NonAdmin_BecomesOwner(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			db := setupTemplateOwnershipTestDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			handlers.ResetTokenCacheForTest()
 			handlers.ResetPermissionCacheForTest()
 
@@ -62,7 +62,7 @@ func TestCreateBoardFromTemplate_AdminCopy_StillOwner(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := setupTemplateOwnershipTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()
 
@@ -96,7 +96,7 @@ func TestCreateBoardFromTemplate_Failure_RollsBack(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := setupTemplateOwnershipTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()
 

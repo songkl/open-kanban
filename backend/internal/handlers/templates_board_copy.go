@@ -43,7 +43,7 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy board"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		newBoardID := generateID()
 		now := time.Now()
@@ -85,7 +85,7 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 			var createdAt, updatedAt time.Time
 
 			if err := colRows.Scan(&colID, &name, &status, &position, &color, &boardIDStr, &createdAt, &updatedAt); err != nil {
-				colRows.Close()
+				_ = colRows.Close()
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy column"})
 				return
 			}
@@ -103,12 +103,12 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 				newColID, name, statusVal, position, color, newBoardID, now, now,
 			)
 			if err != nil {
-				colRows.Close()
+				_ = colRows.Close()
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy column"})
 				return
 			}
 		}
-		colRows.Close()
+		_ = colRows.Close()
 
 		for oldColID, newColID := range oldToNewColIDs {
 			taskRows, err := tx.Query(`
@@ -131,7 +131,7 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 				var createdAt, updatedAt time.Time
 
 				if err := taskRows.Scan(&taskID, &title, &description, &priority, &assignee, &meta, &position, &published, &archived, &archivedAt, &createdBy, &createdAt, &updatedAt); err != nil {
-					taskRows.Close()
+					_ = taskRows.Close()
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy task"})
 					return
 				}
@@ -155,12 +155,12 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				`, newTaskID, title, descVal, priority, assigneeVal, metaVal, newColID, position, published, archived, archivedAt, createdBy, createdAt, updatedAt)
 				if err != nil {
-					taskRows.Close()
+					_ = taskRows.Close()
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy task"})
 					return
 				}
 			}
-			taskRows.Close()
+			_ = taskRows.Close()
 
 			for oldTaskID, newTaskID := range oldToNewTaskIDs {
 				commentRows, err := tx.Query(`
@@ -177,7 +177,7 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 					var createdAt, updatedAt time.Time
 
 					if err := commentRows.Scan(&commentID, &content, &author, &createdAt, &updatedAt); err != nil {
-						commentRows.Close()
+						_ = commentRows.Close()
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy comment"})
 						return
 					}
@@ -188,12 +188,12 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 						VALUES (?, ?, ?, ?, ?, ?)
 					`, newCommentID, content, author, newTaskID, createdAt, updatedAt)
 					if err != nil {
-						commentRows.Close()
+						_ = commentRows.Close()
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy comment"})
 						return
 					}
 				}
-				commentRows.Close()
+				_ = commentRows.Close()
 
 				subtaskRows, err := tx.Query(`
 					SELECT id, title, completed, created_at, updated_at
@@ -210,7 +210,7 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 					var createdAt, updatedAt time.Time
 
 					if err := subtaskRows.Scan(&subtaskID, &title, &completed, &createdAt, &updatedAt); err != nil {
-						subtaskRows.Close()
+						_ = subtaskRows.Close()
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy subtask"})
 						return
 					}
@@ -221,12 +221,12 @@ func CopyBoard(db *sql.DB) gin.HandlerFunc {
 						VALUES (?, ?, ?, ?, ?, ?)
 					`, newSubtaskID, title, completed, newTaskID, createdAt, updatedAt)
 					if err != nil {
-						subtaskRows.Close()
+						_ = subtaskRows.Close()
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy subtask"})
 						return
 					}
 				}
-				subtaskRows.Close()
+				_ = subtaskRows.Close()
 			}
 		}
 

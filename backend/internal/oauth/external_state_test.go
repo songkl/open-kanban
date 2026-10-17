@@ -158,7 +158,7 @@ func sumSHA256(b []byte) []byte {
 //     can look up, expire, and consume.
 func TestPendingState_RoundTrip(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	expires := time.Now().Add(10 * time.Minute)
@@ -197,7 +197,7 @@ func TestPendingState_RoundTrip(t *testing.T) {
 //     a guess that doesn't match any minted row.
 func TestConsumePendingState_NotFound(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := oauth.ConsumePendingState(context.Background(), db, "no-such-state", ""); !errors.Is(err, oauth.ErrPendingStateNotFound) {
 		t.Errorf("expected ErrPendingStateNotFound, got %v", err)
 	}
@@ -208,7 +208,7 @@ func TestConsumePendingState_NotFound(t *testing.T) {
 //     state to provoke a SQL error or a slow scan.
 func TestConsumePendingState_Empty(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := oauth.ConsumePendingState(context.Background(), db, "", ""); !errors.Is(err, oauth.ErrPendingStateNotFound) {
 		t.Errorf("expected ErrPendingStateNotFound for empty state, got %v", err)
 	}
@@ -219,7 +219,7 @@ func TestConsumePendingState_Empty(t *testing.T) {
 //     PendingStateTTL ago.
 func TestConsumePendingState_Expired(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	expires := time.Now().Add(-1 * time.Minute)
 	if err := oauth.PersistPendingStateForTest(db, providerID, "state-exp", "v", "c", "", expires); err != nil {
@@ -234,7 +234,7 @@ func TestConsumePendingState_Expired(t *testing.T) {
 //     Pin the defence-in-depth check the admin tooling uses.
 func TestConsumePendingState_WrongProvider(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	expires := time.Now().Add(10 * time.Minute)
 	if err := oauth.PersistPendingStateForTest(db, providerID, "state-wp", "v", "c", "", expires); err != nil {
@@ -250,7 +250,7 @@ func TestConsumePendingState_WrongProvider(t *testing.T) {
 //     exercises the seam ConsumePendingState uses.
 func TestPendingState_CascadeOnProviderDelete(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	expires := time.Now().Add(10 * time.Minute)
 	if err := oauth.PersistPendingStateForTest(db, providerID, "state-cd", "v", "c", "", expires); err != nil {
@@ -268,7 +268,7 @@ func TestPendingState_CascadeOnProviderDelete(t *testing.T) {
 //     their expiry; live rows are kept.
 func TestPurgeExpiredPendingStates(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	now := time.Now()
 
@@ -327,7 +327,7 @@ func TestSanitizeRedirectAfter(t *testing.T) {
 //     scopes + redirect_uri back to the callback.
 func TestExternalLoginHandler_HappyPath(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("idp"))
 	}))
@@ -416,7 +416,7 @@ func TestExternalLoginHandler_HappyPath(t *testing.T) {
 //     for a different slug).
 func TestExternalLoginHandler_UnknownSlug(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := gin.New()
 	r.GET("/oauth/external/:slug/login", oauth.ExternalLoginHandler(db))
 
@@ -436,7 +436,7 @@ func TestExternalLoginHandler_UnknownSlug(t *testing.T) {
 //     of a disabled row.
 func TestExternalLoginHandler_DisabledProvider(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	if _, err := db.Exec(`UPDATE oauth_providers SET enabled = 0 WHERE provider_id = 'google'`); err != nil {
 		t.Fatalf("disable: %v", err)
@@ -457,7 +457,7 @@ func TestExternalLoginHandler_DisabledProvider(t *testing.T) {
 //     the user to a literal empty string.
 func TestExternalLoginHandler_MissingAuthEndpoint(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	if _, err := db.Exec(`UPDATE oauth_providers SET auth_endpoint = '' WHERE provider_id = 'google'`); err != nil {
 		t.Fatalf("clear auth_endpoint: %v", err)
@@ -477,7 +477,7 @@ func TestExternalLoginHandler_MissingAuthEndpoint(t *testing.T) {
 //     dropped; the persisted row carries redirect_after=”.
 func TestExternalLoginHandler_RejectsOpenRedirect(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer idp.Close()
 	seedStateProvider(t, db, "google", idp.URL)
@@ -507,7 +507,7 @@ func TestExternalLoginHandler_RejectsOpenRedirect(t *testing.T) {
 //     CSRF by sending only `code`.
 func TestExternalCallback_CodeWithoutState(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	r := newLoginServer(t, db, &stubFetcher{info: stubIdentity("sub-1", "a@b.com", true)})
@@ -526,7 +526,7 @@ func TestExternalCallback_CodeWithoutState(t *testing.T) {
 //     "no row matches" branch.
 func TestExternalCallback_UnknownState(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	r := newLoginServer(t, db, &stubFetcher{info: stubIdentity("sub-1", "a@b.com", true)})
@@ -542,7 +542,7 @@ func TestExternalCallback_UnknownState(t *testing.T) {
 //     "row exists but past TTL" branch.
 func TestExternalCallback_ExpiredState(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	expires := time.Now().Add(-1 * time.Minute)
 	if err := oauth.PersistPendingStateForTest(db, providerID, "state-exp", "v", "c", "", expires); err != nil {
@@ -566,7 +566,7 @@ func TestExternalCallback_ExpiredState(t *testing.T) {
 //     enforcement at the HTTP layer.
 func TestExternalCallback_ConsumedState(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	expires := time.Now().Add(10 * time.Minute)
 	if err := oauth.PersistPendingStateForTest(db, providerID, "state-once", "v", "c", "", expires); err != nil {
@@ -599,7 +599,7 @@ func TestExternalCallback_ConsumedState(t *testing.T) {
 //     CSRF replay off-host).
 func TestExternalCallback_CookieMismatch(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	expires := time.Now().Add(10 * time.Minute)
 	if err := oauth.PersistPendingStateForTest(db, providerID, "state-db", "v", "c", "", expires); err != nil {
@@ -625,7 +625,7 @@ func TestExternalCallback_CookieMismatch(t *testing.T) {
 //     suite keeps working.
 func TestExternalCallback_ClaimsPathBypassesState(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	r := newLoginServer(t, db, &stubFetcher{info: stubIdentity("sub-1", "a@b.com", true)})
@@ -644,7 +644,7 @@ func TestExternalCallback_ClaimsPathBypassesState(t *testing.T) {
 //     follow-up request can't accidentally reuse it.
 func TestExternalCallback_ConsumesAndClearsState(t *testing.T) {
 	db := setupStateDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	expires := time.Now().Add(10 * time.Minute)
 	if err := oauth.PersistPendingStateForTest(db, providerID, "state-success", "v", "c", "", expires); err != nil {

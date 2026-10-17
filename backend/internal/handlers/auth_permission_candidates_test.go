@@ -212,7 +212,7 @@ func callGetPermissions(t *testing.T, db *sql.DB, token, query string) *httptest
 //     must be included
 func TestGetPermissions_CandidatesExcludesOwnerAndExistingHolders(t *testing.T) {
 	db := setupPermissionsCandidatesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callGetPermissions(t, db, "admin-token", "boardId=board1")
 	if w.Code != http.StatusOK {
@@ -279,7 +279,7 @@ func TestGetPermissions_CandidatesExcludesOwnerAndExistingHolders(t *testing.T) 
 // without translation.
 func TestGetPermissions_CandidatesShapeMatchesUsersVisible(t *testing.T) {
 	db := setupPermissionsCandidatesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callGetPermissions(t, db, "admin-token", "boardId=board1")
 	if w.Code != http.StatusOK {
@@ -326,7 +326,7 @@ func TestGetPermissions_CandidatesShapeMatchesUsersVisible(t *testing.T) {
 // callers parsing the historical response don't break.
 func TestGetPermissions_CandidatesAbsentWithoutBoardID(t *testing.T) {
 	db := setupPermissionsCandidatesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callGetPermissions(t, db, "admin-token", "")
 	if w.Code != http.StatusOK {
@@ -356,7 +356,7 @@ func TestGetPermissions_CandidatesEmptyArrayIsArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	schema := `
 	CREATE TABLE users (
@@ -456,7 +456,7 @@ func TestGetPermissions_CandidatesEmptyArrayIsArray(t *testing.T) {
 // in candidates.
 func TestGetPermissions_CandidatesRespectsExpiryAndRevocation(t *testing.T) {
 	db := setupPermissionsCandidatesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callGetPermissions(t, db, "admin-token", "boardId=board1")
 	if w.Code != http.StatusOK {

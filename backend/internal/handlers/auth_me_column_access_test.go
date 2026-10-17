@@ -29,7 +29,7 @@ func TestGetMyColumnAccess_RoleMatrix(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	type wantCol struct {
 		effectiveAccess string
@@ -217,7 +217,7 @@ func TestGetMyColumnAccess_NoAccess_Returns404(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	cases := []struct {
 		name    string
@@ -282,7 +282,7 @@ func TestGetMyColumnAccess_MissingBoardID(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))

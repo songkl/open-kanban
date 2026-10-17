@@ -76,13 +76,13 @@ func setupWorkspaceDB(t *testing.T) *sql.DB {
 func TestWorkspaceStats(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWorkspaceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tmpDir := t.TempDir()
 	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
 		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
 	}
-	defer os.Unsetenv("WORKSPACE_DIR")
+	defer func() { _ = os.Unsetenv("WORKSPACE_DIR") }()
 
 	router := gin.New()
 	router.GET("/api/v1/workspace/stats", handlers.RequireAuth(db), handlers.WorkspaceStats(db))
@@ -117,13 +117,13 @@ func TestWorkspaceStats(t *testing.T) {
 func TestListWorkspaceFiles(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWorkspaceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tmpDir := t.TempDir()
 	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
 		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
 	}
-	defer os.Unsetenv("WORKSPACE_DIR")
+	defer func() { _ = os.Unsetenv("WORKSPACE_DIR") }()
 
 	router := gin.New()
 	router.GET("/api/v1/workspace/files", handlers.RequireAuth(db), handlers.ListWorkspaceFiles(db))
@@ -162,13 +162,13 @@ func TestListWorkspaceFiles(t *testing.T) {
 func TestUploadTextFile(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWorkspaceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tmpDir := t.TempDir()
 	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
 		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
 	}
-	defer os.Unsetenv("WORKSPACE_DIR")
+	defer func() { _ = os.Unsetenv("WORKSPACE_DIR") }()
 
 	router := gin.New()
 	router.POST("/api/v1/workspace/upload", handlers.RequireAuth(db), handlers.UploadTextFile(db))
@@ -224,13 +224,13 @@ func TestUploadTextFile(t *testing.T) {
 func TestReadWorkspaceFile(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWorkspaceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tmpDir := t.TempDir()
 	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
 		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
 	}
-	defer os.Unsetenv("WORKSPACE_DIR")
+	defer func() { _ = os.Unsetenv("WORKSPACE_DIR") }()
 
 	subDir := filepath.Join(tmpDir, "subdir")
 	if err := os.MkdirAll(subDir, 0755); err != nil {
@@ -288,13 +288,13 @@ func TestReadWorkspaceFile(t *testing.T) {
 func TestDeleteWorkspaceFile(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWorkspaceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tmpDir := t.TempDir()
 	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
 		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
 	}
-	defer os.Unsetenv("WORKSPACE_DIR")
+	defer func() { _ = os.Unsetenv("WORKSPACE_DIR") }()
 
 	testFile := filepath.Join(tmpDir, "todelete.txt")
 	_ = os.WriteFile(testFile, []byte("to be deleted"), 0644)
@@ -342,13 +342,13 @@ func TestDeleteWorkspaceFile(t *testing.T) {
 func TestBatchUploadTextFiles(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWorkspaceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tmpDir := t.TempDir()
 	if err := os.Setenv("WORKSPACE_DIR", tmpDir); err != nil {
 		t.Fatalf("failed to set WORKSPACE_DIR: %v", err)
 	}
-	defer os.Unsetenv("WORKSPACE_DIR")
+	defer func() { _ = os.Unsetenv("WORKSPACE_DIR") }()
 
 	router := gin.New()
 	router.POST("/api/v1/workspace/batch-upload", handlers.RequireAuth(db), handlers.BatchUploadTextFiles(db))

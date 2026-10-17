@@ -120,7 +120,7 @@ func agentIDsFromResponse(body map[string]interface{}) []string {
 // handler runs. (plan §4.1.3: "Auth: handlers.RequireAuth(db)")
 func TestDeviceAgents_UnauthenticatedReturns401(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newDeviceAgentsServer(t, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/device/agents", nil)
@@ -136,7 +136,7 @@ func TestDeviceAgents_UnauthenticatedReturns401(t *testing.T) {
 // (plan §4.1.6 #13 - admin branch)
 func TestDeviceAgents_AdminSeesAllEnabledAgents(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	now := time.Now()
 	seedAgentWithTimestamps(t, db, "agent-admin-role", "Admin Agent", "ADMIN", true, now.Add(-3*time.Hour))
 	seedAgentWithTimestamps(t, db, "agent-member-role", "Member Agent", "MEMBER", true, now.Add(-2*time.Hour))
@@ -163,7 +163,7 @@ func TestDeviceAgents_AdminSeesAllEnabledAgents(t *testing.T) {
 // enabled/disabled and type='AGENT' filters apply uniformly.
 func TestDeviceAgents_AdminFiltersDisabledAndHumans(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	now := time.Now()
 	seedAgentWithTimestamps(t, db, "agent-on", "On", "ADMIN", true, now.Add(-3*time.Hour))
 	seedAgentWithTimestamps(t, db, "agent-off", "Off", "MEMBER", false, now.Add(-2*time.Hour))
@@ -191,7 +191,7 @@ func TestDeviceAgents_AdminFiltersDisabledAndHumans(t *testing.T) {
 // and VIEWER Agents surface. (plan §4.1.2 + §4.1.3 visibility rule)
 func TestDeviceAgents_MemberHidesAdminRoleAgents(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	now := time.Now()
 	seedAgentWithTimestamps(t, db, "agent-admin-role", "Admin Agent", "ADMIN", true, now.Add(-3*time.Hour))
 	seedAgentWithTimestamps(t, db, "agent-member-role", "Member Agent", "MEMBER", true, now.Add(-2*time.Hour))
@@ -218,7 +218,7 @@ func TestDeviceAgents_MemberHidesAdminRoleAgents(t *testing.T) {
 // non-ADMIN Agents are visible.
 func TestDeviceAgents_ViewerHidesAdminRoleAgents(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	now := time.Now()
 	seedAgentWithTimestamps(t, db, "agent-admin-role", "Admin Agent", "ADMIN", true, now.Add(-2*time.Hour))
 	seedAgentWithTimestamps(t, db, "agent-viewer-role", "Viewer Agent", "VIEWER", true, now.Add(-1*time.Hour))
@@ -239,7 +239,7 @@ func TestDeviceAgents_ViewerHidesAdminRoleAgents(t *testing.T) {
 // filter accidentally runs before the enabled filter.
 func TestDeviceAgents_FiltersDisabledRegardlessOfRole(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	now := time.Now()
 	seedAgentWithTimestamps(t, db, "agent-disabled-member", "Disabled Member", "MEMBER", false, now.Add(-2*time.Hour))
 	seedAgentWithTimestamps(t, db, "agent-enabled-member", "Enabled Member", "MEMBER", true, now.Add(-1*time.Hour))
@@ -261,7 +261,7 @@ func TestDeviceAgents_FiltersDisabledRegardlessOfRole(t *testing.T) {
 // responses".
 func TestDeviceAgents_EmptyResultIsArrayNotNull(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	now := time.Now()
 	// Seed a single ADMIN-role Agent and a MEMBER caller. The MEMBER
 	// should see an empty list because the only Agent is gated by role.
@@ -291,7 +291,7 @@ func TestDeviceAgents_EmptyResultIsArrayNotNull(t *testing.T) {
 // as available_agents[] in lookup.")
 func TestDeviceAgents_PayloadShapeMatchesLookup(t *testing.T) {
 	db := setupTokenDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	now := time.Now()
 	seedAgentWithTimestamps(t, db, "agent-alpha", "Alpha", "ADMIN", true, now.Add(-1*time.Hour))
 	r := newDeviceAgentsServer(t, db)

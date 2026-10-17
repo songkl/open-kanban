@@ -96,7 +96,7 @@ func setupStatusDB(t *testing.T) *sql.DB {
 func TestStatusCheck_HealthyReportsCounts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := setupStatusDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed deterministic counts so the assertions can pin the
 	// numbers exactly. We use a mix of human + agent users, a
@@ -267,7 +267,7 @@ func TestStatusCheck_DBUnreachableMarksDegraded(t *testing.T) {
 func TestStatusCheck_NoMigrationsYet(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := setupStatusDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Fresh install: no schema_version rows. The handler must
 	// still answer 200 with empty migration fields rather than

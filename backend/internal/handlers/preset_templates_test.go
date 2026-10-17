@@ -214,7 +214,7 @@ func TestGetPresetTemplates(t *testing.T) {
 
 	t.Run("returns enabled presets without auth (public marketplace)", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/v1/preset-templates", handlers.GetPresetTemplates(db))
@@ -251,7 +251,7 @@ func TestGetPresetTemplates(t *testing.T) {
 
 	t.Run("404 when marketplace is disabled by admin", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`REPLACE INTO app_config (` + "`key`" + `, value) VALUES ('marketplaceEnabled', '0')`); err != nil {
 			t.Fatalf("disable marketplace: %v", err)
@@ -274,7 +274,7 @@ func TestGetPresetTemplates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("open: %v", err)
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/v1/preset-templates", handlers.GetPresetTemplates(db))
@@ -294,7 +294,7 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 	t.Run("unauthenticated quickstart returns 401", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -314,7 +314,7 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 	t.Run("quickstart materialises board + columns + agent + demo task in one shot", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -416,7 +416,7 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 	t.Run("explicit installAgent=false skips the sample agent", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -463,7 +463,7 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 	t.Run("unknown presetSlug returns 404", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -484,7 +484,7 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 	t.Run("missing presetSlug returns 400", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -505,7 +505,7 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 	t.Run("custom boardName overrides the preset default", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -534,7 +534,7 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 	t.Run("nickname collision appends a numeric suffix instead of clobbering", func(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Seed a user that already owns the "Alpha Bot" nickname so the
 		// onboarding wizard has to disambiguate.
@@ -580,7 +580,7 @@ func TestGetAppConfigIncludesMarketplaceEnabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := setupPresetTemplatesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.GET("/api/auth/config", handlers.GetAppConfig(db))
@@ -613,7 +613,7 @@ func TestUpdateAppConfigTogglesMarketplaceEnabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := setupPresetTemplatesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))

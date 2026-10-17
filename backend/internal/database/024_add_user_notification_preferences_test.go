@@ -31,7 +31,7 @@ func TestSQLiteMigration024_AddsUserNotificationPreferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// SQLite ships with foreign-key enforcement disabled; enable it
 	// so the ON DELETE CASCADE clause on the prefs table fires.
@@ -144,7 +144,7 @@ func TestSQLiteMigration024_DownDropsUserNotificationPreferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
 	if err != nil {

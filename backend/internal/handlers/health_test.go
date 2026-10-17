@@ -64,7 +64,7 @@ func TestGetRequestID(t *testing.T) {
 		}
 
 		var resp map[string]string
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["request_id"] != "test-request-id-123" {
 			t.Errorf("expected request_id 'test-request-id-123', got %q", resp["request_id"])
@@ -87,7 +87,7 @@ func TestGetRequestID(t *testing.T) {
 		}
 
 		var resp map[string]string
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["request_id"] != "" {
 			t.Errorf("expected request_id '', got %q", resp["request_id"])

@@ -121,7 +121,7 @@ func fetchCatalogue(t *testing.T, r *gin.Engine, auth bool) (*httptest.ResponseR
 func TestWebhookEventCatalogue_RequireAuth(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWebhookEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	r := webhookEventsRouter(db)
 
@@ -176,7 +176,7 @@ func TestWebhookEventCatalogue_RequireAuth(t *testing.T) {
 func TestWebhookEventCatalogue_Structure(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWebhookEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	r := webhookEventsRouter(db)
 	_, resp := fetchCatalogue(t, r, true)
@@ -325,7 +325,7 @@ func TestWebhookEventCatalogue_Structure(t *testing.T) {
 func TestWebhookEventCatalogue_SortedOrder(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWebhookEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	r := webhookEventsRouter(db)
 	_, resp := fetchCatalogue(t, r, true)
@@ -362,7 +362,7 @@ func TestWebhookEventCatalogue_SortedOrder(t *testing.T) {
 func TestWebhookEventCatalogue_TaskSchemaSpotCheck(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupWebhookEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	r := webhookEventsRouter(db)
 	_, resp := fetchCatalogue(t, r, true)

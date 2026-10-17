@@ -139,7 +139,7 @@ func hasIndex(t *testing.T, db *sql.DB, indexName string) bool {
 	if err != nil {
 		t.Fatalf("pragma index_list: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var (
 			seq     int

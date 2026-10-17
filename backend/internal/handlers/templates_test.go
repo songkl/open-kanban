@@ -196,7 +196,7 @@ func TestGetTemplatesHandler(t *testing.T) {
 
 	t.Run("get templates without auth returns 401", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -213,7 +213,7 @@ func TestGetTemplatesHandler(t *testing.T) {
 
 	t.Run("get templates with auth returns templates list", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -239,7 +239,7 @@ func TestSaveTemplateHandler(t *testing.T) {
 
 	t.Run("save template without auth returns 401", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -260,7 +260,7 @@ func TestSaveTemplateHandler(t *testing.T) {
 
 	t.Run("save template with valid data returns 200", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -280,7 +280,7 @@ func TestSaveTemplateHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["name"] != "New Template" {
 			t.Errorf("expected name 'New Template', got %v", resp["name"])
 		}
@@ -291,7 +291,7 @@ func TestSaveTemplateHandler(t *testing.T) {
 
 	t.Run("save template without name returns 400", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -317,7 +317,7 @@ func TestDeleteTemplateHandler(t *testing.T) {
 
 	t.Run("delete template without auth returns 401", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -334,7 +334,7 @@ func TestDeleteTemplateHandler(t *testing.T) {
 
 	t.Run("delete non-existent template returns 404", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -352,7 +352,7 @@ func TestDeleteTemplateHandler(t *testing.T) {
 
 	t.Run("delete existing template returns success", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		_, err := db.Exec(`INSERT INTO templates (id, name, board_id, created_by) VALUES ('tmpl1', 'Template to Delete', 'b1', 'u1')`)
 		if err != nil {
@@ -379,7 +379,7 @@ func TestCopyBoardHandler(t *testing.T) {
 
 	t.Run("copy board without auth returns 401", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -396,7 +396,7 @@ func TestCopyBoardHandler(t *testing.T) {
 
 	t.Run("copy board without permission returns 403", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		_, _ = db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('bp2', 'u1', 'b1', 'READ')`)
 
@@ -420,7 +420,7 @@ func TestCreateBoardFromTemplateHandler(t *testing.T) {
 
 	t.Run("create board from template without auth returns 401", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -441,7 +441,7 @@ func TestCreateBoardFromTemplateHandler(t *testing.T) {
 
 	t.Run("create board from template without name returns 400", func(t *testing.T) {
 		db := setupTemplatesDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))

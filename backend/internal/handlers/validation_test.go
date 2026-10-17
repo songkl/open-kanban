@@ -212,7 +212,7 @@ func TestBindAndValidate(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["name"] != "John" {
 			t.Errorf("expected name 'John', got %v", resp["name"])
 		}

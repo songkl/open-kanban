@@ -90,7 +90,7 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 
 		stats.TotalTasks = stats.PublishedTasks + stats.DraftTasks
 
-		db.QueryRow(`
+		_ = db.QueryRow(`
 			SELECT
 				(SELECT COUNT(*) FROM boards WHERE deleted = 0) as total_boards,
 				(SELECT COUNT(*) FROM columns) as total_columns,
@@ -98,7 +98,7 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 		`).Scan(&stats.TotalBoards, &stats.TotalColumns, &stats.TotalUsers)
 		stats.ActiveBoardCount = stats.TotalBoards
 
-		db.QueryRow(`
+		_ = db.QueryRow(`
 			SELECT COUNT(*) FROM activities
 			WHERE action = 'COMPLETE_TASK'
 			  AND created_at >= datetime('now', '-7 days')

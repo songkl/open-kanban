@@ -72,7 +72,7 @@ func newDeviceServer(t *testing.T, db *sql.DB) *gin.Engine {
 
 func TestRequestDeviceCodeSuccess(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
 		[]string{"kanban:read", "tasks:write"})
@@ -140,7 +140,7 @@ func TestRequestDeviceCodeSuccess(t *testing.T) {
 
 func TestRequestDeviceCodeAcceptsJSONBody(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	r := newDeviceServer(t, db)
@@ -158,7 +158,7 @@ func TestRequestDeviceCodeAcceptsJSONBody(t *testing.T) {
 
 func TestRequestDeviceCodeMissingClientIDReturns400(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newDeviceServer(t, db)
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/device/code", strings.NewReader("scope=kanban:read"))
@@ -178,7 +178,7 @@ func TestRequestDeviceCodeMissingClientIDReturns400(t *testing.T) {
 
 func TestRequestDeviceCodeUnknownClientReturns400(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newDeviceServer(t, db)
 
 	body := "client_id=ghost"
@@ -198,7 +198,7 @@ func TestRequestDeviceCodeUnknownClientReturns400(t *testing.T) {
 
 func TestRequestDeviceCodeClientWithoutDeviceGrantReturns400(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-2", "", "auth-only",
 		[]string{"authorization_code", "refresh_token"}, []string{"kanban:read"})
 	r := newDeviceServer(t, db)
@@ -220,7 +220,7 @@ func TestRequestDeviceCodeClientWithoutDeviceGrantReturns400(t *testing.T) {
 
 func TestRequestDeviceCodeRejectsScopeNotInRegistration(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	r := newDeviceServer(t, db)
@@ -237,7 +237,7 @@ func TestRequestDeviceCodeRejectsScopeNotInRegistration(t *testing.T) {
 
 func TestRequestDeviceCodeHonoursConfiguredTTLs(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	if _, err := db.Exec(`INSERT INTO app_config (key, value) VALUES ('oauth_device_code_ttl_seconds', '60'), ('oauth_device_poll_interval_seconds', '3')`); err != nil {
@@ -289,7 +289,7 @@ func TestGenerateUserCodeFormat(t *testing.T) {
 
 func TestApproveDeviceCodeFlow(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	r := newDeviceServer(t, db)
@@ -321,7 +321,7 @@ func TestApproveDeviceCodeFlow(t *testing.T) {
 
 func TestApproveDeviceCodeExpiredReturnsError(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 
@@ -352,7 +352,7 @@ func TestApproveDeviceCodeExpiredReturnsError(t *testing.T) {
 
 func TestDenyDeviceCode(t *testing.T) {
 	db := setupDeviceDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 
@@ -405,7 +405,7 @@ func seedAgent(t *testing.T, db *sql.DB, id string) {
 
 func TestApproveDeviceCodeBindsToConfiguredAgent(t *testing.T) {
 	db := setupAgentBindingDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	seedAgent(t, db, "agent-1")
@@ -438,7 +438,7 @@ func TestApproveDeviceCodeBindsToConfiguredAgent(t *testing.T) {
 
 func TestApproveDeviceCodeFallsBackWhenAgentMissing(t *testing.T) {
 	db := setupAgentBindingDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	// Configured agent id does NOT exist as an enabled AGENT row, so the
@@ -471,7 +471,7 @@ func TestApproveDeviceCodeFallsBackWhenAgentMissing(t *testing.T) {
 
 func TestApproveDeviceCodeIgnoresNonAgentBinding(t *testing.T) {
 	db := setupAgentBindingDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	// Seed a non-AGENT row at the configured id; the binding should not apply.

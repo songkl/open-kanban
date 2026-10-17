@@ -80,7 +80,7 @@ func newApproveServer(t *testing.T, db *sql.DB) *gin.Engine {
 
 func TestApproveDeviceSucceeds(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "ABCD-EFGH", "kanban:read", time.Hour)
@@ -126,7 +126,7 @@ func TestApproveDeviceSucceeds(t *testing.T) {
 
 func TestDenyDeviceSucceeds(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "WXYZ-1234", "kanban:read", time.Hour)
@@ -150,7 +150,7 @@ func TestDenyDeviceSucceeds(t *testing.T) {
 
 func TestApproveDeviceRequiresAuth(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newApproveServer(t, db)
 
 	body := `{"user_code":"ABCD-EFGH","decision":"approve"}`
@@ -165,7 +165,7 @@ func TestApproveDeviceRequiresAuth(t *testing.T) {
 
 func TestApproveDeviceUnknownUserCode(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newApproveServer(t, db)
 
 	body := `{"user_code":"ZZZZ-ZZZZ","decision":"approve"}`
@@ -181,7 +181,7 @@ func TestApproveDeviceUnknownUserCode(t *testing.T) {
 
 func TestApproveDeviceExpiredReturns410(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "EXPR-EXPR", "kanban:read", -time.Minute)
@@ -200,7 +200,7 @@ func TestApproveDeviceExpiredReturns410(t *testing.T) {
 
 func TestApproveDeviceNormalisesLowercaseUserCode(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "CASE-CASE", "kanban:read", time.Hour)
@@ -220,7 +220,7 @@ func TestApproveDeviceNormalisesLowercaseUserCode(t *testing.T) {
 
 func TestApproveDeviceInvalidDecision(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newApproveServer(t, db)
 
 	body := `{"user_code":"ABCD-EFGH","decision":"maybe"}`
@@ -236,7 +236,7 @@ func TestApproveDeviceInvalidDecision(t *testing.T) {
 
 func TestDeviceLookupReturnsClientMetadata(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "LOOK-UP99", "kanban:read tasks:write", time.Hour)
@@ -263,7 +263,7 @@ func TestDeviceLookupReturnsClientMetadata(t *testing.T) {
 
 func TestDeviceLookupRejectsUnknownCode(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newApproveServer(t, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/device/lookup?user_code=GHOST", nil)
@@ -276,7 +276,7 @@ func TestDeviceLookupRejectsUnknownCode(t *testing.T) {
 
 func TestDeviceLookupRequiresUserCode(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newApproveServer(t, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/oauth/device/lookup", nil)
@@ -292,7 +292,7 @@ func TestDeviceLookupAcceptsCodeQuery(t *testing.T) {
 	// make sure the public lookup endpoint honours it identically to
 	// ?user_code= so the device page can use either name.
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "CODE-QRY99", "kanban:read", time.Hour)
@@ -316,7 +316,7 @@ func TestDeviceLookupPrefersCodeOverUserCode(t *testing.T) {
 	// safely forward URL parameters without colliding with an unrelated
 	// user_code value embedded in a deep link.
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "WINN-WINN", "kanban:read", time.Hour)
@@ -387,7 +387,7 @@ func seedApproveAgent(t *testing.T, db *sql.DB, id, nickname, role string) {
 //	    (plan §4.1.1 + §4.4).
 func TestApproveDeviceBindsConsentAndAuditToExplicitAgent(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-client-1", "AGNT-AGNT", "kanban:read", time.Hour)

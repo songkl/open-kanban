@@ -82,7 +82,7 @@ func newAdminServer(t *testing.T, db *sql.DB) *gin.Engine {
 
 func TestListAdminClients(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code", "refresh_token"},
 		[]string{"kanban:read"})
@@ -110,7 +110,7 @@ func TestListAdminClients(t *testing.T) {
 
 func TestDeleteAdminClientRemovesRows(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	r := newAdminServer(t, db)
@@ -132,7 +132,7 @@ func TestDeleteAdminClientRemovesRows(t *testing.T) {
 
 func TestDeleteAdminClientMissingID(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newAdminServer(t, db)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/oauth/clients", nil)
@@ -145,7 +145,7 @@ func TestDeleteAdminClientMissingID(t *testing.T) {
 
 func TestDeleteAdminClientNotFound(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newAdminServer(t, db)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/oauth/clients?client_id=ghost", nil)
@@ -158,7 +158,7 @@ func TestDeleteAdminClientNotFound(t *testing.T) {
 
 func TestListConsentsRequiresUser(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// This test verifies that an unauthenticated caller is
 	// rejected — so the router must NOT inject a user into
 	// the context. Build a bespoke router here rather than
@@ -177,7 +177,7 @@ func TestListConsentsRequiresUser(t *testing.T) {
 
 func TestListConsentsReturnsRowsForUser(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO oauth_consents (id, user_id, client_id, scope, granted_at) VALUES ('c1', 'user-1', 'kanban-client-1', 'kanban:read', ?)`,
 		time.Now()); err != nil {
@@ -206,7 +206,7 @@ func TestListConsentsReturnsRowsForUser(t *testing.T) {
 
 func TestRevokeConsentAlsoRevokesRefreshTokens(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO oauth_consents (id, user_id, client_id, scope, granted_at) VALUES ('c1', 'user-1', 'kanban-client-1', 'kanban:read', ?)`,
 		time.Now()); err != nil {
@@ -241,7 +241,7 @@ func TestRevokeConsentAlsoRevokesRefreshTokens(t *testing.T) {
 
 func TestGetOAuthConfigReturnsDefaultsAndLiveValues(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestGetOAuthConfigReturnsDefaultsAndLiveValues(t *testing.T) {
 
 func TestUpdateOAuthConfigAppliesUpdates(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestUpdateOAuthConfigAppliesUpdates(t *testing.T) {
 
 func TestUpdateOAuthConfigRejectsUnknownKey(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newAdminServer(t, db)
 
 	body := `{"updates":{"oauth_typo":"1"}}`
@@ -315,7 +315,7 @@ func TestUpdateOAuthConfigRejectsUnknownKey(t *testing.T) {
 
 func TestUpdateOAuthConfigRejectsEmpty(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newAdminServer(t, db)
 
 	body := `{"updates":{}}`

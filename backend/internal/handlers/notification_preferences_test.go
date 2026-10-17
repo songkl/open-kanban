@@ -123,7 +123,7 @@ func decodeNotificationPrefs(t *testing.T, w *httptest.ResponseRecorder) handler
 // fallback so it doesn't have to special-case "first visit".
 func TestGetNotificationPreferences_Default(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newNotificationPrefsRouter(db)
 
 	w := doNotificationPrefsRequest(t, router, "GET", "token-member", nil)
@@ -150,7 +150,7 @@ func TestGetNotificationPreferences_Default(t *testing.T) {
 // RequireAuth so anonymous probes can never read preferences.
 func TestGetNotificationPreferences_RequiresAuth(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newNotificationPrefsRouter(db)
 
 	w := doNotificationPrefsRequest(t, router, "GET", "", nil)
@@ -165,7 +165,7 @@ func TestGetNotificationPreferences_RequiresAuth(t *testing.T) {
 // that flips webhookEnabled cannot silently re-enable email.
 func TestUpdateNotificationPreferences_PartialUpdate(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newNotificationPrefsRouter(db)
 
 	// Seed an existing row so we can prove preserved fields.
@@ -206,7 +206,7 @@ func TestUpdateNotificationPreferences_PartialUpdate(t *testing.T) {
 // a typo (e.g. javascript:) cannot become a stored XSS payload.
 func TestUpdateNotificationPreferences_RejectsBadURL(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newNotificationPrefsRouter(db)
 
 	cases := []struct {
@@ -237,7 +237,7 @@ func TestUpdateNotificationPreferences_RejectsBadURL(t *testing.T) {
 // accepted and persisted.
 func TestUpdateNotificationPreferences_AcceptsValidURL(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newNotificationPrefsRouter(db)
 
 	body := []byte(`{"webhookUrl":"https://hooks.example.com/path?token=abc"}`)
@@ -257,7 +257,7 @@ func TestUpdateNotificationPreferences_AcceptsValidURL(t *testing.T) {
 // webhook URL field.
 func TestUpdateNotificationPreferences_EmptyURLClearsDestination(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(
 		`INSERT INTO user_notification_preferences (user_id, webhook_url) VALUES ('admin1', 'https://old.example.com/hook')`,
 	); err != nil {
@@ -283,7 +283,7 @@ func TestUpdateNotificationPreferences_EmptyURLClearsDestination(t *testing.T) {
 // their own row.
 func TestUpdateNotificationPreferences_NonAdminCanWrite(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newNotificationPrefsRouter(db)
 
 	for _, token := range []string{"token-admin", "token-member", "token-viewer"} {
@@ -304,7 +304,7 @@ func TestUpdateNotificationPreferences_NonAdminCanWrite(t *testing.T) {
 // so the Settings tab can surface a sensible toast.
 func TestUpdateNotificationPreferences_RejectsBadJSON(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newNotificationPrefsRouter(db)
 
 	w := doNotificationPrefsRequest(t, router, "PUT", "token-admin", []byte(`{not json`))
@@ -320,7 +320,7 @@ func TestUpdateNotificationPreferences_RejectsBadJSON(t *testing.T) {
 // userID-in-path to try anyway).
 func TestNotificationPreferences_OtherUserCannotRead(t *testing.T) {
 	db := setupNotificationPreferencesDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// Pre-seed the admin row.
 	if _, err := db.Exec(
 		`INSERT INTO user_notification_preferences (user_id, webhook_url) VALUES ('admin1', 'https://secret.example.com/admin')`,

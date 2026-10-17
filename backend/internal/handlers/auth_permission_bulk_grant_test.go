@@ -37,7 +37,7 @@ func TestBulkGrantPermissions_OwnerCanGrantBatch(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed two fresh users that have no permission row on board1
 	// yet, plus a third user (existing1) that already has a row.
@@ -139,7 +139,7 @@ func TestBulkGrantPermissions_AdminCanGrantBatch(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// member1 already has a row on board1 (fixture). Grant
 	// another user — fresh from the perspective of the batch.
@@ -180,7 +180,7 @@ func TestBulkGrantPermissions_NonOwnerNonAdmin_Returns403(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := bulkGrantRoute(db)
 	body := map[string]interface{}{
@@ -208,7 +208,7 @@ func TestBulkGrantPermissions_NotLoggedIn_Returns401(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := bulkGrantRoute(db)
 	body := map[string]interface{}{
@@ -235,7 +235,7 @@ func TestBulkGrantPermissions_MissingFields_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := bulkGrantRoute(db)
 
@@ -276,7 +276,7 @@ func TestBulkGrantPermissions_TooManyEntries_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := bulkGrantRoute(db)
 
@@ -329,7 +329,7 @@ func TestBulkGrantPermissions_InvalidAccess_ReportedAsSkipped(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "mix-1", "MEMBER")
 	createUser(t, db, "mix-2", "MEMBER")
@@ -372,7 +372,7 @@ func TestBulkGrantPermissions_InvalidAccess_ReportedAsSkipped(t *testing.T) {
 	// mix-2 must NOT have a row, since the batch kept its
 	// "invalid_access" reason and never tried to write it.
 	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM board_permissions WHERE user_id = 'mix-2' AND board_id = 'board1'`).Scan(&count)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM board_permissions WHERE user_id = 'mix-2' AND board_id = 'board1'`).Scan(&count)
 	if count != 0 {
 		t.Errorf("expected no row for mix-2, got %d", count)
 	}
@@ -389,7 +389,7 @@ func TestBulkGrantPermissions_UnknownUsers_ReportedAsSkipped(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "real-1", "MEMBER")
 
@@ -445,7 +445,7 @@ func TestBulkGrantPermissions_AlreadyGranted_ReportedAsSkipped(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// member1 already has a READ row on board1 (fixture, no
 	// expires_at). The bulk grant must skip member1 instead of
@@ -518,7 +518,7 @@ func TestBulkGrantPermissions_AlreadyGranted_ExpiredOrRevokedCanBeRegranted(t *t
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert an expired row for reexpire and a revoked row for
 	// rerevoked; both should be eligible for re-grant since their
@@ -595,7 +595,7 @@ func TestBulkGrantPermissions_OwnerInBatch_ReportedAsSkipped(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "okuser", "MEMBER")
 
@@ -653,7 +653,7 @@ func TestBulkGrantPermissions_NonExistentBoard_Returns404(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := bulkGrantRoute(db)
 	body := map[string]interface{}{
@@ -684,7 +684,7 @@ func TestBulkGrantPermissions_ExpiresAt_StoredAndReturned(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "exp-user", "MEMBER")
 
@@ -749,7 +749,7 @@ func TestBulkGrantPermissions_ExpiresAt_PastRejected(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "past-exp-user", "MEMBER")
 
@@ -787,7 +787,7 @@ func TestBulkGrantPermissions_ExpiresAt_PastRejected(t *testing.T) {
 	}
 
 	var count int
-	db.QueryRow(`SELECT COUNT(*) FROM board_permissions WHERE user_id = 'past-exp-user' AND board_id = 'board1'`).Scan(&count)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM board_permissions WHERE user_id = 'past-exp-user' AND board_id = 'board1'`).Scan(&count)
 	if count != 0 {
 		t.Errorf("expected no row for past-exp-user, got %d", count)
 	}
@@ -803,7 +803,7 @@ func TestBulkGrantPermissions_ExpiresAt_UnparseableRejected(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "garbage-exp", "MEMBER")
 
@@ -845,7 +845,7 @@ func TestBulkGrantPermissions_DedupesAndDropsEmptyUserIDs(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "dup-1", "MEMBER")
 
@@ -900,7 +900,7 @@ func TestBulkGrantPermissions_InvalidatesPermissionCache(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "warm-1", "MEMBER")
 	createUser(t, db, "warm-2", "MEMBER")
@@ -953,7 +953,7 @@ func TestBulkGrantPermissions_LogsActivity(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	createUser(t, db, "act-ok", "MEMBER")
 	createUser(t, db, "act-bad", "MEMBER")
@@ -1009,7 +1009,7 @@ func TestBulkGrantPermissions_AllSkippedStillReturns200(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// All three entries will be skipped for different reasons:
 	//   ghost: unknown_user
@@ -1068,7 +1068,7 @@ func TestBulkGrantPermissions_TransactionRollbackOnMidFailure(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Trigger fires on user_id='grant-fail'.
 	if _, err := db.Exec(`

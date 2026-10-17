@@ -105,10 +105,10 @@ func TestConcurrentWritersDoNotPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client dial failed: %v", err)
 	}
-	defer clientConn.Close()
+	defer func() { _ = clientConn.Close() }()
 
 	serverConn := <-serverConnCh
-	defer serverConn.Close()
+	defer func() { _ = serverConn.Close() }()
 
 	handlers.AddClientForTest(clientConn)
 	defer handlers.RemoveAllClientsForTest()
@@ -173,8 +173,8 @@ func newTestWebSocket(t *testing.T) (*websocket.Conn, func()) {
 	serverConn := <-serverConnCh
 
 	cleanup := func() {
-		clientConn.Close()
-		serverConn.Close()
+		_ = clientConn.Close()
+		_ = serverConn.Close()
 		server.Close()
 	}
 

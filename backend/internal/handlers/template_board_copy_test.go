@@ -156,7 +156,7 @@ func setupTemplateOwnershipTestDB(t *testing.T) *sql.DB {
 	`
 
 	if _, err := db.Exec(schema); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to create schema: %v", err)
 	}
 
@@ -172,7 +172,7 @@ func setupTemplateOwnershipTestDB(t *testing.T) *sql.DB {
 			`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, 'pass', '', 'HUMAN', ?, 1)`,
 			user.id, user.username, user.nickname, user.role,
 		); err != nil {
-			db.Close()
+			_ = db.Close()
 			t.Fatalf("failed to seed user %s: %v", user.id, err)
 		}
 	}
@@ -188,13 +188,13 @@ func setupTemplateOwnershipTestDB(t *testing.T) *sql.DB {
 			`INSERT INTO tokens (id, name, key, user_id) VALUES (?, 'default', ?, ?)`,
 			token.id, token.key, token.user,
 		); err != nil {
-			db.Close()
+			_ = db.Close()
 			t.Fatalf("failed to seed token %s: %v", token.id, err)
 		}
 	}
 
 	if _, err := db.Exec(`INSERT INTO boards (id, name) VALUES ('source', 'Source Board')`); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to seed source board: %v", err)
 	}
 
@@ -214,7 +214,7 @@ func setupTemplateOwnershipTestDB(t *testing.T) *sql.DB {
 			`INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES (?, ?, 'source', ?, ?)`,
 			permission.id, permission.user, owner, permission.access,
 		); err != nil {
-			db.Close()
+			_ = db.Close()
 			t.Fatalf("failed to seed permission %s: %v", permission.id, err)
 		}
 	}
@@ -230,7 +230,7 @@ func setupTemplateOwnershipTestDB(t *testing.T) *sql.DB {
 			`INSERT INTO columns (id, name, status, position, color, board_id) VALUES (?, ?, ?, ?, ?, 'source')`,
 			column.id, column.name, column.status, column.position, column.color,
 		); err != nil {
-			db.Close()
+			_ = db.Close()
 			t.Fatalf("failed to seed column %s: %v", column.id, err)
 		}
 	}
@@ -238,19 +238,19 @@ func setupTemplateOwnershipTestDB(t *testing.T) *sql.DB {
 	if _, err := db.Exec(
 		`INSERT INTO tasks (id, title, description, priority, column_id, position, created_by) VALUES ('source-task', 'Source Task', 'Description', 'high', 'source-column-1', 0, 'admin1')`,
 	); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to seed source task: %v", err)
 	}
 	if _, err := db.Exec(
 		`INSERT INTO comments (id, content, author, task_id) VALUES ('source-comment', 'Source Comment', 'admin1', 'source-task')`,
 	); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to seed source comment: %v", err)
 	}
 	if _, err := db.Exec(
 		`INSERT INTO subtasks (id, title, completed, task_id) VALUES ('source-subtask', 'Source Subtask', 0, 'source-task')`,
 	); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to seed source subtask: %v", err)
 	}
 
@@ -259,7 +259,7 @@ func setupTemplateOwnershipTestDB(t *testing.T) *sql.DB {
 		`INSERT INTO templates (id, name, columns_config) VALUES ('template1', 'Test Template', ?)`,
 		columnsConfig,
 	); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("failed to seed template: %v", err)
 	}
 
@@ -316,7 +316,7 @@ func TestCopyBoard_NonAdminUser_BecomesOwner(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			db := setupTemplateOwnershipTestDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			handlers.ResetTokenCacheForTest()
 			handlers.ResetPermissionCacheForTest()
 
@@ -354,7 +354,7 @@ func TestCopyBoard_AdminCopy_StillOwner(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := setupTemplateOwnershipTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()
 
@@ -393,7 +393,7 @@ func TestCopyBoard_OwnerCanManage(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			db := setupTemplateOwnershipTestDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			handlers.ResetTokenCacheForTest()
 			handlers.ResetPermissionCacheForTest()
 
@@ -451,7 +451,7 @@ func TestCopyBoard_Failure_RollsBack(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			db := setupTemplateOwnershipTestDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			if test.prepare != nil {
 				test.prepare(t, db)
 			}

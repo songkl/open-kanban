@@ -211,7 +211,7 @@ func setupCommentsDB(t *testing.T) *sql.DB {
 func TestGetCommentsHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -260,7 +260,7 @@ func TestGetCommentsHandler(t *testing.T) {
 		}
 
 		var resp []interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 0 {
 			t.Errorf("expected empty array, got %v", resp)
 		}
@@ -282,7 +282,7 @@ func TestGetCommentsHandler(t *testing.T) {
 		}
 
 		var resp []interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 1 {
 			t.Errorf("expected 1 comment, got %d", len(resp))
 		}
@@ -304,7 +304,7 @@ func TestGetCommentsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 2 {
 			t.Errorf("expected 2 comments, got %d", len(resp))
 		}
@@ -317,7 +317,7 @@ func TestGetCommentsHandler(t *testing.T) {
 func TestGetCommentHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO comments (id, content, author, task_id, user_id) VALUES ('c1', 'Test comment', 'admin', 'task1', 'u1')`)
 	if err != nil {
@@ -360,7 +360,7 @@ func TestGetCommentHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["id"] != "c1" {
 			t.Errorf("expected comment id c1, got %v", resp["id"])
 		}
@@ -380,7 +380,7 @@ func TestCreateCommentHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetRateLimitMapForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -460,7 +460,7 @@ func TestCreateCommentHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["content"] != "Test comment" {
 			t.Errorf("expected content 'Test comment', got %v", resp["content"])
 		}
@@ -490,7 +490,7 @@ func TestCreateCommentHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["content"] != "Member comment" {
 			t.Errorf("expected content 'Member comment', got %v", resp["content"])
 		}
@@ -504,7 +504,7 @@ func TestCreateCommentBeyondFormerLimit(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetRateLimitMapForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -571,7 +571,7 @@ func TestCreateCommentPersistsFullContent(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetRateLimitMapForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -621,7 +621,7 @@ func TestCreateComment400ErrorMessages(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetRateLimitMapForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -711,7 +711,7 @@ func TestCreateCommentBeyondMySQLTextLimit(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetRateLimitMapForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -808,7 +808,7 @@ func TestCreateCommentContentLengthIsNot400(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetRateLimitMapForTest()
 	db := setupCommentsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))

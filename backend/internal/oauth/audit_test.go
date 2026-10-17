@@ -48,7 +48,7 @@ func fetchAuditRows(t *testing.T, db *sql.DB) []activityRow {
 	if err != nil {
 		t.Fatalf("query activities: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []activityRow
 	for rows.Next() {
 		var r activityRow
@@ -71,7 +71,7 @@ func fetchAuditRows(t *testing.T, db *sql.DB) []activityRow {
 func TestOAuthAudit_CreateProvider(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)
@@ -164,7 +164,7 @@ func TestOAuthAudit_CreateProvider(t *testing.T) {
 func TestOAuthAudit_UpdateProviderWritesAuditRow(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)
@@ -246,7 +246,7 @@ func TestOAuthAudit_UpdateProviderWritesAuditRow(t *testing.T) {
 func TestOAuthAudit_UpdateProviderEnableDisable(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)
@@ -326,7 +326,7 @@ func TestOAuthAudit_UpdateProviderEnableDisable(t *testing.T) {
 func TestOAuthAudit_UpdateProviderEnablePlusOther(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)
@@ -383,7 +383,7 @@ func TestOAuthAudit_UpdateProviderEnablePlusOther(t *testing.T) {
 func TestOAuthAudit_DeleteProvider(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)
@@ -439,7 +439,7 @@ func TestOAuthAudit_DeleteProvider(t *testing.T) {
 //     identifier, not its internal row id).
 func TestOAuthAudit_DeleteClient(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-client-1", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	r := newAdminServer(t, db)
@@ -472,7 +472,7 @@ func TestOAuthAudit_DeleteClient(t *testing.T) {
 //     pre-update value of each key.
 func TestOAuthAudit_UpdateConfig(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestOAuthAudit_UpdateConfig(t *testing.T) {
 //     consent row was actually present before the call.
 func TestOAuthAudit_RevokeConsent(t *testing.T) {
 	db := setupAdminDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(
 		`INSERT INTO oauth_consents (id, user_id, client_id, scope, granted_at) VALUES ('c1', 'user-1', 'kanban-client-1', 'kanban:read', ?)`,
 		time.Now(),
@@ -566,7 +566,7 @@ func TestOAuthAudit_RevokeConsent(t *testing.T) {
 func TestOAuthAudit_FailedCreateDoesNotLog(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)
@@ -600,7 +600,7 @@ func TestOAuthAudit_FailedCreateDoesNotLog(t *testing.T) {
 func TestOAuthAudit_NoOpUpdateDoesNotLog(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)
@@ -651,7 +651,7 @@ func TestOAuthAudit_NoOpUpdateDoesNotLog(t *testing.T) {
 func TestOAuthAudit_DeleteMissingProviderDoesNotLog(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`
 		INSERT OR IGNORE INTO users (id, username, nickname, type, role, enabled)
 		VALUES ('test-caller', 'test-caller', 'Test', 'HUMAN', 'ADMIN', 1)

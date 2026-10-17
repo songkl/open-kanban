@@ -770,7 +770,7 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 				c.String(404, "index.html not found")
 				return
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			c.Header("Cache-Control", "no-cache")
 			c.Header("Content-Type", "text/html; charset=utf-8")
 			if _, err := io.Copy(c.Writer, f); err != nil {
@@ -793,7 +793,7 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 				c.String(404, "file not found")
 				return
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			c.Header("Content-Type", getMimeType(path))
 			if _, err := io.Copy(c.Writer, f); err != nil {
 				c.String(500, "Failed to serve file")
@@ -823,7 +823,7 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 					c.String(404, "file not found")
 					return
 				}
-				defer f.Close()
+				defer func() { _ = f.Close() }()
 				c.Header("Content-Type", getMimeType(asset))
 				// Service workers must be served with this header for the
 				// browser to accept the registration.
@@ -852,7 +852,7 @@ func setupStaticRoutes(r *gin.Engine, webDir string, embeddedWeb embed.FS) {
 				c.String(404, "index.html not found")
 				return
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			c.Status(200)
 			c.Header("Cache-Control", "no-cache")
 			c.Header("Content-Type", "text/html; charset=utf-8")
@@ -1245,7 +1245,7 @@ func runPasswordReset(nickname, newPassword string) {
 	if err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Hash password with salt
 	hashedPassword, err := handlers.HashPasswordWithSalt(newPassword)
@@ -1289,7 +1289,7 @@ func runSystemReset(skipConfirm bool) {
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tables := []string{
 		"tokens",

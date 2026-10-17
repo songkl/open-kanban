@@ -101,7 +101,7 @@ func safeRemoveClient(conn *websocket.Conn) {
 	if _, ok := clients[conn]; ok {
 		delete(clients, conn)
 		clientsMux.Unlock()
-		conn.Close()
+		_ = conn.Close()
 	} else {
 		clientsMux.Unlock()
 	}

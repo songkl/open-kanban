@@ -156,7 +156,7 @@ func getColumnIDForTask(db *sql.DB, taskID string) (string, error) {
 
 func getColumnName(db *sql.DB, columnID string) string {
 	var name string
-	db.QueryRow("SELECT name FROM columns WHERE id = ?", columnID).Scan(&name)
+	_ = db.QueryRow("SELECT name FROM columns WHERE id = ?", columnID).Scan(&name)
 	return name
 }
 

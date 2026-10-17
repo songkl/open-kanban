@@ -284,7 +284,7 @@ func TestPermissionMatrix_AllRolesAllAccessLevels(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	cases := []struct {
 		name           string
@@ -389,7 +389,7 @@ func TestPermissionCascade_ColumnOverridesBoard(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// member2 has board READ on board1 and column ADMIN on c1.
 	if !checkColumnAccessWithBoardFallback(db, "member2", "c1", "ADMIN", "MEMBER") {
@@ -416,7 +416,7 @@ func TestPermissionCascade_BoardFallback(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// c3 has no per-column grant for member1; member1 has board
 	// WRITE on board1.
@@ -446,7 +446,7 @@ func TestPermissionInheritance_OwnerInheritsAll(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// owner1 is recorded as owner_agent_id on their board1 row
 	// and has global role MEMBER. They should still be granted
@@ -500,7 +500,7 @@ func TestPermissionChange_TakesEffectImmediately(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Warm the permission cache with member2's current
 	// (READ) access on board1 so we can later assert the
@@ -568,7 +568,7 @@ func TestLastAdmin_CannotBeDemoted(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Ensure admin2 is non-ADMIN so admin1 is the only enabled
 	// ADMIN — this is the precondition the handler checks.
@@ -655,7 +655,7 @@ func TestLastAdmin_CannotBeDisabled(t *testing.T) {
 	})
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// admin1 is the only enabled ADMIN in the DB. admin2 is
 	// "ADMIN" by role but disabled — IsLastAdmin(admin1) excludes
@@ -722,7 +722,7 @@ func TestPermissionRevoke_CleansUpActiveSessions(t *testing.T) {
 
 	t.Run("SetPermission downgrade flushes caches", func(t *testing.T) {
 		db := setupPermissionIntegrationDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		SeedTokenCacheForTest("member1-tok-1", "member1", "MEMBER")
 		SeedTokenCacheForTest("member1-tok-2", "member1", "MEMBER")
@@ -763,7 +763,7 @@ func TestPermissionRevoke_CleansUpActiveSessions(t *testing.T) {
 
 	t.Run("DeletePermission flushes caches", func(t *testing.T) {
 		db := setupPermissionIntegrationDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		SeedTokenCacheForTest("member1-tok-1", "member1", "MEMBER")
 		SeedTokenCacheForTest("member1-tok-2", "member1", "MEMBER")
@@ -811,7 +811,7 @@ func TestGetEffectiveColumnAccessForBoard_NoUser(t *testing.T) {
 	t.Cleanup(ResetPermissionCacheForTest)
 
 	db := setupPermissionIntegrationDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	result, err := GetEffectiveColumnAccessForBoard(db, "", "board1", "MEMBER")
 	if err != nil {

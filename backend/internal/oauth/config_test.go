@@ -8,7 +8,7 @@ import (
 
 func TestEnsureDefaultsIsIdempotent(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestEnsureDefaultsIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	seen := map[string]int{}
 	for rows.Next() {
 		var k, v string
@@ -36,7 +36,7 @@ func TestEnsureDefaultsIsIdempotent(t *testing.T) {
 
 func TestEnsureDefaultsDoesNotOverwriteExisting(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`INSERT INTO app_config (key, value) VALUES ('oauth_enabled', '0')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestEnsureDefaultsDoesNotOverwriteExisting(t *testing.T) {
 
 func TestIsOAuthEnabled(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestIsOAuthEnabled(t *testing.T) {
 
 func TestSetConfigRejectsUnknownKey(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.SetConfig(db, "oauth_typo_key", "1"); err == nil {
 		t.Error("expected error for unknown key")
 	}
@@ -79,7 +79,7 @@ func TestSetConfigRejectsUnknownKey(t *testing.T) {
 
 func TestSetConfigUpdatesKnownKey(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestSetConfigUpdatesKnownKey(t *testing.T) {
 
 func TestGetConfigMapReturnsAllDefaults(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestDefaultConfigKeysAreDistinct(t *testing.T) {
 
 func TestPKCERequiredDefault(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestPKCERequiredDefault(t *testing.T) {
 
 func TestIsDeviceFlowEnabled(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestIsDeviceFlowEnabled(t *testing.T) {
 
 func TestDeviceFlowAgentID(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestDeviceFlowAgentID(t *testing.T) {
 // admins opt in.
 func TestDeviceFlowRequiresAgentSelectionDefault(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestDeviceFlowRequiresAgentSelectionDefault(t *testing.T) {
 // accidentally turns the strict mode on.
 func TestDeviceFlowRequiresAgentSelectionToggle(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}

@@ -195,7 +195,7 @@ func setupTasksDB(t *testing.T) *sql.DB {
 
 func TestGetTasksHandler(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -227,7 +227,7 @@ func TestCreateTaskHandler(t *testing.T) {
 	handlers.ResetRateLimitMapForTest()
 	handlers.ResetTokenCacheForTest()
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -286,7 +286,7 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 	handlers.ResetGlobalRateLimitMapForTest()
 	handlers.ResetTokenCacheForTest()
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -309,7 +309,7 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if int(resp["position"].(float64)) != 1000 {
 			t.Errorf("expected position 1000, got %v", resp["position"])
 		}
@@ -333,7 +333,7 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if int(resp["position"].(float64)) != 2000 {
 			t.Errorf("expected position 2000, got %v", resp["position"])
 		}
@@ -357,7 +357,7 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if int(resp["position"].(float64)) != 2001 {
 			t.Errorf("expected position 2001 (MAX 2000 + 1), got %v", resp["position"])
 		}
@@ -381,7 +381,7 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if int(resp["position"].(float64)) != 2000 {
 			t.Errorf("expected position 2000 ((2000+2001)/2), got %v", resp["position"])
 		}
@@ -405,7 +405,7 @@ func TestCreateTaskHandlerWithPriority(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if int(resp["position"].(float64)) != 500 {
 			t.Errorf("expected position 500, got %v", resp["position"])
 		}
@@ -424,7 +424,7 @@ func TestCreateTaskDefaultsToPublished(t *testing.T) {
 	handlers.ResetGlobalRateLimitMapForTest()
 	handlers.ResetTokenCacheForTest()
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -504,7 +504,7 @@ func TestCreateTaskHandlerWithDueDateAndAttachments(t *testing.T) {
 	handlers.ResetGlobalRateLimitMapForTest()
 	handlers.ResetTokenCacheForTest()
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// Pin to a single open connection so the handler always
 	// sees the schema we set up in setupTasksDB — without this,
 	// the goroutine spawned by the broadcast handler (and any
@@ -645,7 +645,7 @@ func TestCreateTaskHandlerWithDueDateAndAttachments(t *testing.T) {
 
 func TestDeleteTaskHandler(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id) VALUES ('task1', 'Task to Delete', 'c1')`)
 	if err != nil {
@@ -694,7 +694,7 @@ func TestDeleteTaskHandler(t *testing.T) {
 
 func TestUpdateTaskHandler(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Original Title', 'c1', 'u1')`)
 	if err != nil {
@@ -773,7 +773,7 @@ func TestUpdateTaskHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["columnId"] != "c2" {
 			t.Errorf("expected columnId to be c2, got %v", response["columnId"])
 		}
@@ -782,7 +782,7 @@ func TestUpdateTaskHandler(t *testing.T) {
 
 func TestArchiveTaskHandler(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Task to Archive', 'c1', 'u1')`)
 	if err != nil {
@@ -859,7 +859,7 @@ func TestArchiveTaskHandler(t *testing.T) {
 
 func TestCompleteTaskHandler(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// s-1271: /complete now means "move to done column" (not "advance one
 	// column"). The board needs a done column for the happy path; an
@@ -930,7 +930,7 @@ func TestCompleteTaskHandlerNoDoneColumn(t *testing.T) {
 	// Board without a status='done' column: /complete returns 409 so the
 	// operator can configure the board instead of seeing a generic 500.
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'In Progress', 'b1', 1)`)
 	if err != nil {
@@ -960,7 +960,7 @@ func TestAdvanceTaskHandler(t *testing.T) {
 	// /advance replaces the old /complete semantics — task moves one
 	// column forward regardless of destination status.
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c2', 'Next Column', 'b1', 1)`)
 	if err != nil {
@@ -1052,7 +1052,7 @@ func TestAdvanceTaskHandler(t *testing.T) {
 
 func TestGetTaskHandler(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Test Task', 'c1', 'u1')`)
 	if err != nil {
@@ -1103,7 +1103,7 @@ func TestGetTaskHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		if response["commentCount"] != float64(1) {
 			t.Errorf("expected commentCount 1, got %v", response["commentCount"])
@@ -1130,7 +1130,7 @@ func TestGetTaskHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		if response["commentCount"] != float64(1) {
 			t.Errorf("expected commentCount 1, got %v", response["commentCount"])
@@ -1155,7 +1155,7 @@ func TestGetTaskHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		if response["subtaskCount"] != float64(1) {
 			t.Errorf("expected subtaskCount 1, got %v", response["subtaskCount"])
@@ -1180,7 +1180,7 @@ func TestGetTaskHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		comments, _ := response["comments"].([]interface{})
 		if len(comments) != 1 {
@@ -1195,7 +1195,7 @@ func TestGetTaskHandler(t *testing.T) {
 
 func TestSearchTasksHandler(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, description, priority, column_id, position, published, archived, created_by) VALUES ('task1', 'Bug Report', 'Something is broken', 'high', 'c1', 100, 1, 0, 'u1')`)
 	if err != nil {
@@ -1223,7 +1223,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1244,7 +1244,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1265,7 +1265,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1286,7 +1286,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1307,7 +1307,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1328,7 +1328,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1358,7 +1358,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1379,7 +1379,7 @@ func TestSearchTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok {
@@ -1402,7 +1402,7 @@ func TestReorderTasksHandler(t *testing.T) {
 	handlers.ResetRateLimitMapForTest()
 	handlers.ResetTokenCacheForTest()
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, position, created_by) VALUES ('t1', 'Task 1', 'c1', 0, 'u1')`)
 	if err != nil {
@@ -1430,7 +1430,7 @@ func TestReorderTasksHandler(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to query positions: %v", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		result := make(map[string]int)
 		for rows.Next() {
 			var id string
@@ -1608,7 +1608,7 @@ func TestReorderTasksHandler(t *testing.T) {
 
 func TestSearchTasksOrdering(t *testing.T) {
 	db := setupTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, position, published, archived, created_by) VALUES ('task-old', 'Old Order', 'c1', 100, 1, 0, 'u1')`)
 	if err != nil {
@@ -1636,7 +1636,7 @@ func TestSearchTasksOrdering(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 		data, ok := response["data"].([]interface{})
 		if !ok || len(data) != 3 {

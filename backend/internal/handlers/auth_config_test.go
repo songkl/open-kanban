@@ -110,7 +110,7 @@ func TestRenderAdvancedConfigEnv_AlwaysEmitsPortAndAllowedOrigins(t *testing.T) 
 // a full reference of every knob, not a partial subset.
 func TestInitHandler_AlwaysWritesConfig(t *testing.T) {
 	db := setupConfigTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Redirect the config output to a temp file so we can inspect it.
 	dir := t.TempDir()
@@ -161,7 +161,7 @@ func TestInitHandler_AlwaysWritesConfig(t *testing.T) {
 // makes it to the config file (the original regression).
 func TestInitHandler_WritesOperatorSuppliedAllowedOrigins(t *testing.T) {
 	db := setupConfigTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	dir := t.TempDir()
 	t.Setenv("INIT_CONFIG_OUTPUT", filepath.Join(dir, "kanban.env"))

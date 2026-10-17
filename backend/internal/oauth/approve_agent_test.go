@@ -94,7 +94,7 @@ func lookupDevice(t *testing.T, r *gin.Engine, code string) map[string]interface
 // 1. Approve with agent_id set — row bound to that Agent. (plan §4.1.6 #1)
 func TestApproveAgentScenario1_AgentIDSetBindsToAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0001", "kanban:read", time.Hour)
@@ -121,7 +121,7 @@ func TestApproveAgentScenario1_AgentIDSetBindsToAgent(t *testing.T) {
 // human approver (legacy behaviour). (plan §4.1.6 #2)
 func TestApproveAgentScenario2_EmptyAgentAndEmptyGlobalBindsToApprover(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0002", "kanban:read", time.Hour)
@@ -150,7 +150,7 @@ func TestApproveAgentScenario2_EmptyAgentAndEmptyGlobalBindsToApprover(t *testin
 // configured Agent. (plan §4.1.6 #3)
 func TestApproveAgentScenario3_EmptyAgentGlobalSetBindsToConfiguredAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0003", "kanban:read", time.Hour)
@@ -182,7 +182,7 @@ func TestApproveAgentScenario3_EmptyAgentGlobalSetBindsToConfiguredAgent(t *test
 // resubmit without an explicit agent_id. (plan §4.1.6 #4)
 func TestApproveAgentScenario4_UnknownAgentReturns400(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0004", "kanban:read", time.Hour)
@@ -216,7 +216,7 @@ func TestApproveAgentScenario4_UnknownAgentReturns400(t *testing.T) {
 // §4.1.6 #5)
 func TestApproveAgentScenario5_DisabledAgentReturns400(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0005", "kanban:read", time.Hour)
@@ -240,7 +240,7 @@ func TestApproveAgentScenario5_DisabledAgentReturns400(t *testing.T) {
 // not AGENT. (plan §4.1.6 #6)
 func TestApproveAgentScenario6_NonAgentIDReturns400(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0006", "kanban:read", time.Hour)
@@ -264,7 +264,7 @@ func TestApproveAgentScenario6_NonAgentIDReturns400(t *testing.T) {
 // ADMIN approvers in Phase 1. (plan §4.1.6 #7)
 func TestApproveAgentScenario7_MemberBindingToAdminAgentReturns403(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0007", "kanban:read", time.Hour)
@@ -300,7 +300,7 @@ func TestApproveAgentScenario7_MemberBindingToAdminAgentReturns403(t *testing.T)
 // Agent. (plan §4.1.6 #8)
 func TestApproveAgentScenario8_AdminBindsToAnyEnabledAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0008", "kanban:read", time.Hour)
@@ -338,7 +338,7 @@ func TestApproveAgentScenario8_AdminBindsToAnyEnabledAgent(t *testing.T) {
 // explicit agent_id (or after clearing the flag). (plan §4.1.6 #9)
 func TestApproveAgentScenario9_RequireAgentNoBindingFallsBack(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0009", "kanban:read", time.Hour)
@@ -380,7 +380,7 @@ func TestApproveAgentScenario9_RequireAgentNoBindingFallsBack(t *testing.T) {
 // agent). (plan §4.1.6 #10)
 func TestApproveAgentScenario10_RequireAgentApproverIsAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0010", "kanban:read", time.Hour)
@@ -414,7 +414,7 @@ func TestApproveAgentScenario10_RequireAgentApproverIsAgent(t *testing.T) {
 // the test asserts the current absent semantics. (plan §4.1.6 #11)
 func TestApproveAgentScenario11_LookupAgentSelectionRequiredForCLI(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0011", "kanban:read", time.Hour)
@@ -435,7 +435,7 @@ func TestApproveAgentScenario11_LookupAgentSelectionRequiredForCLI(t *testing.T)
 // client. (plan §4.1.6 #12)
 func TestApproveAgentScenario12_LookupAgentSelectionRequiredFalseForSPA(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-spa", "", "open-kanban",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	if _, err := db.Exec(
@@ -464,7 +464,7 @@ func TestApproveAgentScenario12_LookupAgentSelectionRequiredFalseForSPA(t *testi
 // the field unconditionally. (plan §4.1.6 #13)
 func TestApproveAgentScenario13_LookupAgentListFilteredByRole(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0013", "kanban:read", time.Hour)
@@ -527,7 +527,7 @@ func TestApproveAgentScenario13_LookupAgentListFilteredByRole(t *testing.T) {
 // (plan §4.1.6 #14)
 func TestApproveAgentScenario14_ConsentBoundToAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-0014", "kanban:read", time.Hour)
@@ -559,7 +559,7 @@ func TestApproveAgentScenario14_ConsentBoundToAgent(t *testing.T) {
 // target_id=bound Agent, target_type=DEVICE. (plan §4.1.6 #15)
 func TestApproveAgentScenario15_ActivityLogActorAndTarget(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// Activities is part of the production schema but is not seeded
 	// by setupAgentApprovalDB (which only adds the legacy
 	// activity_log table); create the canonical activities table here
@@ -641,7 +641,7 @@ func setApproveUserAsAgent(req *http.Request, db *sql.DB, userID, role string) {
 // semantics for s-1112.7 tests.
 func TestApproveAgentScenarioWiring(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newApproveServer(t, db)
 	req := httptest.NewRequest(http.MethodGet, "/oauth/device/lookup", nil)
 	w := httptest.NewRecorder()
@@ -665,7 +665,7 @@ func TestApproveAgentScenarioWiring(t *testing.T) {
 // don't get locked out on rollout.
 func TestRequireAgentSelection_DefaultOff_LegacyBinding(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "REQ-DEFAULT", "kanban:read", time.Hour)
@@ -694,7 +694,7 @@ func TestRequireAgentSelection_DefaultOff_LegacyBinding(t *testing.T) {
 // the approver can retry with an explicit agent_id.
 func TestRequireAgentSelection_HumanApproverNoBindingReturns400(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "REQ-HUMAN1", "kanban:read", time.Hour)
@@ -731,7 +731,7 @@ func TestRequireAgentSelection_HumanApproverNoBindingReturns400(t *testing.T) {
 // via LookupAgent and binds to the resolved Agent.
 func TestRequireAgentSelection_ExplicitAgentIDAllowed(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "REQ-AGID1", "kanban:read", time.Hour)
@@ -762,7 +762,7 @@ func TestRequireAgentSelection_ExplicitAgentIDAllowed(t *testing.T) {
 // agent_id through the device authorization page.
 func TestRequireAgentSelection_GlobalBindingAllowed(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "REQ-GLOB1", "kanban:read", time.Hour)
@@ -795,7 +795,7 @@ func TestRequireAgentSelection_GlobalBindingAllowed(t *testing.T) {
 // requirement (it carries no binding semantics).
 func TestRequireAgentSelection_DenyAlwaysAllowed(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "REQ-DENY1", "kanban:read", time.Hour)

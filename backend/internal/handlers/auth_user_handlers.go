@@ -124,7 +124,7 @@ func UpdateUser(db *sql.DB) gin.HandlerFunc {
 			Role     string
 			Type     string
 		}
-		db.QueryRow("SELECT username, nickname, avatar, role, type FROM users WHERE id = ?", req.TargetUserID).Scan(&oldUser.Username, &oldUser.Nickname, &oldUser.Avatar, &oldUser.Role, &oldUser.Type)
+		_ = db.QueryRow("SELECT username, nickname, avatar, role, type FROM users WHERE id = ?", req.TargetUserID).Scan(&oldUser.Username, &oldUser.Nickname, &oldUser.Avatar, &oldUser.Role, &oldUser.Type)
 
 		var changes []string
 
@@ -276,7 +276,7 @@ func SetUserEnabled(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var exists bool
-		db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", req.UserID).Scan(&exists)
+		_ = db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", req.UserID).Scan(&exists)
 		if !exists {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
@@ -857,7 +857,7 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 		tokenID := generateID()
 		now := time.Now()
 
-		db.Exec("DELETE FROM tokens WHERE user_id = ?", agentID)
+		_, _ = db.Exec("DELETE FROM tokens WHERE user_id = ?", agentID)
 
 		_, err = db.Exec(
 			"INSERT INTO tokens (id, name, `key`, user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",

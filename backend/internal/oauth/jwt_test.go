@@ -42,7 +42,7 @@ func seedSigner(t *testing.T) (*oauth.Signer, *sql.DB) {
 
 func TestSignerLoadOrGenerateCreatesKey(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	jwks, err := s.JWKS()
 	if err != nil {
@@ -72,7 +72,7 @@ func TestSignerLoadOrGenerateCreatesKey(t *testing.T) {
 
 func TestSignerLoadOrGenerateReusesPersistedKey(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	first, err := s.JWKS()
 	if err != nil {
@@ -100,9 +100,9 @@ func TestSignerLoadOrGenerateReusesPersistedKey(t *testing.T) {
 
 func TestSignerLoadOrGenerateDifferentDBsProduceDifferentKeys(t *testing.T) {
 	s1, db1 := seedSigner(t)
-	defer db1.Close()
+	defer func() { _ = db1.Close() }()
 	s2, db2 := seedSigner(t)
-	defer db2.Close()
+	defer func() { _ = db2.Close() }()
 
 	k1, _ := s1.JWKS()
 	k2, _ := s2.JWKS()
@@ -116,7 +116,7 @@ func TestSignerLoadOrGenerateDifferentDBsProduceDifferentKeys(t *testing.T) {
 
 func TestSignerSignAndVerify(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().Unix()
 	claims := &oauth.AccessTokenClaims{
@@ -158,7 +158,7 @@ func TestSignerSignAndVerify(t *testing.T) {
 
 func TestSignerVerifyRejectsWrongAudience(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().Unix()
 	claims := &oauth.AccessTokenClaims{
@@ -184,7 +184,7 @@ func TestSignerVerifyRejectsWrongAudience(t *testing.T) {
 
 func TestSignerVerifyRejectsWrongIssuer(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().Unix()
 	claims := &oauth.AccessTokenClaims{
@@ -210,7 +210,7 @@ func TestSignerVerifyRejectsWrongIssuer(t *testing.T) {
 
 func TestSignerVerifyRejectsExpired(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().Unix()
 	claims := &oauth.AccessTokenClaims{
@@ -236,7 +236,7 @@ func TestSignerVerifyRejectsExpired(t *testing.T) {
 
 func TestSignerVerifyRejectsWrongTokenType(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().Unix()
 	claims := &oauth.AccessTokenClaims{
@@ -262,7 +262,7 @@ func TestSignerVerifyRejectsWrongTokenType(t *testing.T) {
 
 func TestSignerVerifyRejectsTamperedSignature(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	now := time.Now().Unix()
 	claims := &oauth.AccessTokenClaims{
@@ -296,7 +296,7 @@ func TestSignerVerifyRejectsTamperedSignature(t *testing.T) {
 
 func TestSignerVerifyRejectsTokenSignedWithDifferentKey(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	other, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -328,7 +328,7 @@ func TestSignerVerifyRejectsTokenSignedWithDifferentKey(t *testing.T) {
 
 func TestSignerEmptyTokenRejected(t *testing.T) {
 	s, db := seedSigner(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, err := s.VerifyAccessToken("", "https://kanban.example", "kanban")
 	if !errors.Is(err, oauth.ErrTokenInvalid) {
 		t.Errorf("expected ErrTokenInvalid, got %v", err)

@@ -68,7 +68,7 @@ func countAgents(t *testing.T, db *sql.DB) int {
 
 func TestDeviceCreateAgent_HappyPathNoGrants(t *testing.T) {
 	db := setupCreateAgentDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newCreateAgentServer(t, db)
 
 	body := `{"nickname":"runner-bot","role":"MEMBER"}`
@@ -110,7 +110,7 @@ func TestDeviceCreateAgent_HappyPathNoGrants(t *testing.T) {
 
 func TestDeviceCreateAgent_WithBoardGrants(t *testing.T) {
 	db := setupCreateAgentDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`INSERT INTO boards (id, name) VALUES ('b1', 'Board 1'), ('b2', 'Board 2')`); err != nil {
 		t.Fatalf("seed boards: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestDeviceCreateAgent_WithBoardGrants(t *testing.T) {
 
 func TestDeviceCreateAgent_NonAdminForbidden(t *testing.T) {
 	db := setupCreateAgentDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newCreateAgentServer(t, db)
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/device/create-agent",
@@ -181,7 +181,7 @@ func TestDeviceCreateAgent_NonAdminForbidden(t *testing.T) {
 
 func TestDeviceCreateAgent_AnonymousUnauthorized(t *testing.T) {
 	db := setupCreateAgentDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newCreateAgentServer(t, db)
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/device/create-agent",
@@ -197,7 +197,7 @@ func TestDeviceCreateAgent_AnonymousUnauthorized(t *testing.T) {
 
 func TestDeviceCreateAgent_EmptyNicknameBadRequest(t *testing.T) {
 	db := setupCreateAgentDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newCreateAgentServer(t, db)
 
 	req := httptest.NewRequest(http.MethodPost, "/oauth/device/create-agent",
@@ -227,7 +227,7 @@ func TestDeviceCreateAgent_InvalidBoardGrantRollsBack(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupCreateAgentDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			if _, err := db.Exec(`INSERT INTO boards (id, name) VALUES ('b1', 'Board 1')`); err != nil {
 				t.Fatalf("seed board: %v", err)
 			}
@@ -257,7 +257,7 @@ func TestDeviceCreateAgent_InvalidBoardGrantRollsBack(t *testing.T) {
 // but the SPA switches on the camelCase alias so both must be present.
 func TestDeviceLookup_EmitsCamelCaseAliases(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "SCEN-CAMEL", "kanban:read", time.Hour)
@@ -306,7 +306,7 @@ func TestDeviceApprove_AcceptsSnakeCaseAgentID(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupAgentApprovalDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			insertClient(t, db, "kanban-cli", "", "open-kanban-cli",
 				[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 			insertPendingDevice(t, db, "kanban-cli", "WIRE-0001", "kanban:read", time.Hour)

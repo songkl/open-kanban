@@ -184,7 +184,7 @@ func setupBatchTasksDB(t *testing.T) *sql.DB {
 
 func TestBatchUpdateTasksHandler(t *testing.T) {
 	db := setupBatchTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Task 1', 'c1', 'u1')`)
 	if err != nil {
@@ -266,14 +266,14 @@ func TestBatchUpdateTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["updated"].(float64) != 2 {
 			t.Errorf("expected updated=2, got %v", response["updated"])
 		}
 
 		var col1, col2 string
-		db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task1'").Scan(&col1)
-		db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task2'").Scan(&col2)
+		_ = db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task1'").Scan(&col1)
+		_ = db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task2'").Scan(&col2)
 		if col1 != "c2" || col2 != "c2" {
 			t.Errorf("expected tasks to be in c2, got task1=%s, task2=%s", col1, col2)
 		}
@@ -295,7 +295,7 @@ func TestBatchUpdateTasksHandler(t *testing.T) {
 		}
 
 		var col string
-		db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task1'").Scan(&col)
+		_ = db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task1'").Scan(&col)
 		if col != "c3" {
 			t.Errorf("expected task1 to be in c3 (待测试), got %s", col)
 		}
@@ -317,7 +317,7 @@ func TestBatchUpdateTasksHandler(t *testing.T) {
 		}
 
 		var priority string
-		db.QueryRow("SELECT priority FROM tasks WHERE id = 'task1'").Scan(&priority)
+		_ = db.QueryRow("SELECT priority FROM tasks WHERE id = 'task1'").Scan(&priority)
 		if priority != "high" {
 			t.Errorf("expected priority=high, got %s", priority)
 		}
@@ -339,7 +339,7 @@ func TestBatchUpdateTasksHandler(t *testing.T) {
 		}
 
 		var assignee string
-		db.QueryRow("SELECT assignee FROM tasks WHERE id = 'task1'").Scan(&assignee)
+		_ = db.QueryRow("SELECT assignee FROM tasks WHERE id = 'task1'").Scan(&assignee)
 		if assignee != "newuser" {
 			t.Errorf("expected assignee=newuser, got %s", assignee)
 		}
@@ -361,7 +361,7 @@ func TestBatchUpdateTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["failed"].(float64) != 1 {
 			t.Errorf("expected failed=1, got %v", response["failed"])
 		}
@@ -370,7 +370,7 @@ func TestBatchUpdateTasksHandler(t *testing.T) {
 
 func TestBatchUpdateTasksPermissionDenied(t *testing.T) {
 	db := setupBatchTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Task 1', 'c1', 'other_user')`)
 	if err != nil {
@@ -406,7 +406,7 @@ func TestBatchUpdateTasksPermissionDenied(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["failed"].(float64) != 1 {
 			t.Errorf("expected failed=1, got %v", response["failed"])
 		}
@@ -415,7 +415,7 @@ func TestBatchUpdateTasksPermissionDenied(t *testing.T) {
 
 func TestBatchDeleteTasksHandler(t *testing.T) {
 	db := setupBatchTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Task 1', 'c1', 'u1')`)
 	if err != nil {
@@ -481,13 +481,13 @@ func TestBatchDeleteTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["deleted"].(float64) != 2 {
 			t.Errorf("expected deleted=2, got %v", response["deleted"])
 		}
 
 		var count int
-		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE id IN ('task1', 'task2')").Scan(&count)
+		_ = db.QueryRow("SELECT COUNT(*) FROM tasks WHERE id IN ('task1', 'task2')").Scan(&count)
 		if count != 0 {
 			t.Errorf("expected tasks to be deleted, got count=%d", count)
 		}
@@ -509,7 +509,7 @@ func TestBatchDeleteTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["failed"].(float64) != 1 {
 			t.Errorf("expected failed=1, got %v", response["failed"])
 		}
@@ -518,7 +518,7 @@ func TestBatchDeleteTasksHandler(t *testing.T) {
 
 func TestBatchDeleteTasksPermissionDenied(t *testing.T) {
 	db := setupBatchTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO tasks (id, title, column_id, created_by) VALUES ('task1', 'Task 1', 'c1', 'other_user')`)
 	if err != nil {
@@ -554,7 +554,7 @@ func TestBatchDeleteTasksPermissionDenied(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["failed"].(float64) != 1 {
 			t.Errorf("expected failed=1, got %v", response["failed"])
 		}
@@ -563,7 +563,7 @@ func TestBatchDeleteTasksPermissionDenied(t *testing.T) {
 
 func TestBatchCreateTasksHandler(t *testing.T) {
 	db := setupBatchTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -625,7 +625,7 @@ func TestBatchCreateTasksHandler(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["created"].(float64) != 2 {
 			t.Errorf("expected created=2, got %v", response["created"])
 		}
@@ -636,7 +636,7 @@ func TestBatchCreateTasksHandler(t *testing.T) {
 		}
 
 		var count int
-		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE title LIKE 'Batch Task%'").Scan(&count)
+		_ = db.QueryRow("SELECT COUNT(*) FROM tasks WHERE title LIKE 'Batch Task%'").Scan(&count)
 		if count != 2 {
 			t.Errorf("expected 2 tasks in DB, got count=%d", count)
 		}
@@ -645,7 +645,7 @@ func TestBatchCreateTasksHandler(t *testing.T) {
 
 func TestBatchCreateTasksPermissionDenied(t *testing.T) {
 	db := setupBatchTasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// The permission cache is a process-global; without a reset a
 	// prior test in the same binary that populated u2:b1 → WRITE
@@ -690,7 +690,7 @@ func TestBatchCreateTasksPermissionDenied(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["failed"].(float64) != 1 {
 			t.Errorf("expected failed=1, got %v", response["failed"])
 		}
@@ -854,7 +854,7 @@ func setupCrossBoardDB(t *testing.T) *sql.DB {
 
 func TestBatchUpdateTasksCrossBoard(t *testing.T) {
 	db := setupCrossBoardDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -876,7 +876,7 @@ func TestBatchUpdateTasksCrossBoard(t *testing.T) {
 		}
 
 		var response map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &response)
+		_ = json.Unmarshal(w.Body.Bytes(), &response)
 		if response["failed"].(float64) != 1 {
 			t.Errorf("expected failed=1, got %v", response)
 		}
@@ -889,7 +889,7 @@ func TestBatchUpdateTasksCrossBoard(t *testing.T) {
 		}
 
 		var colID string
-		db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task1'").Scan(&colID)
+		_ = db.QueryRow("SELECT column_id FROM tasks WHERE id = 'task1'").Scan(&colID)
 		if colID != "c1" {
 			t.Errorf("task should remain in c1, got %s", colID)
 		}

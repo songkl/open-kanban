@@ -140,7 +140,7 @@ func (r *captureRequeuer) snapshot() []*services.DeliveryJob {
 
 func TestRetrySweeper_RequeueDue_PicksUpFailedRows(t *testing.T) {
 	db := setupRetrySweeperTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedWebhookRetrySweeper(t, db, "wh-1", "https://example.com/hook", 5)
 
 	// Two FAILED rows: one due (next_retry_at IS NULL) and one
@@ -192,7 +192,7 @@ func TestRetrySweeper_RequeueDue_PicksUpFailedRows(t *testing.T) {
 
 func TestRetrySweeper_Exhaustion_TransitionsAfterMaxRetries(t *testing.T) {
 	db := setupRetrySweeperTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// max_retries = 2; we insert attempt = 3 (over budget).
 	seedWebhookRetrySweeper(t, db, "wh-1", "https://example.com/hook", 2)
 	delID := seedDelivery(t, db, "wh-1", "task.created", 3, true)
@@ -219,7 +219,7 @@ func TestRetrySweeper_Exhaustion_TransitionsAfterMaxRetries(t *testing.T) {
 
 func TestRetrySweeper_Exhaustion_KeepsRowOnBudget(t *testing.T) {
 	db := setupRetrySweeperTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// max_retries = 5; we insert attempt = 2 — under budget.
 	seedWebhookRetrySweeper(t, db, "wh-1", "https://example.com/hook", 5)
 	delID := seedDelivery(t, db, "wh-1", "task.created", 2, true)
@@ -250,7 +250,7 @@ func TestRetrySweeper_Exhaustion_KeepsRowOnBudget(t *testing.T) {
 
 func TestRetrySweeper_StartStop_Idempotent(t *testing.T) {
 	db := setupRetrySweeperTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	rec := &captureRequeuer{}
 	sweeper := services.NewRetrySweeper(db, nil, rec, 50*time.Millisecond)
@@ -263,7 +263,7 @@ func TestRetrySweeper_StartStop_Idempotent(t *testing.T) {
 
 func TestRetrySweeper_StopWithoutStartIsSafe(t *testing.T) {
 	db := setupRetrySweeperTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	rec := &captureRequeuer{}
 	sweeper := services.NewRetrySweeper(db, nil, rec, time.Second)
 	sweeper.Stop()
@@ -284,7 +284,7 @@ func (rejectingRequeuer) Requeue(*services.DeliveryJob) error {
 
 func TestRetrySweeper_RequeueError_LeavesAttemptUnchanged(t *testing.T) {
 	db := setupRetrySweeperTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedWebhookRetrySweeper(t, db, "wh-1", "https://example.com/hook", 5)
 	delID := seedDelivery(t, db, "wh-1", "task.created", 1, true)
 

@@ -27,7 +27,7 @@ func TestSQLiteMigration020_PreservesRowCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
 	if err != nil {
@@ -156,7 +156,7 @@ func TestSQLiteMigration020_PreservesRowCount(t *testing.T) {
 			notes                string
 		)
 		if err := rows.Scan(&id, &grantedBy, &expiresAt, &revokedAt, &revokedBy, &notes); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			t.Fatalf("scan board_permissions: %v", err)
 		}
 		if grantedBy.Valid {
@@ -182,7 +182,7 @@ func TestSQLiteMigration020_PreservesRowCount(t *testing.T) {
 				id, notes)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	rows, err = db.Query(`
 		SELECT id, granted_by_user_id, expires_at, revoked_at, revoked_by_user_id
@@ -199,7 +199,7 @@ func TestSQLiteMigration020_PreservesRowCount(t *testing.T) {
 			revokedAt, revokedBy sql.NullString
 		)
 		if err := rows.Scan(&id, &grantedBy, &expiresAt, &revokedAt, &revokedBy); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			t.Fatalf("scan column_permissions: %v", err)
 		}
 		if grantedBy.Valid || expiresAt.Valid || revokedAt.Valid || revokedBy.Valid {
@@ -208,7 +208,7 @@ func TestSQLiteMigration020_PreservesRowCount(t *testing.T) {
 				id, grantedBy, expiresAt, revokedAt, revokedBy)
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	// The migration also creates an index on each table's revoked_at
 	// column. Pin that down so a future migration that forgets to
@@ -241,7 +241,7 @@ func TestSQLiteMigration020_RoundTripDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
 	if err != nil {

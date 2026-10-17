@@ -354,7 +354,7 @@ func GetPublicBoard(db *sql.DB) gin.HandlerFunc {
 			}
 			seeds = append(seeds, c)
 		}
-		colRows.Close()
+		_ = colRows.Close()
 
 		columns := []gin.H{}
 		for _, c := range seeds {
@@ -398,7 +398,7 @@ func GetPublicBoard(db *sql.DB) gin.HandlerFunc {
 					},
 				})
 			}
-			taskRows.Close()
+			_ = taskRows.Close()
 
 			var statusPtr *string
 			if c.Status != "" {

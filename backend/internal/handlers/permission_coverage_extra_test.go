@@ -68,7 +68,7 @@ func TestPermissionHandlers_UnauthenticatedBranches(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	gin.SetMode(gin.TestMode)
 
@@ -130,7 +130,7 @@ func TestPermissionHandlers_BindErrorBranches(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	gin.SetMode(gin.TestMode)
 
@@ -163,7 +163,7 @@ func TestGetPermissions_QueryError(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec("DROP TABLE board_permissions"); err != nil {
 		t.Fatalf("drop board_permissions: %v", err)
@@ -184,7 +184,7 @@ func TestGetColumnPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("non-admin requesting another user's grants returns 403", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedCoverageColumns(t, db)
 
 		r := gin.New()
@@ -197,7 +197,7 @@ func TestGetColumnPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("non-admin scoping by unknown column returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedCoverageColumns(t, db)
 
 		r := gin.New()
@@ -210,7 +210,7 @@ func TestGetColumnPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("non-admin scoping by a column they do not own returns 403", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedCoverageColumns(t, db)
 
 		r := gin.New()
@@ -223,7 +223,7 @@ func TestGetColumnPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("admin scoping by column returns the unified rows", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedCoverageColumns(t, db)
 
 		r := gin.New()
@@ -239,7 +239,7 @@ func TestGetColumnPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("query failure returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE column_permissions"); err != nil {
 			t.Fatalf("drop column_permissions: %v", err)
 		}
@@ -260,7 +260,7 @@ func TestSetColumnPermission_ExtraBranches(t *testing.T) {
 
 	t.Run("unknown column returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedCoverageColumns(t, db)
 
 		r := gin.New()
@@ -273,7 +273,7 @@ func TestSetColumnPermission_ExtraBranches(t *testing.T) {
 
 	t.Run("owner lookup error returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedCoverageColumns(t, db)
 		if _, err := db.Exec("DROP TABLE board_permissions"); err != nil {
 			t.Fatalf("drop board_permissions: %v", err)
@@ -295,7 +295,7 @@ func TestDeleteColumnPermission_ExtraBranches(t *testing.T) {
 
 	t.Run("unknown id is an idempotent 200", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		r := gin.New()
 		r.DELETE("/p", DeleteColumnPermission(db))
@@ -307,7 +307,7 @@ func TestDeleteColumnPermission_ExtraBranches(t *testing.T) {
 
 	t.Run("load failure (table missing) returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE column_permissions"); err != nil {
 			t.Fatalf("drop column_permissions: %v", err)
 		}
@@ -322,7 +322,7 @@ func TestDeleteColumnPermission_ExtraBranches(t *testing.T) {
 
 	t.Run("owner lookup error returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		seedCoverageColumns(t, db)
 		if _, err := db.Exec("DROP TABLE board_permissions"); err != nil {
 			t.Fatalf("drop board_permissions: %v", err)
@@ -344,7 +344,7 @@ func TestDeletePermission_ExtraBranches(t *testing.T) {
 
 	t.Run("unknown id is an idempotent 200", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		r := gin.New()
 		r.DELETE("/p", DeletePermission(db))
@@ -356,7 +356,7 @@ func TestDeletePermission_ExtraBranches(t *testing.T) {
 
 	t.Run("load failure (table missing) returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE board_permissions"); err != nil {
 			t.Fatalf("drop board_permissions: %v", err)
 		}
@@ -377,7 +377,7 @@ func TestBulkSetPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("board load failure returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE boards"); err != nil {
 			t.Fatalf("drop boards: %v", err)
 		}
@@ -392,7 +392,7 @@ func TestBulkSetPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("user verification failure returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE users"); err != nil {
 			t.Fatalf("drop users: %v", err)
 		}
@@ -414,7 +414,7 @@ func TestBulkGrantPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("board load failure returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE boards"); err != nil {
 			t.Fatalf("drop boards: %v", err)
 		}
@@ -429,7 +429,7 @@ func TestBulkGrantPermissions_ExtraBranches(t *testing.T) {
 
 	t.Run("user verification failure returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE users"); err != nil {
 			t.Fatalf("drop users: %v", err)
 		}
@@ -451,7 +451,7 @@ func TestTransferOwnership_ExtraBranches(t *testing.T) {
 
 	t.Run("ownership lookup error returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE board_permissions"); err != nil {
 			t.Fatalf("drop board_permissions: %v", err)
 		}
@@ -466,7 +466,7 @@ func TestTransferOwnership_ExtraBranches(t *testing.T) {
 
 	t.Run("board load failure returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE boards"); err != nil {
 			t.Fatalf("drop boards: %v", err)
 		}
@@ -481,7 +481,7 @@ func TestTransferOwnership_ExtraBranches(t *testing.T) {
 
 	t.Run("target user lookup failure returns 500", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.Exec("DROP TABLE users"); err != nil {
 			t.Fatalf("drop users: %v", err)
 		}
@@ -518,7 +518,7 @@ func TestUpdateAppConfig_ExtraBranches(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupBoardOwnerDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 
 			r := gin.New()
 			r.POST("/p", UpdateAppConfig(db))
@@ -531,7 +531,7 @@ func TestUpdateAppConfig_ExtraBranches(t *testing.T) {
 
 	t.Run("non-admin is forbidden", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		r := gin.New()
 		r.POST("/p", UpdateAppConfig(db))

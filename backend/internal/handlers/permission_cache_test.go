@@ -122,7 +122,7 @@ func TestPermissionCache_TTLExpiry(t *testing.T) {
 
 func TestCheckBoardAccess_CacheHit(t *testing.T) {
 	db := setupPermissionTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ResetPermissionCacheForTest()
 	t.Cleanup(ResetPermissionCacheForTest)
@@ -146,7 +146,7 @@ func TestCheckBoardAccess_CacheHit(t *testing.T) {
 
 func TestCheckBoardAccess_NegativeCacheHit(t *testing.T) {
 	db := setupPermissionTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ResetPermissionCacheForTest()
 	t.Cleanup(ResetPermissionCacheForTest)
@@ -170,7 +170,7 @@ func TestCheckBoardAccess_NegativeCacheHit(t *testing.T) {
 
 func TestCheckColumnAccess_CacheHit(t *testing.T) {
 	db := setupPermissionTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ResetPermissionCacheForTest()
 	t.Cleanup(ResetPermissionCacheForTest)
@@ -194,7 +194,7 @@ func TestCheckColumnAccess_CacheHit(t *testing.T) {
 
 func TestGetEffectiveColumnAccessForBoard(t *testing.T) {
 	db := setupPermissionTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ResetPermissionCacheForTest()
 	t.Cleanup(ResetPermissionCacheForTest)
@@ -226,7 +226,7 @@ func TestGetEffectiveColumnAccessForBoard(t *testing.T) {
 
 func TestGetEffectiveColumnAccessForBoard_AdminShortCircuit(t *testing.T) {
 	db := setupPermissionTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ResetPermissionCacheForTest()
 	t.Cleanup(ResetPermissionCacheForTest)
@@ -242,7 +242,7 @@ func TestGetEffectiveColumnAccessForBoard_AdminShortCircuit(t *testing.T) {
 
 func TestGetEffectiveBoardAccess(t *testing.T) {
 	db := setupPermissionTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ResetPermissionCacheForTest()
 	t.Cleanup(ResetPermissionCacheForTest)

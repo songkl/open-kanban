@@ -138,7 +138,7 @@ func doFrontendEventsRequest(t *testing.T, router *gin.Engine, method, path, tok
 // expected.
 func TestIngestFrontendEvent_HappyPath(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	body := []byte(`{
@@ -208,7 +208,7 @@ func TestIngestFrontendEvent_HappyPath(t *testing.T) {
 // persists, just with a NULL user_id.
 func TestIngestFrontendEvent_PreLoginUser(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	body := []byte(`{"eventType": "error", "message": "boom"}`)
@@ -239,7 +239,7 @@ func TestIngestFrontendEvent_PreLoginUser(t *testing.T) {
 // "all good, nothing to do".
 func TestIngestFrontendEvent_DisabledReturnsNoContent(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`INSERT INTO app_config (key, value) VALUES ('frontendEventsEnabled', '0')`); err != nil {
 		t.Fatalf("seed disabled flag: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestIngestFrontendEvent_DisabledReturnsNoContent(t *testing.T) {
 // junk-row generator.
 func TestIngestFrontendEvent_RejectsUnknownEventType(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	body := []byte(`{"eventType": "totally made up", "message": "boom"}`)
@@ -281,7 +281,7 @@ func TestIngestFrontendEvent_RejectsUnknownEventType(t *testing.T) {
 // global handler does not crash on a corrupted payload.
 func TestIngestFrontendEvent_RejectsBadJSON(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	w := doFrontendEventsRequest(t, router, "POST", "/api/v1/frontend-events", "token-admin", []byte(`{not json`))
@@ -297,7 +297,7 @@ func TestIngestFrontendEvent_RejectsBadJSON(t *testing.T) {
 // and be forced to make a deliberate choice.
 func TestIngestFrontendEvent_AcceptsEveryEventType(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	for _, eventType := range []string{"error", "unhandled_rejection", "react_error", "console_error", "resource_404"} {
@@ -350,7 +350,7 @@ func TestRedactString_RemovesAuthorizationHeader(t *testing.T) {
 			// handler runs against every captured string.
 			body := []byte(`{"eventType":"error","message":"` + tc.in + `"}`)
 			db := setupFrontendEventsDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			router := newFrontendEventsRouter(db)
 
 			w := doFrontendEventsRequest(t, router, "POST", "/api/v1/frontend-events", "token-admin", body)
@@ -379,7 +379,7 @@ func TestRedactString_RemovesAuthorizationHeader(t *testing.T) {
 // because they are not authentication material.
 func TestRedactString_RemovesKanbanTokenCookie(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	body := []byte(`{
@@ -421,7 +421,7 @@ func TestRedactString_RemovesKanbanTokenCookie(t *testing.T) {
 // URLs must not leak.
 func TestRedactString_RemovesQueryStringTokens(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	body := []byte(`{"eventType":"error","message":"fetch /api/v1/boards?token=alpha&api_key=beta failed"}`)
@@ -450,7 +450,7 @@ func TestRedactString_RemovesQueryStringTokens(t *testing.T) {
 // where embedded JSON is the common case.
 func TestRedactString_RemovesJSONSecretKeys(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	body := []byte(`{
@@ -480,7 +480,7 @@ func TestRedactString_RemovesJSONSecretKeys(t *testing.T) {
 // against the input.
 func TestIngestFrontendEvent_CapsMassiveMessage(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	// 60 KB of filler — well above the 4 KB message cap and
@@ -510,7 +510,7 @@ func TestIngestFrontendEvent_CapsMassiveMessage(t *testing.T) {
 // boundary so a runaway client cannot exhaust server memory.
 func TestIngestFrontendEvent_RejectsOversizedRequest(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	oversize := bytes.Repeat([]byte("a"), 1024*1024)
@@ -525,7 +525,7 @@ func TestIngestFrontendEvent_RejectsOversizedRequest(t *testing.T) {
 // the payload carries stack traces and user identifiers.
 func TestListFrontendEvents_AdminOnly(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	// Seed a row to make sure the "empty list" case is not
@@ -568,7 +568,7 @@ func TestListFrontendEvents_AdminOnly(t *testing.T) {
 // Admin-only by the same rule as the list endpoint.
 func TestSetFrontendEventsEnabled_RoundTrip(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.PUT("/api/v1/frontend-events/config", handlers.SetFrontendEventsEnabled(db))
@@ -623,7 +623,7 @@ func TestSetFrontendEventsEnabled_RoundTrip(t *testing.T) {
 // then read it back and confirm the stored value is well-formed.
 func TestTruncateToUtf8Bytes(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	// Build a stack that is exactly 32 KB long (the stack
@@ -661,7 +661,7 @@ func TestTruncateToUtf8Bytes(t *testing.T) {
 // maintainer has to make a deliberate choice to surface 400.
 func TestParseLimitParam_RejectsOutOfRange(t *testing.T) {
 	db := setupFrontendEventsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	router := newFrontendEventsRouter(db)
 
 	w := doFrontendEventsRequest(t, router, "GET", "/api/v1/frontend-events?limit=99999", "token-admin", nil)

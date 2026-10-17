@@ -139,7 +139,7 @@ func seedRun(t *testing.T, db *sql.DB, taskID, status string, expiresAtPast bool
 
 func TestRunReaper_RunOnce_ExpiresStaleRow(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedRun(t, db, "t-stale", "claimed", true)
 	seedRun(t, db, "t-fresh", "claimed", false)
@@ -170,7 +170,7 @@ func TestRunReaper_RunOnce_ExpiresStaleRow(t *testing.T) {
 
 func TestRunReaper_RunOnce_RestoresColumn(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedRun(t, db, "t-stale", "claimed", true)
 
@@ -200,7 +200,7 @@ func TestRunReaper_RunOnce_RestoresColumn(t *testing.T) {
 
 func TestRunReaper_RunOnce_Idempotent(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedRun(t, db, "t-stale", "claimed", true)
 
@@ -218,7 +218,7 @@ func TestRunReaper_RunOnce_Idempotent(t *testing.T) {
 
 func TestRunReaper_StartStop_LoopRuns(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedRun(t, db, "t-stale", "claimed", true)
 
@@ -254,7 +254,7 @@ func TestRunReaper_StartStop_LoopRuns(t *testing.T) {
 
 func TestRunReaper_StopIsIdempotent(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	reaper := services.NewRunReaperWithInterval(db, 10*time.Millisecond)
 	reaper.Start(context.Background())
@@ -266,7 +266,7 @@ func TestRunReaper_StopIsIdempotent(t *testing.T) {
 
 func TestRunReaper_StartIsIdempotent(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	reaper := services.NewRunReaperWithInterval(db, 10*time.Millisecond)
 	reaper.Start(context.Background())
@@ -276,7 +276,7 @@ func TestRunReaper_StartIsIdempotent(t *testing.T) {
 
 func TestRunReaper_NewRunReaperRejectsZeroInterval(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	reaper := services.NewRunReaperWithInterval(db, 0)
 	if reaper == nil {
@@ -292,7 +292,7 @@ func TestRunReaper_NewRunReaperRejectsZeroInterval(t *testing.T) {
 // raising an error from the repo's "no eligible task" path.
 func TestRunReaper_NoRowsSafe(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	reaper := services.NewRunReaper(db)
 	n, err := reaper.RunOnce()
@@ -308,7 +308,7 @@ func TestRunReaper_NoRowsSafe(t *testing.T) {
 // reaper touching already-terminal rows.
 func TestRunReaper_OnlySweepsLiveStatus(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	for _, status := range []string{"completed", "failed", "released"} {
 		seedRun(t, db, "t-"+status, status, true)
@@ -330,7 +330,7 @@ func TestRunReaper_OnlySweepsLiveStatus(t *testing.T) {
 // without an external RunOnce call.
 func TestRunReaper_HonoursInterval(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedRun(t, db, "t-stale", "claimed", true)
 
@@ -367,7 +367,7 @@ loop:
 // sequence.
 func TestRunReaper_StopBeforeStartDoesNotPanic(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	reaper := services.NewRunReaperWithInterval(db, 10*time.Millisecond)
 	// Must not block or panic.
@@ -388,7 +388,7 @@ func TestRunReaper_StopBeforeStartDoesNotPanic(t *testing.T) {
 // surface the error to the caller.
 func TestRunReaper_PropagatesDBError(t *testing.T) {
 	db := setupReaperDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec("DROP TABLE task_runs"); err != nil {
 		t.Fatalf("drop: %v", err)

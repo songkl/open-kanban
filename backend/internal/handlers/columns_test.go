@@ -218,7 +218,7 @@ func setupColumnsDB(t *testing.T) *sql.DB {
 
 func TestGetColumnsHandler(t *testing.T) {
 	db := setupColumnsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -245,7 +245,7 @@ func TestGetColumnsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp == nil {
 			t.Errorf("expected array response, got nil")
 		}
@@ -253,10 +253,10 @@ func TestGetColumnsHandler(t *testing.T) {
 
 	t.Run("get columns returns correct commentCount and subtaskCount", func(t *testing.T) {
 		var count int
-		db.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&count)
+		_ = db.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&count)
 		t.Logf("Total tasks in DB: %d", count)
 
-		db.QueryRow("SELECT COUNT(*) FROM tasks WHERE column_id = 'c1'").Scan(&count)
+		_ = db.QueryRow("SELECT COUNT(*) FROM tasks WHERE column_id = 'c1'").Scan(&count)
 		t.Logf("Tasks in c1: %d", count)
 
 		req, _ := http.NewRequest("GET", "/api/columns?boardId=b1", nil)
@@ -271,7 +271,7 @@ func TestGetColumnsHandler(t *testing.T) {
 		t.Logf("Response body: %s", w.Body.String())
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		for _, col := range resp {
 			t.Logf("Column %v, tasks: %v", col["id"], col["tasks"])
@@ -327,7 +327,7 @@ func TestGetColumnsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 1 {
 			t.Errorf("expected 1 column, got %d", len(resp))
 		}
@@ -349,7 +349,7 @@ func TestGetColumnsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 3 {
 			t.Errorf("expected 3 columns, got %d", len(resp))
 		}
@@ -374,7 +374,7 @@ func TestGetColumnsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 2 {
 			t.Errorf("expected 2 columns, got %d", len(resp))
 		}
@@ -383,7 +383,7 @@ func TestGetColumnsHandler(t *testing.T) {
 
 func TestCreateColumnHandler(t *testing.T) {
 	db := setupColumnsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -439,7 +439,7 @@ func TestCreateColumnHandler(t *testing.T) {
 
 func TestUpdateColumnHandler(t *testing.T) {
 	db := setupColumnsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c6', 'Old Name', 'b1', 0)`)
 	if err != nil {
@@ -500,7 +500,7 @@ func TestUpdateColumnHandler(t *testing.T) {
 
 func TestDeleteColumnHandler(t *testing.T) {
 	db := setupColumnsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO columns (id, name, board_id, position) VALUES ('c7', 'Column to Delete', 'b1', 0)`)
 	if err != nil {
@@ -551,7 +551,7 @@ func TestDeleteColumnHandler(t *testing.T) {
 
 func TestGetColumnSlugHandler(t *testing.T) {
 	db := setupColumnsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.GET("/api/columns/slug", handlers.GetColumnSlug(db))
@@ -623,7 +623,7 @@ func TestGetColumnSlugHandler(t *testing.T) {
 // agent configs for many columns correctly via batched queries (fixes N+1).
 func TestGetColumnsBatchedQueries(t *testing.T) {
 	db := setupColumnsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Add 10 more columns to stress the batching path.
 	for i := 0; i < 10; i++ {
@@ -721,7 +721,7 @@ func TestGetColumnsBatchedQueries(t *testing.T) {
 // empty-result case without error.
 func TestGetColumnsEmptyBoard(t *testing.T) {
 	db := setupColumnsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert a brand-new board with no columns.
 	_, err := db.Exec(`INSERT INTO boards (id, name) VALUES ('b-empty', 'Empty Board')`)

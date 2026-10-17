@@ -120,7 +120,7 @@ func BulkColumnAction(db *sql.DB) gin.HandlerFunc {
 				targets = append(targets, ref)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 
 		if len(targets) == 0 {
 			c.JSON(http.StatusOK, BulkColumnActionResponse{

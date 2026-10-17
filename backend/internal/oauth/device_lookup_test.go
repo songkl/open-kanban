@@ -175,7 +175,7 @@ func agentIDsFromLookup(body map[string]interface{}) []string {
 // §4.1.2)
 func TestDeviceLookup_AgentSelectionRequiredTrueForKanbanCLI(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-KCLI", "kanban:read", time.Hour)
@@ -198,7 +198,7 @@ func TestDeviceLookup_AgentSelectionRequiredTrueForKanbanCLI(t *testing.T) {
 // `open-kanban-cli` literal and other `-cli` suffixes (case-insensitive).
 func TestDeviceLookup_AgentSelectionRequiredTrueForOpenKanbanCLI(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "open-kanban-cli", "", "open-kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "open-kanban-cli", "ASR-OKCL", "kanban:read", time.Hour)
@@ -219,7 +219,7 @@ func TestDeviceLookup_AgentSelectionRequiredTrueForOpenKanbanCLI(t *testing.T) {
 // first-party-human — this is the implicit-CLI branch of the heuristic.
 func TestDeviceLookup_AgentSelectionRequiredTrueForDeviceCodeClient(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "open-kanban-mcp", "", "open-kanban-mcp",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "open-kanban-mcp", "ASR-DCCP", "kanban:read", time.Hour)
@@ -240,7 +240,7 @@ func TestDeviceLookup_AgentSelectionRequiredTrueForDeviceCodeClient(t *testing.T
 // is gated on that grant type.
 func TestDeviceLookup_AgentSelectionRequiredFalseWithoutDeviceCode(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-web", "", "kanban-web",
 		[]string{"authorization_code", "refresh_token"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-web", "ASR-NODC", "kanban:read", time.Hour)
@@ -263,7 +263,7 @@ func TestDeviceLookup_AgentSelectionRequiredFalseWithoutDeviceCode(t *testing.T)
 // §4.1.6 #12 — pinned here as well so the field surface doesn't drift.)
 func TestDeviceLookup_AgentSelectionRequiredFalseForFirstPartySPA(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-spa", "", "open-kanban",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	if _, err := db.Exec(
@@ -290,7 +290,7 @@ func TestDeviceLookup_AgentSelectionRequiredFalseForFirstPartySPA(t *testing.T) 
 // is attached.
 func TestDeviceLookup_AnonymousEmptyAvailableAgents(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-ANON", "kanban:read", time.Hour)
@@ -325,7 +325,7 @@ func TestDeviceLookup_AnonymousEmptyAvailableAgents(t *testing.T) {
 // endpoints stay in lockstep. (plan §4.1.6 #13 admin branch.)
 func TestDeviceLookup_AdminSeesAllEnabledAgents(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-ADMN", "kanban:read", time.Hour)
@@ -355,7 +355,7 @@ func TestDeviceLookup_AdminSeesAllEnabledAgents(t *testing.T) {
 // #13 member branch.)
 func TestDeviceLookup_MemberHidesAdminRoleAgents(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-MEMB", "kanban:read", time.Hour)
@@ -391,7 +391,7 @@ func TestDeviceLookup_MemberHidesAdminRoleAgents(t *testing.T) {
 // only.
 func TestDeviceLookup_ViewerHidesAdminRoleAgents(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-VIEW", "kanban:read", time.Hour)
@@ -415,7 +415,7 @@ func TestDeviceLookup_ViewerHidesAdminRoleAgents(t *testing.T) {
 // against this new field.
 func TestDeviceLookup_EmptyListSerialisesAsArrayNotNull(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-EMPT", "kanban:read", time.Hour)
@@ -443,7 +443,7 @@ func TestDeviceLookup_EmptyListSerialisesAsArrayNotNull(t *testing.T) {
 // /oauth/device/agents endpoint (plan §4.1.3).
 func TestDeviceLookup_AvailableAgentsPayloadShape(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-SHAP", "kanban:read", time.Hour)
@@ -483,7 +483,7 @@ func TestDeviceLookup_AvailableAgentsPayloadShape(t *testing.T) {
 // admin-only.
 func TestDeviceLookup_LegacyAgentsFieldRemoved(t *testing.T) {
 	db := setupApproveDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertClient(t, db, "kanban-cli", "", "kanban-cli",
 		[]string{"urn:ietf:params:oauth:grant-type:device_code"}, []string{"kanban:read"})
 	insertPendingDevice(t, db, "kanban-cli", "ASR-LEGC", "kanban:read", time.Hour)

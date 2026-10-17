@@ -191,7 +191,7 @@ func callUsersVisible(t *testing.T, db *sql.DB, token, query string) *httptest.R
 // the scenario that broke under the old getUsers()-only flow.
 func TestGetUsersVisible_NonAdminOwnerCanCall(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callUsersVisible(t, db, "member1-token", "boardId=board1")
 	if w.Code != http.StatusOK {
@@ -250,7 +250,7 @@ func TestGetUsersVisible_NonAdminOwnerCanCall(t *testing.T) {
 // enforce.
 func TestGetUsersVisible_NonOwnerNonAdmin_Returns403(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// member2 has an ADMIN row on board1 but is NOT the owner.
 	w := callUsersVisible(t, db, "member2-token", "boardId=board1")
@@ -280,7 +280,7 @@ func TestGetUsersVisible_NonOwnerNonAdmin_Returns403(t *testing.T) {
 // every user so the existing getUsers()-based pickers still work.
 func TestGetUsersVisible_GlobalAdminWithoutBoardID(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callUsersVisible(t, db, "admin-token", "")
 	if w.Code != http.StatusOK {
@@ -321,7 +321,7 @@ func TestGetUsersVisible_GlobalAdminWithoutBoardID(t *testing.T) {
 // leaking the entire user list.
 func TestGetUsersVisible_NonAdminWithoutBoardID_Returns403(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callUsersVisible(t, db, "member1-token", "")
 	if w.Code != http.StatusForbidden {
@@ -342,7 +342,7 @@ func TestGetUsersVisible_NonAdminWithoutBoardID_Returns403(t *testing.T) {
 // admin-only path.
 func TestGetUsersVisible_GlobalAdminWithBoardID(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callUsersVisible(t, db, "admin-token", "boardId=board1")
 	if w.Code != http.StatusOK {
@@ -382,7 +382,7 @@ func TestGetUsersVisible_GlobalAdminWithBoardID(t *testing.T) {
 // on board1 — invitee1 must be the lone survivor in the response.
 func TestGetUsersVisible_ExcludesExistingPermissionHolders(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callUsersVisible(t, db, "admin-token", "boardId=board1")
 	if w.Code != http.StatusOK {
@@ -421,7 +421,7 @@ func TestGetUsersVisible_ExcludesExistingPermissionHolders(t *testing.T) {
 // s-1101 interlock called out in the task description.
 func TestGetUsersVisible_IncludesExpiredAndRevokedHolders(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Add two more users with rows that look like real grants
 	// but are no longer effective. Both must show up in the
@@ -492,7 +492,7 @@ func TestGetUsersVisible_IncludesExpiredAndRevokedHolders(t *testing.T) {
 // callers.
 func TestGetUsersVisible_BoardNotFound_Returns404(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callUsersVisible(t, db, "admin-token", "boardId=ghost-board")
 	if w.Code != http.StatusNotFound {
@@ -505,7 +505,7 @@ func TestGetUsersVisible_BoardNotFound_Returns404(t *testing.T) {
 // before the authorization branches run.
 func TestGetUsersVisible_Unauthenticated_Returns401(t *testing.T) {
 	db := setupUsersVisibleDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callUsersVisible(t, db, "", "boardId=board1")
 	if w.Code != http.StatusUnauthorized {

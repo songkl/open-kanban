@@ -237,7 +237,7 @@ func waitForDeliveryStatus(t *testing.T, db *sql.DB, wantOneOf []string, d time.
 // opensslLikeHMAC below for the exact formula.
 func TestWebhookE2E_HappyPath_ReceiverGetsSignedPOST(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	const (
 		webhookID   = "wh-e2e-success"
@@ -254,7 +254,7 @@ func TestWebhookE2E_HappyPath_ReceiverGetsSignedPOST(t *testing.T) {
 	seedWebhookE2E(t, db, webhookID, srv.URL, secretPlain, maxRetries)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -403,7 +403,7 @@ func TestWebhookE2E_HappyPath_ReceiverGetsSignedPOST(t *testing.T) {
 //   - the full EventCenter → deliverer → sweeper → EXHAUSTED round-trip
 func TestWebhookE2E_FailurePath_ExhaustedAfterMaxRetries(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	const (
 		webhookID   = "wh-e2e-fail"
@@ -420,7 +420,7 @@ func TestWebhookE2E_FailurePath_ExhaustedAfterMaxRetries(t *testing.T) {
 	seedWebhookE2E(t, db, webhookID, srv.URL, secretPlain, maxRetries)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -527,7 +527,7 @@ func TestWebhookE2E_FailurePath_ExhaustedAfterMaxRetries(t *testing.T) {
 // the receiver observed exactly that hex string.
 func TestWebhookE2E_SignatureMatchesOpenSSL(t *testing.T) {
 	db := setupE2EDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	const (
 		secretPlain = "feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface"
@@ -543,7 +543,7 @@ func TestWebhookE2E_SignatureMatchesOpenSSL(t *testing.T) {
 	seedWebhookE2E(t, db, webhookID, srv.URL, secretPlain, 5)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))

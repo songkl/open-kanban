@@ -78,14 +78,14 @@ func run(port int, boardID, adminToken, agentToken string) error {
 	// path pins migrations to the current git tag, which can lag
 	// behind the latest migration file when a feature lands without
 	// a tag bump. The e2e suite always wants the latest schema.
-	os.Setenv("DB_TYPE", "sqlite")
-	os.Setenv("DATABASE_URL", inMemoryDSN)
+	_ = os.Setenv("DB_TYPE", "sqlite")
+	_ = os.Setenv("DATABASE_URL", inMemoryDSN)
 
 	db, err := sql.Open("sqlite3", inMemoryDSN)
 	if err != nil {
 		return fmt.Errorf("open sqlite: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		return fmt.Errorf("enable FK: %w", err)

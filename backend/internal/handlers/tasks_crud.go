@@ -337,7 +337,7 @@ func DeleteTask(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var taskTitle string
-		db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle)
+		_ = db.QueryRow("SELECT title FROM tasks WHERE id = ?", id).Scan(&taskTitle)
 		LogActivity(db, user.ID, "DELETE_TASK", "TASK", id, taskTitle, "", c.ClientIP(), getRequestSource(c))
 
 		taskService := services.NewTaskService(db)

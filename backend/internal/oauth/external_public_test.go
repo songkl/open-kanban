@@ -77,7 +77,7 @@ func decodePublicProviders(t *testing.T, body []byte) []map[string]interface{} {
 // before any provider is configured.
 func TestListEnabledExternalProviders_Empty(t *testing.T) {
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newPublicExternalServer(t, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/external/providers", nil)
@@ -96,7 +96,7 @@ func TestListEnabledExternalProviders_Empty(t *testing.T) {
 // at the SQL layer (plan §6.5: enabled=0 omits from public list).
 func TestListEnabledExternalProviders_FiltersDisabled(t *testing.T) {
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedPublicProvider(t, db, "p-google", "google", "Google", "google", true, 0, "google-cid", "https://accounts.google.com/o/oauth2/v2/auth", "openid email profile")
 	seedPublicProvider(t, db, "p-github", "github", "GitHub", "github", false, 1, "gh-cid", "https://github.com/login/oauth/authorize", "user:email")
 	seedPublicProvider(t, db, "p-oidc", "corp-okta", "Corp Okta", "oidc", true, 2, "okta-cid", "https://okta.example.com/oauth2/v1/authorize", "openid email")
@@ -128,7 +128,7 @@ func TestListEnabledExternalProviders_FiltersDisabled(t *testing.T) {
 // in non-position order.
 func TestListEnabledExternalProviders_OrdersByPosition(t *testing.T) {
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// Insert in reverse-position order so the test proves the SQL
 	// actually sorts rather than returning insertion order.
 	seedPublicProvider(t, db, "p-okta", "corp-okta", "Corp Okta", "oidc", true, 5, "okta-cid", "https://okta.example.com/oauth2/v1/authorize", "openid email")
@@ -160,7 +160,7 @@ func TestListEnabledExternalProviders_OrdersByPosition(t *testing.T) {
 // hand-written, not SELECT *).
 func TestListEnabledExternalProviders_NoSecretLeak(t *testing.T) {
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// Insert a row with a non-NULL client_secret so a leak would
 	// be visible in the response body.
 	_, err := db.Exec(
@@ -202,7 +202,7 @@ func TestListEnabledExternalProviders_NoSecretLeak(t *testing.T) {
 // listing cannot be gated on RequireAuth. Pins plan §4.2.
 func TestListEnabledExternalProviders_PubliclyReachable(t *testing.T) {
 	db := setupProviderDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedPublicProvider(t, db, "p-google", "google", "Google", "google", true, 0, "cid", "https://accounts.google.com/o/oauth2/v2/auth", "openid email")
 
 	// Build a request with no Authorization header and no

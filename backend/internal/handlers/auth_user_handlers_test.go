@@ -179,7 +179,7 @@ func countAccessRows(t *testing.T, db *sql.DB, userID string) map[string]string 
 	if err != nil {
 		t.Fatalf("query board_permissions: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make(map[string]string)
 	for rows.Next() {
 		var bid, access string
@@ -198,7 +198,7 @@ func countAccessRows(t *testing.T, db *sql.DB, userID string) map[string]string 
 // one row, on the public board, at READ.
 func TestRegisterNewUser_GetsPublicBoardRead(t *testing.T) {
 	db := setupUserVisibilityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -261,7 +261,7 @@ func TestRegisterNewUser_GetsPublicBoardRead(t *testing.T) {
 // to every new user, defeating the is_public flag.
 func TestRegisterNewUser_PrivateBoardNoAccess(t *testing.T) {
 	db := setupUserVisibilityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Flip pub1 to private so the only board the user can see
 	// is priv1, which they must not get a grant on.
@@ -318,7 +318,7 @@ func TestRegisterNewUser_PrivateBoardNoAccess(t *testing.T) {
 // folds those three steps into one POST.
 func TestRegisterNewUser_BoardGrantsAddsExplicitAccess(t *testing.T) {
 	db := setupUserVisibilityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -386,7 +386,7 @@ func TestRegisterNewUser_BoardGrantsAddsExplicitAccess(t *testing.T) {
 // the BoardPermissionsModal after the fact".
 func TestCreateAgent_NoAutoGrants(t *testing.T) {
 	db := setupUserVisibilityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -447,7 +447,7 @@ func TestCreateAgent_NoAutoGrants(t *testing.T) {
 // creation time, no implicit broad grants.
 func TestCreateAgent_ExplicitBoardGrants(t *testing.T) {
 	db := setupUserVisibilityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -507,7 +507,7 @@ func TestCreateAgent_ExplicitBoardGrants(t *testing.T) {
 // grant behind.
 func TestCreateAgent_InvalidBoardGrant(t *testing.T) {
 	db := setupUserVisibilityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))

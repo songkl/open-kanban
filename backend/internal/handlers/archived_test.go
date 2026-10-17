@@ -172,7 +172,7 @@ func setupArchivedDB(t *testing.T) *sql.DB {
 
 func TestGetArchivedTasksHandler(t *testing.T) {
 	db := setupArchivedDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -312,7 +312,7 @@ func TestGetArchivedTasksHandler(t *testing.T) {
 
 func TestGetDraftsHandler(t *testing.T) {
 	db := setupArchivedDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -449,7 +449,7 @@ func TestGetDraftsHandler(t *testing.T) {
 
 func TestBatchDeleteDraftsHandler(t *testing.T) {
 	db := setupArchivedDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -514,7 +514,7 @@ func TestBatchDeleteDraftsHandler(t *testing.T) {
 		}
 
 		var count int
-		db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE id IN ('d1', 'd2')`).Scan(&count)
+		_ = db.QueryRow(`SELECT COUNT(*) FROM tasks WHERE id IN ('d1', 'd2')`).Scan(&count)
 		if count != 0 {
 			t.Errorf("expected 0 remaining drafts, got %d", count)
 		}
@@ -547,7 +547,7 @@ func TestBatchDeleteDraftsHandler(t *testing.T) {
 
 func TestBatchPublishDraftsHandler(t *testing.T) {
 	db := setupArchivedDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -621,7 +621,7 @@ func TestBatchPublishDraftsHandler(t *testing.T) {
 
 func TestBatchArchiveDraftsHandler(t *testing.T) {
 	db := setupArchivedDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))

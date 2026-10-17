@@ -177,7 +177,7 @@ func setupSubtasksDB(t *testing.T) *sql.DB {
 
 func TestGetSubtasksHandler(t *testing.T) {
 	db := setupSubtasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -239,7 +239,7 @@ func TestGetSubtasksHandler(t *testing.T) {
 		}
 
 		var resp []interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 0 {
 			t.Errorf("expected empty array, got %v", resp)
 		}
@@ -261,7 +261,7 @@ func TestGetSubtasksHandler(t *testing.T) {
 		}
 
 		var resp []interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 1 {
 			t.Errorf("expected 1 subtask, got %d", len(resp))
 		}
@@ -283,7 +283,7 @@ func TestGetSubtasksHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 2 {
 			t.Errorf("expected 2 subtasks, got %d", len(resp))
 		}
@@ -303,7 +303,7 @@ func TestGetSubtasksHandler(t *testing.T) {
 		}
 
 		var resp []interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) < 2 {
 			t.Errorf("expected at least 2 subtasks, got %d", len(resp))
 		}
@@ -313,7 +313,7 @@ func TestGetSubtasksHandler(t *testing.T) {
 func TestCreateSubtaskHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupSubtasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -393,7 +393,7 @@ func TestCreateSubtaskHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["title"] != "New subtask" {
 			t.Errorf("expected title 'New subtask', got %v", resp["title"])
 		}
@@ -423,7 +423,7 @@ func TestCreateSubtaskHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["title"] != "Member subtask" {
 			t.Errorf("expected title 'Member subtask', got %v", resp["title"])
 		}
@@ -433,7 +433,7 @@ func TestCreateSubtaskHandler(t *testing.T) {
 func TestUpdateSubtaskHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupSubtasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO subtasks (id, title, completed, task_id) VALUES ('st1', 'Test subtask', 0, 'task1')`)
 	if err != nil {
@@ -503,7 +503,7 @@ func TestUpdateSubtaskHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["title"] != "Updated subtask" {
 			t.Errorf("expected title 'Updated subtask', got %v", resp["title"])
 		}
@@ -525,7 +525,7 @@ func TestUpdateSubtaskHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["completed"] != true {
 			t.Errorf("expected completed true, got %v", resp["completed"])
 		}
@@ -551,7 +551,7 @@ func TestUpdateSubtaskHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["title"] != "Updated by member" {
 			t.Errorf("expected title 'Updated by member', got %v", resp["title"])
 		}
@@ -561,7 +561,7 @@ func TestUpdateSubtaskHandler(t *testing.T) {
 func TestDeleteSubtaskHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupSubtasksDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO subtasks (id, title, completed, task_id) VALUES ('st1', 'Test subtask', 0, 'task1')`)
 	if err != nil {
@@ -615,7 +615,7 @@ func TestDeleteSubtaskHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["success"] != true {
 			t.Errorf("expected success true, got %v", resp["success"])
 		}

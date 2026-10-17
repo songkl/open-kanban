@@ -97,7 +97,7 @@ func setupWebhookTestDB(t *testing.T) *sql.DB {
 
 func TestWebhookRepository_Create(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	createdBy := "u-admin"
@@ -229,7 +229,7 @@ func TestWebhookRepository_Create(t *testing.T) {
 
 func TestWebhookRepository_Get(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	createdBy := "u-admin"
@@ -297,7 +297,7 @@ func TestWebhookRepository_Get(t *testing.T) {
 
 func TestWebhookRepository_List(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	for i, id := range []string{"wh-1", "wh-2", "wh-3"} {
@@ -341,7 +341,7 @@ func TestWebhookRepository_List(t *testing.T) {
 
 func TestWebhookRepository_List_Empty(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	got, err := repo.List()
@@ -358,7 +358,7 @@ func TestWebhookRepository_List_Empty(t *testing.T) {
 
 func TestWebhookRepository_Update(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	seed := &models.Webhook{
@@ -427,7 +427,7 @@ func TestWebhookRepository_Update(t *testing.T) {
 
 func TestWebhookRepository_Update_NotFound(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	missing := &models.Webhook{
@@ -445,7 +445,7 @@ func TestWebhookRepository_Update_NotFound(t *testing.T) {
 
 func TestWebhookRepository_Delete(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	if err := repo.Create(&models.Webhook{ID: "wh-del", Name: "x", URL: "https://example.com/x", Secret: []byte("k"), Enabled: true}); err != nil {
@@ -462,7 +462,7 @@ func TestWebhookRepository_Delete(t *testing.T) {
 
 func TestWebhookRepository_Delete_NotFound(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	err := repo.Delete("ghost")
@@ -473,7 +473,7 @@ func TestWebhookRepository_Delete_NotFound(t *testing.T) {
 
 func TestWebhookRepository_Delete_CascadesDeliveries(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	if err := repo.Create(&models.Webhook{ID: "wh-casc", Name: "x", URL: "https://example.com/x", Secret: []byte("k"), Enabled: true}); err != nil {
@@ -497,7 +497,7 @@ func TestWebhookRepository_Delete_CascadesDeliveries(t *testing.T) {
 
 func TestWebhookRepository_RotateSecret(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	if err := repo.Create(&models.Webhook{ID: "wh-rot", Name: "x", URL: "https://example.com/x", Secret: []byte("old-secret"), Enabled: true}); err != nil {
@@ -520,7 +520,7 @@ func TestWebhookRepository_RotateSecret(t *testing.T) {
 
 func TestWebhookRepository_RotateSecret_NotFound(t *testing.T) {
 	db := setupWebhookTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := repositories.NewWebhookRepository(db)
 
 	err := repo.RotateSecret("ghost", []byte("k"))

@@ -228,7 +228,7 @@ func setupUserPermDB(t *testing.T) *sql.DB {
 func TestGetPermissionsHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -353,7 +353,7 @@ func TestGetPermissionsHandler(t *testing.T) {
 
 func TestSetPermissionHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -441,7 +441,7 @@ func TestSetPermissionHandler(t *testing.T) {
 
 func TestDeletePermissionHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('perm1', 'member1', 'board1', 'WRITE')`)
 	if err != nil {
@@ -499,7 +499,7 @@ func TestDeletePermissionHandler(t *testing.T) {
 func TestSetPermission_LogsActivity(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -547,7 +547,7 @@ func TestSetPermission_LogsActivity(t *testing.T) {
 func TestSetPermission_InvalidatesTokenCache(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -589,7 +589,7 @@ func TestSetPermission_InvalidatesTokenCache(t *testing.T) {
 
 func TestDeletePermission_LogsActivity(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('perm-del-1', 'member1', 'board1', 'WRITE')`)
 	if err != nil {
@@ -653,7 +653,7 @@ func TestDeletePermission_LogsActivity(t *testing.T) {
 func TestDeletePermission_InvalidatesTokenCache(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, access) VALUES ('perm-cache-del', 'member1', 'board1', 'WRITE')`)
 	if err != nil {
@@ -684,7 +684,7 @@ func TestDeletePermission_InvalidatesTokenCache(t *testing.T) {
 
 func TestUpdateAppConfigHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -740,7 +740,7 @@ func TestUpdateAppConfigHandler(t *testing.T) {
 
 func TestGetActivitiesHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO activities (id, user_id, action, target_type, target_id, target_title, details, ip_address, source, created_at) VALUES ('act1', 'admin1', 'LOGIN', 'SYSTEM', '', '', '', '127.0.0.1', 'web', datetime('now'))`)
 	if err != nil {
@@ -772,7 +772,7 @@ func TestGetActivitiesHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["activities"] == nil {
 			t.Errorf("expected activities in response")
 		}
@@ -803,7 +803,7 @@ func TestGetActivitiesHandler(t *testing.T) {
 
 func TestGetUsersHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -841,7 +841,7 @@ func TestGetUsersHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["users"] == nil {
 			t.Errorf("expected users in response")
 		}
@@ -851,7 +851,7 @@ func TestGetUsersHandler(t *testing.T) {
 func TestUpdateUserHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -1071,7 +1071,7 @@ func TestUpdateUserHandler(t *testing.T) {
 func TestSetUserEnabledHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -1191,10 +1191,10 @@ func TestSetUserEnabledHandler(t *testing.T) {
 func TestGetAgentsHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM users WHERE type = 'AGENT'").Scan(&count)
+	_ = db.QueryRow("SELECT COUNT(*) FROM users WHERE type = 'AGENT'").Scan(&count)
 	t.Logf("AGENT users count before insert: %d", count)
 
 	// agent1 — pre-existing AGENT, no creator on file (NULL).
@@ -1235,7 +1235,7 @@ func TestGetAgentsHandler(t *testing.T) {
 		var resp struct {
 			Agents []map[string]interface{} `json:"agents"`
 		}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp.Agents) < 2 {
 			t.Fatalf("expected at least 2 agents, got %d", len(resp.Agents))
 		}
@@ -1276,7 +1276,7 @@ func TestGetAgentsHandler(t *testing.T) {
 func TestGetAgentsHandlerHealthMetrics(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Fresh agent with no activity yet — health counters must
 	// default to zero rather than NULL so the frontend can render
@@ -1423,7 +1423,7 @@ func TestGetAgentsHandlerHealthMetrics(t *testing.T) {
 func TestCreateAgentHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -1492,7 +1492,7 @@ func TestCreateAgentHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["agent"] == nil {
 			t.Errorf("expected agent in response")
 		}
@@ -1518,7 +1518,7 @@ func TestCreateAgentHandler(t *testing.T) {
 func TestDeleteAgentHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO users (id, username, nickname, role, type, enabled) VALUES ('agent1', 'agent1', 'Test Agent', 'ADMIN', 'AGENT', 1)`)
 	if err != nil {
@@ -1576,7 +1576,7 @@ func TestDeleteAgentHandler(t *testing.T) {
 func TestResetAgentTokenHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO users (id, username, nickname, role, type, enabled) VALUES ('agent1', 'agent1', 'Test Agent', 'ADMIN', 'AGENT', 1)`)
 	if err != nil {
@@ -1634,7 +1634,7 @@ func TestResetAgentTokenHandler(t *testing.T) {
 func TestCreateUserHandler(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -1735,7 +1735,7 @@ func TestCreateUserHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["user"] == nil {
 			t.Errorf("expected user in response")
 		}
@@ -1744,7 +1744,7 @@ func TestCreateUserHandler(t *testing.T) {
 
 func TestGetColumnPermissionsHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -1887,7 +1887,7 @@ func TestGetColumnPermissionsHandler(t *testing.T) {
 
 func TestSetColumnPermissionHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -2076,7 +2076,7 @@ func TestSetColumnPermissionHandler(t *testing.T) {
 
 func TestDeleteColumnPermissionHandler(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access) VALUES ('cp1', 'member1', 'col1', 'WRITE')`)
 	if err != nil {
@@ -2133,7 +2133,7 @@ func TestDeleteColumnPermissionHandler(t *testing.T) {
 
 func TestSetColumnPermission_LogsActivity(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -2178,7 +2178,7 @@ func TestSetColumnPermission_LogsActivity(t *testing.T) {
 func TestSetColumnPermission_InvalidatesTokenCache(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -2210,7 +2210,7 @@ func TestSetColumnPermission_InvalidatesTokenCache(t *testing.T) {
 
 func TestDeleteColumnPermission_LogsActivity(t *testing.T) {
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access) VALUES ('cp-del-1', 'member1', 'col1', 'WRITE')`)
 	if err != nil {
@@ -2272,7 +2272,7 @@ func TestDeleteColumnPermission_LogsActivity(t *testing.T) {
 func TestDeleteColumnPermission_InvalidatesTokenCache(t *testing.T) {
 	handlers.ResetTokenCacheForTest()
 	db := setupUserPermDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := db.Exec(`INSERT INTO column_permissions (id, user_id, column_id, access) VALUES ('cp-cache-del', 'member1', 'col1', 'WRITE')`)
 	if err != nil {

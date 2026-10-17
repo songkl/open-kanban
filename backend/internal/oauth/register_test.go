@@ -64,7 +64,7 @@ func doRegister(t *testing.T, r *gin.Engine, body string) *httptest.ResponseReco
 
 func TestRegisterPublicClientSuccess(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{
@@ -108,7 +108,7 @@ func TestRegisterPublicClientSuccess(t *testing.T) {
 
 func TestRegisterConfidentialClientIssuesSecretOnce(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{
@@ -149,7 +149,7 @@ func TestRegisterConfidentialClientIssuesSecretOnce(t *testing.T) {
 
 func TestRegisterRejectsInvalidAuthMethod(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{"client_name": "x", "token_endpoint_auth_method": "private_key_jwt"}`
@@ -166,7 +166,7 @@ func TestRegisterRejectsInvalidAuthMethod(t *testing.T) {
 
 func TestRegisterRejectsUnsupportedGrantType(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{"client_name": "x", "grant_types": ["password"]}`
@@ -178,7 +178,7 @@ func TestRegisterRejectsUnsupportedGrantType(t *testing.T) {
 
 func TestRegisterRejectsUnsupportedScope(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{"client_name": "x", "scope": "kanban:read admin:everything"}`
@@ -190,7 +190,7 @@ func TestRegisterRejectsUnsupportedScope(t *testing.T) {
 
 func TestRegisterRejectsDisallowedRedirectURI(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{"client_name": "x", "redirect_uris": ["http://example.com/cb"]}`
@@ -202,7 +202,7 @@ func TestRegisterRejectsDisallowedRedirectURI(t *testing.T) {
 
 func TestRegisterAllowsLoopbackRedirectURI(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{"client_name": "x", "redirect_uris": ["http://127.0.0.1:8765/cb", "http://localhost:9000/cb"]}`
@@ -214,7 +214,7 @@ func TestRegisterAllowsLoopbackRedirectURI(t *testing.T) {
 
 func TestRegisterRequiresRedirectURIForConfidentialClient(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{"client_name": "x", "token_endpoint_auth_method": "client_secret_basic"}`
@@ -226,7 +226,7 @@ func TestRegisterRequiresRedirectURIForConfidentialClient(t *testing.T) {
 
 func TestRegisterDisabledByConfig(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`INSERT INTO app_config (key, value) VALUES ('oauth_allow_dynamic_client_registration', '0')`); err != nil {
 		t.Fatalf("insert config: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestRegisterDisabledByConfig(t *testing.T) {
 
 func TestRegisterInvalidJSON(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	w := doRegister(t, r, "{not json")
@@ -257,7 +257,7 @@ func TestRegisterInvalidJSON(t *testing.T) {
 
 func TestRegisterClientNameTooLong(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{"client_name": "` + strings.Repeat("a", 200) + `"}`
@@ -269,7 +269,7 @@ func TestRegisterClientNameTooLong(t *testing.T) {
 
 func TestRegisterSetsCacheAndPragma(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	w := doRegister(t, r, `{"client_name": "x"}`)
@@ -286,7 +286,7 @@ func TestRegisterSetsCacheAndPragma(t *testing.T) {
 
 func TestGetClientAndHelpers(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{
@@ -336,7 +336,7 @@ func TestRegisterBodyBufferReset(t *testing.T) {
 	// Re-registers across multiple bodies to make sure no module-level
 	// state leaks between requests.
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 	for i := 0; i < 3; i++ {
 		body := `{"client_name": "client-` + strings.Repeat("a", i+1) + `"}`
@@ -358,7 +358,7 @@ func TestRegisterBodyBufferReset(t *testing.T) {
 // OAuth tab after the local credential store was wiped a few times.
 func TestRegisterDedupesByNameAuthMethodGrantsScopes(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{
@@ -421,7 +421,7 @@ func TestRegisterDedupesByNameAuthMethodGrantsScopes(t *testing.T) {
 // don't silently widen an existing identity's privileges.
 func TestRegisterDoesNotDedupWhenScopeIsWider(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	first := `{
@@ -472,7 +472,7 @@ func TestRegisterDoesNotDedupWhenScopeIsWider(t *testing.T) {
 // when grants and scopes happen to match.
 func TestRegisterDoesNotDedupAcrossNames(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	makeBody := func(name string) string {
@@ -506,7 +506,7 @@ func TestRegisterDoesNotDedupAcrossNames(t *testing.T) {
 // existing client_id and never expose the stored bcrypt hash.
 func TestRegisterDedupesConfidentialClient(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newRegisterServer(t, db)
 
 	body := `{

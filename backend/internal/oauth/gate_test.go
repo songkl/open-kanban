@@ -14,7 +14,7 @@ import (
 
 func TestOAuthGateBlocksWhenDisabled(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestOAuthGateBlocksWhenDisabled(t *testing.T) {
 
 func TestOAuthGatePassesWhenEnabled(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestOAuthGatePassesWhenEnabled(t *testing.T) {
 
 func TestDeviceFlowGateBlocksWhenDisabled(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestDeviceFlowGateBlocksWhenDisabled(t *testing.T) {
 
 func TestDeviceFlowGatePassesWhenEnabled(t *testing.T) {
 	db := setupRegisterDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := oauth.EnsureDefaults(db); err != nil {
 		t.Fatalf("EnsureDefaults: %v", err)
 	}

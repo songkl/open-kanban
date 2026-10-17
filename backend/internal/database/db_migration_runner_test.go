@@ -239,7 +239,7 @@ func dumpBoardsSchema(t *testing.T, db *sql.DB) {
 		t.Logf("dumpBoardsSchema: pragma failed: %v", err)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	t.Log("boards schema after drift repair:")
 	for rows.Next() {
 		var cid int
@@ -265,7 +265,7 @@ func dumpSchemaMigrations(t *testing.T, db *sql.DB) {
 		t.Logf("dumpSchemaMigrations: select failed: %v", err)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	t.Log("schema_migrations rows after drift repair:")
 	for rows.Next() {
 		var version int
@@ -573,7 +573,7 @@ func hasColumn(t *testing.T, db *sql.DB, table, column string) bool {
 	if err != nil {
 		t.Fatalf("pragma table_info(%s): %v", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var (
 			cid     int

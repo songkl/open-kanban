@@ -143,7 +143,7 @@ func setupBoardsListDB(t *testing.T) *sql.DB {
 
 func TestGetBoardsHandler(t *testing.T) {
 	db := setupBoardsListDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -523,7 +523,7 @@ func boardByID(t *testing.T, resp []map[string]interface{}, id string) map[strin
 // ad-hoc asserts.
 func TestGetBoards_AccessMatrix(t *testing.T) {
 	db := setupBoardsAccessMatrixDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	type wantRow struct {
 		effectiveAccess string
@@ -641,7 +641,7 @@ func TestGetBoards_AccessMatrix(t *testing.T) {
 // caller with multiple grants, so they pin the ordering.
 func TestGetBoards_SortOrderByAccess(t *testing.T) {
 	db := setupBoardsAccessMatrixDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()
@@ -663,7 +663,7 @@ func TestGetBoards_SortOrderByAccess(t *testing.T) {
 // built before s-1021 keep working without code changes.
 func TestGetBoards_BackwardCompatibleShape(t *testing.T) {
 	db := setupBoardsAccessMatrixDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()
@@ -907,7 +907,7 @@ func setupBoardsActivityDB(t *testing.T) *sql.DB {
 // board.updated_at).
 func TestGetBoards_ActivityHelpers(t *testing.T) {
 	db := setupBoardsActivityDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()

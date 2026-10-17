@@ -17,7 +17,7 @@ import (
 
 func TestLookupAgentRejectsEmptyID(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := oauth.LookupAgent(db, "", "ADMIN")
 	var lookupErr *oauth.AgentLookupError
@@ -31,7 +31,7 @@ func TestLookupAgentRejectsEmptyID(t *testing.T) {
 
 func TestLookupAgentRejectsUnknownID(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err := oauth.LookupAgent(db, "ghost-agent", "ADMIN")
 	var lookupErr *oauth.AgentLookupError
@@ -48,7 +48,7 @@ func TestLookupAgentRejectsUnknownID(t *testing.T) {
 
 func TestLookupAgentRejectsDisabled(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedAgentWithRole(t, db, "agent-disabled", "Disabled", "ADMIN", false)
 
 	_, err := oauth.LookupAgent(db, "agent-disabled", "ADMIN")
@@ -63,7 +63,7 @@ func TestLookupAgentRejectsDisabled(t *testing.T) {
 
 func TestLookupAgentRejectsHumanUser(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedHumanWithRole(t, db, "user-other", "Other Admin", "ADMIN")
 
 	_, err := oauth.LookupAgent(db, "user-other", "ADMIN")
@@ -78,7 +78,7 @@ func TestLookupAgentRejectsHumanUser(t *testing.T) {
 
 func TestLookupAgentAllowsAdminBindingAdminAgent(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedAgentWithRole(t, db, "agent-admin", "Admin Agent", "ADMIN", true)
 
 	got, err := oauth.LookupAgent(db, "agent-admin", "ADMIN")
@@ -92,7 +92,7 @@ func TestLookupAgentAllowsAdminBindingAdminAgent(t *testing.T) {
 
 func TestLookupAgentGatesAdminAgentToAdminCallers(t *testing.T) {
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedAgentWithRole(t, db, "agent-admin", "Admin Agent", "ADMIN", true)
 
 	for _, role := range []string{"MEMBER", "VIEWER", ""} {
@@ -122,7 +122,7 @@ func TestLookupAgentAllowsMemberBindingMemberAgent(t *testing.T) {
 	// authenticated approver so the existing CLI self-service flow
 	// keeps working.
 	db := setupAgentApprovalDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedAgentWithRole(t, db, "agent-member", "Member Agent", "MEMBER", true)
 
 	for _, role := range []string{"ADMIN", "MEMBER", "VIEWER"} {

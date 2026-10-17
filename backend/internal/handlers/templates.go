@@ -113,7 +113,7 @@ func SaveTemplate(db *sql.DB) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get column info"})
 				return
 			}
-			defer colRows.Close()
+			defer func() { _ = colRows.Close() }()
 
 			var columns []ColumnConfig
 			for colRows.Next() {

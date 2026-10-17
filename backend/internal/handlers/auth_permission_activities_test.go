@@ -106,7 +106,7 @@ func TestGetPermissionActivities_Unauthenticated_Returns401(t *testing.T) {
 	ResetTokenCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.GET("/api/v1/activities", GetPermissionActivities(db))
@@ -125,7 +125,7 @@ func TestGetPermissionActivities_NonOwnerNonAdmin_Returns403(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -149,7 +149,7 @@ func TestGetPermissionActivities_AdminSeesAllActions(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed activities across both boards. admin1 owns board1 but
 	// board2 has no permissions; the global admin short-circuit must
@@ -206,7 +206,7 @@ func TestGetPermissionActivities_FilterByGrantOnly(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedAuditActivity(t, db, "act-grant-board1", "admin1", "PERMISSION_GRANT", "BOARD", "board1", "Board One")
 	seedAuditActivity(t, db, "act-revoke-board1", "admin1", "PERMISSION_REVOKE", "BOARD", "board1", "Board One")
@@ -250,7 +250,7 @@ func TestGetPermissionActivities_FilterByRevokeOnly(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedAuditActivity(t, db, "act-grant-board1", "admin1", "PERMISSION_GRANT", "BOARD", "board1", "Board One")
 	seedAuditActivity(t, db, "act-revoke-board1", "admin1", "PERMISSION_REVOKE", "BOARD", "board1", "Board One")
@@ -291,7 +291,7 @@ func TestGetPermissionActivities_FilterByTransferOnly(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedAuditActivity(t, db, "act-grant-board1", "admin1", "PERMISSION_GRANT", "BOARD", "board1", "Board One")
 	seedAuditActivity(t, db, "act-revoke-board1", "admin1", "PERMISSION_REVOKE", "BOARD", "board1", "Board One")
@@ -332,7 +332,7 @@ func TestGetPermissionActivities_FilterMultipleActions(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedAuditActivity(t, db, "act-grant-board1", "admin1", "PERMISSION_GRANT", "BOARD", "board1", "Board One")
 	seedAuditActivity(t, db, "act-revoke-board1", "admin1", "PERMISSION_REVOKE", "BOARD", "board1", "Board One")
@@ -367,7 +367,7 @@ func TestGetPermissionActivities_InvalidAction_Returns400(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -389,7 +389,7 @@ func TestGetPermissionActivities_BoardOwnerSeesOnlyOwnBoard(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Promote member1 to owner of board2 — admin1 keeps board1.
 	if _, err := db.Exec(
@@ -445,7 +445,7 @@ func TestGetPermissionActivities_BoardOwnerExcludesForeignRows(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// member1 owns ONLY board1; admin1 owns board1 in the fixture
 	// but we strip that so member1 is the sole owner of board1.
@@ -490,7 +490,7 @@ func TestGetPermissionActivities_ColumnTargetResolvesToBoard(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed a column under board1, then a PERMISSION_GRANT activity
 	// with target_type=COLUMN. member1 (after promotion) owns
@@ -541,7 +541,7 @@ func TestGetPermissionActivities_EmptyActionsDefaultsToThree(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed all four PERMISSION actions. PERMISSION_BULK_GRANT must
 	// NOT appear in the default response — only the three canonical
@@ -583,7 +583,7 @@ func TestGetPermissionActivities_EmptyReturnsArray(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupAuditDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed a non-permission activity so the table isn't literally
 	// empty (regression guard for the WHERE action IN (...) path).

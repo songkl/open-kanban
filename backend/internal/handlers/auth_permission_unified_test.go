@@ -270,7 +270,7 @@ func assertPermissionShape(t *testing.T, rows []map[string]interface{}) {
 // quietly re-introduce the divergence.
 func TestGetPermissions_UnifiedResponseShape(t *testing.T) {
 	db := setupUnifiedPermissionsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	t.Run("boardId variant carries the full unified shape", func(t *testing.T) {
 		w := callGetPermissions(t, db, "admin-token", "boardId=board1")
@@ -425,7 +425,7 @@ func mapKeys(m map[string]interface{}) []string {
 // the ?userId= branch.
 func TestGetPermissions_UnifiedResponseValues(t *testing.T) {
 	db := setupUnifiedPermissionsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	t.Run("boardId variant projects user / board / grantedBy / expiresAt correctly", func(t *testing.T) {
 		w := callGetPermissions(t, db, "admin-token", "boardId=board1")
@@ -564,7 +564,7 @@ func TestGetPermissions_UnifiedResponseValues(t *testing.T) {
 // empty path for both branches.
 func TestGetPermissions_EmptyArrayOnNoGrants(t *testing.T) {
 	db := setupUnifiedPermissionsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	t.Run("boardId variant with zero rows returns permissions:[]", func(t *testing.T) {
 		w := callGetPermissions(t, db, "admin-token", "boardId=board2")
@@ -585,7 +585,7 @@ func TestGetPermissions_EmptyArrayOnNoGrants(t *testing.T) {
 // appear.
 func TestGetPermissions_NoUserNicknameKeyAlias(t *testing.T) {
 	db := setupUnifiedPermissionsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	w := callGetPermissions(t, db, "admin-token", "boardId=board1")
 	if w.Code != http.StatusOK {
@@ -631,7 +631,7 @@ func keysOf[V any](m map[string]V) []string {
 // simply omits the line.
 func TestGetPermissions_GrantedByUsernameNullable(t *testing.T) {
 	db := setupUnifiedPermissionsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed a board + permission row with no granted_by stamp. We
 	// reuse board2 (no permission rows seeded by the fixture) and

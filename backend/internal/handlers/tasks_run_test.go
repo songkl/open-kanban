@@ -309,7 +309,7 @@ func doRequest(router *gin.Engine, method, path, token string, body interface{})
 
 func TestClaimRun_HappyPath(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 
@@ -358,7 +358,7 @@ func TestClaimRun_HappyPath(t *testing.T) {
 
 func TestClaimRun_NoEligibleTaskReturns204(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Archive every task so nothing is eligible.
 	if _, err := db.Exec("UPDATE tasks SET archived = 1"); err != nil {
@@ -385,7 +385,7 @@ func TestClaimRun_NoEligibleTaskReturns204(t *testing.T) {
 // body field.
 func TestClaimRun_NoAgentTypeFallbackToken(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
@@ -415,7 +415,7 @@ func TestClaimRun_NoAgentTypeFallbackToken(t *testing.T) {
 // succeeds so the runner can pick up work.
 func TestClaimRun_NoAgentTypeAndNoTokenUserAgent(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mint a token with no user_agent at all so the
 	// fallback path also resolves to empty.
@@ -445,7 +445,7 @@ func TestClaimRun_NoAgentTypeAndNoTokenUserAgent(t *testing.T) {
 
 func TestClaimRun_ViewerForbidden(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/claim", "viewer-token", map[string]interface{}{
@@ -461,7 +461,7 @@ func TestClaimRun_ViewerForbidden(t *testing.T) {
 
 func TestClaimRun_NoAuthReturns401(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/claim", "", map[string]interface{}{
@@ -477,7 +477,7 @@ func TestClaimRun_NoAuthReturns401(t *testing.T) {
 
 func TestClaimRun_MissingFieldsReturns400(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
@@ -499,7 +499,7 @@ func TestClaimRun_MissingFieldsReturns400(t *testing.T) {
 // without re-issuing tokens.
 func TestClaimRun_AgentTypeMismatchStillAccepted(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mint a token whose user_agent is 'opencoder' (the seed
 	// already has admin-token='opencoder') and pass agentType
@@ -545,7 +545,7 @@ func TestClaimRun_ParallelClaimersRaceOnlyOneWins(t *testing.T) {
 		i := i
 		t.Run(fmt.Sprintf("iter-%03d", i), func(t *testing.T) {
 			db := setupRunsDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 
 			// Restrict to a single eligible task so the test design
 			// collapses to "exactly one winner" — otherwise two
@@ -618,7 +618,7 @@ func TestClaimRun_ParallelClaimersRaceOnlyOneWins(t *testing.T) {
 
 func TestHeartbeatRun_RefreshesExpiresAt(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 
@@ -656,7 +656,7 @@ func TestHeartbeatRun_RefreshesExpiresAt(t *testing.T) {
 
 func TestHeartbeatRun_ConflictOnWrongRunner(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 
@@ -678,7 +678,7 @@ func TestHeartbeatRun_ConflictOnWrongRunner(t *testing.T) {
 
 func TestHeartbeatRun_NotFound(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/no-such-task/heartbeat", "admin-token", map[string]interface{}{
@@ -699,7 +699,7 @@ func TestHeartbeatRun_NotFound(t *testing.T) {
 // looping forever.
 func TestHeartbeatRun_ConflictAfterReaper(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-reap-hb', 'reap+hb', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed task: %v", err)
@@ -733,7 +733,7 @@ func TestHeartbeatRun_ConflictAfterReaper(t *testing.T) {
 
 func TestFinishRun_CompletedAdvancesColumn(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed an extra in_progress + done column pair so
 	// CompleteTask has somewhere to advance into.
@@ -793,7 +793,7 @@ func TestFinishRun_CompletedAdvancesColumn(t *testing.T) {
 
 func TestFinishRun_FailedKeepsTaskInPlace(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-fail', 'fail me', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed task: %v", err)
@@ -839,7 +839,7 @@ func TestFinishRun_FailedKeepsTaskInPlace(t *testing.T) {
 
 func TestFinishRun_WrongRunnerReturns409(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-wrong', 'wrong runner', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed task: %v", err)
@@ -861,7 +861,7 @@ func TestFinishRun_WrongRunnerReturns409(t *testing.T) {
 
 func TestFinishRun_InvalidStatusReturns400(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-bad', 'bad status', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed task: %v", err)
@@ -889,7 +889,7 @@ func TestFinishRun_InvalidStatusReturns400(t *testing.T) {
 // advance the task.
 func TestFinishRun_ReadOnlyUserRejected(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-ro', 'ro', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed task: %v", err)
@@ -927,7 +927,7 @@ func TestFinishRun_ReadOnlyUserRejected(t *testing.T) {
 // banner made every successful run look like a failure.
 func TestFinishRun_StoresAgentOutput(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
 		('c-next', 'Next', 'review', 3, 'b1')`); err != nil {
@@ -979,7 +979,7 @@ func TestFinishRun_StoresAgentOutput(t *testing.T) {
 // conflating it with the stderr noise.
 func TestFinishRun_OutputDistinctFromError(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
 		('c-next', 'Next', 'review', 3, 'b1')`); err != nil {
@@ -1032,7 +1032,7 @@ func TestFinishRun_OutputDistinctFromError(t *testing.T) {
 // task detail page.
 func TestFinishRun_FailedStillRecordsOutput(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-fail-out', 'fail out', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed task: %v", err)
@@ -1078,7 +1078,7 @@ func TestFinishRun_FailedStillRecordsOutput(t *testing.T) {
 // from both `output` and `error` before persisting.
 func TestFinishRun_StripsAnsiFromOutput(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO columns (id, name, status, position, board_id) VALUES
 		('c-next-ansi', 'Next', 'review', 3, 'b1')`); err != nil {
@@ -1134,7 +1134,7 @@ func TestFinishRun_StripsAnsiFromOutput(t *testing.T) {
 // task detail page can render the agent's actual reply.
 func TestGetRun_ReturnsOutputField(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-out-get', 'out get', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -1197,7 +1197,7 @@ func TestGetRun_ReturnsOutputField(t *testing.T) {
 // and asserts the response is clean.
 func TestGetRun_LegacyRowIsStripped(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-legacy', 'legacy row', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed task: %v", err)
@@ -1281,7 +1281,7 @@ func TestGetRun_LegacyRowIsStripped(t *testing.T) {
 
 func TestReleaseRuns_BulkRestore(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	for _, id := range []string{"t-rel-1", "t-rel-2"} {
 		if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES (?, 'rel', 'c-todo', 1, 'u-admin')`, id); err != nil {
@@ -1340,7 +1340,7 @@ func TestReleaseRuns_BulkRestore(t *testing.T) {
 
 func TestReleaseRuns_ScopedByTaskIDs(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	for _, id := range []string{"t-scope-1", "t-scope-2", "t-scope-3"} {
 		if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES (?, 's', 'c-todo', 1, 'u-admin')`, id); err != nil {
@@ -1385,7 +1385,7 @@ func TestReleaseRuns_ScopedByTaskIDs(t *testing.T) {
 
 func TestGetRun_TaskMissingReturns404(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "GET", "/api/v1/runs/no-such", "admin-token", nil)
@@ -1404,7 +1404,7 @@ func TestGetRun_TaskMissingReturns404(t *testing.T) {
 // /runs/:taskId on every paint without logging a red error.
 func TestGetRun_NoRunYetReturnsEnvelope(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-norow', 'never claimed', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -1429,7 +1429,7 @@ func TestGetRun_NoRunYetReturnsEnvelope(t *testing.T) {
 
 func TestGetRun_ReturnsRow(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-get', 'get me', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -1465,7 +1465,7 @@ func TestGetRun_ReturnsRow(t *testing.T) {
 // can map them to 404 vs 409 without ambiguity.
 func TestRepository_ErrNoRunRowDistinctFromErrLockHeld(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewRunRepository(db)
 
@@ -1509,7 +1509,7 @@ func TestRepository_ErrNoRunRowDistinctFromErrLockHeld(t *testing.T) {
 // of draft / archived tasks.
 func TestRepository_FindEligibleTaskSkipsArchivedAndUnpublished(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewRunRepository(db)
 
@@ -1550,7 +1550,7 @@ func TestRepository_FindEligibleTaskSkipsArchivedAndUnpublished(t *testing.T) {
 // which agent class the column advertises.
 func TestRepository_FindEligibleTaskEmptyAgentType(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewRunRepository(db)
 
@@ -1575,7 +1575,7 @@ func TestRepository_FindEligibleTaskEmptyAgentType(t *testing.T) {
 // the "no agent-type restriction" sentinel.
 func TestRepository_FindEligibleTaskColumnWithoutColumnAgentsRow(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed an extra column with no column_agents row, then a
 	// task in it. The agent_type filter must not exclude the
@@ -1604,7 +1604,7 @@ func TestRepository_FindEligibleTaskColumnWithoutColumnAgentsRow(t *testing.T) {
 // rather than leaving the task in the in_progress lane.
 func TestRepository_ReleaseRunsRestoresSnapshotColumn(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewRunRepository(db)
 
@@ -1646,7 +1646,7 @@ func TestRepository_ReleaseRunsRestoresSnapshotColumn(t *testing.T) {
 // goroutine runs every 30s.
 func TestRepository_ReapExpiredRuns(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewRunRepository(db)
 
@@ -1703,7 +1703,7 @@ func TestRepository_ReapExpiredRuns(t *testing.T) {
 // happens to live in a watched column.
 func TestClaimRun_MineModePicksAssignedTask(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Add a task assigned to u-bot (not just in a watched
 	// column) so the mode='mine' filter has something to pick.
@@ -1740,7 +1740,7 @@ func TestClaimRun_MineModePicksAssignedTask(t *testing.T) {
 // JSON shape drifts from the model enum.
 func TestGetRun_JSONShapeMatchesTaskRunModel(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ('t-shape', 'shape', 'c-todo', 1, 'u-admin')`); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -1780,7 +1780,7 @@ func TestGetRun_JSONShapeMatchesTaskRunModel(t *testing.T) {
 // to the board pipeline.
 func TestClaimRun_BadModeReturns400(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/claim", "admin-token", map[string]interface{}{
@@ -2173,7 +2173,7 @@ func TestListRunsHistory(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupRunsDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 
 			if tt.seed != nil {
 				tt.seed(t, db, now)
@@ -2241,7 +2241,7 @@ func strPtr(s string) *string { return &s }
 //   - task moves into the in_progress column, just like ClaimRun.
 func TestAttachRun_HappyPath(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
@@ -2297,7 +2297,7 @@ func TestAttachRun_HappyPath(t *testing.T) {
 // misleading lock-held error.
 func TestAttachRun_TaskNotFound(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-missing/attach", "admin-token", map[string]interface{}{
@@ -2314,7 +2314,7 @@ func TestAttachRun_TaskNotFound(t *testing.T) {
 // instead of resurrecting it.
 func TestAttachRun_ArchivedTaskRejected(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-archived/attach", "admin-token", map[string]interface{}{
@@ -2330,7 +2330,7 @@ func TestAttachRun_ArchivedTaskRejected(t *testing.T) {
 // AI-first workflow, which only acts on visible tasks.
 func TestAttachRun_DraftTaskRejected(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-draft/attach", "admin-token", map[string]interface{}{
@@ -2346,7 +2346,7 @@ func TestAttachRun_DraftTaskRejected(t *testing.T) {
 // the rest of the runner API.
 func TestAttachRun_ViewerForbidden(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "viewer-token", map[string]interface{}{
@@ -2362,7 +2362,7 @@ func TestAttachRun_ViewerForbidden(t *testing.T) {
 // round-trip can verify ownership against a stable identity.
 func TestAttachRun_NoRunnerIDReturns400(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{})
@@ -2374,7 +2374,7 @@ func TestAttachRun_NoRunnerIDReturns400(t *testing.T) {
 // TestAttachRun_NoAuthReturns401 covers the auth path.
 func TestAttachRun_NoAuthReturns401(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "", map[string]interface{}{
@@ -2391,7 +2391,7 @@ func TestAttachRun_NoAuthReturns401(t *testing.T) {
 // have the option to "pick the next one".
 func TestAttachRun_LockedByAnotherRunnerReturns409(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed a pre-existing lock owned by runner-A so the
 	// second attach (from runner-B) is forced into the
@@ -2416,7 +2416,7 @@ func TestAttachRun_LockedByAnotherRunnerReturns409(t *testing.T) {
 // "operator pinned this task to a specific runner".
 func TestAttachRun_ReasonRecordedInActivity(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
@@ -2444,7 +2444,7 @@ func TestAttachRun_ReasonRecordedInActivity(t *testing.T) {
 // don't have to be retuned to use the new endpoint.
 func TestAttachRun_FallbackToTokenAgentType(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
@@ -2471,7 +2471,7 @@ func TestAttachRun_FallbackToTokenAgentType(t *testing.T) {
 // stolen token can't attach to tasks for an unrelated agent.
 func TestAttachRun_AgentTypeMismatchRejected(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := runsRouter(db)
 	w := doRequest(router, "POST", "/api/v1/runs/t-1/attach", "admin-token", map[string]interface{}{
@@ -2497,7 +2497,7 @@ func TestAttachRun_AgentTypeMismatchRejected(t *testing.T) {
 // ReadMessage.
 func TestClaimRun_BroadcastsTaskNotification(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handlers.InitBroadcastWorkerForTest()
 
@@ -2551,7 +2551,7 @@ func TestClaimRun_BroadcastsTaskNotification(t *testing.T) {
 // apart a scanner-grab from a manual escalation.
 func TestAttachRun_BroadcastsTaskNotification(t *testing.T) {
 	db := setupRunsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handlers.InitBroadcastWorkerForTest()
 
@@ -2640,8 +2640,8 @@ func newBidirectionalWebSocket(t *testing.T) (*websocket.Conn, *websocket.Conn, 
 	serverConn := <-serverConnCh
 
 	cleanup := func() {
-		clientConn.Close()
-		serverConn.Close()
+		_ = clientConn.Close()
+		_ = serverConn.Close()
 		server.Close()
 	}
 

@@ -77,7 +77,7 @@ func setupBoardsGetDB(t *testing.T) *sql.DB {
 
 func TestGetBoardHandler(t *testing.T) {
 	db := setupBoardsGetDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.GET("/api/boards/:id", handlers.GetBoard(db))
@@ -357,7 +357,7 @@ func fetchBoard(t *testing.T, db *sql.DB, boardID, token string) map[string]inte
 // scattering asserts across the suite.
 func TestGetBoard_AccessMatrix(t *testing.T) {
 	db := setupBoardsGetAccessMatrixDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	cases := []struct {
 		name          string
@@ -455,7 +455,7 @@ func TestGetBoard_AccessMatrix(t *testing.T) {
 // endpoint just annotates.
 func TestGetBoard_NoGrant_ReturnsEmptyAccess(t *testing.T) {
 	db := setupBoardsGetAccessMatrixDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()
@@ -482,7 +482,7 @@ func TestGetBoard_NoGrant_ReturnsEmptyAccess(t *testing.T) {
 // reflects that exactly.
 func TestGetBoard_OwnerAdminOnDifferentBoard(t *testing.T) {
 	db := setupBoardsGetAccessMatrixDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	handlers.ResetTokenCacheForTest()
 	handlers.ResetPermissionCacheForTest()

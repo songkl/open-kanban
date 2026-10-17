@@ -122,7 +122,7 @@ func (e *fakeEvent) FilterAssignee() string { return e.assignee }
 
 func TestChannelEventBus_Publish_DeliversToChannel(t *testing.T) {
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	ev := &fakeEvent{typ: "task.created", id: "evt-1", at: time.Now().UTC()}
 	if err := bus.Publish(ev); err != nil {
@@ -141,7 +141,7 @@ func TestChannelEventBus_Publish_DeliversToChannel(t *testing.T) {
 
 func TestChannelEventBus_Publish_NilEventRejected(t *testing.T) {
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	if err := bus.Publish(nil); err == nil {
 		t.Fatal("Publish(nil) should return an error")
@@ -170,7 +170,7 @@ func TestChannelEventBus_Close_IsIdempotent(t *testing.T) {
 
 func TestChannelEventBus_ChannelCapacity(t *testing.T) {
 	bus := services.NewChannelEventBus(2)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	// Two non-blocking publishes fill the buffer.
 	for i := 0; i < 2; i++ {
@@ -234,7 +234,7 @@ func (r *recorderDeliverFunc) snapshot() []*services.DeliveryJob {
 
 func TestEventCenter_FanOut_SingleEvent_MultipleWebhooks(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Three webhooks, all subscribe to task.created with no
 	// filters → one publish must produce three delivery rows
@@ -305,7 +305,7 @@ func TestEventCenter_FanOut_SingleEvent_MultipleWebhooks(t *testing.T) {
 
 func TestEventCenter_NoMatchingWebhooks_IsNoOp(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedWebhook(t, db, "wh-other", "https://example.com/other", `["task.moved"]`, `{}`)
 
@@ -340,7 +340,7 @@ func TestEventCenter_NoMatchingWebhooks_IsNoOp(t *testing.T) {
 
 func TestEventCenter_DisabledWebhooksAreSkipped(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedWebhook(t, db, "wh-enabled", "https://example.com/on", `["task.created"]`, `{}`)
 	if _, err := db.Exec(`INSERT INTO webhooks (id, name, url, secret, enabled, event_types) VALUES ('wh-disabled', 'wh-disabled', 'https://example.com/off', ?, 0, '["task.created"]')`, []byte("k")); err != nil {
@@ -375,7 +375,7 @@ func TestEventCenter_DisabledWebhooksAreSkipped(t *testing.T) {
 
 func TestEventCenter_FilterHit(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedWebhook(t, db, "wh-board", "https://example.com/board",
 		`["task.created"]`, `{"boardIds":["b-1"]}`)
@@ -423,7 +423,7 @@ func TestEventCenter_FilterHit(t *testing.T) {
 
 func TestEventCenter_FilterMiss(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Webhook demands a different board / column / priority / assignee
 	// than what the event reports → all four filters must reject.
@@ -474,7 +474,7 @@ func TestEventCenter_FilterMiss(t *testing.T) {
 
 func TestEventCenter_FilterAndAcrossCategories(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Two filters: boardIds AND priority. The event has the
 	// matching board but the wrong priority → must miss.
@@ -512,7 +512,7 @@ func TestEventCenter_FilterAndAcrossCategories(t *testing.T) {
 
 func TestEventCenter_WorkerCount_HonoursConstructorArgument(t *testing.T) {
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	c := services.NewEventCenter(nil, bus, 7)
 	if got := c.WorkerCount(); got != 7 {
 		t.Errorf("WorkerCount: got %d want 7", got)
@@ -522,7 +522,7 @@ func TestEventCenter_WorkerCount_HonoursConstructorArgument(t *testing.T) {
 func TestEventCenter_WorkerCount_FallsBackToEnv(t *testing.T) {
 	t.Setenv("WEBHOOK_WORKERS", "9")
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	c := services.NewEventCenter(nil, bus, 0)
 	if got := c.WorkerCount(); got != 9 {
 		t.Errorf("WorkerCount from env: got %d want 9", got)
@@ -532,7 +532,7 @@ func TestEventCenter_WorkerCount_FallsBackToEnv(t *testing.T) {
 func TestEventCenter_WorkerCount_FallsBackToDefault(t *testing.T) {
 	t.Setenv("WEBHOOK_WORKERS", "")
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	c := services.NewEventCenter(nil, bus, 0)
 	if got := c.WorkerCount(); got != services.DefaultWorkerCount {
 		t.Errorf("WorkerCount default: got %d want %d", got, services.DefaultWorkerCount)
@@ -542,7 +542,7 @@ func TestEventCenter_WorkerCount_FallsBackToDefault(t *testing.T) {
 func TestEventCenter_WorkerCount_RejectsInvalidEnv(t *testing.T) {
 	t.Setenv("WEBHOOK_WORKERS", "not-a-number")
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	c := services.NewEventCenter(nil, bus, 0)
 	if got := c.WorkerCount(); got != services.DefaultWorkerCount {
 		t.Errorf("invalid env should fall back to default; got %d want %d", got, services.DefaultWorkerCount)
@@ -551,7 +551,7 @@ func TestEventCenter_WorkerCount_RejectsInvalidEnv(t *testing.T) {
 
 func TestEventCenter_WorkerCount_CapsAtMax(t *testing.T) {
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	c := services.NewEventCenter(nil, bus, 100000)
 	if got := c.WorkerCount(); got > 256 {
 		t.Errorf("worker count must be capped; got %d", got)
@@ -560,7 +560,7 @@ func TestEventCenter_WorkerCount_CapsAtMax(t *testing.T) {
 
 func TestEventCenter_DispatchLoop_OnlySpawnsConfiguredWorkers(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// 12 webhooks all subscribe to task.created, but the pool
 	// only has 3 workers. Use a deliver function that blocks
@@ -655,7 +655,7 @@ func TestEventCenter_DispatchLoop_OnlySpawnsConfiguredWorkers(t *testing.T) {
 
 func TestEventCenter_Stop_GracefulShutdownDrainsQueuedJobs(t *testing.T) {
 	db := setupEventCenterTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	seedWebhook(t, db, "wh-1", "https://example.com/1", `["task.created"]`, `{}`)
 	seedWebhook(t, db, "wh-2", "https://example.com/2", `["task.created"]`, `{}`)
@@ -700,7 +700,7 @@ func TestEventCenter_Stop_GracefulShutdownDrainsQueuedJobs(t *testing.T) {
 
 func TestEventCenter_Stop_WithoutStartIsSafe(t *testing.T) {
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	center := services.NewEventCenter(nil, bus, 1)
 	center.Stop()
 	center.Stop()
@@ -708,7 +708,7 @@ func TestEventCenter_Stop_WithoutStartIsSafe(t *testing.T) {
 
 func TestEventCenter_Start_IsIdempotent(t *testing.T) {
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	center := services.NewEventCenter(nil, bus, 1)
 	center.Start()
 	center.Start()
@@ -741,7 +741,7 @@ func TestEventCenter_PublishAfterBusCloseReturnsErr(t *testing.T) {
 
 func TestEventCenter_Requeue_NilJobIsNoop(t *testing.T) {
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	center := services.NewEventCenter(nil, bus, 1)
 	if err := center.Requeue(nil); err != nil {
 		t.Errorf("Requeue(nil) should return nil; got %v", err)
@@ -750,7 +750,7 @@ func TestEventCenter_Requeue_NilJobIsNoop(t *testing.T) {
 
 func TestEventCenter_Requeue_ReturnsErrAfterStop(t *testing.T) {
 	bus := services.NewChannelEventBus(1)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	center := services.NewEventCenter(nil, bus, 1)
 	center.Start()
 	center.Stop()

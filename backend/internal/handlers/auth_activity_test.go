@@ -71,7 +71,7 @@ func TestLogActivity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupTestDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 
 			var userID string
 			if tt.seedUser {
@@ -112,7 +112,7 @@ func TestLogActivity(t *testing.T) {
 func TestGetActivitiesRequiresAuth(t *testing.T) {
 	t.Run("unauthenticated request returns 401", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
@@ -131,7 +131,7 @@ func TestGetActivitiesRequiresAuth(t *testing.T) {
 func TestGetActivitiesReturnsRows(t *testing.T) {
 	t.Run("admin user receives activities list", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		userID := setupTestUser(t, db, "alice", "", "ADMIN")
 		handlers.LogActivity(db, userID, "LOGIN", "USER", userID, "alice", "", "127.0.0.1", "web")
@@ -181,7 +181,7 @@ func TestGetActivitiesReturnsRows(t *testing.T) {
 func TestGetActivitiesEmptyReturnsArray(t *testing.T) {
 	t.Run("empty log returns activities:[] and total:0", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		userID := setupTestUser(t, db, "alice", "", "ADMIN")
 		tokenKey := "alice-empty-token"
@@ -219,7 +219,7 @@ func TestGetActivitiesEmptyReturnsArray(t *testing.T) {
 func TestLogActivityUsesValidTimestamp(t *testing.T) {
 	t.Run("activity and last_active_at are written within a reasonable time window", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		userID := setupTestUser(t, db, "alice", "", "MEMBER")
 
 		before := time.Now().Add(-2 * time.Second)
@@ -319,7 +319,7 @@ func fetchActivityIDs(t *testing.T, db *sql.DB, tokenKey string, params url.Valu
 func TestGetActivitiesScopeFilters(t *testing.T) {
 	t.Run("boardId filter returns the board's full activity slice", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		aliceID, _ := seedActivityScope(t, db)
 		tokenKey := "alice-token"
 		setupTestToken(t, db, aliceID, tokenKey)
@@ -336,7 +336,7 @@ func TestGetActivitiesScopeFilters(t *testing.T) {
 
 	t.Run("columnId filter returns direct column + tasks under it + comments", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		aliceID, _ := seedActivityScope(t, db)
 		tokenKey := "alice-token-col"
 		setupTestToken(t, db, aliceID, tokenKey)
@@ -353,7 +353,7 @@ func TestGetActivitiesScopeFilters(t *testing.T) {
 
 	t.Run("taskId filter returns task + comment rows for the task", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		aliceID, _ := seedActivityScope(t, db)
 		tokenKey := "alice-token-task"
 		setupTestToken(t, db, aliceID, tokenKey)
@@ -370,7 +370,7 @@ func TestGetActivitiesScopeFilters(t *testing.T) {
 
 	t.Run("scope filter combines with action filter", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		aliceID, _ := seedActivityScope(t, db)
 		tokenKey := "alice-token-combo"
 		setupTestToken(t, db, aliceID, tokenKey)
@@ -386,7 +386,7 @@ func TestGetActivitiesScopeFilters(t *testing.T) {
 
 	t.Run("non-admin cannot pass cross-account userId", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		_, bobID := seedActivityScope(t, db)
 		tokenKey := "bob-token"
 		setupTestToken(t, db, bobID, tokenKey)
@@ -409,7 +409,7 @@ func TestGetActivitiesScopeFilters(t *testing.T) {
 func TestExportActivitiesCSV(t *testing.T) {
 	t.Run("streams CSV with stable header and same slice as list endpoint", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		aliceID, _ := seedActivityScope(t, db)
 		tokenKey := "alice-export-token"
 		setupTestToken(t, db, aliceID, tokenKey)
@@ -469,7 +469,7 @@ func TestExportActivitiesCSV(t *testing.T) {
 
 	t.Run("non-csv format is rejected with 400", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		aliceID, _ := seedActivityScope(t, db)
 		tokenKey := "alice-export-400"
 		setupTestToken(t, db, aliceID, tokenKey)
@@ -490,7 +490,7 @@ func TestExportActivitiesCSV(t *testing.T) {
 
 	t.Run("unauthenticated export is rejected with 401", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		gin.SetMode(gin.TestMode)
 		router := gin.New()

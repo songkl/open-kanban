@@ -225,7 +225,7 @@ func setupDashboardDB(t *testing.T) *sql.DB {
 
 func TestGetDashboardStatsHandler(t *testing.T) {
 	db := setupDashboardDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(handlers.RequireAuth(db))
@@ -287,7 +287,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if int(resp["totalTasks"].(float64)) != 0 {
 			t.Errorf("expected totalTasks=0, got %v", resp["totalTasks"])
@@ -331,7 +331,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if int(resp["totalTasks"].(float64)) != 3 {
 			t.Errorf("expected totalTasks=3, got %v", resp["totalTasks"])
@@ -378,7 +378,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		tasksByStatus := resp["tasksByStatus"].(map[string]interface{})
 		if tasksByStatus["todo"] == nil {
@@ -400,7 +400,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if int(resp["activeBoardCount"].(float64)) != int(resp["totalBoards"].(float64)) {
 			t.Errorf("expected activeBoardCount == totalBoards (%v), got %v",
@@ -424,7 +424,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if int(resp["activeBoardCount"].(float64)) != 1 {
 			t.Errorf("expected activeBoardCount=1 (excluding deleted board), got %v", resp["activeBoardCount"])
@@ -462,7 +462,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if int(resp["tasksCompletedLast7Days"].(float64)) != 2 {
 			t.Errorf("expected tasksCompletedLast7Days=2, got %v", resp["tasksCompletedLast7Days"])
@@ -523,7 +523,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		agentsRaw := resp["topAgentsByActivity"].([]interface{})
 		if len(agentsRaw) != 3 {
@@ -564,7 +564,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		agentsRaw := resp["topAgentsByActivity"].([]interface{})
 		if len(agentsRaw) != 3 {
 			t.Fatalf("expected 3 agents, got %d", len(agentsRaw))
@@ -580,7 +580,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		// Use a fresh DB so heartbeat-only "Iteration Bot" doesn't get
 		// outranked by the agents inserted in earlier subtests.
 		freshDB := setupDashboardDB(t)
-		defer freshDB.Close()
+		defer func() { _ = freshDB.Close() }()
 
 		freshRouter := gin.New()
 		freshRouter.Use(handlers.RequireAuth(freshDB))
@@ -669,7 +669,7 @@ func TestGetDashboardStatsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		cardsRaw := resp["longestBlockedCards"].([]interface{})
 		if len(cardsRaw) != 3 {

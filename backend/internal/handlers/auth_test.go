@@ -247,7 +247,7 @@ func setupTestToken(t *testing.T, db *sql.DB, userID, tokenKey string) {
 func TestInitHandler(t *testing.T) {
 	t.Run("init without username returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/init", handlers.Init(db, nil))
@@ -266,7 +266,7 @@ func TestInitHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["error"] != "Username is required" {
 			t.Errorf("expected error 'Username is required', got %v", resp["error"])
 		}
@@ -274,7 +274,7 @@ func TestInitHandler(t *testing.T) {
 
 	t.Run("first init creates admin user successfully", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/init", handlers.Init(db, nil))
@@ -296,7 +296,7 @@ func TestInitHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["user"] == nil {
 			t.Errorf("expected user in response, got error: %v", resp["error"])
@@ -314,7 +314,7 @@ func TestInitHandler(t *testing.T) {
 
 	t.Run("init fails when users already exist", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/init", handlers.Init(db, nil))
@@ -339,7 +339,7 @@ func TestInitHandler(t *testing.T) {
 
 	t.Run("init with allowRegistration config", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/init", handlers.Init(db, nil))
@@ -372,7 +372,7 @@ func TestInitHandler(t *testing.T) {
 			t.Skip("this subtest exercises the mysql advanced config flow; skipping on non-mysql builds")
 		}
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		dir := t.TempDir()
 		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
@@ -458,7 +458,7 @@ func TestInitHandler(t *testing.T) {
 
 	t.Run("init with sqlite advanced config writes database_url", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		dir := t.TempDir()
 		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
@@ -519,7 +519,7 @@ func TestInitHandler(t *testing.T) {
 		t.Setenv("INIT_CONFIG_OUTPUT", configPath)
 
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/init", handlers.Init(db, nil))
@@ -569,7 +569,7 @@ func TestInitHandler(t *testing.T) {
 
 	t.Run("init with invalid advanced dbType returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		dir := t.TempDir()
 		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
@@ -598,7 +598,7 @@ func TestInitHandler(t *testing.T) {
 
 	t.Run("init with mysql advanced but missing host returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		dir := t.TempDir()
 		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
@@ -629,7 +629,7 @@ func TestInitHandler(t *testing.T) {
 
 	t.Run("init with invalid serverPort returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		dir := t.TempDir()
 		t.Setenv("INIT_CONFIG_OUTPUT", dir+"/kanban.env")
@@ -660,7 +660,7 @@ func TestInitHandler(t *testing.T) {
 func TestLoginHandler(t *testing.T) {
 	t.Run("login without credentials returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
@@ -681,7 +681,7 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("login with empty username returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
@@ -704,12 +704,12 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("login with new user creates account when no users exist", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 
 		body := map[string]interface{}{
 			"username": "newuser",
@@ -728,7 +728,7 @@ func TestLoginHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["user"] == nil {
 			t.Errorf("expected user in response")
@@ -747,12 +747,12 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("login with existing user returns token", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "testuser", "", "MEMBER")
 
 		body := map[string]interface{}{
@@ -771,7 +771,7 @@ func TestLoginHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["user"] == nil {
 			t.Errorf("expected user in response")
@@ -783,14 +783,14 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("login with registration disabled returns forbidden", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "existing", "", "ADMIN")
-		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', '0')")
+		_, _ = db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', '0')")
 
 		body := map[string]interface{}{
 			"username": "newuser",
@@ -812,12 +812,12 @@ func TestLoginHandler(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 
 		hashedPw := "$2a$10$EsMrLjGrWt.cFHRnqUcnauqTOXPSTR8dTBZkUHfQbQPWKDlKvYl1y"
 		_, err := db.Exec(
@@ -844,7 +844,7 @@ func TestLoginHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["requirePassword"] != true {
 			t.Errorf("expected requirePassword=true in response, got %v", resp["requirePassword"])
 		}
@@ -854,12 +854,12 @@ func TestLoginHandler(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 
 		hashedPw := "$2a$10$EsMrLjGrWt.cFHRnqUcnauqTOXPSTR8dTBZkUHfQbQPWKDlKvYl1y"
 		_, err := db.Exec(
@@ -891,12 +891,12 @@ func TestLoginHandler(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 
 		handlers.SetSaltForTest("test-salt-for-password-hashing-32ch")
 		hashedPw, err := handlers.HashPasswordWithSalt("correctpassword")
@@ -928,7 +928,7 @@ func TestLoginHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["token"] == nil {
 			t.Errorf("expected token in response")
 		}
@@ -938,12 +938,12 @@ func TestLoginHandler(t *testing.T) {
 		handlers.ResetRateLimitMapForTest()
 		handlers.ResetTokenCacheForTest()
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.POST("/api/auth/login", handlers.Login(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 
 		// Insert a user with a NULL password, the shape produced when the
 		// first admin (or any auto-registered user) is created without a
@@ -971,7 +971,7 @@ func TestLoginHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["token"] == nil {
 			t.Errorf("expected token in response")
 		}
@@ -981,12 +981,12 @@ func TestLoginHandler(t *testing.T) {
 func TestGetMeHandler(t *testing.T) {
 	t.Run("get me without token returns ok with null user (needsSetup=true)", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 
 		req, _ := http.NewRequest("GET", "/api/auth/me", nil)
 
@@ -998,7 +998,7 @@ func TestGetMeHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["user"] != nil {
 			t.Errorf("expected nil user without token, got %v", resp["user"])
@@ -1010,12 +1010,12 @@ func TestGetMeHandler(t *testing.T) {
 
 	t.Run("get me with valid token returns user", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "testuser", "", "MEMBER")
 		tokenKey := "test-token-123"
 		setupTestToken(t, db, userID, tokenKey)
@@ -1031,7 +1031,7 @@ func TestGetMeHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["user"] == nil {
 			t.Errorf("expected user with valid token")
@@ -1045,12 +1045,12 @@ func TestGetMeHandler(t *testing.T) {
 
 	t.Run("get me with invalid token returns unauthorized", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "testuser", "", "MEMBER")
 
 		req, _ := http.NewRequest("GET", "/api/auth/me", nil)
@@ -1099,12 +1099,12 @@ func TestUsersMeAlias(t *testing.T) {
 	// surfaces (cookie, bearer, no token, lazy setup).
 	t.Run("needsSetup when no users exist (no auth)", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/v1/users/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 
 		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
 		w := httptest.NewRecorder()
@@ -1134,12 +1134,12 @@ func TestUsersMeAlias(t *testing.T) {
 		// "credential presented but invalid" (401, preserves the CLI's
 		// verifyAgentToken rejection path).
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/v1/users/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "alice", "", "MEMBER")
 
 		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
@@ -1165,12 +1165,12 @@ func TestUsersMeAlias(t *testing.T) {
 		// Mirrors the /api/v1/users/me case for the SPA-facing
 		// /api/auth/me route used by the frontend's authApi.me().
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "bob", "", "MEMBER")
 
 		req, _ := http.NewRequest("GET", "/api/auth/me", nil)
@@ -1198,12 +1198,12 @@ func TestUsersMeAlias(t *testing.T) {
 		// verifyAgentToken helper still surfaces "Token rejected by
 		// server. Re-run `kanban auth login`." to the operator.
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/v1/users/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "carol", "", "MEMBER")
 
 		req, _ := http.NewRequest("GET", "/api/v1/users/me", nil)
@@ -1221,12 +1221,12 @@ func TestUsersMeAlias(t *testing.T) {
 		// tampered cookie still resolves to 401, so the frontend's
 		// LoginPage keeps redirecting the visitor away.
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/me", handlers.GetMe(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "dave", "", "MEMBER")
 
 		req, _ := http.NewRequest("GET", "/api/auth/me", nil)
@@ -1241,13 +1241,13 @@ func TestUsersMeAlias(t *testing.T) {
 
 	t.Run("returns user with valid bearer token (CLI flow)", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/v1/users/me", handlers.GetMe(db))
 
 		handlers.ResetTokenCacheForTest()
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "cli-user", "", "MEMBER")
 		tokenKey := "cli-bearer-token"
 		setupTestToken(t, db, userID, tokenKey)
@@ -1278,13 +1278,13 @@ func TestUsersMeAlias(t *testing.T) {
 
 	t.Run("returns user with valid cookie (frontend flow)", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/v1/users/me", handlers.GetMe(db))
 
 		handlers.ResetTokenCacheForTest()
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "web-user", "", "MEMBER")
 		tokenKey := "web-cookie-token"
 		setupTestToken(t, db, userID, tokenKey)
@@ -1385,10 +1385,10 @@ func mintAccessJWT(t *testing.T, s *oauth.Signer, subject, clientID string) stri
 func TestUsersMeAliasJWTBearer(t *testing.T) {
 	t.Run("returns user when bearer is a valid access JWT", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		handlers.ResetTokenCacheForTest()
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "cli-user", "", "MEMBER")
 		signer := mustAccessJWTSigner(t, db)
 		tok := mintAccessJWT(t, signer, userID, "open-kanban-cli")
@@ -1420,10 +1420,10 @@ func TestUsersMeAliasJWTBearer(t *testing.T) {
 
 	t.Run("falls back to 401 when JWT subject does not match any user", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		handlers.ResetTokenCacheForTest()
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		setupTestUser(t, db, "real-user", "", "MEMBER")
 		signer := mustAccessJWTSigner(t, db)
 		tok := mintAccessJWT(t, signer, "ghost-user", "open-kanban-cli")
@@ -1444,10 +1444,10 @@ func TestUsersMeAliasJWTBearer(t *testing.T) {
 
 	t.Run("falls back to 401 when JWT is expired", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		handlers.ResetTokenCacheForTest()
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "expired-user", "", "MEMBER")
 		signer := mustAccessJWTSigner(t, db)
 
@@ -1486,10 +1486,10 @@ func TestUsersMeAliasJWTBearer(t *testing.T) {
 
 	t.Run("falls back to 401 when JWT signature does not verify", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		handlers.ResetTokenCacheForTest()
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "sig-user", "", "MEMBER")
 		signer := mustAccessJWTSigner(t, db)
 		good := mintAccessJWT(t, signer, userID, "open-kanban-cli")
@@ -1531,10 +1531,10 @@ func TestUsersMeAliasJWTBearer(t *testing.T) {
 		// pins the fallback path so the JWT optimisation does not regress
 		// the existing auth surface.
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		handlers.ResetTokenCacheForTest()
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "legacy-user", "", "MEMBER")
 		tokenKey := "legacy-bearer-abc"
 		setupTestToken(t, db, userID, tokenKey)
@@ -1567,7 +1567,7 @@ func TestUsersMeAliasJWTBearer(t *testing.T) {
 func TestGetTokensHandler(t *testing.T) {
 	t.Run("unauthorized without token returns 401", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -1585,13 +1585,13 @@ func TestGetTokensHandler(t *testing.T) {
 
 	t.Run("authorized returns tokens list", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
 		router.GET("/api/auth/token", handlers.GetTokens(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "testuser", "", "MEMBER")
 		tokenKey := "test-token-123"
 		setupTestToken(t, db, userID, tokenKey)
@@ -1611,13 +1611,13 @@ func TestGetTokensHandler(t *testing.T) {
 func TestCreateTokenHandler(t *testing.T) {
 	t.Run("create token successfully", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
 		router.POST("/api/auth/token", handlers.CreateToken(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "testuser", "", "MEMBER")
 		tokenKey := "test-token-123"
 		setupTestToken(t, db, userID, tokenKey)
@@ -1639,7 +1639,7 @@ func TestCreateTokenHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["token"] == nil {
 			t.Errorf("expected token in response")
@@ -1648,7 +1648,7 @@ func TestCreateTokenHandler(t *testing.T) {
 
 	t.Run("unauthorized without token returns 401", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -1674,7 +1674,7 @@ func TestCreateTokenHandler(t *testing.T) {
 func TestDeleteTokenHandler(t *testing.T) {
 	t.Run("unauthorized without token returns 401", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
@@ -1692,13 +1692,13 @@ func TestDeleteTokenHandler(t *testing.T) {
 
 	t.Run("delete token without id returns bad request", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.Use(handlers.RequireAuth(db))
 		router.DELETE("/api/auth/token", handlers.DeleteToken(db))
 
-		db.Exec("DELETE FROM users")
+		_, _ = db.Exec("DELETE FROM users")
 		userID := setupTestUser(t, db, "testuser", "", "MEMBER")
 		tokenKey := "test-token-123"
 		setupTestToken(t, db, userID, tokenKey)
@@ -1718,7 +1718,7 @@ func TestDeleteTokenHandler(t *testing.T) {
 func TestGetAppConfigHandler(t *testing.T) {
 	t.Run("get config returns ok with defaults", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/config", handlers.GetAppConfig(db))
@@ -1733,7 +1733,7 @@ func TestGetAppConfigHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["allowRegistration"] == nil {
 			t.Errorf("expected allowRegistration in response")
@@ -1748,13 +1748,13 @@ func TestGetAppConfigHandler(t *testing.T) {
 
 	t.Run("get config returns saved values", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/config", handlers.GetAppConfig(db))
 
-		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', '0')")
-		db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('requirePassword', '1')")
+		_, _ = db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('allowRegistration', '0')")
+		_, _ = db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES ('requirePassword', '1')")
 
 		req, _ := http.NewRequest("GET", "/api/auth/config", nil)
 
@@ -1766,7 +1766,7 @@ func TestGetAppConfigHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["allowRegistration"] != false {
 			t.Errorf("expected allowRegistration=false, got %v", resp["allowRegistration"])
@@ -1849,7 +1849,7 @@ func TestGetAppConfigHandler(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open bootstrapped db: %v", err)
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		var username, role string
 		if err := db.QueryRow("SELECT username, role FROM users").Scan(&username, &role); err != nil {
 			t.Fatalf("expected admin user in bootstrapped db: %v", err)
@@ -1900,7 +1900,7 @@ func TestGetAppConfigHandler(t *testing.T) {
 func TestGetAvatarsHandler(t *testing.T) {
 	t.Run("get avatars returns list", func(t *testing.T) {
 		db := setupTestDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		router := gin.New()
 		router.GET("/api/auth/avatars", handlers.GetAvatars())
@@ -1915,7 +1915,7 @@ func TestGetAvatarsHandler(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["avatars"] == nil {
 			t.Errorf("expected avatars in response")

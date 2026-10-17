@@ -125,7 +125,7 @@ func TestExtractMentions(t *testing.T) {
 
 func TestInsertNotificationRejectsBadSource(t *testing.T) {
 	db := setupNotificationsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := handlers.InsertNotification(db, "u1", "NOT_A_SOURCE", "title", "body", "TASK", "t1"); err == nil {
 		t.Fatal("expected error for unknown source")
@@ -140,7 +140,7 @@ func TestInsertNotificationRejectsBadSource(t *testing.T) {
 
 func TestInsertNotificationPersistsRow(t *testing.T) {
 	db := setupNotificationsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := handlers.InsertNotification(db, "u2", handlers.NotificationSourceTaskAssigned, "You have been assigned", "Fix the bug", "TASK", "t-42"); err != nil {
 		t.Fatalf("insert: %v", err)
@@ -156,7 +156,7 @@ func TestInsertNotificationPersistsRow(t *testing.T) {
 
 func TestGetNotifications(t *testing.T) {
 	db := setupNotificationsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	for _, src := range []string{
 		handlers.NotificationSourceTaskAssigned,
 		handlers.NotificationSourceTaskMentioned,
@@ -234,7 +234,7 @@ func TestGetNotifications(t *testing.T) {
 // default-bounded limit and with the user-supplied value.
 func TestGetNotificationsLimit50(t *testing.T) {
 	db := setupNotificationsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Seed 60 rows so the default page (50) is fully filled and
 	// the response proves the LIMIT clause is honoured.
@@ -293,7 +293,7 @@ func TestGetNotificationsLimit50(t *testing.T) {
 
 func TestMarkNotificationRead(t *testing.T) {
 	db := setupNotificationsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := handlers.InsertNotification(db, "u1", handlers.NotificationSourceTaskAssigned, "T", "B", "TASK", "x"); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -364,7 +364,7 @@ func TestMarkNotificationRead(t *testing.T) {
 
 func TestMarkNotificationReadDoesNotLeakOtherUsers(t *testing.T) {
 	db := setupNotificationsDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	// Seed notification owned by u2 directly via SQL.
 	if _, err := db.Exec(`INSERT INTO notifications (id, user_id, source, title, body, target_type, target_id) VALUES ('n2', 'u2', 'TASK_ASSIGNED', 'secret', '', 'TASK', 'x')`); err != nil {
 		t.Fatalf("seed: %v", err)

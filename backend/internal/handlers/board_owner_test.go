@@ -206,7 +206,7 @@ func TestIsBoardOwner(t *testing.T) {
 
 	t.Run("owner flagged via owner_agent_id returns true", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		owner, err := IsBoardOwner(db, "admin1", "board1")
 		if err != nil {
@@ -219,7 +219,7 @@ func TestIsBoardOwner(t *testing.T) {
 
 	t.Run("member with row but no owner_agent_id returns false", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		owner, err := IsBoardOwner(db, "member1", "board1")
 		if err != nil {
@@ -232,7 +232,7 @@ func TestIsBoardOwner(t *testing.T) {
 
 	t.Run("non-existent permission row returns false without error", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		owner, err := IsBoardOwner(db, "admin1", "board2")
 		if err != nil {
@@ -245,7 +245,7 @@ func TestIsBoardOwner(t *testing.T) {
 
 	t.Run("empty user id short-circuits to false", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		owner, err := IsBoardOwner(db, "", "board1")
 		if err != nil {
@@ -258,7 +258,7 @@ func TestIsBoardOwner(t *testing.T) {
 
 	t.Run("empty board id short-circuits to false", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		owner, err := IsBoardOwner(db, "admin1", "")
 		if err != nil {
@@ -275,7 +275,7 @@ func TestCheckBoardAccess_OwnerHasAdminAccess(t *testing.T) {
 
 	t.Run("owner without admin role still has ADMIN access", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(
 			`UPDATE board_permissions SET owner_agent_id = 'member1' WHERE user_id = 'member1' AND board_id = 'board1'`,
@@ -297,7 +297,7 @@ func TestCheckBoardAccess_OwnerHasAdminAccess(t *testing.T) {
 
 	t.Run("owner_agent_id only short-circuits when it matches user_id", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		ResetPermissionCacheForTest()
 
@@ -313,7 +313,7 @@ func TestCheckBoardAccess_OwnerHasAdminAccess(t *testing.T) {
 
 	t.Run("VIEWER owner still gets ADMIN access", func(t *testing.T) {
 		db := setupBoardOwnerDB(t)
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		if _, err := db.Exec(`INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES ('bp-viewer', 'viewer1', 'board1', 'viewer1', 'READ')`); err != nil {
 			t.Fatalf("failed to seed viewer owner: %v", err)
@@ -331,7 +331,7 @@ func TestSetPermission_BoardOwnerCanGrant(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(
 		`UPDATE board_permissions SET owner_agent_id = 'member1' WHERE user_id = 'member1' AND board_id = 'board1'`,
@@ -373,7 +373,7 @@ func TestSetPermission_NonOwnerNonAdmin_Returns403(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -399,7 +399,7 @@ func TestSetPermission_AdminCanStillGrant(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -425,7 +425,7 @@ func TestSetPermission_OwnerCanDemoteSelf(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -469,7 +469,7 @@ func TestDeletePermission_BoardOwnerCanRevoke(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := db.Exec(
 		`UPDATE board_permissions SET owner_agent_id = 'member1' WHERE user_id = 'member1' AND board_id = 'board1'`,
@@ -515,7 +515,7 @@ func TestDeletePermission_NonOwnerNonAdmin_Returns403(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -537,7 +537,7 @@ func TestDeletePermission_CannotRevokeOwner(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -571,7 +571,7 @@ func TestDeletePermission_OwnerCannotRevokeSelf(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -595,7 +595,7 @@ func TestCreateBoard_AssignsOwner(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))
@@ -747,7 +747,7 @@ func TestColumnPermissionManagement_BoardOwner(t *testing.T) {
 			ResetPermissionCacheForTest()
 
 			db := setupBoardOwnerDB(t)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 
 			for _, columnID := range []string{"owner-column", "member-column"} {
 				if _, err := db.Exec(
@@ -849,7 +849,7 @@ func TestCreateBoard_AssignsOwnerForNonAdminCreator(t *testing.T) {
 	ResetPermissionCacheForTest()
 
 	db := setupBoardOwnerDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	router := gin.New()
 	router.Use(RequireAuth(db))

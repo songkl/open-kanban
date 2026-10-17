@@ -199,7 +199,7 @@ func stubIdentity(subject, email string, verified bool) *oauth.ExternalUserInfo 
 // Pins plan §4.4 / §5.1.
 func TestMapExternalIdentity_ProvisionNewUser(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("enc-secret"))
 
 	res, err := oauth.MapExternalIdentity(db, loadProvider(t, db, "google"), stubIdentity("google-sub-1", "alice@example.com", true), `{"sub":"google-sub-1"}`)
@@ -252,7 +252,7 @@ func TestMapExternalIdentity_ProvisionNewUser(t *testing.T) {
 // Pins the pass-1 hot path in the algorithm.
 func TestMapExternalIdentity_BoundReturningUser(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("enc-secret"))
 
 	first, err := oauth.MapExternalIdentity(db, loadProvider(t, db, "google"), stubIdentity("google-sub-1", "alice@example.com", true), `{"sub":"google-sub-1"}`)
@@ -291,7 +291,7 @@ func TestMapExternalIdentity_BoundReturningUser(t *testing.T) {
 // Pins plan §4.4 row 1 ("verified email match").
 func TestMapExternalIdentity_AutoLinkByVerifiedEmail(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("enc-secret"))
 	existing := seedUser(t, db, "local-1", "alice", "Alice Local", "alice@example.com", "HUMAN", "MEMBER", true)
 
@@ -326,7 +326,7 @@ func TestMapExternalIdentity_AutoLinkByVerifiedEmail(t *testing.T) {
 //     respond with 403.
 func TestMapExternalIdentity_RefusesBindToAgent(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("enc-secret"))
 	seedUser(t, db, "agent-1", "bot-alice", "Bot Alice", "alice@example.com", "AGENT", "MEMBER", true)
 
@@ -340,7 +340,7 @@ func TestMapExternalIdentity_RefusesBindToAgent(t *testing.T) {
 //     row 1 forbids re-enabling an account via IdP login.
 func TestMapExternalIdentity_RefusesBindToDisabled(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("enc-secret"))
 	seedUser(t, db, "local-1", "alice", "Alice Local", "alice@example.com", "HUMAN", "MEMBER", false)
 
@@ -361,7 +361,7 @@ func TestMapExternalIdentity_RefusesBindToDisabled(t *testing.T) {
 // account by claiming an unverified email address.
 func TestMapExternalIdentity_UnverifiedEmailFallsThrough(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("enc-secret"))
 	seedUser(t, db, "local-1", "alice", "Alice Local", "alice@example.com", "HUMAN", "MEMBER", true)
 
@@ -384,7 +384,7 @@ func TestMapExternalIdentity_UnverifiedEmailFallsThrough(t *testing.T) {
 // Pins plan §5.2.
 func TestMapExternalIdentity_MultiIdpBinding(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	insertCallbackProvider(t, db, "github", "GitHub", "github", []byte("gh"))
 	seedUser(t, db, "local-1", "alice", "Alice Local", "alice@example.com", "HUMAN", "MEMBER", true)
@@ -424,7 +424,7 @@ func TestMapExternalIdentity_MultiIdpBinding(t *testing.T) {
 //     even when the IdP returns the same subject.
 func TestMapExternalIdentity_RefreshesRawClaims(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	if _, err := oauth.MapExternalIdentity(db, loadProvider(t, db, "google"), stubIdentity("sub-1", "alice@example.com", true), `{"sub":"sub-1","name":"Old"}`); err != nil {
@@ -451,7 +451,7 @@ func TestMapExternalIdentity_RefreshesRawClaims(t *testing.T) {
 //     bound to a NULL subject.
 func TestMapExternalIdentity_RefusesEmptySubject(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	_, err := oauth.MapExternalIdentity(db, loadProvider(t, db, "google"), stubIdentity("", "alice@example.com", true), `{}`)
@@ -464,7 +464,7 @@ func TestMapExternalIdentity_RefusesEmptySubject(t *testing.T) {
 //     provision. Pins plan §5.1 row "role".
 func TestMapExternalIdentity_RespectsDefaultRole(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	id := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	if _, err := db.Exec(`UPDATE oauth_providers SET extra_config = ? WHERE id = ?`, `{"default_role":"ADMIN"}`, id); err != nil {
 		t.Fatalf("update: %v", err)
@@ -484,7 +484,7 @@ func TestMapExternalIdentity_RespectsDefaultRole(t *testing.T) {
 //     callback.
 func TestMapExternalIdentity_UnknownDefaultRoleFallsBackToMember(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	id := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	if _, err := db.Exec(`UPDATE oauth_providers SET extra_config = ? WHERE id = ?`, `{"default_role":"god-mode"}`, id); err != nil {
 		t.Fatalf("update: %v", err)
@@ -505,7 +505,7 @@ func TestMapExternalIdentity_UnknownDefaultRoleFallsBackToMember(t *testing.T) {
 //     WebSocket broadcast (CLAUDE.md WebSocket-safety rule).
 func TestMapExternalIdentity_RawClaimsSanitised(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	huge := strings.Repeat("a", 80*1024) + "\xff\xfe"
@@ -530,7 +530,7 @@ func TestMapExternalIdentity_RawClaimsSanitised(t *testing.T) {
 //     instead of a UNIQUE-constraint error.
 func TestMapExternalIdentity_UsernameCollisionSuffix(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 
 	a, err := oauth.MapExternalIdentity(db, loadProvider(t, db, "google"), stubIdentity("sub-A", "shared@example.com", false), `{}`)
@@ -555,7 +555,7 @@ func TestMapExternalIdentity_UsernameCollisionSuffix(t *testing.T) {
 //     surface for a soft-disabled provider.
 func TestFetchProviderBySlug_DisabledReturnsErr(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	if _, err := db.Exec(`UPDATE oauth_providers SET enabled = 0 WHERE provider_id = 'google'`); err != nil {
 		t.Fatalf("disable: %v", err)
@@ -570,7 +570,7 @@ func TestFetchProviderBySlug_DisabledReturnsErr(t *testing.T) {
 //     by the handler).
 func TestFetchProviderBySlug_UnknownReturnsErr(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, err := oauth.FetchProviderBySlug(db, "nope")
 	if !errors.Is(err, oauth.ErrProviderNotFound) {
 		t.Fatalf("expected ErrProviderNotFound, got %v", err)
@@ -584,7 +584,7 @@ func TestFetchProviderBySlug_UnknownReturnsErr(t *testing.T) {
 //     same envelope as POST /api/v1/auth/login.
 func TestExternalCallbackHandler_HappyPath(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	r := newCallbackServer(t, db, &stubFetcher{info: stubIdentity("sub-1", "alice@example.com", true)})
 
@@ -641,7 +641,7 @@ func TestExternalCallbackHandler_HappyPath(t *testing.T) {
 //     exists for a different slug).
 func TestExternalCallbackHandler_UnknownSlug(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	r := newCallbackServer(t, db, &stubFetcher{info: stubIdentity("sub-1", "a@b.com", true)})
 
 	body := `{"claims":{"sub":"sub-1"}}`
@@ -657,7 +657,7 @@ func TestExternalCallbackHandler_UnknownSlug(t *testing.T) {
 // 18. Disabled provider → 404. Pins plan §6.5.
 func TestExternalCallbackHandler_DisabledProvider(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	if _, err := db.Exec(`UPDATE oauth_providers SET enabled = 0 WHERE provider_id = 'google'`); err != nil {
 		t.Fatalf("disable: %v", err)
@@ -678,7 +678,7 @@ func TestExternalCallbackHandler_DisabledProvider(t *testing.T) {
 //     caller-readable error message.
 func TestExternalCallbackHandler_RefusesAgent(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	seedUser(t, db, "agent-1", "bot-alice", "Bot Alice", "alice@example.com", "AGENT", "MEMBER", true)
 	r := newCallbackServer(t, db, &stubFetcher{info: stubIdentity("sub-NEW", "alice@example.com", true)})
@@ -699,7 +699,7 @@ func TestExternalCallbackHandler_RefusesAgent(t *testing.T) {
 // 20. Invalid JSON body → 400.
 func TestExternalCallbackHandler_BadJSON(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	r := newCallbackServer(t, db, &stubFetcher{})
 
@@ -717,7 +717,7 @@ func TestExternalCallbackHandler_BadJSON(t *testing.T) {
 //     calling the fetcher with empty inputs.
 func TestExternalCallbackHandler_NeitherCodeNorClaims(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	r := newCallbackServer(t, db, &stubFetcher{err: errors.New("should not be called")})
 
@@ -744,7 +744,7 @@ func TestExternalCallbackHandler_NeitherCodeNorClaims(t *testing.T) {
 //     external_state_test.go.
 func TestExternalCallbackHandler_CodePathCallsFetcher(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	stub := &stubFetcher{info: stubIdentity("sub-1", "alice@example.com", true)}
 	r := newCallbackServer(t, db, stub)
@@ -776,7 +776,7 @@ func TestExternalCallbackHandler_CodePathCallsFetcher(t *testing.T) {
 //     in external_state_test.go.
 func TestExternalCallbackHandler_FetcherError(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	providerID := insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	r := newCallbackServer(t, db, &stubFetcher{err: errors.New("IdP down")})
 
@@ -797,7 +797,7 @@ func TestExternalCallbackHandler_FetcherError(t *testing.T) {
 //     parity guarantee in plan §3.3 holds.
 func TestUserIdentities_CascadeOnUserDelete(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	insertCallbackProvider(t, db, "github", "GitHub", "github", []byte("h"))
 	seedUser(t, db, "local-1", "alice", "Alice", "alice@example.com", "HUMAN", "MEMBER", true)
@@ -827,7 +827,7 @@ func TestUserIdentities_CascadeOnUserDelete(t *testing.T) {
 //     orphan rows.
 func TestUserIdentities_CascadeOnProviderDelete(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	seedUser(t, db, "local-1", "alice", "Alice", "alice@example.com", "HUMAN", "MEMBER", true)
 
@@ -850,7 +850,7 @@ func TestUserIdentities_CascadeOnProviderDelete(t *testing.T) {
 //     rows pointing at the same IdP subject. Pins plan §3.3.
 func TestUserIdentities_UniqueProviderSubject(t *testing.T) {
 	db := setupCallbackDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	insertCallbackProvider(t, db, "google", "Google", "google", []byte("g"))
 	seedUser(t, db, "a", "alice-a", "Alice A", "a@x.com", "HUMAN", "MEMBER", true)
 	seedUser(t, db, "b", "alice-b", "Alice B", "b@x.com", "HUMAN", "MEMBER", true)
