@@ -124,7 +124,7 @@ func handleGzip(c *gin.Context) {
 
 	c.Next()
 
-	gzWriter.Close()
+	_ = gzWriter.Close()
 	putGzipWriter(gz)
 }
 

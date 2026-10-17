@@ -195,7 +195,7 @@ func TestInitDB_SQLiteWithPath(t *testing.T) {
 		t.Errorf("failed to ping database: %v", err)
 	}
 
-	os.Remove("/tmp/test_kanban.db")
+	_ = os.Remove("/tmp/test_kanban.db")
 }
 
 // TestBuildMySQLDSNIncludesMultiStatements verifies the default-build

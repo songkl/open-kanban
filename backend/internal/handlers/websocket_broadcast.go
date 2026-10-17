@@ -50,11 +50,6 @@ func initBroadcastWorker() {
 	})
 }
 
-func stopBroadcastWorker() {
-	close(broadcastDone)
-	broadcastWg.Wait()
-}
-
 func enqueueBroadcast(msgType int, data any) bool {
 	select {
 	case broadcastQueue <- broadcastMessage{msgType: msgType, data: data}:

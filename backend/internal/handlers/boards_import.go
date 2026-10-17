@@ -51,7 +51,7 @@ func ImportBoard(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		now := time.Now()
 		if boardExists && req.Reset {

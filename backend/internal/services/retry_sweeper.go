@@ -32,7 +32,6 @@ package services
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -349,28 +348,4 @@ func (s *RetrySweeper) requeueDue(ctx context.Context) (int, error) {
 		}
 	}
 	return len(jobs), nil
-}
-
-// Helper exposed so unit tests can construct a job the same way
-// production does. Currently unused outside tests but kept here
-// because the row→job mapping is non-trivial and benefits from
-// living next to the SQL it mirrors.
-func rowToDeliveryJobForTest(
-	id, webhookID, eventID, eventType, requestBody string,
-	attempt int,
-	url string, secret []byte, headers string, timeoutSec int,
-) (*DeliveryJob, int) {
-	body := json.RawMessage(requestBody)
-	return &DeliveryJob{
-		DeliveryID: id,
-		WebhookID:  webhookID,
-		EventID:    eventID,
-		EventType:  eventType,
-		URL:        url,
-		Secret:     secret,
-		Headers:    headers,
-		TimeoutSec: timeoutSec,
-		Attempt:    attempt + 1,
-		Body:       []byte(body),
-	}, attempt + 1
 }

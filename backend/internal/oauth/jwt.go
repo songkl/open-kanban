@@ -271,14 +271,6 @@ func (s *Signer) persistKey(stored SigningKey) error {
 	return nil
 }
 
-// audienceMatches returns true if the audience claim contains the expected value.
-func audienceMatches(claim, expected string) bool {
-	if claim == expected {
-		return true
-	}
-	return false
-}
-
 func randomKid() (string, error) {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {

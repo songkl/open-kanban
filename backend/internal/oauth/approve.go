@@ -430,45 +430,6 @@ func lookupAgent(db *sql.DB, id string) (*models.User, error) {
 	return &u, nil
 }
 
-// listAvailableAgents returns enabled AGENT users the supplied approver is
-// permitted to act on. The list is ordered by created_at DESC so newly
-// created Agents surface first. Returns an empty slice (not nil) when no
-// Agents are visible so the JSON encoder emits [].
-func listAvailableAgents(db *sql.DB, approver *models.User) []gin.H {
-	out := []gin.H{}
-	if approver == nil {
-		return out
-	}
-	rows, err := db.Query(
-		`SELECT id, nickname, avatar, role FROM users
-		 WHERE type = 'AGENT' AND enabled = 1
-		   AND (role <> 'ADMIN' OR ? = 'ADMIN')
-		 ORDER BY created_at DESC`,
-		approver.Role,
-	)
-	if err != nil {
-		return out
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var id, nickname, role string
-		var avatar sql.NullString
-		if err := rows.Scan(&id, &nickname, &avatar, &role); err != nil {
-			continue
-		}
-		entry := gin.H{
-			"id":       id,
-			"nickname": nickname,
-			"role":     role,
-		}
-		if avatar.Valid {
-			entry["avatar"] = avatar.String
-		}
-		out = append(out, entry)
-	}
-	return out
-}
-
 // canApproveAsAgent encodes the visibility rule: ADMINs may authorise as
 // any enabled Agent; MEMBERs and VIEWERs may only authorise as Agents whose
 // role is not ADMIN. Centralised so both resolveAgentIDForApprover and
@@ -669,7 +630,7 @@ func resolveDeviceCreateAgentBoardGrants(db *sql.DB, callerID, newAgentID string
 			found[id] = struct{}{}
 		}
 	}
-	existing.Close()
+	_ = existing.Close()
 	var missing []string
 	for _, id := range ids {
 		if _, ok := found[id]; !ok {

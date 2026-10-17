@@ -1120,53 +1120,6 @@ func createUser(t *testing.T, db *sql.DB, id, role string) {
 	}
 }
 
-// createBoard inserts a row into boards with the given id and
-// name. The board is private (is_public = 0) by default — bulk
-// permission tests don't care about visibility, but matching the
-// setupBoardOwnerDB default keeps behaviour consistent across
-// tests.
-func createBoard(t *testing.T, db *sql.DB, id, name string) {
-	t.Helper()
-	if _, err := db.Exec(
-		`INSERT INTO boards (id, name) VALUES (?, ?)`,
-		id, name,
-	); err != nil {
-		t.Fatalf("createBoard(%s, %s) failed: %v", id, name, err)
-	}
-}
-
-// grantPermission inserts a row into board_permissions. ownerID
-// is optional: pass "" when the row is not an owner row. The
-// id parameter is the row's primary key — required so tests can
-// delete a specific row later if they need to.
-func grantPermission(t *testing.T, db *sql.DB, id, userID, boardID, ownerID, access string) {
-	t.Helper()
-	var ownerArg interface{}
-	if ownerID != "" {
-		ownerArg = ownerID
-	}
-	if _, err := db.Exec(
-		`INSERT INTO board_permissions (id, user_id, board_id, owner_agent_id, access) VALUES (?, ?, ?, ?, ?)`,
-		id, userID, boardID, ownerArg, access,
-	); err != nil {
-		t.Fatalf("grantPermission(%s, %s, %s, %q, %s) failed: %v", id, userID, boardID, ownerID, access, err)
-	}
-}
-
-// seedActivity inserts a row into activities with the action /
-// target fields a test wants to assert against. userID defaults
-// to "admin1" so activity-log assertions line up with the
-// common caller used in these tests.
-func seedActivity(t *testing.T, db *sql.DB, action, targetType, targetID string) {
-	t.Helper()
-	if _, err := db.Exec(
-		`INSERT INTO activities (id, user_id, action, target_type, target_id, details, ip_address, source) VALUES (?, 'admin1', ?, ?, ?, '', '', 'web')`,
-		"act-"+action+"-"+targetID, action, targetType, targetID,
-	); err != nil {
-		t.Fatalf("seedActivity(%s, %s, %s) failed: %v", action, targetType, targetID, err)
-	}
-}
-
 func TestBulkSetPermissions_UpsertExisting(t *testing.T) {
 	ResetTokenCacheForTest()
 	ResetPermissionCacheForTest()

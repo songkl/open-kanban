@@ -704,12 +704,12 @@ func (r *RunRepository) ReapExpiredRuns(restore bool) ([]ExpiredRun, error) {
 	for rows.Next() {
 		var e ExpiredRun
 		if err := rows.Scan(&e.TaskID, &e.ColumnID, &e.BoardID); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return nil, err
 		}
 		expired = append(expired, e)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}

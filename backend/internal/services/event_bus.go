@@ -181,9 +181,8 @@ func (b *ChannelEventBus) Channel() <-chan Event {
 // the goroutine that drains publishes doesn't leak past the
 // test's defer boundary.
 var (
-	defaultBusMu  sync.Mutex
-	defaultBus    EventBus
-	defaultBusSet bool
+	defaultBusMu sync.Mutex
+	defaultBus   EventBus
 )
 
 // GetDefaultEventBus returns the process-wide EventBus used by
@@ -208,7 +207,6 @@ func SetDefaultEventBus(bus EventBus) {
 	defaultBusMu.Lock()
 	defer defaultBusMu.Unlock()
 	defaultBus = bus
-	defaultBusSet = true
 }
 
 // ResetDefaultEventBusForTest clears the singleton so the next
@@ -225,5 +223,4 @@ func ResetDefaultEventBusForTest() {
 		_ = defaultBus.Close()
 	}
 	defaultBus = nil
-	defaultBusSet = false
 }

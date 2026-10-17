@@ -472,16 +472,9 @@ func TestDeliveryPipeline_RateLimitShuffle(t *testing.T) {
 	bus := services.NewChannelEventBus(4)
 	defer bus.Close()
 
-	// Cap the limiter at 0 so every Allow call fails.
-	limiter := services.NewRateLimiter(0)
-	// Pre-populate one entry to ensure the webhook is
-	// already over the cap (a cap of 0 with no entries is
-	// trivially permissive because Allow returns true
-	// when len(ring) >= cap=0 evaluates to false; we
-	// want the limiter to actively block, so we set a
-	// positive cap, exhaust it, and then verify the
-	// reschedule path).
-	limiter = services.NewRateLimiter(1)
+	// Cap the limiter at 1, exhaust it, and then verify the
+	// reschedule path.
+	limiter := services.NewRateLimiter(1)
 	if !limiter.Allow("wh-rl") {
 		t.Fatal("first call should pass with cap=1")
 	}

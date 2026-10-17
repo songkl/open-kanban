@@ -37,8 +37,7 @@ func readConfigFile(configPath string) (map[string]string, error) {
 	}
 	envVars := make(map[string]string)
 	lines := strings.Split(string(data), "\n")
-	for lineNum, line := range lines {
-		lineNum++
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -58,13 +57,13 @@ func validateConfigValue(key, value string, validDBTypes map[string]bool) (strin
 	switch key {
 	case "PORT":
 		if _, err := strconv.Atoi(value); err != nil {
-			return fmt.Sprintf("PORT must be a valid number"), false
+			return "PORT must be a valid number", false
 		} else if port, _ := strconv.Atoi(value); port < 1 || port > 65535 {
-			return fmt.Sprintf("PORT must be between 1 and 65535"), false
+			return "PORT must be between 1 and 65535", false
 		}
 	case "DB_TYPE":
 		if !validDBTypes[value] {
-			return fmt.Sprintf("DB_TYPE must be 'sqlite' or 'mysql'"), false
+			return "DB_TYPE must be 'sqlite' or 'mysql'", false
 		}
 	case "DB_PORT", "DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS", "DB_CONN_MAX_LIFETIME":
 		if _, err := strconv.Atoi(value); err != nil {

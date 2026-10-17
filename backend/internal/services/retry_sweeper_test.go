@@ -110,10 +110,9 @@ func seedDelivery(t *testing.T, db *sql.DB, webhookID, eventType string, attempt
 //
 // Implements services.DeliveryRequeuer.
 type captureRequeuer struct {
-	mu     sync.Mutex
-	jobs   []*services.DeliveryJob
-	calls  atomic.Int32
-	errors atomic.Int32
+	mu    sync.Mutex
+	jobs  []*services.DeliveryJob
+	calls atomic.Int32
 }
 
 func (r *captureRequeuer) Requeue(j *services.DeliveryJob) error {

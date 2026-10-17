@@ -67,7 +67,7 @@ func GetUsers(db *sql.DB) gin.HandlerFunc {
 							})
 						}
 					}
-					permRows.Close()
+					_ = permRows.Close()
 				}
 
 				users = append(users, gin.H{
@@ -642,7 +642,7 @@ func ResolveBoardGrants(db *sql.DB, callerID, newUserID string, grants []BoardAc
 			found[id] = struct{}{}
 		}
 	}
-	existing.Close()
+	_ = existing.Close()
 	var missing []string
 	for _, id := range ids {
 		if _, ok := found[id]; !ok {

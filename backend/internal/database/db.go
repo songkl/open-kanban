@@ -360,15 +360,6 @@ func storeSchemaVersion(db *sql.DB, ver string) error {
 	return err
 }
 
-func getStoredSchemaVersion(db *sql.DB) (string, error) {
-	var version string
-	err := db.QueryRow("SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1").Scan(&version)
-	if err != nil {
-		return "", err
-	}
-	return version, nil
-}
-
 func runMySQLMigrations(db *sql.DB, databaseName string) error {
 	driver, err := mysql.WithInstance(db, &mysql.Config{})
 	if err != nil {

@@ -117,7 +117,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 
 func TestGetTaskByID(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -179,7 +179,7 @@ func TestGetTaskByID(t *testing.T) {
 
 func TestGetTaskCreatorFields(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -244,7 +244,7 @@ func TestGetTaskCreatorFields(t *testing.T) {
 
 func TestGetTasksByColumnIDsCreatorFields(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -279,7 +279,7 @@ func TestGetTasksByColumnIDsCreatorFields(t *testing.T) {
 
 func TestCreateTask(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -324,7 +324,7 @@ func TestCreateTask(t *testing.T) {
 
 func TestUpdateTask(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -362,7 +362,7 @@ func TestUpdateTask(t *testing.T) {
 
 func TestDeleteTask(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -384,7 +384,7 @@ func TestDeleteTask(t *testing.T) {
 
 func TestGetTasksByColumnIDs(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -466,7 +466,7 @@ func TestGetTasksByColumnIDs(t *testing.T) {
 
 func TestGetColumnIDForTask(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -508,7 +508,7 @@ func TestGetColumnIDForTask(t *testing.T) {
 
 func TestGetMaxPosition(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -547,7 +547,7 @@ func TestGetMaxPosition(t *testing.T) {
 
 func TestGetMaxPositionForPriority(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -596,7 +596,7 @@ func TestGetMaxPositionForPriority(t *testing.T) {
 
 func TestGetMinPositionForLowPriority(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -635,7 +635,7 @@ func TestGetMinPositionForLowPriority(t *testing.T) {
 
 func TestGetTaskCommentCount(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -679,7 +679,7 @@ func TestGetTaskCommentCount(t *testing.T) {
 
 func TestGetTaskSubtaskCount(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -723,7 +723,7 @@ func TestGetTaskSubtaskCount(t *testing.T) {
 
 func TestGetNextColumn(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -762,7 +762,7 @@ func TestGetNextColumn(t *testing.T) {
 
 func TestMoveTaskToColumn(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -792,7 +792,7 @@ func TestMoveTaskToColumn(t *testing.T) {
 
 func TestGetColumnPositionAndBoardID(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -839,7 +839,7 @@ func TestGetColumnPositionAndBoardID(t *testing.T) {
 func TestShiftPositionsUp(t *testing.T) {
 	t.Skip("ShiftPositionsUp uses NOW() which is not available in SQLite in-memory mode")
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -861,7 +861,7 @@ func TestShiftPositionsUp(t *testing.T) {
 func TestShiftPositionsDown(t *testing.T) {
 	t.Skip("ShiftPositionsDown uses NOW() which is not available in SQLite in-memory mode")
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -883,7 +883,7 @@ func TestShiftPositionsDown(t *testing.T) {
 func TestShiftPositionsLeft(t *testing.T) {
 	t.Skip("ShiftPositionsLeft uses NOW() which is not available in SQLite in-memory mode")
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -905,7 +905,7 @@ func TestShiftPositionsLeft(t *testing.T) {
 func TestShiftPositionsRight(t *testing.T) {
 	t.Skip("ShiftPositionsRight uses NOW() which is not available in SQLite in-memory mode")
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 
@@ -926,7 +926,7 @@ func TestShiftPositionsRight(t *testing.T) {
 
 func TestSearchTasks(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := repositories.NewTaskRepository(db)
 

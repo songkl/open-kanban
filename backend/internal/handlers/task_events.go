@@ -309,24 +309,6 @@ func boardIDForColumn(db *sql.DB, columnID string) string {
 	return boardID
 }
 
-// taskAssigneeBeforeUpdate fetches the task's assignee value
-// in a single SELECT so the UpdateTask handler can hand the
-// previous value to publishTaskUpdates without re-reading the
-// row. Returns nil when the column was NULL.
-func taskAssigneeBeforeUpdate(db *sql.DB, taskID string) *string {
-	var assignee sql.NullString
-	if err := db.QueryRow(
-		"SELECT assignee FROM tasks WHERE id = ?", taskID,
-	).Scan(&assignee); err != nil {
-		return nil
-	}
-	if !assignee.Valid {
-		return nil
-	}
-	v := assignee.String
-	return &v
-}
-
 // preUpdateTaskSnapshot captures the diff-relevant fields of
 // the task row before UpdateTask applies the request. Used by
 // diffChangeEntries to compute the change set; without this,

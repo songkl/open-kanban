@@ -64,7 +64,7 @@ func ExportBoard(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get column"})
 			return
 		}
-		defer colRows.Close()
+		defer func() { _ = colRows.Close() }()
 
 		var columns []gin.H
 		for colRows.Next() {
@@ -148,7 +148,7 @@ func ExportBoard(db *sql.DB) gin.HandlerFunc {
 					"subtasks":    subtasks,
 				})
 			}
-			taskRows.Close()
+			_ = taskRows.Close()
 
 			columns = append(columns, gin.H{
 				"id":        col.ID,

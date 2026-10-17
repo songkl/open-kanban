@@ -434,7 +434,7 @@ func (r *TaskRepository) ReorderTasksInColumn(items []TaskReorderItem) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, item := range items {
 		if _, err := stmt.Exec(item.ColumnID, item.Position, now, item.TaskID); err != nil {

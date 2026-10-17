@@ -35,10 +35,6 @@ func getEnvInt(key string, defaultVal int) int {
 	return defaultVal
 }
 
-func validateInputLength(value string, maxLength int) bool {
-	return len(value) <= maxLength
-}
-
 func sanitizeString(s string) string {
 	if !utf8.ValidString(s) {
 		return strings.ToValidUTF8(s, "")
@@ -102,12 +98,4 @@ func sanitizeValue(v any) any {
 
 func sanitizeActivity(a any) any {
 	return sanitizeValue(a)
-}
-
-func sanitizeActivityForBroadcast(a Activity) Activity {
-	sanitized := sanitizeValue(a)
-	if s, ok := sanitized.(Activity); ok {
-		return s
-	}
-	return a
 }

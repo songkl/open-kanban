@@ -370,12 +370,10 @@ func TestHasColumnWrite(t *testing.T) {
 		if !HasColumnWrite(db, admin, "b1", "c1") {
 			t.Error("expected admin to be granted WRITE on any column")
 		}
-		// Even on a column the admin has no explicit row for —
-		// the role short-circuits.
+		// Even on a column the admin has no explicit row for,
+		// the role short-circuits and grants write.
 		if !HasColumnWrite(db, admin, "b1", "no-such-column") {
-			// Empty / unknown column id should still return false
-			// because the helper guards against empty input — but
-			// admin is a different path: see below.
+			t.Error("expected admin to be granted WRITE on unknown column id")
 		}
 	})
 

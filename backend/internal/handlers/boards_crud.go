@@ -37,7 +37,7 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create board"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		shortAlias := req.ShortAlias
 		if shortAlias == "" {
@@ -106,8 +106,7 @@ func CreateBoard(db *sql.DB) gin.HandlerFunc {
 			sql.NullTime{Time: now, Valid: true},
 		)
 
-		var board gin.H
-		board = gin.H{
+		board := gin.H{
 			"id":          boardID,
 			"name":        req.Name,
 			"description": req.Description,

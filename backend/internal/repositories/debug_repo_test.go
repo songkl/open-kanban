@@ -23,9 +23,9 @@ func TestDebugRepository(t *testing.T) {
 	_, _ = db.Exec(schema)
 	_, _ = db.Exec(`INSERT INTO boards (id, name, short_alias, task_counter) VALUES ('b1', 'Test Board', 'TST', 1000)`)
 	_, _ = db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c1', 'Todo', 'b1', 0, 'todo')`)
-	db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c2', 'Done', 'b1', 1, 'done')`)
-	db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t1', 'Task 1', 'c1', 100, 1)`)
-	db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t2', 'Task 2', 'c1', 200, 1)`)
+	_, _ = db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c2', 'Done', 'b1', 1, 'done')`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t1', 'Task 1', 'c1', 100, 1)`)
+	_, _ = db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t2', 'Task 2', 'c1', 200, 1)`)
 
 	// Test: simple SELECT
 	var count int
@@ -56,7 +56,7 @@ func TestDebugRepository(t *testing.T) {
 		fmt.Printf("Query error: %v\n", err)
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	n := 0
 	for rows.Next() {
 		n++

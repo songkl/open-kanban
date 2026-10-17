@@ -62,19 +62,6 @@ func fetchAuditRows(t *testing.T, db *sql.DB) []activityRow {
 	return out
 }
 
-// auditRowFor returns the first activities row whose action
-// matches; nil when none. The handler may emit more than one
-// row per request (e.g. enable + update), so callers that need
-// to assert ordering must look at the slice directly.
-func auditRowFor(rows []activityRow, action string) *activityRow {
-	for i := range rows {
-		if rows[i].Action == action {
-			return &rows[i]
-		}
-	}
-	return nil
-}
-
 //  1. CreateAdminProviderHandler writes exactly one
 //     OAUTH_PROVIDER_CREATE row with target_id=provider id,
 //     target_title=provider_id (the slug), target_type='OAUTH',

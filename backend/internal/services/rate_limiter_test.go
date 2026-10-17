@@ -33,8 +33,11 @@ func TestRateLimiter_AllowsUpToCapThenBlocks(t *testing.T) {
 // accumulate junk during the retry storm).
 func TestRateLimiter_RejectedCallDoesNotConsumeQuota(t *testing.T) {
 	rl := services.NewRateLimiter(2)
-	if !rl.Allow("wh-1") || !rl.Allow("wh-1") {
-		t.Fatalf("first two calls should pass")
+	if !rl.Allow("wh-1") {
+		t.Fatalf("first call should pass")
+	}
+	if !rl.Allow("wh-1") {
+		t.Fatalf("second call should pass")
 	}
 	for i := 0; i < 100; i++ {
 		if rl.Allow("wh-1") {
@@ -48,15 +51,21 @@ func TestRateLimiter_RejectedCallDoesNotConsumeQuota(t *testing.T) {
 // quota must not affect webhook B's quota.
 func TestRateLimiter_IndependentWebhooksHaveIndependentQuotas(t *testing.T) {
 	rl := services.NewRateLimiter(2)
-	if !rl.Allow("wh-a") || !rl.Allow("wh-a") {
-		t.Fatalf("webhook a should get its full quota")
+	if !rl.Allow("wh-a") {
+		t.Fatalf("webhook a first call should pass")
+	}
+	if !rl.Allow("wh-a") {
+		t.Fatalf("webhook a second call should get its full quota")
 	}
 	if rl.Allow("wh-a") {
 		t.Fatal("webhook a 3rd call should be rejected")
 	}
 	// Webhook b is unaffected.
-	if !rl.Allow("wh-b") || !rl.Allow("wh-b") {
-		t.Errorf("webhook b should get its own quota")
+	if !rl.Allow("wh-b") {
+		t.Errorf("webhook b first call should get its own quota")
+	}
+	if !rl.Allow("wh-b") {
+		t.Errorf("webhook b second call should get its own quota")
 	}
 	if rl.Allow("wh-b") {
 		t.Errorf("webhook b 3rd call should be rejected")

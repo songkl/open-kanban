@@ -145,7 +145,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if taskRows != nil {
-			defer taskRows.Close()
+			defer func() { _ = taskRows.Close() }()
 			for taskRows.Next() {
 				var task models.Task
 				var desc, assignee, meta, createdBy, createdByUsername, columnName, agentID, agentPrompt sql.NullString

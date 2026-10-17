@@ -42,7 +42,7 @@ func ResetBoard(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset board"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		if err := resetBoardData(tx, boardID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear board data"})

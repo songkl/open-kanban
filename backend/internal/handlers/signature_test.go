@@ -19,13 +19,13 @@ func setupSignatureTestRouter(enabled bool) *gin.Engine {
 	r := gin.New()
 
 	if enabled {
-		os.Setenv("SIGNATURE_ENABLED", "1")
-		os.Setenv("SIGNATURE_SECRETS", "test-key:my-secret-key")
+		_ = os.Setenv("SIGNATURE_ENABLED", "1")
+		_ = os.Setenv("SIGNATURE_SECRETS", "test-key:my-secret-key")
 		loadSignatureSecrets()
 		SetSignatureEnabled(true)
 	} else {
-		os.Setenv("SIGNATURE_ENABLED", "0")
-		os.Unsetenv("SIGNATURE_SECRETS")
+		_ = os.Setenv("SIGNATURE_ENABLED", "0")
+		_ = os.Unsetenv("SIGNATURE_SECRETS")
 		loadSignatureSecrets()
 		SetSignatureEnabled(false)
 	}
@@ -278,8 +278,8 @@ func TestSignatureEnabledByDefault(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 
-	os.Unsetenv("SIGNATURE_ENABLED")
-	os.Unsetenv("SIGNATURE_SECRETS")
+	_ = os.Unsetenv("SIGNATURE_ENABLED")
+	_ = os.Unsetenv("SIGNATURE_SECRETS")
 	loadSignatureSecrets()
 	SetSignatureEnabled(os.Getenv("SIGNATURE_ENABLED") != "0")
 

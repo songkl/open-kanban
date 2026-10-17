@@ -710,7 +710,7 @@ func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
 				found[id] = struct{}{}
 			}
 		}
-		existingRows.Close()
+		_ = existingRows.Close()
 		var missing []string
 		for _, uid := range cleaned {
 			if _, ok := found[uid]; !ok {
@@ -748,7 +748,7 @@ func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk set permissions"})
 			return
 		}
-		defer stmt.Close()
+		defer func() { _ = stmt.Close() }()
 
 		granted := make([]gin.H, 0, len(cleaned))
 		for _, uid := range cleaned {
@@ -984,7 +984,7 @@ func BulkGrantPermissions(db *sql.DB) gin.HandlerFunc {
 				found[id] = struct{}{}
 			}
 		}
-		existingRows.Close()
+		_ = existingRows.Close()
 
 		// Bulk-resolve existing rows on this board so the
 		// "already_granted" classification is one query. We
@@ -1007,7 +1007,7 @@ func BulkGrantPermissions(db *sql.DB) gin.HandlerFunc {
 				alreadyGranted[id] = struct{}{}
 			}
 		}
-		existingRows2.Close()
+		_ = existingRows2.Close()
 
 		for _, g := range req.Grants {
 			if g.UserID == "" {
@@ -1099,7 +1099,7 @@ func BulkGrantPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk grant permissions"})
 			return
 		}
-		defer stmt.Close()
+		defer func() { _ = stmt.Close() }()
 
 		for i, p := range applied {
 			uid := grantedIDs[i]

@@ -643,7 +643,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 
 		LogActivity(db, existingUser.ID, "LOGIN", "USER", existingUser.ID, existingUser.Nickname, "", c.ClientIP(), getRequestSource(c))
 
-		var requirePassword bool = false
+		var requirePassword bool
 		var requirePasswordVal string
 		if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePasswordVal); err == nil {
 			requirePassword = requirePasswordVal == "1"
@@ -686,7 +686,7 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var requirePasswordVal string
-		var isRequirePassword bool = false
+		var isRequirePassword bool
 		if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePasswordVal); err == nil {
 			isRequirePassword = requirePasswordVal == "1"
 		}
@@ -753,12 +753,12 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 			}
 		}
 
-		var allowRegistration bool = true
-		var requirePassword bool = false
-		var authEnabled bool = true
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowRegistration)
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePassword)
-		db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
+		allowRegistration := true
+		requirePassword := false
+		authEnabled := true
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'allowRegistration'").Scan(&allowRegistration)
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'requirePassword'").Scan(&requirePassword)
+		_ = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'authEnabled'").Scan(&authEnabled)
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{

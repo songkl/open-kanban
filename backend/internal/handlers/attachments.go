@@ -78,7 +78,7 @@ func ServeFile(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot read file"})
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		// Get file size
 		fileInfo, err := file.Stat()

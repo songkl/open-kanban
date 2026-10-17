@@ -63,13 +63,14 @@ func LogActivity(db *sql.DB, userID, action, targetType, targetID, targetTitle, 
 		boardID, err := getBoardIDForTask(db, targetID)
 		if err == nil && boardID != "" {
 			notifyAction := action
-			if action == "CREATE_TASK" {
+			switch action {
+			case "CREATE_TASK":
 				notifyAction = "create"
-			} else if action == "UPDATE_TASK" {
+			case "UPDATE_TASK":
 				notifyAction = "update"
-			} else if action == "COMPLETE_TASK" {
+			case "COMPLETE_TASK":
 				notifyAction = "update_status"
-			} else if action == "ADD_COMMENT" {
+			case "ADD_COMMENT":
 				notifyAction = "new_comment"
 			}
 			go BroadcastTaskNotificationExternal(boardID, targetID, notifyAction)

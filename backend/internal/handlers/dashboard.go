@@ -124,7 +124,7 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 			LIMIT 3
 		`)
 		if err == nil {
-			defer agentRows.Close()
+			defer func() { _ = agentRows.Close() }()
 			for agentRows.Next() {
 				var a DashboardAgentActivity
 				if agentRows.Scan(&a.UserID, &a.Nickname, &a.Avatar, &a.ActivityCnt) == nil {
@@ -155,7 +155,7 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 			LIMIT 3
 		`)
 		if err == nil {
-			defer blockedRows.Close()
+			defer func() { _ = blockedRows.Close() }()
 			for blockedRows.Next() {
 				var t DashboardBlockedTask
 				var updatedAt sql.NullString

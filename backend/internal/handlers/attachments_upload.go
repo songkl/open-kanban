@@ -92,14 +92,14 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 				buffer := make([]byte, 512)
 				n, err := file.Read(buffer)
 				if err != nil && err != io.EOF {
-					file.Close()
+					_ = file.Close()
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
 					return
 				}
 				mimeType := http.DetectContentType(buffer[:n])
 
 				if !isAllowedFileType(mimeType) {
-					file.Close()
+					_ = file.Close()
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Unsupported file type: %s", header.Filename)})
 					return
 				}
@@ -116,28 +116,28 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 				storagePath := filepath.Join(UploadDir, storageName)
 
 				if err := os.MkdirAll(UploadDir, 0755); err != nil {
-					file.Close()
+					_ = file.Close()
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
 					return
 				}
 
 				dst, err := os.Create(storagePath)
 				if err != nil {
-					file.Close()
+					_ = file.Close()
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create file"})
 					return
 				}
 
 				if _, err := io.Copy(dst, file); err != nil {
-					dst.Close()
-					file.Close()
-					os.Remove(storagePath)
+					_ = dst.Close()
+					_ = file.Close()
+					_ = os.Remove(storagePath)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
 					return
 				}
 
-				dst.Close()
-				file.Close()
+				_ = dst.Close()
+				_ = file.Close()
 
 				query := `
 					INSERT INTO attachments (id, filename, storage_path, storage_type, mime_type, size, uploader_id, task_id, comment_id, created_at, updated_at)
@@ -160,7 +160,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 					now, now)
 
 				if err != nil {
-					os.Remove(storagePath)
+					_ = os.Remove(storagePath)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save attachment record"})
 					return
 				}
@@ -227,7 +227,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create file"})
 			return
 		}
-		defer dst.Close()
+		defer func() { _ = dst.Close() }()
 
 		if _, err := io.Copy(dst, file); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})

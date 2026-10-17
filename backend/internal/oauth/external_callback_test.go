@@ -152,7 +152,6 @@ func loadProvider(t *testing.T, db *sql.DB, slug string) *oauth.AdminOAuthProvid
 // without standing up a fake IdP.
 type stubFetcher struct {
 	info  *oauth.ExternalUserInfo
-	raw   string
 	calls int
 	err   error
 }

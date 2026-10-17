@@ -642,11 +642,10 @@ func TestEmbedSnippet(t *testing.T) {
 // function is.
 func TestViewerTokenHashIsStable(t *testing.T) {
 	got := sha256HexPublic("vwt_stability_check")
-	want := "5b9e94d7f7f3b39b6c8aef0be7d1c79f0c6b6c8aef0be7d1c79f0c6b6c8aef0be" // dummy; replaced below
 	// Compute the expected value the same way the handler does so
 	// the test pins the contract instead of a magic constant.
 	sum := sha256.Sum256([]byte("vwt_stability_check"))
-	want = hex.EncodeToString(sum[:])
+	want := hex.EncodeToString(sum[:])
 	if got != want {
 		t.Errorf("hash drift: handler returns %q, want %q", got, want)
 	}

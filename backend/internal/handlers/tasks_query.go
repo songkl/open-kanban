@@ -133,10 +133,11 @@ func GetTask(db *sql.DB) gin.HandlerFunc {
 			includes := strings.Split(include, ",")
 			for _, inc := range includes {
 				inc = strings.TrimSpace(inc)
-				if inc == "comments" {
+				switch inc {
+				case "comments":
 					comments, _ := getCommentsForTask(db, task.ID)
 					response["comments"] = comments
-				} else if inc == "subtasks" {
+				case "subtasks":
 					subtasks, _ := getSubtasksForTask(db, task.ID)
 					response["subtasks"] = subtasks
 				}

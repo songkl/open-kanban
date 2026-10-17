@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -597,16 +596,4 @@ func FindDeviceCodeByDeviceToken(db *sql.DB, deviceCode string) (*models.OAuthDe
 func MarkDevicePolled(db *sql.DB, id string) error {
 	_, err := db.Exec("UPDATE oauth_device_codes SET last_poll_at = ? WHERE id = ?", time.Now(), id)
 	return err
-}
-
-// readJSONArray tolerates both string and JSON-array-shaped fields.
-func readJSONArray(raw string) []string {
-	if raw == "" {
-		return nil
-	}
-	var out []string
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil
-	}
-	return out
 }

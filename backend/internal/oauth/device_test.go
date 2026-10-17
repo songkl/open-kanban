@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
-	"golang.org/x/crypto/bcrypt"
 
 	"open-kanban/internal/oauth"
 )
@@ -42,21 +41,6 @@ func setupDeviceDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func seedClient(t *testing.T, db *sql.DB, id, secretHash, name string, grantTypes []string, scopes []string) string {
-	t.Helper()
-	if secretHash != "" {
-		hash := mustHashSecret(t, secretHash)
-		_, err := db.Exec(`UPDATE oauth_clients SET client_secret_hash = ? WHERE client_id = ?`, hash, id)
-		if err != nil {
-			// row may not exist yet, insert below
-			insertClient(t, db, id, hash, name, grantTypes, scopes)
-			return id
-		}
-	}
-	insertClient(t, db, id, secretHash, name, grantTypes, scopes)
-	return id
-}
-
 func insertClient(t *testing.T, db *sql.DB, id, secretHash, name string, grantTypes []string, scopes []string) {
 	t.Helper()
 	gj, _ := json.Marshal(grantTypes)
@@ -77,20 +61,6 @@ func insertClient(t *testing.T, db *sql.DB, id, secretHash, name string, grantTy
 	if err != nil {
 		t.Fatalf("insert client: %v", err)
 	}
-}
-
-func mustHashSecret(t *testing.T, plain string) string {
-	t.Helper()
-	hash, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("bcrypt: %v", err)
-	}
-	return string(hash)
-}
-
-func bcryptHash(plain string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
-	return string(hash), err
 }
 
 func newDeviceServer(t *testing.T, db *sql.DB) *gin.Engine {

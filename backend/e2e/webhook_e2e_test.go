@@ -306,7 +306,7 @@ func TestWebhookE2E_HappyPath_ReceiverGetsSignedPOST(t *testing.T) {
 	seedWebhookE2E(t, db, webhookID, srv.URL, secretPlain, maxRetries)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -454,7 +454,7 @@ func TestWebhookE2E_FailurePath_ExhaustedAfterMaxRetries(t *testing.T) {
 	seedWebhookE2E(t, db, webhookID, srv.URL, secretPlain, maxRetries)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))
@@ -566,7 +566,7 @@ func TestWebhookE2E_SignatureMatchesOpenSSL(t *testing.T) {
 	seedWebhookE2E(t, db, webhookID, srv.URL, secretPlain, 5)
 
 	bus := services.NewChannelEventBus(4)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	center := services.NewEventCenter(db, bus, 2)
 	center.SetDeliverFunc(services.NewDefaultDeliverFunc(db))

@@ -174,30 +174,3 @@ func JWKSHandler(signer *Signer) gin.HandlerFunc {
 func GetConfiguredAudience(c *gin.Context) string {
 	return "kanban"
 }
-
-// audienceForDB returns the configured audience from the app_config table.
-// When no override is set it returns "kanban".
-func audienceForDB(db *sql.DB) string {
-	if db == nil {
-		return "kanban"
-	}
-	var val string
-	if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'oauth_audience'").Scan(&val); err != nil || val == "" {
-		return "kanban"
-	}
-	return val
-}
-
-// issuerForDB returns the configured issuer override from app_config. If no
-// override is set the function returns "" and the caller should derive issuer
-// from the HTTP request.
-func issuerForDB(db *sql.DB) string {
-	if db == nil {
-		return ""
-	}
-	var val string
-	if err := db.QueryRow("SELECT value FROM app_config WHERE `key` = 'oauth_issuer_override'").Scan(&val); err != nil {
-		return ""
-	}
-	return val
-}
