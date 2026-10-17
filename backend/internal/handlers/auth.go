@@ -318,7 +318,6 @@ func OptionalAuth(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-
 func initTokenCache() {
 	tokenCacheOnce.Do(func() {
 		redisCache, err := utils.NewRedisTokenCache()

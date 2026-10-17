@@ -18,4 +18,4 @@ lint-fix:
 	$(GOLANGCI_LINT) run --fix ./...
 
 install-lint:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.0

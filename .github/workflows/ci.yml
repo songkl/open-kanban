@@ -60,7 +60,11 @@ jobs:
           cp -r ./dist/. backend/cmd/server/web/
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63.4
+        # Pinned to a v2 release: the repository's .golangci.yml files
+        # use the v2 schema (version: "2", linters.settings,
+        # formatters), which v1 cannot parse. v2 also understands the
+        # go1.24 module directive used by backend/go.mod.
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.0
 
       - name: Run golangci-lint
         run: |
