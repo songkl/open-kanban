@@ -2523,17 +2523,10 @@ func TestClaimRun_BroadcastsTaskNotification(t *testing.T) {
 	// use a short deadline so the test fails fast if the
 	// fan-out path is broken. The broadcast writes to
 	// clientConn, so we read from the server-side
-	// counterpart.
-	_ = serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, payload, err := serverConn.ReadMessage()
-	if err != nil {
-		t.Fatalf("did not receive broadcast within deadline: %v", err)
-	}
-
-	var msg handlers.TaskNotification
-	if err := json.Unmarshal(payload, &msg); err != nil {
-		t.Fatalf("decode broadcast: %v (raw=%s)", err, string(payload))
-	}
+	// counterpart. awaitTaskNotification skips unrelated
+	// frames (new_activity / refresh / stale notifications
+	// from other tests sharing the process-global queue).
+	msg := awaitTaskNotification(t, serverConn, "t-1", "update_status")
 	if msg.Type != "task_notification" {
 		t.Errorf("expected type=task_notification, got %q", msg.Type)
 	}
@@ -2576,21 +2569,43 @@ func TestAttachRun_BroadcastsTaskNotification(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	_ = serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, payload, err := serverConn.ReadMessage()
-	if err != nil {
-		t.Fatalf("did not receive broadcast within deadline: %v", err)
-	}
-
-	var msg handlers.TaskNotification
-	if err := json.Unmarshal(payload, &msg); err != nil {
-		t.Fatalf("decode broadcast: %v (raw=%s)", err, string(payload))
-	}
+	msg := awaitTaskNotification(t, serverConn, "t-2", "attach")
 	if msg.Action != "attach" {
 		t.Errorf("expected action=attach, got %q", msg.Action)
 	}
 	if msg.TaskID != "t-2" {
 		t.Errorf("expected taskId=t-2, got %q", msg.TaskID)
+	}
+}
+
+// awaitTaskNotification reads frames from the server-side
+// connection until it sees a task_notification matching the
+// expected taskID + action, or the deadline elapses.
+//
+// The broadcastQueue is process-global and LogActivity fans
+// out new_activity / CLAIM_TASK frames on background
+// goroutines, so a bare first-read is racy: an unrelated
+// frame (from this test's own audit trail or another test
+// still running) can land ahead of the frame under test.
+// Matching on taskID + action keeps the assertion strict
+// while tolerating the noise.
+func awaitTaskNotification(t *testing.T, conn *websocket.Conn, wantTaskID, wantAction string) handlers.TaskNotification {
+	t.Helper()
+
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	for {
+		_, payload, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("did not receive task_notification taskId=%s action=%s within deadline: %v",
+				wantTaskID, wantAction, err)
+		}
+		var msg handlers.TaskNotification
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			continue
+		}
+		if msg.Type == "task_notification" && msg.TaskID == wantTaskID && msg.Action == wantAction {
+			return msg
+		}
 	}
 }
 
