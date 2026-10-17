@@ -1,36 +1,14 @@
+version: "2"
 run:
   timeout: 5m
   modules-download-mode: readonly
-  go: "1.24"
 
 linters:
-  enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - gosec
-    - unconvert
-    - dupl
-    - goconst
-    - gocyclo
-    - misspell
-    - nakedret
-    - prealloc
-    - copyloopref
-
-linters-settings:
-  gocyclo:
-    min-complexity: 15
-  gosec:
-    excludes:
-      - G104
-  dupl:
-    threshold: 150
-
-issues:
-  exclude-use-default: false
-  max-issues-per-linter: 0
-  max-same-issues: 0
+  settings:
+    gocyclo:
+      min-complexity: 15
+    gosec:
+      excludes:
+        - G104
+    dupl:
+      threshold: 150
