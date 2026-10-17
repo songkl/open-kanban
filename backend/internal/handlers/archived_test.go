@@ -199,7 +199,7 @@ func TestGetArchivedTasksHandler(t *testing.T) {
 		}
 
 		var resp []interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 0 {
 			t.Errorf("expected empty array, got %v", resp)
 		}
@@ -221,7 +221,7 @@ func TestGetArchivedTasksHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 1 {
 			t.Errorf("expected 1 archived task, got %d", len(resp))
 		}
@@ -249,7 +249,7 @@ func TestGetArchivedTasksHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 1 {
 			t.Errorf("expected 1 archived task for b1, got %d", len(resp))
 		}
@@ -274,7 +274,7 @@ func TestGetArchivedTasksHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 2 {
 			t.Errorf("expected 2 archived tasks, got %d", len(resp))
 		}
@@ -301,7 +301,7 @@ func TestGetArchivedTasksHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		for _, task := range resp {
 			if task["published"] == false {
 				t.Errorf("expected no drafts in archived tasks, got %v", task)
@@ -339,7 +339,7 @@ func TestGetDraftsHandler(t *testing.T) {
 		}
 
 		var resp []interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 0 {
 			t.Errorf("expected empty array, got %v", resp)
 		}
@@ -361,7 +361,7 @@ func TestGetDraftsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 1 {
 			t.Errorf("expected 1 draft task, got %d", len(resp))
 		}
@@ -389,7 +389,7 @@ func TestGetDraftsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if len(resp) != 1 {
 			t.Errorf("expected 1 draft task for b1, got %d", len(resp))
 		}
@@ -414,7 +414,7 @@ func TestGetDraftsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		for _, task := range resp {
 			if task["published"] == true {
 				t.Errorf("expected no published tasks in drafts, got %v", task)
@@ -438,7 +438,7 @@ func TestGetDraftsHandler(t *testing.T) {
 		}
 
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		for _, task := range resp {
 			if task["archived"] == true {
 				t.Errorf("expected no archived tasks in drafts, got %v", task)
@@ -508,7 +508,7 @@ func TestBatchDeleteDraftsHandler(t *testing.T) {
 		}
 
 		var resp map[string]int
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["deleted"] != 2 {
 			t.Errorf("expected deleted=2, got %v", resp)
 		}
@@ -538,7 +538,7 @@ func TestBatchDeleteDraftsHandler(t *testing.T) {
 		}
 
 		var resp map[string]int
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["deleted"] != 0 {
 			t.Errorf("expected deleted=0 for published task, got %v", resp)
 		}
@@ -612,7 +612,7 @@ func TestBatchPublishDraftsHandler(t *testing.T) {
 		}
 
 		var resp map[string]int
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["published"] != 2 {
 			t.Errorf("expected published=2, got %v", resp)
 		}
@@ -673,7 +673,7 @@ func TestBatchArchiveDraftsHandler(t *testing.T) {
 		}
 
 		var resp map[string]int
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		if resp["archived"] != 2 {
 			t.Errorf("expected archived=2, got %v", resp)
 		}

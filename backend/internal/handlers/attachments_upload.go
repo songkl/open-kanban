@@ -104,7 +104,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 					return
 				}
 
-				file.Seek(0, 0)
+				_, _ = file.Seek(0, 0)
 
 				fileID := generateFileID()
 				safeFilename := sanitizeFilename(header.Filename)
@@ -206,7 +206,7 @@ func UploadFile(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		file.Seek(0, 0)
+		_, _ = file.Seek(0, 0)
 
 		fileID := generateFileID()
 		safeFilename := sanitizeFilename(header.Filename)

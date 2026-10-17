@@ -234,11 +234,11 @@ func isUserConnectionAllowed(userID string) bool {
 }
 
 func incrementUserConnCount(userID string) {
-	connCounter.IncrUser(userID)
+	_, _ = connCounter.IncrUser(userID)
 }
 
 func decrementUserConnCount(userID string) {
-	connCounter.DecrUser(userID)
+	_, _ = connCounter.DecrUser(userID)
 }
 
 // WebSocketHandler handles WebSocket connections
@@ -272,7 +272,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		requestID := GetRequestID(c)
 
 		conn.SetPongHandler(func(appData string) error {
-			conn.SetReadDeadline(time.Now().Add(config.GetConfig().WebSocket.ReadDeadline))
+			_ = conn.SetReadDeadline(time.Now().Add(config.GetConfig().WebSocket.ReadDeadline))
 			return nil
 		})
 
@@ -280,7 +280,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		clientsMux.Lock()
 		clients[conn] = writeMux
 		clientsMux.Unlock()
-		connCounter.IncrTotal()
+		_, _ = connCounter.IncrTotal()
 		incrementUserConnCount(userID)
 		initBroadcastWorker()
 
@@ -301,7 +301,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				case <-done:
 					return
 				case <-pingTicker.C:
-					conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
+					_ = conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
 					writeMux.Lock()
 					err := conn.WriteMessage(websocket.PingMessage, nil)
 					writeMux.Unlock()
@@ -314,7 +314,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		}()
 
 		for {
-			conn.SetReadDeadline(time.Now().Add(config.GetConfig().WebSocket.ReadDeadline))
+			_ = conn.SetReadDeadline(time.Now().Add(config.GetConfig().WebSocket.ReadDeadline))
 			msgType, _, err := conn.ReadMessage()
 			if err != nil {
 				if closeErr, ok := err.(*websocket.CloseError); ok && closeErr.Code == websocket.CloseProtocolError {
@@ -327,7 +327,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 				break
 			}
 			if msgType == websocket.TextMessage {
-				conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
+				_ = conn.SetWriteDeadline(time.Now().Add(config.GetConfig().WebSocket.PingWriteDeadline))
 				writeMux.Lock()
 				err = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"heartbeat_ack"}`))
 				writeMux.Unlock()
@@ -342,7 +342,7 @@ func WebSocketHandler(db *sql.DB) gin.HandlerFunc {
 		wg.Wait()
 
 		safeRemoveClient(conn)
-		connCounter.DecrTotal()
+		_, _ = connCounter.DecrTotal()
 		decrementUserConnCount(userID)
 
 		userConns, _ = connCounter.GetUserConnections(userID)

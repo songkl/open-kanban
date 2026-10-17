@@ -53,7 +53,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			if err := rows.Scan(&colID, &colName, &boardID, &agentTypesStr); err == nil {
 				if userAgent != "" && agentTypesStr != "" && agentTypesStr != "[]" {
 					var agentTypes []string
-					json.Unmarshal([]byte(agentTypesStr), &agentTypes)
+					_ = json.Unmarshal([]byte(agentTypesStr), &agentTypes)
 					for _, at := range agentTypes {
 						if at == userAgent {
 							columnIDs[colID] = true

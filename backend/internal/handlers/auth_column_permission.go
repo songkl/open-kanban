@@ -304,7 +304,7 @@ func SetColumnPermission(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var columnName string
-		db.QueryRow("SELECT name FROM columns WHERE id = ?", req.ColumnID).Scan(&columnName)
+		_ = db.QueryRow("SELECT name FROM columns WHERE id = ?", req.ColumnID).Scan(&columnName)
 
 		// Invalidate every cached session for the target user so they
 		// see the new column access on the next request instead of

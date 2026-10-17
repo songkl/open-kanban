@@ -20,20 +20,20 @@ func TestDebugRepository(t *testing.T) {
     CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT, priority TEXT DEFAULT 'medium', assignee TEXT, meta TEXT, column_id TEXT NOT NULL, position INTEGER DEFAULT 0, published BOOLEAN DEFAULT 0, archived BOOLEAN DEFAULT 0, archived_at DATETIME, due_at DATETIME, agent_id TEXT, agent_prompt TEXT, created_by TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE);
     `
 
-	db.Exec(schema)
-	db.Exec(`INSERT INTO boards (id, name, short_alias, task_counter) VALUES ('b1', 'Test Board', 'TST', 1000)`)
-	db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c1', 'Todo', 'b1', 0, 'todo')`)
+	_, _ = db.Exec(schema)
+	_, _ = db.Exec(`INSERT INTO boards (id, name, short_alias, task_counter) VALUES ('b1', 'Test Board', 'TST', 1000)`)
+	_, _ = db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c1', 'Todo', 'b1', 0, 'todo')`)
 	db.Exec(`INSERT INTO columns (id, name, board_id, position, status) VALUES ('c2', 'Done', 'b1', 1, 'done')`)
 	db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t1', 'Task 1', 'c1', 100, 1)`)
 	db.Exec(`INSERT INTO tasks (id, title, column_id, position, published) VALUES ('t2', 'Task 2', 'c1', 200, 1)`)
 
 	// Test: simple SELECT
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&count)
+	_ = db.QueryRow("SELECT COUNT(*) FROM tasks").Scan(&count)
 	fmt.Printf("Simple tasks count: %d\n", count)
 
 	// Test: JOIN columns
-	db.QueryRow("SELECT COUNT(*) FROM tasks t JOIN columns col ON t.column_id = col.id").Scan(&count)
+	_ = db.QueryRow("SELECT COUNT(*) FROM tasks t JOIN columns col ON t.column_id = col.id").Scan(&count)
 	fmt.Printf("Tasks JOIN columns count: %d\n", count)
 
 	// Test: the full query

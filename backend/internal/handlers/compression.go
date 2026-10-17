@@ -31,7 +31,7 @@ func (g *gzipWriter) Close() error {
 			return err
 		}
 		if g.buf.Len() > 0 {
-			g.ResponseWriter.Write(g.buf.Bytes())
+			_, _ = g.ResponseWriter.Write(g.buf.Bytes())
 		}
 	}
 	return nil

@@ -32,7 +32,7 @@ func TestServerError(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["error"] != "Test error" {
 			t.Errorf("expected error 'Test error', got %v", resp["error"])
@@ -57,7 +57,7 @@ func TestServerError(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["error"] != "Test error" {
 			t.Errorf("expected error 'Test error', got %v", resp["error"])
@@ -84,7 +84,7 @@ func TestServerError(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["error"] != "Test error" {
 			t.Errorf("expected error 'Test error', got %v", resp["error"])
@@ -168,7 +168,7 @@ func TestErrorHandlerMiddleware(t *testing.T) {
 		router := gin.New()
 		router.Use(handlers.ErrorHandler())
 		router.GET("/test", func(c *gin.Context) {
-			c.Error(&testError{Message: "详细错误信息"})
+			_ = c.Error(&testError{Message: "详细错误信息"})
 			c.Writer.WriteHeader(500)
 		})
 
@@ -181,7 +181,7 @@ func TestErrorHandlerMiddleware(t *testing.T) {
 		}
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		if resp["error"] != "Internal server error" {
 			t.Errorf("expected error 'Internal server error', got %v", resp["error"])

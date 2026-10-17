@@ -113,7 +113,7 @@ func (r *RunReaper) loop(ctx context.Context) {
 	// First sweep fires immediately so a server boot doesn't
 	// have to wait `interval` for stale locks to clear. After
 	// that we settle into the steady-state cadence.
-	r.RunOnce()
+	_, _ = r.RunOnce()
 
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()

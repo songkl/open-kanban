@@ -112,11 +112,11 @@ func (r *redisTokenCacheStore) Store(token string, entry *cachedUser) {
 		Enabled:   entry.user.Enabled,
 		ExpiresAt: entry.expiresAt,
 	}
-	r.cache.Store(token, utilsEntry, tokenCacheDuration)
+	_ = r.cache.Store(token, utilsEntry, tokenCacheDuration)
 }
 
 func (r *redisTokenCacheStore) Delete(token string) {
-	r.cache.Delete(token)
+	_ = r.cache.Delete(token)
 }
 
 // DeleteByUserID SCANs Redis for `token:*` keys, fetches each, and
@@ -318,14 +318,6 @@ func OptionalAuth(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func getUserFromContext(c *gin.Context) *models.User {
-	if user, exists := c.Get("user"); exists {
-		if u, ok := user.(*models.User); ok {
-			return u
-		}
-	}
-	return getCurrentUser(c, nil)
-}
 
 func initTokenCache() {
 	tokenCacheOnce.Do(func() {

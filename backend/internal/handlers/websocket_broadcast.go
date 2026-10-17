@@ -80,7 +80,7 @@ func processBroadcast(msg broadcastMessage) {
 	}
 
 	for _, conn := range conns {
-		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		writeMux := getClientWriteLock(conn)
 		if writeMux == nil {
 			continue

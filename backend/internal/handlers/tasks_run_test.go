@@ -2524,7 +2524,7 @@ func TestClaimRun_BroadcastsTaskNotification(t *testing.T) {
 	// fan-out path is broken. The broadcast writes to
 	// clientConn, so we read from the server-side
 	// counterpart.
-	serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, payload, err := serverConn.ReadMessage()
 	if err != nil {
 		t.Fatalf("did not receive broadcast within deadline: %v", err)
@@ -2576,7 +2576,7 @@ func TestAttachRun_BroadcastsTaskNotification(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = serverConn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, payload, err := serverConn.ReadMessage()
 	if err != nil {
 		t.Fatalf("did not receive broadcast within deadline: %v", err)

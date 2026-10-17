@@ -965,7 +965,7 @@ func main() {
 		}
 		switch subcommand {
 		case "reset-password":
-			resetPasswordCmd.Parse(subArgs)
+			_ = resetPasswordCmd.Parse(subArgs)
 			if *userNickname == "" || *newPassword == "" {
 				fmt.Println("Usage: kanban-server reset-password -user <nickname> -password <newpassword>")
 				os.Exit(1)
@@ -973,7 +973,7 @@ func main() {
 			runPasswordReset(*userNickname, *newPassword)
 			return
 		case "reset-system":
-			resetSystemCmd.Parse(subArgs)
+			_ = resetSystemCmd.Parse(subArgs)
 			runSystemReset(*resetSystemYes)
 			return
 		case "help", "--help":

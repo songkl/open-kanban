@@ -737,7 +737,7 @@ func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk set permissions"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		stmt, err := tx.Prepare(`REPLACE INTO board_permissions (
 			id, user_id, board_id, access,
@@ -1076,7 +1076,7 @@ func BulkGrantPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk grant permissions"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		// REPLACE INTO is portable across MySQL and SQLite (see
 		// SetPermission for the long version). The bulk-resolved
@@ -1323,7 +1323,7 @@ func TransferOwnership(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to transfer ownership"})
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 
 		// Step 1: clear the old owner's stamp. We deliberately
 		// keep their access row intact (and their access value)

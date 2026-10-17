@@ -26,7 +26,7 @@ func isAllowedFileType(mimeType string) bool {
 
 func generateFileID() string {
 	bytes := make([]byte, 16)
-	rand.Read(bytes)
+	_, _ = rand.Read(bytes)
 	return "att_" + hex.EncodeToString(bytes)
 }
 

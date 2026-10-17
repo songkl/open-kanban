@@ -652,7 +652,7 @@ func GetColumnAgent(db *sql.DB) gin.HandlerFunc {
 		}
 
 		var agentTypes []string
-		json.Unmarshal([]byte(agentTypesStr), &agentTypes)
+		_ = json.Unmarshal([]byte(agentTypesStr), &agentTypes)
 
 		c.JSON(http.StatusOK, gin.H{
 			"agentTypes":        agentTypes,

@@ -297,7 +297,7 @@ func TestDeleteWorkspaceFile(t *testing.T) {
 	defer os.Unsetenv("WORKSPACE_DIR")
 
 	testFile := filepath.Join(tmpDir, "todelete.txt")
-	os.WriteFile(testFile, []byte("to be deleted"), 0644)
+	_ = os.WriteFile(testFile, []byte("to be deleted"), 0644)
 
 	router := gin.New()
 	router.DELETE("/api/v1/workspace/files/*path", handlers.RequireAuth(db), handlers.DeleteWorkspaceFile(db))
