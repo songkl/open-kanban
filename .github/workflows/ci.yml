@@ -244,11 +244,17 @@ jobs:
 
   frontend-e2e:
     name: Frontend E2E Tests
-    needs: frontend-build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      # The Playwright webServer boots the backend with `go run`
+      # (scripts/e2e-server.sh), so the Go toolchain must be present.
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.24'
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -265,39 +271,16 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
 
-      # Download the frontend build artifact produced by the frontend-build
-      # job so the backend //go:embed web directive has files to embed.
-      - name: Download frontend dist
-        uses: actions/download-artifact@v5
-        with:
-          name: frontend-dist
-          path: ./dist
-
-      # The //go:embed web directive in cmd/server/main.go requires actual
-      # files in backend/cmd/server/web.  Copy the frontend build output so
-      # the backend can compile and serve static assets.
-      - name: Embed frontend into backend/web
-        run: |
-          mkdir -p backend/cmd/server/web
-          cp -r ./dist/. backend/cmd/server/web/
-
-      # Start Go server on port 8081 so the Vite dev server proxy
-      # (configured in vite.config.ts -> server.proxy) can forward
-      # /api/v1 and /ws requests to it.
-      - name: Start backend server
-        run: |
-          cd backend
-          PORT=8081 go build -o /tmp/server ./cmd/server
-          /tmp/server &
-          sleep 5
-
-      # Playwright's webServer (in playwright.config.ts) starts
-      # the Vite dev server automatically — no manual start needed.
-
+      # playwright.config.ts's webServer array owns BOTH processes:
+      #   1. the Go backend via scripts/e2e-server.sh (throwaway SQLite
+      #      DB, PORT=8081, ALLOWED_ORIGINS including the Vite origin);
+      #   2. the Vite dev server on 5173 (proxies /api/v1 + /ws).
+      # Do NOT start a backend manually here — `reuseExistingServer` is
+      # disabled under CI, so a pre-bound :8081 would fail the run.
       - name: Run Playwright E2E tests
         working-directory: frontend
         run: |
-          npx playwright test
+          npx playwright test --project=chromium
 
       - name: Upload Playwright Report
         if: failure()

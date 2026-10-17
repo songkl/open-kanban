@@ -1,165 +1,130 @@
-import { test, expect, Page } from '@playwright/test';
-import { login, createBoard, createColumn, createTask, dragTask, completeTask } from './helpers';
+import { test, expect } from '@playwright/test';
+import {
+  login,
+  createBoard,
+  createColumnViaApi,
+  createTask,
+  openTask,
+  taskCard,
+  columnContainer,
+  moveTaskToColumn,
+  deleteTask,
+  uniqueUser,
+} from './helpers';
 
 test.describe('Task Creation, Movement, and Completion', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, `taskuser_${Date.now()}`);
+    await login(page, uniqueUser('taskuser_'));
     await createBoard(page, `Task Board ${Date.now()}`);
   });
 
   test('should create a new task', async ({ page }) => {
     const taskTitle = `New Task ${Date.now()}`;
     await createTask(page, taskTitle);
-    
-    await expect(page.getByText(taskTitle)).toBeVisible();
+
+    await expect(taskCard(page, taskTitle)).toBeVisible();
   });
 
   test('should create task with description', async ({ page }) => {
     const taskTitle = `Task with Desc ${Date.now()}`;
     const taskDesc = `Description for task ${Date.now()}`;
-    
+
     await createTask(page, taskTitle, { description: taskDesc });
-    
-    await expect(page.getByText(taskTitle)).toBeVisible();
-    await page.getByText(taskTitle).click();
-    await expect(page.getByText(taskDesc)).toBeVisible({ timeout: 2000 });
+
+    const dialog = await openTask(page, taskTitle);
+    await expect(dialog.getByText(taskDesc)).toBeVisible();
   });
 
-  test('should create task in specific column', async ({ page }) => {
-    await createColumn(page, 'In Progress');
-    
-    const taskTitle = `Column Task ${Date.now()}`;
-    const addTaskButton = page.locator('.column, [data-testid="column"]').filter({ hasText: 'In Progress' }).getByRole('button', { name: /add task/i });
-    await addTaskButton.click();
-    
-    const titleInput = page.getByLabel(/task title|title/i);
-    await titleInput.fill(taskTitle);
-    
-    const submitButton = page.getByRole('button', { name: /create|add|submit/i });
-    await submitButton.click();
-    
-    const column = page.locator('.column, [data-testid="column"]').filter({ hasText: 'In Progress' });
-    await expect(column.getByText(taskTitle)).toBeVisible();
+  test('should create task in a specific column', async ({ page }) => {
+    const boardId = page.url().match(/\/board\/([^/?#]+)/)![1];
+    const columnName = `QA Review ${Date.now()}`;
+    const columnId = await createColumnViaApi(page, boardId, columnName, 'qa_review');
+
+    await page.reload();
+    const column = columnContainer(page, columnId);
+    await expect(column.getByText(columnName)).toBeVisible();
+
+    // The empty column shows a "Click to add new task" affordance which
+    // opens the Add Task dialog with this column preselected.
+    await column.getByText('Click to add new task').click();
+    const dialog = page.getByRole('dialog', { name: 'Add Task' });
+    const columnTaskTitle = `Column Task ${Date.now()}`;
+    await dialog.getByPlaceholder('Enter task title').fill(columnTaskTitle);
+    await dialog.getByPlaceholder('Enter task title').press('Enter');
+
+    await expect(column.getByRole('heading', { name: columnTaskTitle })).toBeVisible();
   });
 
-  test('should move task between columns via drag and drop', async ({ page }) => {
-    const taskTitle = `Drag Task ${Date.now()}`;
+  test('should move a task to another column', async ({ page }) => {
+    const boardId = page.url().match(/\/board\/([^/?#]+)/)![1];
+    const columnName = `Done ${Date.now()}`;
+    const columnId = await createColumnViaApi(page, boardId, columnName, 'qa_review');
+
+    const taskTitle = `Move Task ${Date.now()}`;
     await createTask(page, taskTitle);
-    
-    await createColumn(page, 'Done');
-    
-    await dragTask(page, taskTitle, 'Done');
-    
-    const doneColumn = page.locator('.column, [data-testid="column"]').filter({ hasText: 'Done' });
-    await expect(doneColumn.getByText(taskTitle)).toBeVisible({ timeout: 3000 });
-  });
 
-  test('should complete a task', async ({ page }) => {
-    const taskTitle = `Complete Task ${Date.now()}`;
-    await createTask(page, taskTitle);
-    
-    await completeTask(page, taskTitle);
-    
-    const completedTask = page.locator('[data-testid="task"].completed, .task-item.completed').filter({ hasText: taskTitle });
-    await expect(completedTask).toBeVisible({ timeout: 2000 });
-  });
+    await moveTaskToColumn(page, taskTitle, columnName);
 
-  test('should open task modal on click', async ({ page }) => {
-    const taskTitle = `Modal Task ${Date.now()}`;
-    await createTask(page, taskTitle);
-    
-    await page.getByText(taskTitle).click();
-    
-    const modal = page.locator('dialog, [role="dialog"], .modal, [data-testid="task-modal"]');
-    await expect(modal).toBeVisible({ timeout: 2000 });
-  });
-
-  test('should edit task title', async ({ page }) => {
-    const taskTitle = `Edit Task ${Date.now()}`;
-    await createTask(page, taskTitle);
-    
-    await page.getByText(taskTitle).click();
-    
-    const modal = page.locator('dialog, [role="dialog"], .modal, [data-testid="task-modal"]');
-    await modal.waitFor({ state: 'visible', timeout: 2000 });
-    
-    const editButton = modal.getByRole('button', { name: /edit|modify/i });
-    if (await editButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await editButton.click();
-      
-      const titleInput = modal.getByLabel(/title/i);
-      await titleInput.clear();
-      const newTitle = `Edited ${Date.now()}`;
-      await titleInput.fill(newTitle);
-      
-      const saveButton = modal.getByRole('button', { name: /save|update/i });
-      await saveButton.click();
-      
-      await expect(page.getByText(newTitle)).toBeVisible();
-    }
+    const column = columnContainer(page, columnId);
+    await expect(column.getByRole('heading', { name: taskTitle })).toBeVisible();
   });
 
   test('should delete a task', async ({ page }) => {
     const taskTitle = `Delete Task ${Date.now()}`;
     await createTask(page, taskTitle);
-    
-    await page.getByText(taskTitle).click();
-    
-    const modal = page.locator('dialog, [role="dialog"], .modal, [data-testid="task-modal"]');
-    await modal.waitFor({ state: 'visible', timeout: 2000 });
-    
-    const deleteButton = modal.getByRole('button', { name: /delete|remove/i });
-    await deleteButton.click();
-    
-    const confirmButton = page.getByRole('button', { name: /confirm|delete|yes/i });
-    await confirmButton.click();
-    
-    await expect(page.getByText(taskTitle)).not.toBeVisible();
+
+    await deleteTask(page, taskTitle);
+
+    await expect(taskCard(page, taskTitle)).toHaveCount(0);
   });
 
-  test('should add subtask to task', async ({ page }) => {
+  test('should open the task modal on click', async ({ page }) => {
+    const taskTitle = `Modal Task ${Date.now()}`;
+    await createTask(page, taskTitle);
+
+    const dialog = await openTask(page, taskTitle);
+    await expect(dialog).toBeVisible();
+  });
+
+  test('should edit a task title', async ({ page }) => {
+    const taskTitle = `Edit Task ${Date.now()}`;
+    await createTask(page, taskTitle);
+
+    const dialog = await openTask(page, taskTitle);
+    await dialog.getByRole('button', { name: 'Edit Task', exact: true }).click();
+
+    const newTitle = `Edited ${Date.now()}`;
+    const titleInput = dialog.getByLabel('Task title');
+    await titleInput.fill(newTitle);
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(page.getByRole('heading', { name: newTitle }).first()).toBeVisible();
+    await expect(taskCard(page, taskTitle)).toHaveCount(0);
+  });
+
+  test('should add a subtask to a task', async ({ page }) => {
     const taskTitle = `Parent Task ${Date.now()}`;
     await createTask(page, taskTitle);
-    
-    await page.getByText(taskTitle).click();
-    
-    const modal = page.locator('dialog, [role="dialog"], .modal, [data-testid="task-modal"]');
-    await modal.waitFor({ state: 'visible', timeout: 2000 });
-    
-    const addSubtaskButton = page.getByRole('button', { name: /add subtask/i });
-    if (await addSubtaskButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await addSubtaskButton.click();
-      
-      const subtaskInput = page.getByPlaceholder(/subtask|title/i);
-      await subtaskInput.fill(`Subtask ${Date.now()}`);
-      
-      const addButton = page.getByRole('button', { name: /add|create/i });
-      await addButton.click();
-      
-      await expect(modal.getByText(/subtask/i)).toBeVisible();
-    }
-  });
 
-  test('should filter tasks by priority', async ({ page }) => {
-    await createTask(page, `Filter Task 1 ${Date.now()}`);
-    await createTask(page, `Filter Task 2 ${Date.now()}`);
-    
-    const filterButton = page.getByRole('button', { name: /filter/i });
-    await filterButton.click();
-    
-    const prioritySelect = page.locator('select').first();
-    await prioritySelect.selectOption('high');
-    
-    await page.waitForTimeout(500);
+    const dialog = await openTask(page, taskTitle);
+    await dialog.getByRole('button', { name: 'Edit Task', exact: true }).click();
+
+    const subtaskTitle = `Subtask ${Date.now()}`;
+    await dialog.getByRole('button', { name: /Add Subtask/ }).click();
+
+    const subDialog = page.getByRole('dialog', { name: 'Add Subtask' });
+    await subDialog.getByPlaceholder('Enter subtask title').fill(subtaskTitle);
+    await subDialog.getByRole('button', { name: 'Add Subtask', exact: true }).click();
+
+    await expect(dialog.getByText(subtaskTitle)).toBeVisible();
   });
 
   test('should search tasks', async ({ page }) => {
-    const uniqueTitle = `Searchable Task ${Date.now()}`;
+    const uniqueTitle = `Searchable ${Date.now()}`;
     await createTask(page, uniqueTitle);
-    
-    const searchInput = page.getByPlaceholder(/search/i);
-    await searchInput.fill(uniqueTitle);
-    
-    await expect(page.getByText(uniqueTitle)).toBeVisible();
+
+    await page.getByPlaceholder('Search tasks...').first().fill(uniqueTitle);
+
+    await expect(taskCard(page, uniqueTitle)).toBeVisible();
   });
 });

@@ -933,6 +933,49 @@ func TestLoginHandler(t *testing.T) {
 			t.Errorf("expected token in response")
 		}
 	})
+
+	t.Run("login again with passwordless user succeeds", func(t *testing.T) {
+		handlers.ResetRateLimitMapForTest()
+		handlers.ResetTokenCacheForTest()
+		db := setupTestDB(t)
+		defer db.Close()
+
+		router := gin.New()
+		router.POST("/api/auth/login", handlers.Login(db))
+
+		db.Exec("DELETE FROM users")
+
+		// Insert a user with a NULL password, the shape produced when the
+		// first admin (or any auto-registered user) is created without a
+		// password. The login handler must still load this row on a
+		// subsequent sign-in instead of scanning NULL into a string and
+		// failing with a 500.
+		if _, err := db.Exec(
+			`INSERT INTO users (id, username, nickname, password, avatar, type, role, enabled) VALUES (?, ?, ?, NULL, '', 'HUMAN', 'ADMIN', 1)`,
+			"user-no-pw", "returninguser", "Returning User",
+		); err != nil {
+			t.Fatalf("failed to insert test user: %v", err)
+		}
+
+		body := map[string]interface{}{"username": "returninguser"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("expected status 200 for passwordless re-login, got %d: %s", w.Code, w.Body.String())
+		}
+
+		var resp map[string]interface{}
+		json.Unmarshal(w.Body.Bytes(), &resp)
+		if resp["token"] == nil {
+			t.Errorf("expected token in response")
+		}
+	})
 }
 
 func TestGetMeHandler(t *testing.T) {

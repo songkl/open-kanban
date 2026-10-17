@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ApiError, authApi, createApiRequest, setGlobalErrorHandler } from './api';
+import { ApiError, authApi, createApiRequest, runsApi, setGlobalErrorHandler } from './api';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -557,5 +557,70 @@ describe('authApi.bulkSetPermissions', () => {
         message: tc.body.error,
       });
     });
+  });
+});
+
+describe('runsApi.getByTask', () => {
+  const originalFetch = global.fetch;
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockFetch = vi.fn();
+    global.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  // Regression: the helper used to bail out with `null` unless a
+  // readable `kanban-token` cookie was present in `document.cookie`.
+  // That cookie is HttpOnly by design, so the guard was always false
+  // and the board's run polling never issued a request — the
+  // TaskRunIndicator was dead code in the browser. The request must
+  // fire regardless of `document.cookie`.
+  it('fetches even when no readable kanban-token cookie is present', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ run: null, hasRun: false }),
+    });
+
+    await runsApi.getByTask('task-1');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(String(mockFetch.mock.calls[0][0])).toContain('/api/v1/runs/task-1');
+  });
+
+  it('unwraps the { run, hasRun } envelope', async () => {
+    const run = { taskId: 'task-1', status: 'claimed', runnerId: 'runner-a' };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ run, hasRun: true }),
+    });
+
+    await expect(runsApi.getByTask('task-1')).resolves.toEqual(run);
+  });
+
+  it('returns null when the envelope reports no run', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ run: null, hasRun: false }),
+    });
+
+    await expect(runsApi.getByTask('task-1')).resolves.toBeNull();
+  });
+
+  it('normalises a 404 to null', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ error: 'not found' }),
+    });
+
+    await expect(runsApi.getByTask('task-1')).resolves.toBeNull();
   });
 });

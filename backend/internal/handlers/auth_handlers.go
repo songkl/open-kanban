@@ -488,8 +488,12 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			Role     string
 		}
 
+		// COALESCE(password, '') keeps passwordless accounts (first-run
+		// admin, auto-registered users) loadable: the column is NULL for
+		// those rows and scanning NULL into a string errors, which would
+		// turn every subsequent login attempt into a 500.
 		err := db.QueryRow(
-			"SELECT id, password, username, nickname, avatar, type, role FROM users WHERE username = ?",
+			"SELECT id, COALESCE(password, ''), username, nickname, avatar, type, role FROM users WHERE username = ?",
 			username,
 		).Scan(&existingUser.ID, &existingUser.Password, &existingUser.Username, &existingUser.Nickname, &existingUser.Avatar, &existingUser.UserType, &existingUser.Role)
 

@@ -255,6 +255,29 @@ describe('useTasks', () => {
         meta: mockTask.meta,
       });
     });
+
+    it('should apply the update locally when the column belongs to the current board', async () => {
+      // Regression: column ids use a `slug-boardidprefix` format, so the
+      // old `columnId.split('_')[0] === boardId` check treated same-board
+      // edits as cross-board and silently dropped the local update.
+      vi.mocked(tasksApi.update).mockResolvedValueOnce({ ...mockTask, title: 'Renamed' } as Task);
+
+      const { result } = renderHook(() =>
+        useTasks({ columns: mockColumns, currentBoard: mockCurrentBoard, onColumnsChange: mockOnColumnsChange })
+      );
+
+      await act(async () => {
+        await result.current.updateTask({ ...mockTask, title: 'Renamed' });
+      });
+
+      expect(mockOnColumnsChange).toHaveBeenCalled();
+      const updater = mockOnColumnsChange.mock.calls.at(-1)![0] as (cols: ColumnType[]) => ColumnType[];
+      const nextTitle = updater(mockColumns)
+        .flatMap((col) => col.tasks)
+        .find((t) => t.id === 'task-1')?.title;
+      expect(nextTitle).toBe('Renamed');
+      expect(showErrorToastMock).not.toHaveBeenCalledWith('board.taskPublished', 'info');
+    });
   });
 
   describe('deleteTask', () => {

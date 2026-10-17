@@ -94,17 +94,6 @@ const API_BASE = (() => {
   return '/api/v1/';
 })();
 
-// hasSessionCookie reports whether the current document carries
-// the `kanban-token` cookie. Anonymous visitors don't have one,
-// and polling /api/v1/runs/:taskId without it just produces a
-// stream of red 401s in the browser console (PM review s-1261
-// P2-2). Callers short-circuit on `false` so the SPA never fires
-// the doomed request in the first place.
-function hasSessionCookie(): boolean {
-  if (typeof document === 'undefined') return false;
-  return document.cookie.split(';').some((c) => c.trim().startsWith('kanban-token='));
-}
-
 const DEFAULT_RETRY_COUNT = 3;
 const DEFAULT_RETRY_DELAY = 1000;
 
@@ -1041,12 +1030,13 @@ export const runsApi = {
    * callers don't need a try/catch around the "no run yet" case.
    */
   getByTask: async (taskId: string, options?: { signal?: AbortSignal }): Promise<TaskRun | null> => {
-    // Anonymous visitors can't read /runs/:taskId. Skip the
-    // request so DevTools doesn't fill with 401s every time
-    // the board re-paints before the redirect to /login lands
-    // (PM review s-1261 P2-2). The hook consumers already
-    // handle a `null` return as "no run yet".
-    if (!hasSessionCookie()) return null;
+    // The `kanban-token` session cookie is HttpOnly by design, so the
+    // SPA can't detect a session from `document.cookie`. We therefore
+    // always issue the request (the backend returns a quiet 200
+    // envelope `{ run: null, hasRun: false }` when there's no run, and
+    // 401 for anonymous callers — see s-1244 / PM review s-1261 P2-2).
+    // Guarding on a readable cookie silently disabled the board's run
+    // polling entirely, so the TaskRunIndicator never rendered.
     const url = `${API_BASE}runs/${encodeURIComponent(taskId)}`;
     try {
       const response = await fetch(url, {

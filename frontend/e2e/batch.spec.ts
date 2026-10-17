@@ -1,141 +1,111 @@
 import { test, expect } from '@playwright/test';
-import { login, createBoard, createColumn, createTask, selectTask } from './helpers';
+import {
+  login,
+  createBoard,
+  createColumnViaApi,
+  createTask,
+  selectTaskForBatch,
+  batchBar,
+  taskCard,
+  uniqueUser,
+} from './helpers';
 
 test.describe('Batch Operations', () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, `batchuser_${Date.now()}`);
+    await login(page, uniqueUser('batchuser_'));
     await createBoard(page, `Batch Board ${Date.now()}`);
   });
 
-  test('should select multiple tasks', async ({ page }) => {
-    await createTask(page, `Batch Task 1 ${Date.now()}`);
-    await createTask(page, `Batch Task 2 ${Date.now()}`);
-    await createTask(page, `Batch Task 3 ${Date.now()}`);
-    
-    const task1 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Batch Task 1/i }).first();
-    const task2 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Batch Task 2/i }).first();
-    
-    await task1.click();
-    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
-    await task2.click({ modifiers: [modifier] });
-    
-    const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar, [aria-label*="batch"]');
-    await expect(batchBar).toBeVisible({ timeout: 2000 });
+  test('should select multiple tasks and show the count', async ({ page }) => {
+    const task1 = `Batch Task 1 ${Date.now()}`;
+    const task2 = `Batch Task 2 ${Date.now()}`;
+    await createTask(page, task1);
+    await createTask(page, task2);
+
+    await selectTaskForBatch(page, task1);
+    await selectTaskForBatch(page, task2);
+
+    const bar = batchBar(page);
+    await expect(bar).toBeVisible();
+    await expect(bar).toContainText('2 selected');
   });
 
-  test('should batch move selected tasks', async ({ page }) => {
-    await createColumn(page, 'Target Column');
-    
-    await createTask(page, `Move Task 1 ${Date.now()}`);
-    await createTask(page, `Move Task 2 ${Date.now()}`);
-    
-    const task1 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Move Task 1/i }).first();
-    const task2 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Move Task 2/i }).first();
-    
-    await task1.click();
-    await task2.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
-    
-    const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar');
-    await batchBar.waitFor({ state: 'visible', timeout: 2000 });
-    
-    const moveSelect = batchBar.locator('select').first();
-    await moveSelect.selectOption({ label: 'Target Column' });
-    
-    await expect(page.locator('.column, [data-testid="column"]').filter({ hasText: 'Target Column' }).locator('text=/Move Task 1/i')).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('.column, [data-testid="column"]').filter({ hasText: 'Target Column' }).locator('text=/Move Task 2/i')).toBeVisible({ timeout: 3000 });
+  test('should batch move selected tasks to another column', async ({ page }) => {
+    const boardId = page.url().match(/\/board\/([^/?#]+)/)![1];
+    const columnName = `Target ${Date.now()}`;
+    await createColumnViaApi(page, boardId, columnName, 'qa_review');
+    await page.reload();
+
+    const task1 = `Move Task 1 ${Date.now()}`;
+    const task2 = `Move Task 2 ${Date.now()}`;
+    await createTask(page, task1);
+    await createTask(page, task2);
+    await selectTaskForBatch(page, task1);
+    await selectTaskForBatch(page, task2);
+
+    const bar = batchBar(page);
+    await bar.getByRole('button', { name: 'Move to column...' }).click();
+    await page.getByRole('option', { name: columnName, exact: true }).click();
+
+    // Moving clears the selection, so the bar disappears and both cards
+    // now live in the target column.
+    await expect(bar).toBeHidden();
+    const target = page
+      .locator('div.relative.flex.flex-col.rounded-lg')
+      .filter({ has: page.getByRole('heading', { name: columnName }) });
+    await expect(target.getByRole('heading', { name: task1 })).toBeVisible();
+    await expect(target.getByRole('heading', { name: task2 })).toBeVisible();
   });
 
   test('should batch delete selected tasks', async ({ page }) => {
-    await createTask(page, `Delete Task 1 ${Date.now()}`);
-    await createTask(page, `Delete Task 2 ${Date.now()}`);
-    
-    const task1 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Delete Task 1/i }).first();
-    const task2 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Delete Task 2/i }).first();
-    
-    await task1.click();
-    await task2.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
-    
-    const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar');
-    await batchBar.waitFor({ state: 'visible', timeout: 2000 });
-    
-    const deleteButton = batchBar.getByRole('button', { name: /delete|remove/i });
-    await deleteButton.click();
-    
-    const confirmButton = page.getByRole('button', { name: /confirm|delete|yes/i });
-    await confirmButton.click();
-    
-    await expect(page.locator('text=/Delete Task 1/i')).not.toBeVisible();
-    await expect(page.locator('text=/Delete Task 2/i')).not.toBeVisible();
-  });
+    const task1 = `Delete Task 1 ${Date.now()}`;
+    const task2 = `Delete Task 2 ${Date.now()}`;
+    await createTask(page, task1);
+    await createTask(page, task2);
+    await selectTaskForBatch(page, task1);
+    await selectTaskForBatch(page, task2);
 
-  test('should batch complete selected tasks', async ({ page }) => {
-    await createTask(page, `Complete Task 1 ${Date.now()}`);
-    await createTask(page, `Complete Task 2 ${Date.now()}`);
-    
-    const task1 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Complete Task 1/i }).first();
-    const task2 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Complete Task 2/i }).first();
-    
-    await task1.click();
-    await task2.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
-    
-    const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar');
-    await batchBar.waitFor({ state: 'visible', timeout: 2000 });
-    
-    const completeButton = batchBar.getByRole('button', { name: /complete|done|check/i });
-    await completeButton.click();
-    
-    await page.waitForTimeout(1000);
+    await batchBar(page).getByRole('button', { name: 'Delete', exact: true }).click();
+
+    await expect(taskCard(page, task1)).toHaveCount(0);
+    await expect(taskCard(page, task2)).toHaveCount(0);
   });
 
   test('should batch archive selected tasks', async ({ page }) => {
-    await createTask(page, `Archive Task 1 ${Date.now()}`);
-    await createTask(page, `Archive Task 2 ${Date.now()}`);
-    
-    const task1 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Archive Task 1/i }).first();
-    const task2 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Archive Task 2/i }).first();
-    
-    await task1.click();
-    await task2.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
-    
-    const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar');
-    await batchBar.waitFor({ state: 'visible', timeout: 2000 });
-    
-    const archiveButton = batchBar.getByRole('button', { name: /archive/i });
-    if (await archiveButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await archiveButton.click();
-      
-      await expect(page.locator('text=/Archive Task 1/i')).not.toBeVisible();
-    }
+    const task1 = `Archive Task 1 ${Date.now()}`;
+    const task2 = `Archive Task 2 ${Date.now()}`;
+    await createTask(page, task1);
+    await createTask(page, task2);
+    await selectTaskForBatch(page, task1);
+    await selectTaskForBatch(page, task2);
+
+    await batchBar(page).getByRole('button', { name: 'Archive', exact: true }).click();
+
+    await expect(taskCard(page, task1)).toHaveCount(0);
+    await expect(taskCard(page, task2)).toHaveCount(0);
   });
 
-  test('should cancel batch selection', async ({ page }) => {
-    await createTask(page, `Cancel Task ${Date.now()}`);
-    
-    const task = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Cancel Task/i }).first();
-    await task.click();
-    
-    const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar');
-    if (await batchBar.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const cancelButton = batchBar.getByRole('button', { name: /cancel|deselect|clear/i });
-      await cancelButton.click();
-      
-      await expect(batchBar).not.toBeVisible();
-    }
+  test('should batch update priority of selected tasks', async ({ page }) => {
+    const task1 = `Priority Task ${Date.now()}`;
+    await createTask(page, task1);
+    await selectTaskForBatch(page, task1);
+
+    const bar = batchBar(page);
+    await bar.getByRole('button', { name: 'Set priority...' }).click();
+    await page.getByRole('option', { name: 'High', exact: true }).click();
+
+    await expect(taskCard(page, task1)).toContainText('High');
   });
 
-  test('should show selected count in batch bar', async ({ page }) => {
-    await createTask(page, `Count Task 1 ${Date.now()}`);
-    await createTask(page, `Count Task 2 ${Date.now()}`);
-    await createTask(page, `Count Task 3 ${Date.now()}`);
-    
-    const task1 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Count Task 1/i }).first();
-    const task2 = page.locator('[data-testid="task"], .task-item').filter({ hasText: /Count Task 2/i }).first();
-    
-    await task1.click();
-    await task2.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
-    
-    const batchBar = page.locator('[data-testid="batch-bar"], .batch-bar');
-    await expect(batchBar).toBeVisible({ timeout: 2000 });
-    await expect(batchBar).toContainText(/2/i);
+  test('should clear the batch selection', async ({ page }) => {
+    const task1 = `Cancel Task ${Date.now()}`;
+    await createTask(page, task1);
+    await selectTaskForBatch(page, task1);
+
+    const bar = batchBar(page);
+    await expect(bar).toBeVisible();
+    await bar.getByRole('button', { name: 'Clear', exact: true }).click();
+
+    await expect(bar).toBeHidden();
   });
 });
