@@ -53,8 +53,10 @@ export function useFocusTrap<T extends HTMLElement>(
   // title bug).
   const onEscapeRef = useRef(onEscape);
   const initialFocusRef = useRef(initialFocus);
-  onEscapeRef.current = onEscape;
-  initialFocusRef.current = initialFocus;
+  useEffect(() => {
+    onEscapeRef.current = onEscape;
+    initialFocusRef.current = initialFocus;
+  }, [onEscape, initialFocus]);
 
   useEffect(() => {
     if (!enabled) return undefined;
