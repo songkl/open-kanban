@@ -643,7 +643,7 @@ func (r *RunRepository) ListRunHistory(filter RunHistoryFilter) ([]*models.TaskR
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []*models.TaskRun
 	for rows.Next() {

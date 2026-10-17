@@ -340,7 +340,7 @@ func getAllColumns(db *sql.DB) ([]columnInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []columnInfo
 	for rows.Next() {

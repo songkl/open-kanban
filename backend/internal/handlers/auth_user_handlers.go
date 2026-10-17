@@ -44,7 +44,7 @@ func GetUsers(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var users []gin.H
 		for rows.Next() {
@@ -389,7 +389,7 @@ func GetUsersVisible(db *sql.DB) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
 				return
 			}
-			_ = rows.Close()
+			defer func() { _ = rows.Close() }()
 
 			users := make([]gin.H, 0)
 			for rows.Next() {
@@ -451,7 +451,7 @@ func GetUsersVisible(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get visible users"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		users := make([]gin.H, 0)
 		for rows.Next() {
@@ -498,7 +498,7 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var agents []gin.H
 		for rows.Next() {
@@ -1021,7 +1021,7 @@ func grantPublicBoardRead(db *sql.DB, userID string) {
 		log.Printf("[grantPublicBoardRead] failed to list public boards: %v", err)
 		return
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var boardIDs []string
 	for rows.Next() {

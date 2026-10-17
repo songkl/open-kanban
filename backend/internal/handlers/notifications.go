@@ -224,7 +224,7 @@ func ResolveUserIDsByNickname(db *sql.DB, nicknames []string) (map[string]string
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id, nick string
 		if err := rows.Scan(&id, &nick); err != nil {
@@ -293,7 +293,7 @@ func GetNotifications(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query notifications"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		out := make([]Notification, 0, limit)
 		for rows.Next() {

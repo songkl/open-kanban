@@ -183,7 +183,7 @@ func loadOrGenerateSalt() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to init database: %w", err)
 	}
-	_ = db.Close()
+	defer db.Close()
 
 	var existingSalt string
 	err = db.QueryRow("SELECT value FROM app_config WHERE `key` = 'password_salt'").Scan(&existingSalt)

@@ -520,7 +520,7 @@ func queryDeliveriesPage(db *sql.DB, webhookID string, limit int, cursor *delive
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []webhookDeliveryView{}
 	for rows.Next() {

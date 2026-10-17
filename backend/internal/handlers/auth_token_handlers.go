@@ -31,7 +31,7 @@ func GetTokens(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var tokens []gin.H
 		for rows.Next() {

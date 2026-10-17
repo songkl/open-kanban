@@ -84,7 +84,7 @@ func listSelectableAgentsForRole(db *sql.DB, callerRole string) ([]AgentSummary,
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make([]AgentSummary, 0, 8)
 	for rows.Next() {
 		var a AgentSummary

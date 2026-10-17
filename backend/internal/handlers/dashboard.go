@@ -72,7 +72,7 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 			GROUP BY col.status
 		`)
 		if err == nil {
-			_ = rows.Close()
+			defer func() { _ = rows.Close() }()
 			for rows.Next() {
 				var status string
 				var high, medium, low, published, draft, archived int

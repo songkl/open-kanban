@@ -432,7 +432,7 @@ func ListSelectableAgents(db *sql.DB) ([]AgentSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := make([]AgentSummary, 0, 8)
 	for rows.Next() {
 		var a AgentSummary
@@ -539,7 +539,7 @@ func findDeviceCodeByUserCode(db *sql.DB, userCode string) (*models.OAuthDeviceC
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var dc models.OAuthDeviceCode
 		var lastPoll sql.NullTime

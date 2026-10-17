@@ -45,7 +45,7 @@ func GetMyTasks(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get column info"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		columnIDs := make(map[string]bool)
 		for rows.Next() {

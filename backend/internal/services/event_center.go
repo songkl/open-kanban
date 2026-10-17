@@ -487,7 +487,7 @@ func (d *SQLDBDispatcher) Matches(ctx context.Context, event Event, env Envelope
 	if err != nil {
 		return nil, fmt.Errorf("event_center: list webhooks: %w", err)
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var (
 		out     []*MatchedWebhook

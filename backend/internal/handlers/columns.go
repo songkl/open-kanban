@@ -118,7 +118,7 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to iterate columns"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		// Batch-load tasks for all returned columns in a single query (fixes N+1).
 		tasksByColumn, err := loadTasksForColumns(db, columnIDs, boardID)
@@ -895,7 +895,7 @@ func getCommentsForTask(db *sql.DB, taskID string) ([]gin.H, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var comments []gin.H
 	for rows.Next() {
@@ -923,7 +923,7 @@ func getSubtasksForTask(db *sql.DB, taskID string) ([]gin.H, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var subtasks []gin.H
 	for rows.Next() {

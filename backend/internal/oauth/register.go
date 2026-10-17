@@ -419,7 +419,7 @@ func findExistingMatchingClient(
 	if err != nil {
 		return nil, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	grantSet := make(map[string]struct{}, len(grants))
 	for _, g := range grants {

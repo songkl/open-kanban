@@ -142,7 +142,7 @@ func writeAnonymousBoards(c *gin.Context, db *sql.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get boards"})
 		return
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	boards := []gin.H{}
 	for rows.Next() {
@@ -227,7 +227,7 @@ func writeAuthenticatedBoards(c *gin.Context, db *sql.DB, user *models.User) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get boards"})
 		return
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	boards := []gin.H{}
 	admin := isAdmin(user)

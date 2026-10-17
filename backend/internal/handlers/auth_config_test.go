@@ -33,6 +33,9 @@ func setupConfigTestDB(t *testing.T) *sql.DB {
 	if _, err := db.Exec(string(schema)); err != nil {
 		t.Fatalf("failed to apply schema: %v", err)
 	}
+	// Pre-seed a salt so hashWithSalt doesn't reach for the global
+	// database.InitDB() (which opens a file-based DB).
+	SetSaltForTest("01234567890123456789012345678901")
 	return db
 }
 

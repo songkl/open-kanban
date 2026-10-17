@@ -449,7 +449,7 @@ func listAvailableAgents(db *sql.DB, approver *models.User) []gin.H {
 	if err != nil {
 		return out
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id, nickname, role string
 		var avatar sql.NullString

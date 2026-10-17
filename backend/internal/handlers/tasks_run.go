@@ -1002,7 +1002,7 @@ func userHasBoardStatusWrite(db *sql.DB, user *models.User, boardID, status stri
 	if err != nil {
 		return false
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var colID string
 		if err := rows.Scan(&colID); err != nil {
@@ -1117,7 +1117,7 @@ func pickMyTaskForClaim(db *sql.DB, user *models.User, agentType string) (string
 		if err != nil {
 			return "", "", err
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var colID, agentTypesStr string
 			if err := rows.Scan(&colID, &agentTypesStr); err != nil {

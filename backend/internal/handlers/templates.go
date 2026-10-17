@@ -50,7 +50,7 @@ func GetTemplates(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get template"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var templates []gin.H
 		for rows.Next() {

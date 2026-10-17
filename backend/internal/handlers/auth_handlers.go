@@ -560,7 +560,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			if isFirstUser {
 				rows, err := db.Query("SELECT id FROM boards WHERE deleted = false")
 				if err == nil {
-					_ = rows.Close()
+					defer func() { _ = rows.Close() }()
 					for rows.Next() {
 						var boardID string
 						if err := rows.Scan(&boardID); err == nil {
@@ -735,7 +735,7 @@ func GetMe(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var permissions []gin.H
 		for rows.Next() {

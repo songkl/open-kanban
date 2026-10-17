@@ -74,7 +74,7 @@ func GetPresetTemplates(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load preset templates"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		presets := make([]PresetTemplate, 0, 4)
 		for rows.Next() {

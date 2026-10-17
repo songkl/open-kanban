@@ -37,7 +37,7 @@ func ListAdminClientsHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 		out := []AdminOAuthClient{}
 		for rows.Next() {
 			var (
@@ -114,7 +114,7 @@ func ListConsentsHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 		out := []gin.H{}
 		for rows.Next() {
 			var cid, scope string

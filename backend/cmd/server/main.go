@@ -1245,7 +1245,7 @@ func runPasswordReset(nickname, newPassword string) {
 	if err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
-	_ = db.Close()
+	defer db.Close()
 
 	// Hash password with salt
 	hashedPassword, err := handlers.HashPasswordWithSalt(newPassword)
@@ -1289,7 +1289,7 @@ func runSystemReset(skipConfirm bool) {
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
 	}
-	_ = db.Close()
+	defer db.Close()
 
 	tables := []string{
 		"tokens",

@@ -151,7 +151,7 @@ func GetColumnPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		permissions := make([]ColumnPermissionRow, 0)
 		for rows.Next() {

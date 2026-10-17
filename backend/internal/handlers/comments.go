@@ -42,7 +42,7 @@ func GetComments(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get comments"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var comments []gin.H
 		for rows.Next() {

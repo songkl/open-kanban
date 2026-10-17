@@ -85,7 +85,7 @@ func run(port int, boardID, adminToken, agentToken string) error {
 	if err != nil {
 		return fmt.Errorf("open sqlite: %w", err)
 	}
-	_ = db.Close()
+	defer db.Close()
 
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		return fmt.Errorf("enable FK: %w", err)
@@ -390,7 +390,7 @@ func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 		type pending struct {
 			ID       string
 			ClientID string

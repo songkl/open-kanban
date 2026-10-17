@@ -153,7 +153,7 @@ func GetPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		// Pre-allocate as empty (not nil) so the JSON encoder
 		// emits "permissions":[] instead of "permissions":null on
@@ -275,7 +275,7 @@ func loadPermissionCandidates(db *sql.DB, boardID string) []gin.H {
 		log.Printf("[GetPermissions] candidates query failed (board=%s): %v", boardID, err)
 		return []gin.H{}
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	candidates := make([]gin.H, 0)
 	for rows.Next() {
@@ -748,7 +748,7 @@ func BulkSetPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk set permissions"})
 			return
 		}
-		_ = stmt.Close()
+		defer stmt.Close()
 
 		granted := make([]gin.H, 0, len(cleaned))
 		for _, uid := range cleaned {
@@ -1099,7 +1099,7 @@ func BulkGrantPermissions(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to bulk grant permissions"})
 			return
 		}
-		_ = stmt.Close()
+		defer stmt.Close()
 
 		for i, p := range applied {
 			uid := grantedIDs[i]

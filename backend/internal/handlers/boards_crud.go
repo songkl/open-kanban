@@ -276,7 +276,7 @@ func collectColumnIDsForBoard(db *sql.DB, boardID string) []string {
 	if err != nil {
 		return nil
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	var ids []string
 	for rows.Next() {
 		var id string

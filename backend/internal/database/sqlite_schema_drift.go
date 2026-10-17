@@ -168,7 +168,7 @@ func sqliteTableHasColumn(db *sql.DB, table, column string) (bool, error) {
 		}
 		return false, err
 	}
-	_ = rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var (
 			cid     int

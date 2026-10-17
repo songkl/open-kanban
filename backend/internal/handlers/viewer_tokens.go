@@ -159,7 +159,7 @@ func ListViewerTokens(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list viewer tokens"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		tokens := []models.ViewerToken{}
 		for rows.Next() {

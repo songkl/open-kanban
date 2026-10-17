@@ -19,7 +19,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 		if boardID != "" {
 			rows, err := db.Query("SELECT id FROM columns WHERE board_id = ?", boardID)
 			if err == nil {
-				_ = rows.Close()
+				defer func() { _ = rows.Close() }()
 				for rows.Next() {
 					var colID string
 					if err := rows.Scan(&colID); err == nil {
@@ -61,7 +61,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get archived tasks"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var tasks []gin.H
 		for rows.Next() {
@@ -133,7 +133,7 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 		if boardID != "" {
 			rows, err := db.Query("SELECT id FROM columns WHERE board_id = ?", boardID)
 			if err == nil {
-				_ = rows.Close()
+				defer func() { _ = rows.Close() }()
 				for rows.Next() {
 					var colID string
 					if err := rows.Scan(&colID); err == nil {
@@ -175,7 +175,7 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get drafts"})
 			return
 		}
-		_ = rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var tasks []gin.H
 		for rows.Next() {
