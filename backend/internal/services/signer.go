@@ -2,7 +2,7 @@
 // webhook signing scheme described in plan §5.2 of
 // docs/EVENT_CENTER_PLAN_s-1138.md.
 //
-// Wire format
+// # Wire format
 //
 // Every webhook POST carries these headers (see also the
 // constants exposed as WebhookHeader* below):
@@ -25,7 +25,7 @@
 //	$ openssl dgst -sha256 -hmac "$secret" \
 //	    <(printf '%s.%s' "$timestamp" "$raw_body")
 //
-// Replay-window validation
+// # Replay-window validation
 //
 // Plan §5.2 promises receivers reject events whose timestamp
 // is more than 5 minutes off. That guard is enforced on the

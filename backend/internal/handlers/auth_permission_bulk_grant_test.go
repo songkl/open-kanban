@@ -99,12 +99,12 @@ func TestBulkGrantPermissions_OwnerCanGrantBatch(t *testing.T) {
 		{"grant2", "WRITE"},
 	} {
 		var (
-			gotAccess      string
-			gotGrantedBy   sql.NullString
-			gotExpiresAt   sql.NullString
-			gotRevokedAt   sql.NullString
-			gotNotes       string
-			rowCount       int
+			gotAccess    string
+			gotGrantedBy sql.NullString
+			gotExpiresAt sql.NullString
+			gotRevokedAt sql.NullString
+			gotNotes     string
+			rowCount     int
 		)
 		if err := db.QueryRow(
 			`SELECT access, granted_by_user_id, expires_at, revoked_at, notes, (SELECT COUNT(*) FROM board_permissions WHERE user_id = ? AND board_id = 'board1') FROM board_permissions WHERE user_id = ? AND board_id = 'board1'`,
@@ -854,7 +854,7 @@ func TestBulkGrantPermissions_DedupesAndDropsEmptyUserIDs(t *testing.T) {
 		"boardId": "board1",
 		"grants": []map[string]interface{}{
 			{"userId": "dup-1", "access": "READ"},
-			{"userId": "", "access": "READ"},      // dropped silently
+			{"userId": "", "access": "READ"},       // dropped silently
 			{"userId": "dup-1", "access": "WRITE"}, // duplicate — first wins
 		},
 	}

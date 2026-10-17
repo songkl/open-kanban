@@ -45,7 +45,9 @@ func isMarketplaceEnabled(db *sql.DB) bool {
 
 // GetPresetTemplates returns the curated marketplace. Self-hosted admins
 // can disable the marketplace by inserting a row
-//   app_config('marketplaceEnabled', '0')
+//
+//	app_config('marketplaceEnabled', '0')
+//
 // which causes this handler to respond with 404 (the SPA then hides
 // every "Templates" entry point). A 404 rather than an empty list is
 // deliberate: a deliberately-disabled surface should look "gone", not
@@ -72,7 +74,7 @@ func GetPresetTemplates(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load preset templates"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		presets := make([]PresetTemplate, 0, 4)
 		for rows.Next() {

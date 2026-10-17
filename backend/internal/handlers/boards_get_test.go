@@ -360,10 +360,10 @@ func TestGetBoard_AccessMatrix(t *testing.T) {
 	defer db.Close()
 
 	cases := []struct {
-		name            string
-		token           string
-		wantEffective   string
-		wantIsOwner     bool
+		name          string
+		token         string
+		wantEffective string
+		wantIsOwner   bool
 	}{
 		{
 			// No auth → empty access, not owner. Backward-

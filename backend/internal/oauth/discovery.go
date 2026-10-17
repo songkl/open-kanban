@@ -95,18 +95,18 @@ func DiscoveryHandlerWithDB(db *sql.DB, registerDevicePath string) gin.HandlerFu
 		issuer := DiscoveryIssuerFromRequest(c)
 		audience := GetConfiguredAudience(c)
 		md := DiscoveryMetadata{
-			Issuer:                            issuer,
-			AuthorizationEndpoint:             issuer + "/oauth/authorize",
-			TokenEndpoint:                     issuer + "/oauth/token",
-			IntrospectionEndpoint:             issuer + "/oauth/introspect",
-			RevocationEndpoint:                issuer + "/oauth/revoke",
-			JWKSURI:                           issuer + "/.well-known/jwks.json",
-			RegistrationEndpoint:              issuer + "/oauth/register",
-			GrantTypesSupported:               SupportedGrantTypes,
-			ResponseTypesSupported:            SupportedResponseTypes,
-			TokenEndpointAuthMethodsSupported: SupportedAuthMethods,
-			CodeChallengeMethodsSupported:     SupportedCodeChallengeMethods,
-			ScopesSupported:                   SupportedScopes(),
+			Issuer:                                 issuer,
+			AuthorizationEndpoint:                  issuer + "/oauth/authorize",
+			TokenEndpoint:                          issuer + "/oauth/token",
+			IntrospectionEndpoint:                  issuer + "/oauth/introspect",
+			RevocationEndpoint:                     issuer + "/oauth/revoke",
+			JWKSURI:                                issuer + "/.well-known/jwks.json",
+			RegistrationEndpoint:                   issuer + "/oauth/register",
+			GrantTypesSupported:                    SupportedGrantTypes,
+			ResponseTypesSupported:                 SupportedResponseTypes,
+			TokenEndpointAuthMethodsSupported:      SupportedAuthMethods,
+			CodeChallengeMethodsSupported:          SupportedCodeChallengeMethods,
+			ScopesSupported:                        SupportedScopes(),
 			AuthorizationResponseIssuedAtSupported: true,
 		}
 		if db == nil || IsDeviceFlowEnabled(db) {

@@ -148,7 +148,7 @@ func setupUnifiedPermissionsDB(t *testing.T) *sql.DB {
 	// projection.
 	rows := []struct {
 		id, user, board, owner, access, grantedBy string
-		expiresAt, revokedAt                       interface{}
+		expiresAt, revokedAt                      interface{}
 	}{
 		{"bp-admin", "admin1", "board1", "admin1", "ADMIN", "admin1", nil, nil},
 		{"bp-member1", "member1", "board1", "", "WRITE", "admin1", nil, nil},

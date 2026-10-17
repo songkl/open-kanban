@@ -193,9 +193,9 @@ func stubIdentity(subject, email string, verified bool) *oauth.ExternalUserInfo 
 
 // ===================== Mapping algorithm (pure) =====================
 
-// 1. First-time login provisions a brand-new local user with
-//    the role defaulting to MEMBER, type=HUMAN, enabled=1,
-//    and writes a user_identities row.
+//  1. First-time login provisions a brand-new local user with
+//     the role defaulting to MEMBER, type=HUMAN, enabled=1,
+//     and writes a user_identities row.
 //
 // Pins plan §4.4 / §5.1.
 func TestMapExternalIdentity_ProvisionNewUser(t *testing.T) {
@@ -246,9 +246,9 @@ func TestMapExternalIdentity_ProvisionNewUser(t *testing.T) {
 	}
 }
 
-// 2. Returning user: the second call with the same subject
-//    binds to the existing local user without provisioning a
-//    second one. Bound=true, Provisioned=false.
+//  2. Returning user: the second call with the same subject
+//     binds to the existing local user without provisioning a
+//     second one. Bound=true, Provisioned=false.
 //
 // Pins the pass-1 hot path in the algorithm.
 func TestMapExternalIdentity_BoundReturningUser(t *testing.T) {
@@ -284,10 +284,10 @@ func TestMapExternalIdentity_BoundReturningUser(t *testing.T) {
 	}
 }
 
-// 3. Auto-link by verified email: a brand-new IdP subject
-//    whose email matches an existing local user (with email
-//    verified=true) binds to that user. Linked=true,
-//    Provisioned=false.
+//  3. Auto-link by verified email: a brand-new IdP subject
+//     whose email matches an existing local user (with email
+//     verified=true) binds to that user. Linked=true,
+//     Provisioned=false.
 //
 // Pins plan §4.4 row 1 ("verified email match").
 func TestMapExternalIdentity_AutoLinkByVerifiedEmail(t *testing.T) {
@@ -321,10 +321,10 @@ func TestMapExternalIdentity_AutoLinkByVerifiedEmail(t *testing.T) {
 	}
 }
 
-// 4. Auto-link refuses AGENT users — plan §4.4 row 1
-//    explicitly forbids binding an external IdP to an Agent
-//    identity. The error must surface so the handler can
-//    respond with 403.
+//  4. Auto-link refuses AGENT users — plan §4.4 row 1
+//     explicitly forbids binding an external IdP to an Agent
+//     identity. The error must surface so the handler can
+//     respond with 403.
 func TestMapExternalIdentity_RefusesBindToAgent(t *testing.T) {
 	db := setupCallbackDB(t)
 	defer db.Close()
@@ -337,8 +337,8 @@ func TestMapExternalIdentity_RefusesBindToAgent(t *testing.T) {
 	}
 }
 
-// 5. Auto-link refuses locally-disabled users — plan §4.4
-//    row 1 forbids re-enabling an account via IdP login.
+//  5. Auto-link refuses locally-disabled users — plan §4.4
+//     row 1 forbids re-enabling an account via IdP login.
 func TestMapExternalIdentity_RefusesBindToDisabled(t *testing.T) {
 	db := setupCallbackDB(t)
 	defer db.Close()
@@ -351,10 +351,10 @@ func TestMapExternalIdentity_RefusesBindToDisabled(t *testing.T) {
 	}
 }
 
-// 6. EmailVerified=false on a brand-new subject with a
-//    matching local user email must NOT auto-link — instead
-//    a fresh user is provisioned. Pins the "no verified
-//    email, no auto-link" branch.
+//  6. EmailVerified=false on a brand-new subject with a
+//     matching local user email must NOT auto-link — instead
+//     a fresh user is provisioned. Pins the "no verified
+//     email, no auto-link" branch.
 //
 // Plan §4.4 row 1 conditions the auto-link on
 // email_verified=true; unverified claims must fall through
@@ -378,9 +378,9 @@ func TestMapExternalIdentity_UnverifiedEmailFallsThrough(t *testing.T) {
 	}
 }
 
-// 7. Multi-IdP binding: a single local user may carry N rows
-//    in user_identities (one per provider). Two different
-//    providers binding the same local user must coexist.
+//  7. Multi-IdP binding: a single local user may carry N rows
+//     in user_identities (one per provider). Two different
+//     providers binding the same local user must coexist.
 //
 // Pins plan §5.2.
 func TestMapExternalIdentity_MultiIdpBinding(t *testing.T) {
@@ -420,9 +420,9 @@ func TestMapExternalIdentity_MultiIdpBinding(t *testing.T) {
 	}
 }
 
-// 8. raw_claims is refreshed on every returning-user login
-//    so the plan §5.3 sync-on-every-login guarantee holds
-//    even when the IdP returns the same subject.
+//  8. raw_claims is refreshed on every returning-user login
+//     so the plan §5.3 sync-on-every-login guarantee holds
+//     even when the IdP returns the same subject.
 func TestMapExternalIdentity_RefreshesRawClaims(t *testing.T) {
 	db := setupCallbackDB(t)
 	defer db.Close()
@@ -447,9 +447,9 @@ func TestMapExternalIdentity_RefreshesRawClaims(t *testing.T) {
 	}
 }
 
-// 9. Subject is mandatory — a degenerate IdP response that
-//    omits the stable identifier must be refused, not silently
-//    bound to a NULL subject.
+//  9. Subject is mandatory — a degenerate IdP response that
+//     omits the stable identifier must be refused, not silently
+//     bound to a NULL subject.
 func TestMapExternalIdentity_RefusesEmptySubject(t *testing.T) {
 	db := setupCallbackDB(t)
 	defer db.Close()
@@ -461,7 +461,7 @@ func TestMapExternalIdentity_RefusesEmptySubject(t *testing.T) {
 	}
 }
 
-// 10. extra_config.default_role=ADMIN is honoured on
+//  10. extra_config.default_role=ADMIN is honoured on
 //     provision. Pins plan §5.1 row "role".
 func TestMapExternalIdentity_RespectsDefaultRole(t *testing.T) {
 	db := setupCallbackDB(t)
@@ -480,7 +480,7 @@ func TestMapExternalIdentity_RespectsDefaultRole(t *testing.T) {
 	}
 }
 
-// 11. extra_config.default_role=unknown falls back to MEMBER
+//  11. extra_config.default_role=unknown falls back to MEMBER
 //     so a typo doesn't surface as a 500 at the first
 //     callback.
 func TestMapExternalIdentity_UnknownDefaultRoleFallsBackToMember(t *testing.T) {
@@ -500,7 +500,7 @@ func TestMapExternalIdentity_UnknownDefaultRoleFallsBackToMember(t *testing.T) {
 	}
 }
 
-// 12. raw_claims is sanitised — a >64KiB blob is truncated
+//  12. raw_claims is sanitised — a >64KiB blob is truncated
 //     and any invalid UTF-8 is replaced so a malicious IdP
 //     can't smuggle control bytes into the activity log /
 //     WebSocket broadcast (CLAUDE.md WebSocket-safety rule).
@@ -526,7 +526,7 @@ func TestMapExternalIdentity_RawClaimsSanitised(t *testing.T) {
 	}
 }
 
-// 13. Username collision suffixes: a second user whose IdP
+//  13. Username collision suffixes: a second user whose IdP
 //     maps to the same email local part gets a -2 suffix
 //     instead of a UNIQUE-constraint error.
 func TestMapExternalIdentity_UsernameCollisionSuffix(t *testing.T) {
@@ -550,7 +550,7 @@ func TestMapExternalIdentity_UsernameCollisionSuffix(t *testing.T) {
 	}
 }
 
-// 14. Disabling an oauth_providers row prevents the
+//  14. Disabling an oauth_providers row prevents the
 //     FetchProviderBySlug helper from returning it. The
 //     callback handler relies on this to 404 the public
 //     surface for a soft-disabled provider.
@@ -567,7 +567,7 @@ func TestFetchProviderBySlug_DisabledReturnsErr(t *testing.T) {
 	}
 }
 
-// 15. Unknown slug returns ErrProviderNotFound (mapped to 404
+//  15. Unknown slug returns ErrProviderNotFound (mapped to 404
 //     by the handler).
 func TestFetchProviderBySlug_UnknownReturnsErr(t *testing.T) {
 	db := setupCallbackDB(t)
@@ -580,7 +580,7 @@ func TestFetchProviderBySlug_UnknownReturnsErr(t *testing.T) {
 
 // ===================== HTTP handler =====================
 
-// 16. Happy-path POST /oauth/external/:slug/callback mints a
+//  16. Happy-path POST /oauth/external/:slug/callback mints a
 //     kanban session token and returns the user + token in the
 //     same envelope as POST /api/v1/auth/login.
 func TestExternalCallbackHandler_HappyPath(t *testing.T) {
@@ -638,7 +638,7 @@ func TestExternalCallbackHandler_HappyPath(t *testing.T) {
 	}
 }
 
-// 17. Unknown slug → 404 (without leaking whether the row
+//  17. Unknown slug → 404 (without leaking whether the row
 //     exists for a different slug).
 func TestExternalCallbackHandler_UnknownSlug(t *testing.T) {
 	db := setupCallbackDB(t)
@@ -675,7 +675,7 @@ func TestExternalCallbackHandler_DisabledProvider(t *testing.T) {
 	}
 }
 
-// 19. Auto-link-by-email for an AGENT user → 403 with a
+//  19. Auto-link-by-email for an AGENT user → 403 with a
 //     caller-readable error message.
 func TestExternalCallbackHandler_RefusesAgent(t *testing.T) {
 	db := setupCallbackDB(t)
@@ -713,7 +713,7 @@ func TestExternalCallbackHandler_BadJSON(t *testing.T) {
 	}
 }
 
-// 21. When the request body has neither `claims` nor `code`,
+//  21. When the request body has neither `claims` nor `code`,
 //     the handler must respond 400 rather than silently
 //     calling the fetcher with empty inputs.
 func TestExternalCallbackHandler_NeitherCodeNorClaims(t *testing.T) {
@@ -731,7 +731,7 @@ func TestExternalCallbackHandler_NeitherCodeNorClaims(t *testing.T) {
 	}
 }
 
-// 22. When only `code` is supplied (no claims), the handler
+//  22. When only `code` is supplied (no claims), the handler
 //     delegates to the injected UserinfoFetcher. Pins the
 //     production code path; the stub asserts it was called
 //     exactly once.
@@ -767,7 +767,7 @@ func TestExternalCallbackHandler_CodePathCallsFetcher(t *testing.T) {
 	}
 }
 
-// 23. Fetcher failure surfaces as 502 — the IdP is upstream
+//  23. Fetcher failure surfaces as 502 — the IdP is upstream
 //     of us, so Bad Gateway is the semantically correct code.
 //
 //     Updated for s-1145: the production code path now requires
@@ -793,7 +793,7 @@ func TestExternalCallbackHandler_FetcherError(t *testing.T) {
 	}
 }
 
-// 24. Cascade: deleting a user with N identity bindings must
+//  24. Cascade: deleting a user with N identity bindings must
 //     remove all of them via ON DELETE CASCADE so the GDPR
 //     parity guarantee in plan §3.3 holds.
 func TestUserIdentities_CascadeOnUserDelete(t *testing.T) {
@@ -823,7 +823,7 @@ func TestUserIdentities_CascadeOnUserDelete(t *testing.T) {
 	}
 }
 
-// 25. Cascade: deleting a provider drops all of its identity
+//  25. Cascade: deleting a provider drops all of its identity
 //     bindings, so removing an IdP in the admin UI leaves no
 //     orphan rows.
 func TestUserIdentities_CascadeOnProviderDelete(t *testing.T) {
@@ -847,7 +847,7 @@ func TestUserIdentities_CascadeOnProviderDelete(t *testing.T) {
 	}
 }
 
-// 26. UNIQUE(provider_id, subject) prevents two identity
+//  26. UNIQUE(provider_id, subject) prevents two identity
 //     rows pointing at the same IdP subject. Pins plan §3.3.
 func TestUserIdentities_UniqueProviderSubject(t *testing.T) {
 	db := setupCallbackDB(t)

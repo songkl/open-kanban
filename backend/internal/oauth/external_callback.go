@@ -550,10 +550,11 @@ func newIdentityID() string {
 // POST /oauth/external/:slug/callback.
 //
 // In production the IdP dance is:
-//   browser → /oauth/external/:slug/login (mints state + PKCE)
-//   → 302 to IdP authorize endpoint
-//   → IdP → /oauth/external/:slug/callback?code=…&state=…
-//   → handler exchanges code for token, fetches userinfo, maps.
+//
+//	browser → /oauth/external/:slug/login (mints state + PKCE)
+//	→ 302 to IdP authorize endpoint
+//	→ IdP → /oauth/external/:slug/callback?code=…&state=…
+//	→ handler exchanges code for token, fetches userinfo, maps.
 //
 // The CSRF state validation, code exchange, and per-kind
 // userinfo fetch ship in sibling sub-tasks (s-1145 / s-1146).
@@ -564,10 +565,10 @@ func newIdentityID() string {
 // promote the body to a query-string callback by routing the
 // same MapExternalIdentity call behind their own fetcher.
 type ExternalCallbackRequest struct {
-	Code         string                 `json:"code"`
-	State        string                 `json:"state"`
-	Claims       map[string]interface{} `json:"claims"`
-	RawClaims    string                 `json:"rawClaims"`
+	Code      string                 `json:"code"`
+	State     string                 `json:"state"`
+	Claims    map[string]interface{} `json:"claims"`
+	RawClaims string                 `json:"rawClaims"`
 }
 
 // ExternalCallbackHandler serves GET (production IdP redirect)

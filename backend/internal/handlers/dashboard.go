@@ -28,19 +28,19 @@ type DashboardBlockedTask struct {
 }
 
 type DashboardStats struct {
-	TotalTasks            int                      `json:"totalTasks"`
-	TasksByStatus         map[string]int           `json:"tasksByStatus"`
-	TasksByPriority       map[string]int           `json:"tasksByPriority"`
-	PublishedTasks        int                      `json:"publishedTasks"`
-	DraftTasks            int                      `json:"draftTasks"`
-	ArchivedTasks         int                      `json:"archivedTasks"`
-	TotalBoards           int                      `json:"totalBoards"`
-	ActiveBoardCount      int                      `json:"activeBoardCount"`
-	TotalColumns          int                      `json:"totalColumns"`
-	TotalUsers            int                      `json:"totalUsers"`
-	TasksCompletedLast7d  int                      `json:"tasksCompletedLast7Days"`
-	TopAgentsByActivity   []DashboardAgentActivity `json:"topAgentsByActivity"`
-	LongestBlockedCards   []DashboardBlockedTask   `json:"longestBlockedCards"`
+	TotalTasks           int                      `json:"totalTasks"`
+	TasksByStatus        map[string]int           `json:"tasksByStatus"`
+	TasksByPriority      map[string]int           `json:"tasksByPriority"`
+	PublishedTasks       int                      `json:"publishedTasks"`
+	DraftTasks           int                      `json:"draftTasks"`
+	ArchivedTasks        int                      `json:"archivedTasks"`
+	TotalBoards          int                      `json:"totalBoards"`
+	ActiveBoardCount     int                      `json:"activeBoardCount"`
+	TotalColumns         int                      `json:"totalColumns"`
+	TotalUsers           int                      `json:"totalUsers"`
+	TasksCompletedLast7d int                      `json:"tasksCompletedLast7Days"`
+	TopAgentsByActivity  []DashboardAgentActivity `json:"topAgentsByActivity"`
+	LongestBlockedCards  []DashboardBlockedTask   `json:"longestBlockedCards"`
 }
 
 func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
@@ -72,7 +72,7 @@ func GetDashboardStats(db *sql.DB) gin.HandlerFunc {
 			GROUP BY col.status
 		`)
 		if err == nil {
-			defer rows.Close()
+			_ = rows.Close()
 			for rows.Next() {
 				var status string
 				var high, medium, low, published, draft, archived int

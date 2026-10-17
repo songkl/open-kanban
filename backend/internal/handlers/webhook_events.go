@@ -15,30 +15,30 @@ import (
 // types are part of the API contract:
 //
 //   - Event        the dot-namespaced identifier the dispatcher
-//                  matches against webhook.eventTypes. Stable
-//                  across releases (plan §3 promises a fixed,
-//                  versioned catalogue).
+//     matches against webhook.eventTypes. Stable
+//     across releases (plan §3 promises a fixed,
+//     versioned catalogue).
 //   - DisplayName  Chinese label shown in the operator UI. Kept
-//                  in Chinese because the existing kanban UI
-//                  ships zh-CN as its primary locale; an i18n
-//                  layer can overlay later without renaming
-//                  the API field.
+//     in Chinese because the existing kanban UI
+//     ships zh-CN as its primary locale; an i18n
+//     layer can overlay later without renaming
+//     the API field.
 //   - Description  one-line trigger description sourced from
-//                  the §3 "Triggered when" column.
+//     the §3 "Triggered when" column.
 //   - PayloadSchema simplified JSON Schema subset (type /
-//                  required / properties) describing the `data`
-//                  object carried under envelope.data. New
-//                  fields are additive per the §3 note that
-//                  receivers MUST ignore unknown keys.
+//     required / properties) describing the `data`
+//     object carried under envelope.data. New
+//     fields are additive per the §3 note that
+//     receivers MUST ignore unknown keys.
 //   - Filters      which §3.2 filter categories meaningfully
-//                  apply to the event. The picker disables
-//                  categories that aren't listed here.
+//     apply to the event. The picker disables
+//     categories that aren't listed here.
 type EventCatalogueEntry struct {
-	Event        string                 `json:"event"`
-	DisplayName  string                 `json:"displayName"`
-	Description  string                 `json:"description"`
-	PayloadSchema map[string]any        `json:"payloadSchema"`
-	Filters      []string               `json:"filters"`
+	Event         string         `json:"event"`
+	DisplayName   string         `json:"displayName"`
+	Description   string         `json:"description"`
+	PayloadSchema map[string]any `json:"payloadSchema"`
+	Filters       []string       `json:"filters"`
 }
 
 // EventFilter constants are the canonical strings returned in
@@ -347,7 +347,7 @@ func commentPayloadSchema() map[string]any {
 // `from` type because it mirrors the field that changed.
 func changesPayloadSchema() map[string]any {
 	return map[string]any{
-		"type":     "array",
+		"type": "array",
 		"items": map[string]any{
 			"type":     "object",
 			"required": []string{"field", "from", "to"},

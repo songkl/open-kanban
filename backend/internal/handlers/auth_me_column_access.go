@@ -86,10 +86,10 @@ func GetMyColumnAccess(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"boardId":          boardID,
-			"boardAccess":      boardAccess,
-			"isOwner":          isOwner,
-			"columns":          result,
+			"boardId":     boardID,
+			"boardAccess": boardAccess,
+			"isOwner":     isOwner,
+			"columns":     result,
 		})
 	}
 }

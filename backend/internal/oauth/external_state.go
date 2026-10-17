@@ -21,15 +21,15 @@ import (
 // browser carries to the IdP with the PKCE verifier the callback
 // handler will hand back to the IdP at the token-exchange step.
 type PendingOAuthState struct {
-	ID             string
-	State          string
-	ProviderID     string
-	CodeVerifier   string
-	CodeChallenge  string
-	RedirectAfter  string
-	CreatedAt      time.Time
-	ExpiresAt      time.Time
-	ConsumedAt     sql.NullTime
+	ID            string
+	State         string
+	ProviderID    string
+	CodeVerifier  string
+	CodeChallenge string
+	RedirectAfter string
+	CreatedAt     time.Time
+	ExpiresAt     time.Time
+	ConsumedAt    sql.NullTime
 }
 
 // PendingStateTTL is the lifetime of a freshly minted CSRF state
@@ -263,17 +263,17 @@ func sanitizeRedirectAfter(raw string) string {
 
 // ExternalLoginHandler returns the gin handler for
 // GET /oauth/external/:slug/login. The handler:
-//   1. Resolves the slug → provider row (404 if disabled).
-//   2. Mints a fresh state + PKCE pair and writes the row to
-//      pending_oauth_states with a PendingStateTTL window.
-//   3. Sets a defence-in-depth HttpOnly cookie carrying the
-//      same state value (the callback handler will compare
-//      cookie vs DB row — a cookie that mismatches the DB row
-//      suggests the state was stolen off-host and replayed).
-//   4. Builds the IdP authorize URL with response_type=code,
-//      scope, redirect_uri back to /oauth/external/:slug/callback,
-//      state, code_challenge, and code_challenge_method=S256.
-//   5. Returns 302 to the IdP.
+//  1. Resolves the slug → provider row (404 if disabled).
+//  2. Mints a fresh state + PKCE pair and writes the row to
+//     pending_oauth_states with a PendingStateTTL window.
+//  3. Sets a defence-in-depth HttpOnly cookie carrying the
+//     same state value (the callback handler will compare
+//     cookie vs DB row — a cookie that mismatches the DB row
+//     suggests the state was stolen off-host and replayed).
+//  4. Builds the IdP authorize URL with response_type=code,
+//     scope, redirect_uri back to /oauth/external/:slug/callback,
+//     state, code_challenge, and code_challenge_method=S256.
+//  5. Returns 302 to the IdP.
 //
 // The handler is publicly reachable (no RequireAuth) — the whole
 // point of /login is to start an unauthenticated session.

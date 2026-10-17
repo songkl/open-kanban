@@ -132,10 +132,10 @@ func NewTaskCreatedEvent(task TaskPayload, boardID string, at time.Time) *TaskCr
 	}
 }
 
-func (e *TaskCreatedEvent) EventType() string     { return "task.created" }
-func (e *TaskCreatedEvent) EnvelopeID() string    { return newEnvelopeID() }
-func (e *TaskCreatedEvent) OccurredAt() time.Time { return e.at }
-func (e *TaskCreatedEvent) Data() any             { return ginH{"task": e.filter.Task} }
+func (e *TaskCreatedEvent) EventType() string      { return "task.created" }
+func (e *TaskCreatedEvent) EnvelopeID() string     { return newEnvelopeID() }
+func (e *TaskCreatedEvent) OccurredAt() time.Time  { return e.at }
+func (e *TaskCreatedEvent) Data() any              { return ginH{"task": e.filter.Task} }
 func (e *TaskCreatedEvent) FilterBoardID() string  { return e.filter.FilterBoardID() }
 func (e *TaskCreatedEvent) FilterColumnID() string { return e.filter.FilterColumnID() }
 func (e *TaskCreatedEvent) FilterPriority() string { return e.filter.FilterPriority() }
@@ -175,9 +175,9 @@ func (e *TaskUpdatedEvent) FilterAssignee() string { return e.filter.FilterAssig
 // TaskMovedEvent fires when a task crosses a column boundary.
 // Payload root is { task, fromColumnId, toColumnId }.
 type TaskMovedEvent struct {
-	filter        TaskEventFilter
-	fromColumnID  string
-	at            time.Time
+	filter       TaskEventFilter
+	fromColumnID string
+	at           time.Time
 }
 
 func NewTaskMovedEvent(task TaskPayload, boardID, fromColumnID string, at time.Time) *TaskMovedEvent {
@@ -224,10 +224,10 @@ func NewTaskCompletedEvent(task TaskPayload, boardID string, at time.Time) *Task
 	}
 }
 
-func (e *TaskCompletedEvent) EventType() string     { return "task.completed" }
-func (e *TaskCompletedEvent) EnvelopeID() string    { return newEnvelopeID() }
-func (e *TaskCompletedEvent) OccurredAt() time.Time { return e.at }
-func (e *TaskCompletedEvent) Data() any             { return ginH{"task": e.filter.Task} }
+func (e *TaskCompletedEvent) EventType() string      { return "task.completed" }
+func (e *TaskCompletedEvent) EnvelopeID() string     { return newEnvelopeID() }
+func (e *TaskCompletedEvent) OccurredAt() time.Time  { return e.at }
+func (e *TaskCompletedEvent) Data() any              { return ginH{"task": e.filter.Task} }
 func (e *TaskCompletedEvent) FilterBoardID() string  { return e.filter.FilterBoardID() }
 func (e *TaskCompletedEvent) FilterColumnID() string { return e.filter.FilterColumnID() }
 func (e *TaskCompletedEvent) FilterPriority() string { return e.filter.FilterPriority() }
@@ -251,10 +251,10 @@ func NewTaskDeletedEvent(task TaskPayload, boardID string, at time.Time) *TaskDe
 	}
 }
 
-func (e *TaskDeletedEvent) EventType() string     { return "task.deleted" }
-func (e *TaskDeletedEvent) EnvelopeID() string    { return newEnvelopeID() }
-func (e *TaskDeletedEvent) OccurredAt() time.Time { return e.at }
-func (e *TaskDeletedEvent) Data() any             { return ginH{"task": e.filter.Task} }
+func (e *TaskDeletedEvent) EventType() string      { return "task.deleted" }
+func (e *TaskDeletedEvent) EnvelopeID() string     { return newEnvelopeID() }
+func (e *TaskDeletedEvent) OccurredAt() time.Time  { return e.at }
+func (e *TaskDeletedEvent) Data() any              { return ginH{"task": e.filter.Task} }
 func (e *TaskDeletedEvent) FilterBoardID() string  { return e.filter.FilterBoardID() }
 func (e *TaskDeletedEvent) FilterColumnID() string { return e.filter.FilterColumnID() }
 func (e *TaskDeletedEvent) FilterPriority() string { return e.filter.FilterPriority() }
@@ -341,10 +341,10 @@ func NewBoardCreatedEvent(board BoardPayload, at time.Time) *BoardCreatedEvent {
 	return &BoardCreatedEvent{board: board, at: at}
 }
 
-func (e *BoardCreatedEvent) EventType() string     { return "board.created" }
-func (e *BoardCreatedEvent) EnvelopeID() string    { return newEnvelopeID() }
-func (e *BoardCreatedEvent) OccurredAt() time.Time { return e.at }
-func (e *BoardCreatedEvent) Data() any             { return ginH{"board": e.board} }
+func (e *BoardCreatedEvent) EventType() string      { return "board.created" }
+func (e *BoardCreatedEvent) EnvelopeID() string     { return newEnvelopeID() }
+func (e *BoardCreatedEvent) OccurredAt() time.Time  { return e.at }
+func (e *BoardCreatedEvent) Data() any              { return ginH{"board": e.board} }
 func (e *BoardCreatedEvent) FilterBoardID() string  { return "" }
 func (e *BoardCreatedEvent) FilterColumnID() string { return "" }
 func (e *BoardCreatedEvent) FilterPriority() string { return "" }
@@ -396,10 +396,10 @@ func NewColumnCreatedEvent(column ColumnPayload, at time.Time) *ColumnCreatedEve
 	}
 }
 
-func (e *ColumnCreatedEvent) EventType() string     { return "column.created" }
-func (e *ColumnCreatedEvent) EnvelopeID() string    { return newEnvelopeID() }
-func (e *ColumnCreatedEvent) OccurredAt() time.Time { return e.at }
-func (e *ColumnCreatedEvent) Data() any             { return ginH{"column": e.column} }
+func (e *ColumnCreatedEvent) EventType() string      { return "column.created" }
+func (e *ColumnCreatedEvent) EnvelopeID() string     { return newEnvelopeID() }
+func (e *ColumnCreatedEvent) OccurredAt() time.Time  { return e.at }
+func (e *ColumnCreatedEvent) Data() any              { return ginH{"column": e.column} }
 func (e *ColumnCreatedEvent) FilterBoardID() string  { return e.filter.FilterBoardID() }
 func (e *ColumnCreatedEvent) FilterColumnID() string { return e.filter.FilterColumnID() }
 func (e *ColumnCreatedEvent) FilterPriority() string { return e.filter.FilterPriority() }
@@ -458,10 +458,10 @@ func NewColumnDeletedEvent(column ColumnPayload, at time.Time) *ColumnDeletedEve
 	}
 }
 
-func (e *ColumnDeletedEvent) EventType() string     { return "column.deleted" }
-func (e *ColumnDeletedEvent) EnvelopeID() string    { return newEnvelopeID() }
-func (e *ColumnDeletedEvent) OccurredAt() time.Time { return e.at }
-func (e *ColumnDeletedEvent) Data() any             { return ginH{"column": e.column} }
+func (e *ColumnDeletedEvent) EventType() string      { return "column.deleted" }
+func (e *ColumnDeletedEvent) EnvelopeID() string     { return newEnvelopeID() }
+func (e *ColumnDeletedEvent) OccurredAt() time.Time  { return e.at }
+func (e *ColumnDeletedEvent) Data() any              { return ginH{"column": e.column} }
 func (e *ColumnDeletedEvent) FilterBoardID() string  { return e.filter.FilterBoardID() }
 func (e *ColumnDeletedEvent) FilterColumnID() string { return e.filter.FilterColumnID() }
 func (e *ColumnDeletedEvent) FilterPriority() string { return e.filter.FilterPriority() }

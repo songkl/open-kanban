@@ -151,7 +151,7 @@ type CreateTaskInput struct {
 	// default" (true at the time of writing, see PM review s-1261
 	// P0-3); non-nil values are passed through verbatim so the
 	// draft flow can still opt in via `published=false`.
-	Published   *bool
+	Published *bool
 	// DueAt is the optional deadline the create-task modal
 	// forwards (T-1207 / s-1207, PM_REVIEW §3.12). The service
 	// passes it through to the repository; nil means "no due

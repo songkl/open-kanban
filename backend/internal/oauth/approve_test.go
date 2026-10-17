@@ -377,13 +377,14 @@ func seedApproveAgent(t *testing.T, db *sql.DB, id, nickname, role string) {
 // TestApproveDeviceBindsConsentAndAuditToExplicitAgent covers the
 // combined s-1118 happy path: a human approver delegates a device
 // code to an enabled Agent and the handler
-//   (a) records the device row bound to that Agent (covered by the
-//       s-1112.1 bind plumbing, re-asserted here for completeness);
-//   (b) writes the consent row keyed on the BOUND Agent, not the
-//       human approver (plan §4.1.1, §4.4);
-//   (c) writes a DEVICE_APPROVE activity row with actor=human
-//       approver, target_id=bound Agent, target_type=DEVICE
-//       (plan §4.1.1 + §4.4).
+//
+//	(a) records the device row bound to that Agent (covered by the
+//	    s-1112.1 bind plumbing, re-asserted here for completeness);
+//	(b) writes the consent row keyed on the BOUND Agent, not the
+//	    human approver (plan §4.1.1, §4.4);
+//	(c) writes a DEVICE_APPROVE activity row with actor=human
+//	    approver, target_id=bound Agent, target_type=DEVICE
+//	    (plan §4.1.1 + §4.4).
 func TestApproveDeviceBindsConsentAndAuditToExplicitAgent(t *testing.T) {
 	db := setupApproveDB(t)
 	defer db.Close()

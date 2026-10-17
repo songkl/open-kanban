@@ -1759,8 +1759,8 @@ func TestGetRun_JSONShapeMatchesTaskRunModel(t *testing.T) {
 	// The handler now answers { run, hasRun } (PM review s-1261
 	// P1-2), so the row shape assertions live under the `run` key.
 	var envelope struct {
-		Run map[string]any `json:"run"`
-		HasRun bool        `json:"hasRun"`
+		Run    map[string]any `json:"run"`
+		HasRun bool           `json:"hasRun"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -2071,7 +2071,7 @@ func TestListRunsHistory(t *testing.T) {
 					taskID := fmt.Sprintf("t-pg%d", i)
 					values = append(values, fmt.Sprintf("('%s', 'pg %d', 'c-todo', 1, 'u-admin')", taskID, i))
 				}
-				if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES `+strings.Join(values, ",")); err != nil {
+				if _, err := db.Exec(`INSERT INTO tasks (id, title, column_id, published, created_by) VALUES ` + strings.Join(values, ",")); err != nil {
 					t.Fatalf("seed tasks: %v", err)
 				}
 				for i := 0; i < 5; i++ {
@@ -2235,10 +2235,10 @@ func strPtr(s string) *string { return &s }
 // without owning the surrounding column or inbox.
 //
 // Verifies:
-//   * 200 with the canonical { task, run } payload (same shape
+//   - 200 with the canonical { task, run } payload (same shape
 //     as ClaimRun, so the CLI prompt-rendering path is identical).
-//   * task_runs row inserted with the supplied runnerId.
-//   * task moves into the in_progress column, just like ClaimRun.
+//   - task_runs row inserted with the supplied runnerId.
+//   - task moves into the in_progress column, just like ClaimRun.
 func TestAttachRun_HappyPath(t *testing.T) {
 	db := setupRunsDB(t)
 	defer db.Close()

@@ -94,8 +94,8 @@ func countPendingStates(t *testing.T, db *sql.DB) int {
 
 // ===================== Crypto / encoding helpers =====================
 
-// 1. generateOpaqueState returns a 43-char base64url string —
-//    the canonical CSRF token shape per plan §7.1.
+//  1. generateOpaqueState returns a 43-char base64url string —
+//     the canonical CSRF token shape per plan §7.1.
 func TestGenerateOpaqueState_Shape(t *testing.T) {
 	state, err := oauth.GenerateOpaqueStateForTest()
 	if err != nil {
@@ -109,8 +109,8 @@ func TestGenerateOpaqueState_Shape(t *testing.T) {
 	}
 }
 
-// 2. Two consecutive state generations must differ — the
-//    generator must not be deterministic.
+//  2. Two consecutive state generations must differ — the
+//     generator must not be deterministic.
 func TestGenerateOpaqueState_Unique(t *testing.T) {
 	a, err := oauth.GenerateOpaqueStateForTest()
 	if err != nil {
@@ -125,8 +125,8 @@ func TestGenerateOpaqueState_Unique(t *testing.T) {
 	}
 }
 
-// 3. PKCE pair: verifier is 43-char base64url, challenge is
-//    base64url(SHA-256(verifier)). Pin RFC 7636 §4.2 / §4.3.
+//  3. PKCE pair: verifier is 43-char base64url, challenge is
+//     base64url(SHA-256(verifier)). Pin RFC 7636 §4.2 / §4.3.
 func TestGeneratePKCEPair_SHA256(t *testing.T) {
 	verifier, challenge, err := oauth.GeneratePKCEPairForTest()
 	if err != nil {
@@ -154,8 +154,8 @@ func sumSHA256(b []byte) []byte {
 
 // ===================== persistPendingState / ConsumePendingState =====================
 
-// 4. persistPendingState writes a row that ConsumePendingState
-//    can look up, expire, and consume.
+//  4. persistPendingState writes a row that ConsumePendingState
+//     can look up, expire, and consume.
 func TestPendingState_RoundTrip(t *testing.T) {
 	db := setupStateDB(t)
 	defer db.Close()
@@ -192,9 +192,9 @@ func TestPendingState_RoundTrip(t *testing.T) {
 	}
 }
 
-// 5. Unknown state value → ErrPendingStateNotFound. Pins the
-//    callback handler's 400 response when an attacker submits
-//    a guess that doesn't match any minted row.
+//  5. Unknown state value → ErrPendingStateNotFound. Pins the
+//     callback handler's 400 response when an attacker submits
+//     a guess that doesn't match any minted row.
 func TestConsumePendingState_NotFound(t *testing.T) {
 	db := setupStateDB(t)
 	defer db.Close()
@@ -203,9 +203,9 @@ func TestConsumePendingState_NotFound(t *testing.T) {
 	}
 }
 
-// 6. Empty state value → ErrPendingStateNotFound. Pins the
-//    handler's 400 response when an attacker submits an empty
-//    state to provoke a SQL error or a slow scan.
+//  6. Empty state value → ErrPendingStateNotFound. Pins the
+//     handler's 400 response when an attacker submits an empty
+//     state to provoke a SQL error or a slow scan.
 func TestConsumePendingState_Empty(t *testing.T) {
 	db := setupStateDB(t)
 	defer db.Close()
@@ -214,9 +214,9 @@ func TestConsumePendingState_Empty(t *testing.T) {
 	}
 }
 
-// 7. Expired state value → ErrPendingStateExpired. Pins the
-//    handler's 400 when a row was minted more than
-//    PendingStateTTL ago.
+//  7. Expired state value → ErrPendingStateExpired. Pins the
+//     handler's 400 when a row was minted more than
+//     PendingStateTTL ago.
 func TestConsumePendingState_Expired(t *testing.T) {
 	db := setupStateDB(t)
 	defer db.Close()
@@ -230,8 +230,8 @@ func TestConsumePendingState_Expired(t *testing.T) {
 	}
 }
 
-// 8. expectedProviderID mismatch → ErrPendingStateWrongProvider.
-//    Pin the defence-in-depth check the admin tooling uses.
+//  8. expectedProviderID mismatch → ErrPendingStateWrongProvider.
+//     Pin the defence-in-depth check the admin tooling uses.
 func TestConsumePendingState_WrongProvider(t *testing.T) {
 	db := setupStateDB(t)
 	defer db.Close()
@@ -245,9 +245,9 @@ func TestConsumePendingState_WrongProvider(t *testing.T) {
 	}
 }
 
-// 9. ON DELETE CASCADE: removing a provider drops every
-//    pending state bound to it. Mirrors the migration test but
-//    exercises the seam ConsumePendingState uses.
+//  9. ON DELETE CASCADE: removing a provider drops every
+//     pending state bound to it. Mirrors the migration test but
+//     exercises the seam ConsumePendingState uses.
 func TestPendingState_CascadeOnProviderDelete(t *testing.T) {
 	db := setupStateDB(t)
 	defer db.Close()
@@ -264,7 +264,7 @@ func TestPendingState_CascadeOnProviderDelete(t *testing.T) {
 	}
 }
 
-// 10. PurgeExpiredPendingStates removes only the rows past
+//  10. PurgeExpiredPendingStates removes only the rows past
 //     their expiry; live rows are kept.
 func TestPurgeExpiredPendingStates(t *testing.T) {
 	db := setupStateDB(t)
@@ -293,7 +293,7 @@ func TestPurgeExpiredPendingStates(t *testing.T) {
 
 // ===================== sanitizeRedirectAfter =====================
 
-// 11. sanitizeRedirectAfter accepts only relative paths and
+//  11. sanitizeRedirectAfter accepts only relative paths and
 //     refuses open-redirect attempts (absolute URLs,
 //     scheme-relative URLs, empty values).
 func TestSanitizeRedirectAfter(t *testing.T) {
@@ -320,7 +320,7 @@ func TestSanitizeRedirectAfter(t *testing.T) {
 
 // ===================== ExternalLoginHandler =====================
 
-// 12. Happy path: GET /oauth/external/:slug/login → 302 to the
+//  12. Happy path: GET /oauth/external/:slug/login → 302 to the
 //     IdP, sets the state cookie, persists a row. The
 //     redirect URL carries state + code_challenge +
 //     code_challenge_method=S256 + the provider's client_id +
@@ -412,7 +412,7 @@ func TestExternalLoginHandler_HappyPath(t *testing.T) {
 	}
 }
 
-// 13. Unknown slug → 404 (does not leak whether the row exists
+//  13. Unknown slug → 404 (does not leak whether the row exists
 //     for a different slug).
 func TestExternalLoginHandler_UnknownSlug(t *testing.T) {
 	db := setupStateDB(t)
@@ -431,7 +431,7 @@ func TestExternalLoginHandler_UnknownSlug(t *testing.T) {
 	}
 }
 
-// 14. Disabled provider → 404. Same reasoning as the callback
+//  14. Disabled provider → 404. Same reasoning as the callback
 //     handler: the public surface never leaks the existence
 //     of a disabled row.
 func TestExternalLoginHandler_DisabledProvider(t *testing.T) {
@@ -452,7 +452,7 @@ func TestExternalLoginHandler_DisabledProvider(t *testing.T) {
 	}
 }
 
-// 15. auth_endpoint not configured → 500. Pins the early
+//  15. auth_endpoint not configured → 500. Pins the early
 //     failure surface so a misconfigured provider can't 302
 //     the user to a literal empty string.
 func TestExternalLoginHandler_MissingAuthEndpoint(t *testing.T) {
@@ -473,8 +473,8 @@ func TestExternalLoginHandler_MissingAuthEndpoint(t *testing.T) {
 	}
 }
 
-// 16. Open-redirect guard: ?redirect=https://attacker.test is
-//     dropped; the persisted row carries redirect_after=''.
+//  16. Open-redirect guard: ?redirect=https://attacker.test is
+//     dropped; the persisted row carries redirect_after=”.
 func TestExternalLoginHandler_RejectsOpenRedirect(t *testing.T) {
 	db := setupStateDB(t)
 	defer db.Close()
@@ -501,7 +501,7 @@ func TestExternalLoginHandler_RejectsOpenRedirect(t *testing.T) {
 
 // ===================== Callback state validation =====================
 
-// 17. Callback without a state parameter but with a code → 400
+//  17. Callback without a state parameter but with a code → 400
 //     (the state is mandatory in the production IdP flow).
 //     Pins the security check that an attacker can't bypass
 //     CSRF by sending only `code`.
@@ -522,7 +522,7 @@ func TestExternalCallback_CodeWithoutState(t *testing.T) {
 	}
 }
 
-// 18. Callback with an unknown state value → 400. Pins the
+//  18. Callback with an unknown state value → 400. Pins the
 //     "no row matches" branch.
 func TestExternalCallback_UnknownState(t *testing.T) {
 	db := setupStateDB(t)
@@ -538,7 +538,7 @@ func TestExternalCallback_UnknownState(t *testing.T) {
 	}
 }
 
-// 19. Callback with an expired state value → 400. Pins the
+//  19. Callback with an expired state value → 400. Pins the
 //     "row exists but past TTL" branch.
 func TestExternalCallback_ExpiredState(t *testing.T) {
 	db := setupStateDB(t)
@@ -561,7 +561,7 @@ func TestExternalCallback_ExpiredState(t *testing.T) {
 	}
 }
 
-// 20. Callback replays the same state twice → second call
+//  20. Callback replays the same state twice → second call
 //     sees ErrPendingStateConsumed → 400. Pins the one-shot
 //     enforcement at the HTTP layer.
 func TestExternalCallback_ConsumedState(t *testing.T) {
@@ -593,7 +593,7 @@ func TestExternalCallback_ConsumedState(t *testing.T) {
 	}
 }
 
-// 21. Cookie mismatch: the request carries a state value
+//  21. Cookie mismatch: the request carries a state value
 //     that matches the DB row, but the cookie value differs.
 //     Pins the same-origin check (defence-in-depth against a
 //     CSRF replay off-host).
@@ -619,7 +619,7 @@ func TestExternalCallback_CookieMismatch(t *testing.T) {
 	}
 }
 
-// 22. POST test-seam path with `claims` (no `code`) must still
+//  22. POST test-seam path with `claims` (no `code`) must still
 //     mint a session — confirms the state-validation block is
 //     skipped on the test path so the existing external-callback
 //     suite keeps working.
@@ -639,7 +639,7 @@ func TestExternalCallback_ClaimsPathBypassesState(t *testing.T) {
 	}
 }
 
-// 23. Successful callback consumes the state, sets the
+//  23. Successful callback consumes the state, sets the
 //     session cookie, and clears the state cookie so a
 //     follow-up request can't accidentally reuse it.
 func TestExternalCallback_ConsumesAndClearsState(t *testing.T) {

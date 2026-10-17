@@ -451,12 +451,12 @@ func setupAPIRoutes(r *gin.Engine, db *sql.DB, onConfigPersisted func(path strin
 		authProtected.DELETE("/oauth/providers/:id", oauth.DeleteAdminProviderHandler(db))
 	}
 
-// Permission audit log endpoint: surfaces PERMISSION_GRANT /
-// REVOKE / TRANSFER rows to global admins and board owners.
-// Lives at /api/v1/activities (not under /api/v1/auth) so the
-// audit surface area is independent from the per-user activity
-// feed at /api/v1/auth/activities.
-r.GET("/api/v1/activities",
+	// Permission audit log endpoint: surfaces PERMISSION_GRANT /
+	// REVOKE / TRANSFER rows to global admins and board owners.
+	// Lives at /api/v1/activities (not under /api/v1/auth) so the
+	// audit surface area is independent from the per-user activity
+	// feed at /api/v1/auth/activities.
+	r.GET("/api/v1/activities",
 		handlers.RequireSignatureVerification(),
 		handlers.RequireAuth(db),
 		handlers.GetPermissionActivities(db),
@@ -1043,11 +1043,11 @@ func main() {
 	//     elapsed, and transitions over-budget rows to
 	//     EXHAUSTED with slog.Warn.
 	var (
-		eventBus   services.EventBus
-		eventCtr   *services.EventCenter
-		retrySwp   *services.RetrySweeper
-		limiter    *services.RateLimiter
-		runReaper  *services.RunReaper
+		eventBus  services.EventBus
+		eventCtr  *services.EventCenter
+		retrySwp  *services.RetrySweeper
+		limiter   *services.RateLimiter
+		runReaper *services.RunReaper
 	)
 	if db != nil {
 		eventBus = services.NewChannelEventBus(256)
@@ -1245,7 +1245,7 @@ func runPasswordReset(nickname, newPassword string) {
 	if err != nil {
 		log.Fatal("Failed to initialize database:", err)
 	}
-	defer db.Close()
+	_ = db.Close()
 
 	// Hash password with salt
 	hashedPassword, err := handlers.HashPasswordWithSalt(newPassword)
@@ -1289,7 +1289,7 @@ func runSystemReset(skipConfirm bool) {
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
 	}
-	defer db.Close()
+	_ = db.Close()
 
 	tables := []string{
 		"tokens",

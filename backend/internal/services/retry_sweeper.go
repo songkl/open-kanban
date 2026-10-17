@@ -238,11 +238,11 @@ func (s *RetrySweeper) markExhausted(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("retry_sweeper: select exhausted: %w", err)
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	for rows.Next() {
 		var (
 			id, webhookID, eventID, eventType, errMsg string
-			attempt                                    int
+			attempt                                   int
 		)
 		if err := rows.Scan(&id, &webhookID, &eventID, &eventType, &attempt, &errMsg); err != nil {
 			return fmt.Errorf("retry_sweeper: scan exhausted: %w", err)
@@ -278,7 +278,7 @@ func (s *RetrySweeper) requeueDue(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("retry_sweeper: select due: %w", err)
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	type due struct {
 		job        *DeliveryJob

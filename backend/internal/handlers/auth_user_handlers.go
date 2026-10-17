@@ -44,7 +44,7 @@ func GetUsers(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var users []gin.H
 		for rows.Next() {
@@ -389,7 +389,7 @@ func GetUsersVisible(db *sql.DB) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users"})
 				return
 			}
-			defer rows.Close()
+			_ = rows.Close()
 
 			users := make([]gin.H, 0)
 			for rows.Next() {
@@ -451,7 +451,7 @@ func GetUsersVisible(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get visible users"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		users := make([]gin.H, 0)
 		for rows.Next() {
@@ -498,7 +498,7 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var agents []gin.H
 		for rows.Next() {
@@ -510,18 +510,18 @@ func GetAgents(db *sql.DB) gin.HandlerFunc {
 			var creatorUsername sql.NullString
 			if err := rows.Scan(&u.ID, &u.Nickname, &u.Avatar, &u.Type, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &lastActiveAt, &createdBy, &creatorNickname, &creatorUsername, &tokenCount, &runsLast24h, &failsLast24h, &totalRuns); err == nil {
 				agent := gin.H{
-					"id":            u.ID,
-					"nickname":      u.Nickname,
-					"avatar":        u.Avatar,
-					"type":          u.Type,
-					"role":          u.Role,
-					"enabled":       u.Enabled,
-					"createdAt":     u.CreatedAt,
-					"updatedAt":     u.UpdatedAt,
-					"tokenCount":    tokenCount,
-					"runsLast24h":   runsLast24h,
-					"failsLast24h":  failsLast24h,
-					"totalRuns":     totalRuns,
+					"id":           u.ID,
+					"nickname":     u.Nickname,
+					"avatar":       u.Avatar,
+					"type":         u.Type,
+					"role":         u.Role,
+					"enabled":      u.Enabled,
+					"createdAt":    u.CreatedAt,
+					"updatedAt":    u.UpdatedAt,
+					"tokenCount":   tokenCount,
+					"runsLast24h":  runsLast24h,
+					"failsLast24h": failsLast24h,
+					"totalRuns":    totalRuns,
 				}
 				if lastActiveAt.Valid {
 					agent["lastActiveAt"] = lastActiveAt.Time
@@ -564,9 +564,9 @@ type BoardAccessGrant struct {
 }
 
 type CreateAgentRequest struct {
-	Nickname    string            `json:"nickname"`
-	Avatar      string            `json:"avatar"`
-	Role        string            `json:"role"`
+	Nickname    string             `json:"nickname"`
+	Avatar      string             `json:"avatar"`
+	Role        string             `json:"role"`
 	BoardGrants []BoardAccessGrant `json:"boardGrants"`
 }
 
@@ -875,11 +875,11 @@ func ResetAgentToken(db *sql.DB) gin.HandlerFunc {
 }
 
 type CreateUserRequest struct {
-	Username    string            `json:"username"`
-	Nickname    string            `json:"nickname"`
-	Password    string            `json:"password"`
-	Role        string            `json:"role"`
-	Avatar      string            `json:"avatar"`
+	Username    string             `json:"username"`
+	Nickname    string             `json:"nickname"`
+	Password    string             `json:"password"`
+	Role        string             `json:"role"`
+	Avatar      string             `json:"avatar"`
 	BoardGrants []BoardAccessGrant `json:"boardGrants"`
 }
 
@@ -983,14 +983,14 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"user": gin.H{
-				"id":            userID,
-				"username":      req.Username,
-				"nickname":      req.Nickname,
-				"avatar":        avatar,
-				"role":          role,
-				"type":          "HUMAN",
-				"token":         tokenKey,
-				"grantedCount":  explicitGranted,
+				"id":           userID,
+				"username":     req.Username,
+				"nickname":     req.Nickname,
+				"avatar":       avatar,
+				"role":         role,
+				"type":         "HUMAN",
+				"token":        tokenKey,
+				"grantedCount": explicitGranted,
 			},
 		})
 	}
@@ -1021,7 +1021,7 @@ func grantPublicBoardRead(db *sql.DB, userID string) {
 		log.Printf("[grantPublicBoardRead] failed to list public boards: %v", err)
 		return
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	var boardIDs []string
 	for rows.Next() {

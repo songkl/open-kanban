@@ -144,7 +144,7 @@ func GetActivities(db *sql.DB) gin.HandlerFunc {
 			c.JSON(500, gin.H{"error": "Failed to get activity records"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var activities []Activity
 		for rows.Next() {
@@ -361,7 +361,7 @@ func ExportActivities(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to export activity records"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		filename := fmt.Sprintf("activity_log_%s.csv", time.Now().UTC().Format("20060102_150405"))
 		c.Header("Content-Description", "File Transfer")
@@ -543,7 +543,7 @@ func GetPermissionActivities(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query activity records"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var activities []Activity
 		for rows.Next() {
@@ -600,7 +600,7 @@ func loadOwnedBoardIDs(db *sql.DB, userID string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	var boards []string
 	for rows.Next() {
 		var b string

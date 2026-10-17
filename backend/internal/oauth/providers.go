@@ -239,7 +239,7 @@ func ListAdminProvidersHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 		out := []AdminOAuthProvider{}
 		for rows.Next() {
 			var (

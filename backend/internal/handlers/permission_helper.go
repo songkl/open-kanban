@@ -334,7 +334,7 @@ func GetEffectiveColumnAccessForBoard(db *sql.DB, userID, boardID, userRole stri
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
+		_ = rows.Close()
 		for rows.Next() {
 			var id string
 			if err := rows.Scan(&id); err == nil {
@@ -351,7 +351,7 @@ func GetEffectiveColumnAccessForBoard(db *sql.DB, userID, boardID, userRole stri
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
+		_ = rows.Close()
 		for rows.Next() {
 			var id string
 			if err := rows.Scan(&id); err == nil {
@@ -373,7 +373,7 @@ func GetEffectiveColumnAccessForBoard(db *sql.DB, userID, boardID, userRole stri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	for rows.Next() {
 		var columnID, access string

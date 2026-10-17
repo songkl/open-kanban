@@ -229,18 +229,18 @@ func TestWebhookEventCatalogue_Structure(t *testing.T) {
 	// all four filters; column.* accepts only boardIds; the
 	// two board.* events carry no filters at all.
 	expectedFilters := map[string][]string{
-		"task.created":    {"boardIds", "columnIds", "priorities", "assigneeIds"},
-		"task.updated":    {"boardIds", "columnIds", "priorities", "assigneeIds"},
-		"task.moved":      {"boardIds", "columnIds", "priorities", "assigneeIds"},
-		"task.completed":  {"boardIds", "columnIds", "priorities", "assigneeIds"},
-		"task.deleted":    {"boardIds", "columnIds", "priorities", "assigneeIds"},
-		"task.assigned":   {"boardIds", "columnIds", "priorities", "assigneeIds"},
-		"task.commented":  {"boardIds", "columnIds", "priorities", "assigneeIds"},
-		"column.created":  {"boardIds"},
-		"column.updated":  {"boardIds"},
-		"column.deleted":  {"boardIds"},
-		"board.created":   {},
-		"board.updated":   {},
+		"task.created":   {"boardIds", "columnIds", "priorities", "assigneeIds"},
+		"task.updated":   {"boardIds", "columnIds", "priorities", "assigneeIds"},
+		"task.moved":     {"boardIds", "columnIds", "priorities", "assigneeIds"},
+		"task.completed": {"boardIds", "columnIds", "priorities", "assigneeIds"},
+		"task.deleted":   {"boardIds", "columnIds", "priorities", "assigneeIds"},
+		"task.assigned":  {"boardIds", "columnIds", "priorities", "assigneeIds"},
+		"task.commented": {"boardIds", "columnIds", "priorities", "assigneeIds"},
+		"column.created": {"boardIds"},
+		"column.updated": {"boardIds"},
+		"column.deleted": {"boardIds"},
+		"board.created":  {},
+		"board.updated":  {},
 	}
 
 	cases := []struct {

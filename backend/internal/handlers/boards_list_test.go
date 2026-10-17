@@ -531,10 +531,10 @@ func TestGetBoards_AccessMatrix(t *testing.T) {
 	}
 
 	cases := []struct {
-		name      string
-		token     string
-		wantIDs   []string
-		wantByID  map[string]wantRow
+		name     string
+		token    string
+		wantIDs  []string
+		wantByID map[string]wantRow
 	}{
 		{
 			name:    "anonymous sees every public board with empty access",

@@ -190,7 +190,7 @@ func TestGetNotifications(t *testing.T) {
 		}
 		var resp struct {
 			Notifications []map[string]interface{} `json:"notifications"`
-			UnreadCount   int                     `json:"unreadCount"`
+			UnreadCount   int                      `json:"unreadCount"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("decode: %v", err)
@@ -258,7 +258,7 @@ func TestGetNotificationsLimit50(t *testing.T) {
 		}
 		var resp struct {
 			Notifications []map[string]interface{} `json:"notifications"`
-			UnreadCount   int                     `json:"unreadCount"`
+			UnreadCount   int                      `json:"unreadCount"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 			t.Fatalf("decode: %v", err)

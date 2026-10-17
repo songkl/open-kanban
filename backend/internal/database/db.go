@@ -429,7 +429,6 @@ func runMySQLMigrations(db *sql.DB, databaseName string) error {
 		}
 	}
 
-
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		if strings.Contains(err.Error(), "Dirty") || strings.Contains(err.Error(), "no migration found") {
 			if forceErr := m.Force(0); forceErr != nil {

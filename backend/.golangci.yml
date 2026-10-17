@@ -19,7 +19,7 @@ linters:
     - misspell
     - nakedret
     - prealloc
-    - copyloopvar
+    - copyloopref
 
 linters-settings:
   gocyclo:

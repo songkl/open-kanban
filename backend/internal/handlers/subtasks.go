@@ -54,7 +54,7 @@ func GetSubtasks(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get subtasks"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var subtasks []gin.H
 		for rows.Next() {

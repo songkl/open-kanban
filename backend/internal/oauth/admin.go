@@ -37,7 +37,7 @@ func ListAdminClientsHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 		out := []AdminOAuthClient{}
 		for rows.Next() {
 			var (
@@ -114,7 +114,7 @@ func ListConsentsHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 		out := []gin.H{}
 		for rows.Next() {
 			var cid, scope string
@@ -250,8 +250,8 @@ func UpdateOAuthConfigHandler(db *sql.DB) gin.HandlerFunc {
 		logOAuthAdminActivity(db, user.ID, AuditActionOAuthConfigUpdate,
 			strings.Join(keys, ","), "oauth_config",
 			OAuthAuditDetails{
-				Changed:  keys,
-				Previous: prevMap,
+				Changed:    keys,
+				Previous:   prevMap,
 				ConfigKeys: keys,
 			},
 			c.ClientIP(),

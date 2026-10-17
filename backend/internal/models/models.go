@@ -68,17 +68,17 @@ type ColumnAgent struct {
 
 // Task represents a task card
 type Task struct {
-	ID                string     `json:"id"`
-	Title             string     `json:"title"`
-	Description       *string    `json:"description,omitempty"`
-	Priority          string     `json:"priority"` // low, medium, high
-	Assignee          *string    `json:"assignee,omitempty"`
-	Meta              *string    `json:"meta,omitempty"`
-	ColumnID          string     `json:"columnId"`
-	Position          int        `json:"position"`
-	Published         bool       `json:"published"`
-	Archived          bool       `json:"archived"`
-	ArchivedAt        *time.Time `json:"archivedAt,omitempty"`
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	Description *string    `json:"description,omitempty"`
+	Priority    string     `json:"priority"` // low, medium, high
+	Assignee    *string    `json:"assignee,omitempty"`
+	Meta        *string    `json:"meta,omitempty"`
+	ColumnID    string     `json:"columnId"`
+	Position    int        `json:"position"`
+	Published   bool       `json:"published"`
+	Archived    bool       `json:"archived"`
+	ArchivedAt  *time.Time `json:"archivedAt,omitempty"`
 	// DueAt is the optional deadline the create-task modal sets
 	// (T-1207 / s-1207, PM_REVIEW_2026-09-17 §3.12). It is a
 	// nullable timestamp so tasks without a deadline round-trip as
@@ -126,14 +126,14 @@ type Subtask struct {
 // is populated only on the mint response so the caller can copy it
 // out of the dialog exactly once.
 type ViewerToken struct {
-	ID            string     `json:"id"`
-	BoardID       string     `json:"boardId"`
-	Label         string     `json:"label"`
-	CreatedBy     *string    `json:"createdBy,omitempty"`
-	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
-	RevokedAt     *time.Time `json:"revokedAt,omitempty"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	PlaintextToken string    `json:"token,omitempty"`
+	ID             string     `json:"id"`
+	BoardID        string     `json:"boardId"`
+	Label          string     `json:"label"`
+	CreatedBy      *string    `json:"createdBy,omitempty"`
+	ExpiresAt      *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt      *time.Time `json:"revokedAt,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	PlaintextToken string     `json:"token,omitempty"`
 }
 
 // BoardPermission represents user permissions for a board

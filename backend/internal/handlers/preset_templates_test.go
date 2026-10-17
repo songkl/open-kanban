@@ -253,7 +253,7 @@ func TestGetPresetTemplates(t *testing.T) {
 		db := setupPresetTemplatesDB(t)
 		defer db.Close()
 
-		if _, err := db.Exec(`REPLACE INTO app_config (`+"`key`"+`, value) VALUES ('marketplaceEnabled', '0')`); err != nil {
+		if _, err := db.Exec(`REPLACE INTO app_config (` + "`key`" + `, value) VALUES ('marketplaceEnabled', '0')`); err != nil {
 			t.Fatalf("disable marketplace: %v", err)
 		}
 
@@ -424,8 +424,8 @@ func TestQuickstartOnboarding(t *testing.T) {
 
 		f := false
 		body := map[string]interface{}{
-			"presetSlug":    "alpha-template",
-			"installAgent":  f,
+			"presetSlug":     "alpha-template",
+			"installAgent":   f,
 			"triggerDemoRun": f,
 		}
 		jsonBody, _ := json.Marshal(body)
@@ -633,7 +633,7 @@ func TestUpdateAppConfigTogglesMarketplaceEnabled(t *testing.T) {
 
 	// Verify the persisted value and that GetPresetTemplates now 404s.
 	var stored string
-	if err := db.QueryRow(`SELECT value FROM app_config WHERE `+"`key`"+` = 'marketplaceEnabled'`).Scan(&stored); err != nil {
+	if err := db.QueryRow(`SELECT value FROM app_config WHERE ` + "`key`" + ` = 'marketplaceEnabled'`).Scan(&stored); err != nil {
 		t.Fatalf("query stored value: %v", err)
 	}
 	if stored != "0" {

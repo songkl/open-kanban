@@ -176,7 +176,7 @@ func (r *TaskRepository) GetTasksByColumnIDs(columnIDs []string, page, pageSize 
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	tasks := []models.Task{}
 	for rows.Next() {
@@ -434,7 +434,7 @@ func (r *TaskRepository) ReorderTasksInColumn(items []TaskReorderItem) error {
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	_ = stmt.Close()
 
 	for _, item := range items {
 		if _, err := stmt.Exec(item.ColumnID, item.Position, now, item.TaskID); err != nil {
@@ -573,7 +573,7 @@ func (r *TaskRepository) SearchTasks(params TaskSearchParams) ([]models.Task, in
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	tasks := []models.Task{}
 	for rows.Next() {

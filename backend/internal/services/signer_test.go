@@ -47,14 +47,14 @@ func TestSignWebhookBody_MatchesOpenSSLDgst(t *testing.T) {
 			secret:    "feedfacefeedfacefeedfacefeedface",
 			timestamp: 1700000456,
 			body:      "",
-			wantHex: "",
+			wantHex:   "",
 		},
 		{
 			name:      "unicode-body",
 			secret:    "k",
 			timestamp: 1700000789,
 			body:      "你好-世界",
-			wantHex: "",
+			wantHex:   "",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

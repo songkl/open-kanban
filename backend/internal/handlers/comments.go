@@ -42,7 +42,7 @@ func GetComments(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get comments"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var comments []gin.H
 		for rows.Next() {
@@ -144,9 +144,9 @@ type CreateCommentRequest struct {
 //
 //   - 200 OK: comment inserted, response carries the new id/content/author/userId/taskId/timestamps.
 //   - 400 Bad Request — every documented client error:
-//   -   • "content is required"      — `content` missing or empty (validator `required`).
-//   -   • "taskId is required"       — `taskId` missing or empty   (validator `required`).
-//   -   • "Invalid task ID"          — `taskId` does not reference any existing task.
+//   - • "content is required"      — `content` missing or empty (validator `required`).
+//   - • "taskId is required"       — `taskId` missing or empty   (validator `required`).
+//   - • "Invalid task ID"          — `taskId` does not reference any existing task.
 //     Note: length of `content` is NOT a 400 condition. Anything that would
 //     historically have surfaced as a "too long" 400 is intentionally
 //     allowed all the way through to storage (LONGTEXT / SQLite TEXT).

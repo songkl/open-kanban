@@ -520,15 +520,15 @@ func queryDeliveriesPage(db *sql.DB, webhookID string, limit int, cursor *delive
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	out := []webhookDeliveryView{}
 	for rows.Next() {
 		var (
-			v             webhookDeliveryView
-			errStr        sql.NullString
-			finishedAt    sql.NullTime
-			nextRetryAt   sql.NullTime
+			v           webhookDeliveryView
+			errStr      sql.NullString
+			finishedAt  sql.NullTime
+			nextRetryAt sql.NullTime
 		)
 		if err := rows.Scan(
 			&v.ID, &v.WebhookID, &v.EventID, &v.EventType, &v.Status, &v.Attempt,
@@ -701,8 +701,8 @@ func writeWebhookDomainError(c *gin.Context, err error) {
 	var inputErr *services.WebhookInputError
 	if errors.As(err, &inputErr) {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":  inputErr.Message,
-			"field":  inputErr.Field,
+			"error": inputErr.Message,
+			"field": inputErr.Field,
 		})
 		return
 	}

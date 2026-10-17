@@ -20,6 +20,7 @@ interface CustomFieldEditorProps {
  * stays clean for boards that haven't opted into custom fields.
  */
 export function CustomFieldEditor({ customFields, values, onChange, isEditing }: CustomFieldEditorProps) {
+  const { t } = useTranslation();
   if (customFields.length === 0) return null;
 
   const setValue = (name: string, value: unknown) => {
@@ -53,7 +54,7 @@ export function CustomFieldEditor({ customFields, values, onChange, isEditing }:
                   {displayValue || <span className="text-zinc-400">—</span>}
                 </div>
               ) : (
-                renderInput(field, raw, (v) => setValue(field.name, v))
+                renderInput(field, raw, (v) => setValue(field.name, v), t)
               )}
             </div>
           </div>
@@ -67,8 +68,8 @@ function renderInput(
   field: CustomField,
   raw: unknown,
   onValueChange: (value: unknown) => void,
+  t: (key: string) => string,
 ) {
-  const { t } = useTranslation();
   if (field.type === 'text') {
     return (
       <input

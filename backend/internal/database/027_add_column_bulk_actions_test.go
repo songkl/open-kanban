@@ -1,3 +1,5 @@
+//go:build !mysql && !sqlite
+
 package database
 
 import (

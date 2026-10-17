@@ -449,7 +449,7 @@ func listAvailableAgents(db *sql.DB, approver *models.User) []gin.H {
 	if err != nil {
 		return out
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	for rows.Next() {
 		var id, nickname, role string
 		var avatar sql.NullString
@@ -586,6 +586,7 @@ func currentUserOrUnauthorized(c *gin.Context, db *sql.DB) *models.User {
 	}
 	return nil
 }
+
 // DeviceCreateAgentRequest is the body submitted by the verification page
 // when the approver (ADMIN) wants to create a fresh Agent identity inline
 // instead of picking from the existing list. The new Agent is inserted into

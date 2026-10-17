@@ -80,12 +80,12 @@ func DefaultConfig() []ConfigKey {
 			DefaultVal:  "kanban",
 			Description: "aud claim used in issued access tokens.",
 		},
-{
-		Key:         "oauth_issuer_override",
-		DefaultVal:  "",
-		Description: "Optional fixed issuer URL (overrides Host-based detection).",
-	},
-}
+		{
+			Key:         "oauth_issuer_override",
+			DefaultVal:  "",
+			Description: "Optional fixed issuer URL (overrides Host-based detection).",
+		},
+	}
 }
 
 // EnsureDefaults writes default values to app_config for keys that are not yet
@@ -189,7 +189,7 @@ func GetConfigMap(db *sql.DB) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	for rows.Next() {
 		var k, v string
 		if err := rows.Scan(&k, &v); err != nil {

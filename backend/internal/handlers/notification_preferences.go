@@ -23,17 +23,17 @@ import (
 // Field semantics (s-1203, PM_REVIEW_2026-09-17 §3.7):
 //
 //   - EmailEnabled  — master switch for outbound email delivery
-//                     triggered by bell-badge rows. The in-app
-//                     bell is always on; this only mutes the
-//                     external transport.
+//     triggered by bell-badge rows. The in-app
+//     bell is always on; this only mutes the
+//     external transport.
 //   - WebhookEnabled — master switch for outbound webhook
-//                     delivery. Independent from EmailEnabled so
-//                     users can mute one channel without the
-//                     other.
+//     delivery. Independent from EmailEnabled so
+//     users can mute one channel without the
+//     other.
 //   - WebhookURL     — destination URL for outbound webhook
-//                     deliveries. Empty / NULL means there is no
-//                     destination, so the webhook fan-out skips
-//                     the user even if WebhookEnabled is true.
+//     deliveries. Empty / NULL means there is no
+//     destination, so the webhook fan-out skips
+//     the user even if WebhookEnabled is true.
 type NotificationPreferences struct {
 	UserID         string `json:"userId"`
 	EmailEnabled   bool   `json:"emailEnabled"`

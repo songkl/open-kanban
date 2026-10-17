@@ -26,7 +26,8 @@ import (
 //
 // Payload mirrors the `available_agents` slice already emitted by
 // DeviceLookupHandler so the frontend can reuse the rendering path:
-//   { "agents": [{id, nickname, username, role}, ...] }
+//
+//	{ "agents": [{id, nickname, username, role}, ...] }
 //
 // The response is always 200 with an (empty) array even when the
 // caller has no visible Agents — an admin can still authorise as
@@ -83,7 +84,7 @@ func listSelectableAgentsForRole(db *sql.DB, callerRole string) ([]AgentSummary,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	out := make([]AgentSummary, 0, 8)
 	for rows.Next() {
 		var a AgentSummary

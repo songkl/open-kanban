@@ -16,7 +16,7 @@ import (
 // the contract the spec calls out for s-1037:
 //
 //   - row count is unchanged (board_permissions + column_permissions)
-//   - the new audit columns on existing rows are NULL / '' (no data
+//   - the new audit columns on existing rows are NULL / ” (no data
 //     is fabricated for the new columns)
 //
 // The test runs migrations 1..7 first, seeds a few board_permissions
@@ -150,10 +150,10 @@ func TestSQLiteMigration020_PreservesRowCount(t *testing.T) {
 	}
 	for rows.Next() {
 		var (
-			id                       string
-			grantedBy, expiresAt     sql.NullString
-			revokedAt, revokedBy     sql.NullString
-			notes                    string
+			id                   string
+			grantedBy, expiresAt sql.NullString
+			revokedAt, revokedBy sql.NullString
+			notes                string
 		)
 		if err := rows.Scan(&id, &grantedBy, &expiresAt, &revokedAt, &revokedBy, &notes); err != nil {
 			rows.Close()
@@ -194,9 +194,9 @@ func TestSQLiteMigration020_PreservesRowCount(t *testing.T) {
 	}
 	for rows.Next() {
 		var (
-			id                       string
-			grantedBy, expiresAt     sql.NullString
-			revokedAt, revokedBy     sql.NullString
+			id                   string
+			grantedBy, expiresAt sql.NullString
+			revokedAt, revokedBy sql.NullString
 		)
 		if err := rows.Scan(&id, &grantedBy, &expiresAt, &revokedAt, &revokedBy); err != nil {
 			rows.Close()

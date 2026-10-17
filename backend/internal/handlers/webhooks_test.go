@@ -310,8 +310,10 @@ func TestWebhooks_List(t *testing.T) {
 			wantCount: 0,
 		},
 		{
-			name:      "200 MEMBER sees redacted list",
-			setup:     func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/a", `["task.created"]`) },
+			name: "200 MEMBER sees redacted list",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/a", `["task.created"]`)
+			},
 			auth:      webhookMemberTok,
 			wantCode:  http.StatusOK,
 			wantCount: 1,
@@ -335,8 +337,10 @@ func TestWebhooks_List(t *testing.T) {
 			},
 		},
 		{
-			name:      "200 ADMIN also allowed",
-			setup:     func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/a", `["task.created"]`) },
+			name: "200 ADMIN also allowed",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/a", `["task.created"]`)
+			},
 			auth:      webhookAdminTok,
 			wantCode:  http.StatusOK,
 			wantCount: 1,
@@ -657,48 +661,60 @@ func TestWebhooks_Update(t *testing.T) {
 		check    func(t *testing.T, body []byte)
 	}{
 		{
-			name:     "401 without auth",
-			setup:    func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`) },
+			name: "401 without auth",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
+			},
 			auth:     "",
 			id:       "w1",
 			body:     map[string]any{"name": "x"},
 			wantCode: http.StatusUnauthorized,
 		},
 		{
-			name:     "403 MEMBER cannot update",
-			setup:    func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`) },
+			name: "403 MEMBER cannot update",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
+			},
 			auth:     webhookMemberTok,
 			id:       "w1",
 			body:     map[string]any{"name": "renamed"},
 			wantCode: http.StatusForbidden,
 		},
 		{
-			name:     "404 unknown id",
-			setup:    func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`) },
+			name: "404 unknown id",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
+			},
 			auth:     webhookAdminTok,
 			id:       "ghost",
 			body:     map[string]any{"name": "x"},
 			wantCode: http.StatusNotFound,
 		},
 		{
-			name:     "400 invalid URL scheme",
-			setup:    func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`) },
+			name: "400 invalid URL scheme",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
+			},
 			auth:     webhookAdminTok,
 			id:       "w1",
 			body:     map[string]any{"url": "http://insecure.example.com/x"},
 			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:     "400 loopback URL rejected",
-			setup:    func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`) },
+			name: "400 loopback URL rejected",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
+			},
 			auth:     webhookAdminTok,
 			id:       "w1",
 			body:     map[string]any{"url": "https://127.0.0.1/hook"},
 			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:     "200 ADMIN renames",
-			setup:    func(t *testing.T, db *sql.DB) { seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`) },
+			name: "200 ADMIN renames",
+			setup: func(t *testing.T, db *sql.DB) {
+				seedWebhook(t, db, "w1", "primary", "https://example.com/x", `["task.created"]`)
+			},
 			auth:     webhookAdminTok,
 			id:       "w1",
 			body:     map[string]any{"name": "renamed", "enabled": false},

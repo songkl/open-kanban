@@ -229,8 +229,8 @@ func TestGetBoards_Visibility(t *testing.T) {
 			},
 		},
 		{
-			name:    "global admin sees every board regardless of visibility",
-			token:   "admin1-token",
+			name:  "global admin sees every board regardless of visibility",
+			token: "admin1-token",
 			// priv3 wins the owner bucket (4). pub1 / priv1 / priv2
 			// all sit in the ADMIN bucket (3); the created_at
 			// tiebreaker sorts them ascending.
@@ -243,8 +243,8 @@ func TestGetBoards_Visibility(t *testing.T) {
 			},
 		},
 		{
-			name:    "MEMBER with READ on priv1 sees pub1 + priv1",
-			token:   "member1-token",
+			name:  "MEMBER with READ on priv1 sees pub1 + priv1",
+			token: "member1-token",
 			// priv1 lands in the READ bucket (1); pub1 has no
 			// grant so it falls in the no-grant bucket (0). The
 			// bucket sort puts priv1 first; created_at only
@@ -256,8 +256,8 @@ func TestGetBoards_Visibility(t *testing.T) {
 			},
 		},
 		{
-			name:    "VIEWER with READ on priv2 sees pub1 + priv2 but NOT priv1 or priv3",
-			token:   "viewer1-token",
+			name:  "VIEWER with READ on priv2 sees pub1 + priv2 but NOT priv1 or priv3",
+			token: "viewer1-token",
 			// Same shape as the MEMBER case: priv2 wins the
 			// READ bucket (1) over pub1's no-grant bucket (0).
 			wantIDs: []string{"priv2", "pub1"},

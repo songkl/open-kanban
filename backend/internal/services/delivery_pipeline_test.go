@@ -324,9 +324,9 @@ func TestDeliveryPipeline_BackoffMath(t *testing.T) {
 	defer center.Stop()
 
 	ev := &fakeEvent{
-		typ: "task.created",
-		id:  "evt-backoff",
-		at:  time.Now().UTC(),
+		typ:  "task.created",
+		id:   "evt-backoff",
+		at:   time.Now().UTC(),
 		data: map[string]any{"task": map[string]any{"id": "t-bo"}},
 	}
 	if err := bus.Publish(ev); err != nil {
@@ -390,9 +390,9 @@ func TestDeliveryPipeline_ExhaustionLogsWarning(t *testing.T) {
 	defer sweeper.Stop()
 
 	ev := &fakeEvent{
-		typ: "task.created",
-		id:  "evt-exhaust",
-		at:  time.Now().UTC(),
+		typ:  "task.created",
+		id:   "evt-exhaust",
+		at:   time.Now().UTC(),
 		data: map[string]any{"task": map[string]any{"id": "t-ex"}},
 	}
 	if err := bus.Publish(ev); err != nil {
@@ -495,9 +495,9 @@ func TestDeliveryPipeline_RateLimitShuffle(t *testing.T) {
 	defer center.Stop()
 
 	ev := &fakeEvent{
-		typ: "task.created",
-		id:  "evt-rl",
-		at:  time.Now().UTC(),
+		typ:  "task.created",
+		id:   "evt-rl",
+		at:   time.Now().UTC(),
 		data: map[string]any{"task": map[string]any{"id": "t-rl"}},
 	}
 	if err := bus.Publish(ev); err != nil {

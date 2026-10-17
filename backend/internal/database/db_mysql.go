@@ -211,7 +211,7 @@ func missingMySQLTables(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	present := make(map[string]bool, 32)
 	for rows.Next() {
 		var name string

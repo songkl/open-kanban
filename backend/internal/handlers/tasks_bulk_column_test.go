@@ -342,8 +342,8 @@ func TestBulkColumnAction_Archive(t *testing.T) {
 	// Verify the audit-log row targets the COLUMN and carries the
 	// expected action name + details string.
 	var (
-		activityAction string
-		activityTarget string
+		activityAction  string
+		activityTarget  string
 		activityDetails string
 	)
 	if err := db.QueryRow(

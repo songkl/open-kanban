@@ -237,7 +237,7 @@ func ListFrontendEvents(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query frontend events"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		events := make([]gin.H, 0, limit)
 		for rows.Next() {

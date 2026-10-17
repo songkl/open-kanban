@@ -59,12 +59,12 @@ import (
 // Webhook signature header names — exported so receivers and
 // tests can read them without string-typing the constants.
 const (
-	WebhookHeaderID        = "X-Webhook-Id"
-	WebhookHeaderEvent     = "X-Webhook-Event"
-	WebhookHeaderDelivery  = "X-Webhook-Delivery"
-	WebhookHeaderTimestamp = "X-Webhook-Timestamp"
-	WebhookHeaderSignature = "X-Webhook-Signature"
-	WebhookSignaturePrefix = "sha256="
+	WebhookHeaderID         = "X-Webhook-Id"
+	WebhookHeaderEvent      = "X-Webhook-Event"
+	WebhookHeaderDelivery   = "X-Webhook-Delivery"
+	WebhookHeaderTimestamp  = "X-Webhook-Timestamp"
+	WebhookHeaderSignature  = "X-Webhook-Signature"
+	WebhookSignaturePrefix  = "sha256="
 	WebhookSignatureVersion = "sha256"
 )
 

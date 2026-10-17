@@ -75,12 +75,12 @@ func auditRowFor(rows []activityRow, action string) *activityRow {
 	return nil
 }
 
-// 1. CreateAdminProviderHandler writes exactly one
-//    OAUTH_PROVIDER_CREATE row with target_id=provider id,
-//    target_title=provider_id (the slug), target_type='OAUTH',
-//    source='web', and a details payload listing the changed
-//    fields. The plaintext client_secret never appears in the
-//    audit row.
+//  1. CreateAdminProviderHandler writes exactly one
+//     OAUTH_PROVIDER_CREATE row with target_id=provider id,
+//     target_title=provider_id (the slug), target_type='OAUTH',
+//     source='web', and a details payload listing the changed
+//     fields. The plaintext client_secret never appears in the
+//     audit row.
 func TestOAuthAudit_CreateProvider(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
@@ -170,10 +170,10 @@ func TestOAuthAudit_CreateProvider(t *testing.T) {
 	}
 }
 
-// 2. UpdateAdminProviderHandler writes OAUTH_PROVIDER_UPDATE
-//    when fields other than enabled change. The previous values
-//    land in details.previous so a forensic reviewer can roll
-//    back without consulting the row's prior state.
+//  2. UpdateAdminProviderHandler writes OAUTH_PROVIDER_UPDATE
+//     when fields other than enabled change. The previous values
+//     land in details.previous so a forensic reviewer can roll
+//     back without consulting the row's prior state.
 func TestOAuthAudit_UpdateProviderWritesAuditRow(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
@@ -252,10 +252,10 @@ func TestOAuthAudit_UpdateProviderWritesAuditRow(t *testing.T) {
 	}
 }
 
-// 3. UpdateAdminProviderHandler writes OAUTH_PROVIDER_ENABLE /
-//    OAUTH_PROVIDER_DISABLE when only the boolean enabled flag
-//    flips, with enabledBefore / enabledAfter populated so the
-//    activity-log view can render the transition.
+//  3. UpdateAdminProviderHandler writes OAUTH_PROVIDER_ENABLE /
+//     OAUTH_PROVIDER_DISABLE when only the boolean enabled flag
+//     flips, with enabledBefore / enabledAfter populated so the
+//     activity-log view can render the transition.
 func TestOAuthAudit_UpdateProviderEnableDisable(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
@@ -331,11 +331,11 @@ func TestOAuthAudit_UpdateProviderEnableDisable(t *testing.T) {
 	}
 }
 
-// 4. When an update changes BOTH enabled and other fields, the
-//    handler emits two rows in order: OAUTH_PROVIDER_ENABLE /
-//    DISABLE first (because the boolean flip is the more
-//    security-relevant event), then OAUTH_PROVIDER_UPDATE for
-//    the rest. The test pins that ordering.
+//  4. When an update changes BOTH enabled and other fields, the
+//     handler emits two rows in order: OAUTH_PROVIDER_ENABLE /
+//     DISABLE first (because the boolean flip is the more
+//     security-relevant event), then OAUTH_PROVIDER_UPDATE for
+//     the rest. The test pins that ordering.
 func TestOAuthAudit_UpdateProviderEnablePlusOther(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
@@ -389,10 +389,10 @@ func TestOAuthAudit_UpdateProviderEnablePlusOther(t *testing.T) {
 	}
 }
 
-// 5. DeleteAdminProviderHandler writes OAUTH_PROVIDER_DELETE
-//    with target_title=provider_id (the slug) so the audit log
-//    can answer "what was deleted" without joining back to the
-//    (now gone) provider row.
+//  5. DeleteAdminProviderHandler writes OAUTH_PROVIDER_DELETE
+//     with target_title=provider_id (the slug) so the audit log
+//     can answer "what was deleted" without joining back to the
+//     (now gone) provider row.
 func TestOAuthAudit_DeleteProvider(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
@@ -447,9 +447,9 @@ func TestOAuthAudit_DeleteProvider(t *testing.T) {
 	}
 }
 
-// 6. DeleteAdminClientHandler writes OAUTH_CLIENT_DELETE with
-//    target_id=client_id (the OAuth client's externally visible
-//    identifier, not its internal row id).
+//  6. DeleteAdminClientHandler writes OAUTH_CLIENT_DELETE with
+//     target_id=client_id (the OAuth client's externally visible
+//     identifier, not its internal row id).
 func TestOAuthAudit_DeleteClient(t *testing.T) {
 	db := setupAdminDB(t)
 	defer db.Close()
@@ -479,10 +479,10 @@ func TestOAuthAudit_DeleteClient(t *testing.T) {
 	}
 }
 
-// 7. UpdateOAuthConfigHandler writes OAUTH_CONFIG_UPDATE with
-//    details.configKeys listing every app_config key the admin
-//    touched in this request, and details.previous carrying the
-//    pre-update value of each key.
+//  7. UpdateOAuthConfigHandler writes OAUTH_CONFIG_UPDATE with
+//     details.configKeys listing every app_config key the admin
+//     touched in this request, and details.previous carrying the
+//     pre-update value of each key.
 func TestOAuthAudit_UpdateConfig(t *testing.T) {
 	db := setupAdminDB(t)
 	defer db.Close()
@@ -525,9 +525,9 @@ func TestOAuthAudit_UpdateConfig(t *testing.T) {
 	}
 }
 
-// 8. RevokeConsentHandler writes OAUTH_CONSENT_REVOKE with
-//    target_id=client_id and details.existed=true when the
-//    consent row was actually present before the call.
+//  8. RevokeConsentHandler writes OAUTH_CONSENT_REVOKE with
+//     target_id=client_id and details.existed=true when the
+//     consent row was actually present before the call.
 func TestOAuthAudit_RevokeConsent(t *testing.T) {
 	db := setupAdminDB(t)
 	defer db.Close()
@@ -572,10 +572,10 @@ func TestOAuthAudit_RevokeConsent(t *testing.T) {
 	}
 }
 
-// 9. A failed create (validation error) must NOT leave an audit
-//    row — the activity log only records operations that
-//    actually mutated state. Pins the "best-effort, no
-//    speculative rows" contract.
+//  9. A failed create (validation error) must NOT leave an audit
+//     row — the activity log only records operations that
+//     actually mutated state. Pins the "best-effort, no
+//     speculative rows" contract.
 func TestOAuthAudit_FailedCreateDoesNotLog(t *testing.T) {
 	withProviderSecretKey(t, validTestKey())
 	db := setupProviderDB(t)
@@ -607,7 +607,7 @@ func TestOAuthAudit_FailedCreateDoesNotLog(t *testing.T) {
 	}
 }
 
-// 10. Update with no changes (empty body) must NOT write an
+//  10. Update with no changes (empty body) must NOT write an
 //     audit row. The handler bails out before the audit logger
 //     is reached, so the activities table stays untouched.
 func TestOAuthAudit_NoOpUpdateDoesNotLog(t *testing.T) {
@@ -657,7 +657,7 @@ func TestOAuthAudit_NoOpUpdateDoesNotLog(t *testing.T) {
 	}
 }
 
-// 11. Sanity: an attempted delete of a non-existent provider
+//  11. Sanity: an attempted delete of a non-existent provider
 //     returns 404 and writes no audit row. Pins the contract
 //     that 404 is silent in the activity log (otherwise a
 //     scanner would fill the table with 404 noise).

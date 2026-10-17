@@ -204,7 +204,7 @@ func GetTaskAttachments(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query attachments"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var attachments []models.Attachment
 		for rows.Next() {

@@ -70,14 +70,14 @@ var notificationMentionRE = regexp.MustCompile(`(?:^|[^\pL\pN])@([A-Za-z0-9_\-]{
 //
 //   - db              — connection pool (used by INSERT and lookup).
 //   - userID          — recipient. FK on users.id; ON DELETE CASCADE
-//                      keeps orphan rows from accumulating when an
-//                      admin removes a user.
+//     keeps orphan rows from accumulating when an
+//     admin removes a user.
 //   - source          — one of the NotificationSource* consts; an
-//                      unknown value is rejected so a typo can't
-//                      silently desync the badge.
+//     unknown value is rejected so a typo can't
+//     silently desync the badge.
 //   - title           — short headline rendered in the bell list.
 //   - body            — optional supporting copy (kept under 1024
-//                      chars by the regex / column).
+//     chars by the regex / column).
 //   - targetType      — empty or one of TASK / COMMENT / RUN / WEBHOOK.
 //   - targetID        — opaque id the bell list can deep-link into.
 func InsertNotification(db *sql.DB, userID, source, title, body, targetType, targetID string) error {
@@ -224,7 +224,7 @@ func ResolveUserIDsByNickname(db *sql.DB, nicknames []string) (map[string]string
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	for rows.Next() {
 		var id, nick string
 		if err := rows.Scan(&id, &nick); err != nil {
@@ -241,7 +241,8 @@ func ResolveUserIDsByNickname(db *sql.DB, nicknames []string) (map[string]string
 // badge can hydrate from a cheap call without a separate endpoint.
 //
 // Response shape mirrors the activity list pattern:
-//   { notifications: [...], unreadCount: N }
+//
+//	{ notifications: [...], unreadCount: N }
 func GetNotifications(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -292,7 +293,7 @@ func GetNotifications(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query notifications"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		out := make([]Notification, 0, limit)
 		for rows.Next() {

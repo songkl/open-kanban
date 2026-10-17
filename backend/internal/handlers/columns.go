@@ -100,10 +100,10 @@ func GetColumns(db *sql.DB) gin.HandlerFunc {
 		defer func() { _ = rows.Close() }()
 
 		type columnRow struct {
-			col            models.Column
-			status         sql.NullString
-			description    sql.NullString
-			ownerAgentID   sql.NullString
+			col          models.Column
+			status       sql.NullString
+			description  sql.NullString
+			ownerAgentID sql.NullString
 		}
 		columnRecords := []columnRow{}
 		columnIDs := []string{}
@@ -235,21 +235,21 @@ func loadTasksForColumns(db *sql.DB, columnIDs []string, boardID string) (map[st
 		}
 
 		result[task.ColumnID] = append(result[task.ColumnID], gin.H{
-			"id":            task.ID,
-			"title":         task.Title,
-			"description":   task.Description,
-			"priority":      task.Priority,
-			"assignee":      task.Assignee,
-			"meta":          task.Meta,
-			"columnId":      task.ColumnID,
-			"position":      task.Position,
-			"published":     task.Published,
-			"archived":      task.Archived,
-			"archivedAt":    task.ArchivedAt,
-			"createdAt":     task.CreatedAt,
-			"updatedAt":     task.UpdatedAt,
-			"commentCount":  commentCount,
-			"subtaskCount":  subtaskCount,
+			"id":           task.ID,
+			"title":        task.Title,
+			"description":  task.Description,
+			"priority":     task.Priority,
+			"assignee":     task.Assignee,
+			"meta":         task.Meta,
+			"columnId":     task.ColumnID,
+			"position":     task.Position,
+			"published":    task.Published,
+			"archived":     task.Archived,
+			"archivedAt":   task.ArchivedAt,
+			"createdAt":    task.CreatedAt,
+			"updatedAt":    task.UpdatedAt,
+			"commentCount": commentCount,
+			"subtaskCount": subtaskCount,
 			"_count": gin.H{
 				"comments": commentCount,
 				"subtasks": subtaskCount,
@@ -666,15 +666,15 @@ func GetColumnAgent(db *sql.DB) gin.HandlerFunc {
 // The handler layer accepts the same strings and rejects anything else
 // with a 400 so a typo never silently degrades the auto-trigger.
 const (
-	TransitionTriggerNone     = "none"
-	TransitionTriggerOnEnter  = "on_enter"
-	TransitionTriggerOnExit   = "on_exit"
-	TransitionTriggerBoth     = "both"
+	TransitionTriggerNone    = "none"
+	TransitionTriggerOnEnter = "on_enter"
+	TransitionTriggerOnExit  = "on_exit"
+	TransitionTriggerBoth    = "both"
 )
 
 // normalizeTransitionTrigger collapses any empty string to "none" so
 // legacy column_agents rows created before s-1214 (which have no
-// trigger column at all and fall back to '' via COALESCE(... , ''))
+// trigger column at all and fall back to ” via COALESCE(... , ”))
 // still resolve to the documented default.
 func normalizeTransitionTrigger(raw string) string {
 	switch raw {
@@ -895,7 +895,7 @@ func getCommentsForTask(db *sql.DB, taskID string) ([]gin.H, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	var comments []gin.H
 	for rows.Next() {
@@ -923,7 +923,7 @@ func getSubtasksForTask(db *sql.DB, taskID string) ([]gin.H, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	var subtasks []gin.H
 	for rows.Next() {

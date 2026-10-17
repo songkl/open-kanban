@@ -647,16 +647,16 @@ func TestCreateBoard_AssignsOwner(t *testing.T) {
 
 func TestColumnPermissionManagement_BoardOwner(t *testing.T) {
 	type testCase struct {
-		name         string
-		method       string
-		token        string
-		targetUser   string
-		columnID     string
-		permID       string
-		seedRow      bool
-		wantStatus   int
-		wantCount    int
-		wantRevoked  bool // post-condition: row must (or must not) carry revoked_at
+		name        string
+		method      string
+		token       string
+		targetUser  string
+		columnID    string
+		permID      string
+		seedRow     bool
+		wantStatus  int
+		wantCount   int
+		wantRevoked bool // post-condition: row must (or must not) carry revoked_at
 	}
 
 	cases := []testCase{

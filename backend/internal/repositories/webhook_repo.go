@@ -151,7 +151,7 @@ func (r *WebhookRepository) List() ([]*models.Webhook, error) {
 	if err != nil {
 		return nil, fmt.Errorf("webhook repo: list: %w", err)
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	out := []*models.Webhook{}
 	for rows.Next() {

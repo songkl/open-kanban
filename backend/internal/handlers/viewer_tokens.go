@@ -116,10 +116,10 @@ func MintViewerToken(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"id":       id,
-			"boardId":  boardID,
-			"label":    req.Label,
-			"token":    plaintext,
+			"id":        id,
+			"boardId":   boardID,
+			"label":     req.Label,
+			"token":     plaintext,
 			"expiresAt": req.ExpiresAt,
 			"createdAt": time.Now().UTC(),
 		})
@@ -159,7 +159,7 @@ func ListViewerTokens(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list viewer tokens"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		tokens := []models.ViewerToken{}
 		for rows.Next() {

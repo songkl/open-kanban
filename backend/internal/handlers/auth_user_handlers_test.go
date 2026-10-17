@@ -348,8 +348,8 @@ func TestRegisterNewUser_BoardGrantsAddsExplicitAccess(t *testing.T) {
 
 	var resp struct {
 		User struct {
-			ID          string `json:"id"`
-			GrantedCount int   `json:"grantedCount"`
+			ID           string `json:"id"`
+			GrantedCount int    `json:"grantedCount"`
 		} `json:"user"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {

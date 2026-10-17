@@ -19,7 +19,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 		if boardID != "" {
 			rows, err := db.Query("SELECT id FROM columns WHERE board_id = ?", boardID)
 			if err == nil {
-				defer rows.Close()
+				_ = rows.Close()
 				for rows.Next() {
 					var colID string
 					if err := rows.Scan(&colID); err == nil {
@@ -61,7 +61,7 @@ func GetArchivedTasks(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get archived tasks"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var tasks []gin.H
 		for rows.Next() {
@@ -133,7 +133,7 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 		if boardID != "" {
 			rows, err := db.Query("SELECT id FROM columns WHERE board_id = ?", boardID)
 			if err == nil {
-				defer rows.Close()
+				_ = rows.Close()
 				for rows.Next() {
 					var colID string
 					if err := rows.Scan(&colID); err == nil {
@@ -146,36 +146,36 @@ func GetDrafts(db *sql.DB) gin.HandlerFunc {
 		// Build query
 		var rows *sql.Rows
 		var err error
-if len(columnIDs) > 0 {
-		// Use IN clause
-		query := `
+		if len(columnIDs) > 0 {
+			// Use IN clause
+			query := `
 			SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, due_at, created_at, updated_at
 			FROM tasks
 			WHERE published = false AND archived = false AND column_id IN (?
 		`
-		// Build placeholders
-		placeholders := make([]interface{}, len(columnIDs))
-		for i, id := range columnIDs {
-			placeholders[i] = id
-			if i > 0 {
-				query += ",?"
+			// Build placeholders
+			placeholders := make([]interface{}, len(columnIDs))
+			for i, id := range columnIDs {
+				placeholders[i] = id
+				if i > 0 {
+					query += ",?"
+				}
 			}
-		}
-		query += `) ORDER BY created_at DESC`
-		rows, err = db.Query(query, placeholders...)
-	} else {
-		rows, err = db.Query(`
+			query += `) ORDER BY created_at DESC`
+			rows, err = db.Query(query, placeholders...)
+		} else {
+			rows, err = db.Query(`
 			SELECT id, title, description, priority, assignee, meta, column_id, position, published, archived, archived_at, due_at, created_at, updated_at
 			FROM tasks
 			WHERE published = false AND archived = false
 			ORDER BY created_at DESC
 		`)
-	}
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get drafts"})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		var tasks []gin.H
 		for rows.Next() {

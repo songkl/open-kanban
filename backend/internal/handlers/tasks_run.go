@@ -29,12 +29,12 @@ const DefaultRunLockTimeoutMs = 120000
 // See devDoc/CLI_RUNNER_OPENAPI_2026-09-12.yaml `ClaimRunRequest`
 // for the full contract.
 type ClaimRunRequest struct {
-	BoardID        string `json:"boardId"`
-	Status         string `json:"status"`
-	AgentType      string `json:"agentType"`
-	RunnerID       string `json:"runnerId"`
-	Mode           string `json:"mode,omitempty"`
-	LockTimeoutMs  int    `json:"lockTimeoutMs,omitempty"`
+	BoardID       string `json:"boardId"`
+	Status        string `json:"status"`
+	AgentType     string `json:"agentType"`
+	RunnerID      string `json:"runnerId"`
+	Mode          string `json:"mode,omitempty"`
+	LockTimeoutMs int    `json:"lockTimeoutMs,omitempty"`
 }
 
 // HeartbeatRunRequest is the wire shape for POST
@@ -47,20 +47,20 @@ type HeartbeatRunRequest struct {
 // FinishRunRequest is the wire shape for POST
 // /api/v1/runs/:taskId/finish.
 type FinishRunRequest struct {
-	RunnerID      string  `json:"runnerId"`
-	Status        string  `json:"status"`
-	ExitCode      *int    `json:"exitCode,omitempty"`
+	RunnerID string `json:"runnerId"`
+	Status   string `json:"status"`
+	ExitCode *int   `json:"exitCode,omitempty"`
 	// Error is the agent's stderr (≤ 64 KiB), reserved for
 	// genuine failure context. Since s-1185 the runner keeps
 	// its stdout payload in `output` so a successful run is no
 	// longer mis-labelled as "Error" on the task detail page
 	// just because the agent wrote a banner to stderr.
-	Error         *string `json:"error,omitempty"`
+	Error *string `json:"error,omitempty"`
 	// Output is the agent's stdout (≤ 64 KiB). Populated for
 	// both completed and failed runs so the comment stream,
 	// task detail page, and run history can all surface the
 	// actual reply.
-	Output        *string `json:"output,omitempty"`
+	Output *string `json:"output,omitempty"`
 }
 
 // ReleaseRunsRequest is the wire shape for POST
@@ -331,13 +331,18 @@ type AttachRunRequest struct {
 // token can't grab tasks on boards the runner has no access to.
 //
 // 200 — { task, run } in the same shape as ClaimRun so the CLI
-//        prompt-rendering path is identical.
+//
+//	prompt-rendering path is identical.
+//
 // 403 — caller lacks WRITE on the resolved column / board.
 // 404 — task does not exist.
 // 409 — task already locked by another runner with a non-expired
-//        claim (handler maps repositories.ErrLockHeld → 409).
+//
+//	claim (handler maps repositories.ErrLockHeld → 409).
+//
 // 422 — task is archived or unpublished (the attach path only
-//        operates on visible, non-archive tasks).
+//
+//	operates on visible, non-archive tasks).
 func AttachRun(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := getCurrentUser(c, db)
@@ -398,9 +403,9 @@ func AttachRun(db *sql.DB) gin.HandlerFunc {
 		// caller gets a clear 422 instead of a misleading
 		// lock-held response.
 		var (
-			archived   bool
-			published  bool
-			taskTitle  string
+			archived  bool
+			published bool
+			taskTitle string
 		)
 		if err := db.QueryRow(
 			"SELECT archived, published, title FROM tasks WHERE id = ?",
@@ -997,7 +1002,7 @@ func userHasBoardStatusWrite(db *sql.DB, user *models.User, boardID, status stri
 	if err != nil {
 		return false
 	}
-	defer rows.Close()
+	_ = rows.Close()
 	for rows.Next() {
 		var colID string
 		if err := rows.Scan(&colID); err != nil {
@@ -1112,7 +1117,7 @@ func pickMyTaskForClaim(db *sql.DB, user *models.User, agentType string) (string
 		if err != nil {
 			return "", "", err
 		}
-		defer rows.Close()
+		_ = rows.Close()
 		for rows.Next() {
 			var colID, agentTypesStr string
 			if err := rows.Scan(&colID, &agentTypesStr); err != nil {
@@ -1196,11 +1201,11 @@ func renderTaskJSON(db *sql.DB, taskID string) (gin.H, error) {
 	var (
 		id, title, columnID, priority, createdBy, columnName string
 		description, assignee, meta, agentID, agentPrompt    sql.NullString
-		position                                              int
-		published, archived                                   bool
-		archivedAt                                            sql.NullTime
-		createdAt, updatedAt                                  time.Time
-		commentCount, subtaskCount                            int
+		position                                             int
+		published, archived                                  bool
+		archivedAt                                           sql.NullTime
+		createdAt, updatedAt                                 time.Time
+		commentCount, subtaskCount                           int
 	)
 	if err := row.Scan(&id, &title, &description, &priority, &assignee, &meta,
 		&columnID, &position, &published, &archived, &archivedAt,
@@ -1210,17 +1215,17 @@ func renderTaskJSON(db *sql.DB, taskID string) (gin.H, error) {
 	}
 
 	payload := gin.H{
-		"id":          id,
-		"title":       title,
-		"priority":    priority,
-		"columnId":    columnID,
-		"columnName":  columnName,
-		"position":    position,
-		"published":   published,
-		"archived":    archived,
-		"createdBy":   createdBy,
-		"createdAt":   createdAt,
-		"updatedAt":   updatedAt,
+		"id":         id,
+		"title":      title,
+		"priority":   priority,
+		"columnId":   columnID,
+		"columnName": columnName,
+		"position":   position,
+		"published":  published,
+		"archived":   archived,
+		"createdBy":  createdBy,
+		"createdAt":  createdAt,
+		"updatedAt":  updatedAt,
 		"_count": gin.H{
 			"comments": commentCount,
 			"subtasks": subtaskCount,

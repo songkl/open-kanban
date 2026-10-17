@@ -7,7 +7,7 @@
 //	(NextRetryAt += 1 s) rather than dropped — they remain
 //	at-least-once, just delayed.
 //
-// Behaviour
+// # Behaviour
 //
 // The limiter is keyed by webhook id. Each call to Allow
 // asks "can I send one more request right now?"; the answer
@@ -18,7 +18,7 @@
 // of dropping the delivery — the row stays in FAILED and the
 // retry sweeper picks it up on the next tick.
 //
-// Storage
+// # Storage
 //
 // Counts live in an in-memory ring keyed by webhook id. The
 // default EventCenter runs as a single process so a shared
@@ -26,7 +26,7 @@
 // this state into Redis (a future-scope change, called out in
 // plan §5.3).
 //
-// Thread safety
+// # Thread safety
 //
 // RateLimiter is safe for concurrent use. The map is guarded
 // by a sync.Mutex; per-key ring buffers are appended under

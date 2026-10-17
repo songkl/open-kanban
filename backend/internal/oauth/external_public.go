@@ -56,7 +56,7 @@ func ListEnabledExternalProvidersHandler(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 
 		out := []PublicOAuthProvider{}
 		for rows.Next() {

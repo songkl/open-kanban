@@ -443,6 +443,7 @@ func TestSetupOnlyRoutesRegistersUsersMeAlias(t *testing.T) {
 		t.Errorf("expected nil user from /users/me in setupOnlyRoutes, got %v", resp["user"])
 	}
 }
+
 // TestSetupRunsRoutesRegistersAllEndpoints is the regression guard for
 // s-1234 ("cli runs list error: API error 404 on /api/v1/runs/history").
 // The handler existed in internal/handlers/tasks_run.go and was covered
@@ -502,9 +503,9 @@ func TestActivitiesAliasesRouteToCanonical(t *testing.T) {
 	// helper that the production path would have to call.
 	router.GET("/api/v1/auth/activities", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"canonical":   true,
-			"agentOnly":   c.Query("agentOnly"),
-			"echoPath":    c.Request.URL.Path,
+			"canonical": true,
+			"agentOnly": c.Query("agentOnly"),
+			"echoPath":  c.Request.URL.Path,
 		})
 	})
 	alias := func(c *gin.Context) {

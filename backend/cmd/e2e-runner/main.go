@@ -85,7 +85,7 @@ func run(port int, boardID, adminToken, agentToken string) error {
 	if err != nil {
 		return fmt.Errorf("open sqlite: %w", err)
 	}
-	defer db.Close()
+	_ = db.Close()
 
 	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		return fmt.Errorf("enable FK: %w", err)
@@ -390,7 +390,7 @@ func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		defer rows.Close()
+		_ = rows.Close()
 		type pending struct {
 			ID       string
 			ClientID string
@@ -457,21 +457,21 @@ func registerTestEndpoints(r *gin.Engine, db *sql.DB, adminToken string) {
 // seed populates the database with the minimum state needed for the
 // runner e2e test to drive a full claim → heartbeat → finish cycle:
 //
-//   * one ADMIN user with a token whose `key` matches --token
-//   * one MEMBER bot user with a token whose `key` matches --agent-token
+//   - one ADMIN user with a token whose `key` matches --token
+//   - one MEMBER bot user with a token whose `key` matches --agent-token
 //     and `user_agent` is "opencode" (the runner's default agent type —
 //     matches CLI's resolveAgentType() default and the column_agents
 //     wiring below; changing the default requires updating both)
-//   * one MEMBER Agent (`u-e2e-agent`) and one MEMBER human
+//   - one MEMBER Agent (`u-e2e-agent`) and one MEMBER human
 //     (`u-e2e-member`) so the agent-selection e2e can drive a
 //     device flow that the human approver binds to the Agent
 //     identity (plan §4.6). Both have WRITE access on the seed
 //     board so /api/v1/runs/claim succeeds for the resulting JWT.
-//   * one board (--board) with WRITE permission for every user
-//   * four columns: todo, in_progress, review, done
-//   * column_agents wiring "opencode" onto the todo + in_progress
+//   - one board (--board) with WRITE permission for every user
+//   - four columns: todo, in_progress, review, done
+//   - column_agents wiring "opencode" onto the todo + in_progress
 //     columns so the runner is allowed to claim from either
-//   * two tasks in the todo column so we can prove --once stops at one
+//   - two tasks in the todo column so we can prove --once stops at one
 func seed(db *sql.DB, boardID, adminToken, agentToken string) error {
 	now := time.Now().UTC()
 

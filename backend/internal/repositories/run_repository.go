@@ -15,12 +15,12 @@ import (
 // (see devDoc/CLI_RUNNER_PLAN_2026-09-12.md §3.3 / §3.4) maps
 // almost 1:1 onto the methods here:
 //
-//   ClaimRun    → POST  /api/v1/runs/claim
-//   Heartbeat   → POST  /api/v1/runs/:taskId/heartbeat
-//   FinishRun   → POST  /api/v1/runs/:taskId/finish
-//   ReleaseRuns → POST  /api/v1/runs/release
-//   GetRun      → GET   /api/v1/runs/:taskId
-//   ReapExpired → background reaper (§3.5)
+//	ClaimRun    → POST  /api/v1/runs/claim
+//	Heartbeat   → POST  /api/v1/runs/:taskId/heartbeat
+//	FinishRun   → POST  /api/v1/runs/:taskId/finish
+//	ReleaseRuns → POST  /api/v1/runs/release
+//	GetRun      → GET   /api/v1/runs/:taskId
+//	ReapExpired → background reaper (§3.5)
 //
 // The repository is intentionally driver-agnostic so the same code
 // runs against both sqlite (modernc.org/sqlite for tests,
@@ -50,10 +50,10 @@ var ErrLockHeld = fmt.Errorf("task lock held by another runner")
 // the handler can echo it back to the CLI without re-reading
 // from the database.
 type ClaimResult struct {
-	Run     *models.TaskRun
-	TaskID  string
+	Run      *models.TaskRun
+	TaskID   string
 	ColumnID string
-	BoardID string
+	BoardID  string
 }
 
 // FindEligibleTask returns the next task that:
@@ -643,7 +643,7 @@ func (r *RunRepository) ListRunHistory(filter RunHistoryFilter) ([]*models.TaskR
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	_ = rows.Close()
 
 	var out []*models.TaskRun
 	for rows.Next() {

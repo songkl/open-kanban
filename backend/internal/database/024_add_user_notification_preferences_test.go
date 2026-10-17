@@ -19,7 +19,7 @@ import (
 //   - The table has a primary key on user_id so the UPSERT
 //     INSERT … ON CONFLICT(user_id) form in the handler stays valid.
 //   - Defaults match the documented contract: email_enabled=1,
-//     webhook_enabled=1, webhook_url=''. A fresh user opening the
+//     webhook_enabled=1, webhook_url=”. A fresh user opening the
 //     Settings tab for the first time must not see a UI that says
 //     "email is off".
 //   - Foreign key to users(id) with ON DELETE CASCADE so removing a
