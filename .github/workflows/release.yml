@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  prepare:
+    name: Prepare frontend & web archive
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -20,68 +21,159 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Build Frontend
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+      # Upload the dist so every backend matrix job can embed it via
+      # //go:embed web without rebuilding the frontend themselves.
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v5
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Prepare web archive
+        run: |
+          mkdir -p release-assets
+          cp -r frontend/dist release-assets/web
+          cd release-assets
+          tar -czf web.tar.gz web/
+
+      - name: Upload web archive
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-assets
+          path: release-assets/web.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  build-backend:
+    name: Build backend (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # CGO (SQLite driver: mattn/go-sqlite3) requires a native or
+          # properly cross-configured toolchain per target:
+          #  - linux/amd64: native gcc on the ubuntu runner
+          #  - linux/arm64: aarch64 cross gcc
+          #  - darwin/*: macos runner (Apple clang handles both -arch values;
+          #    Linux clang rejects -arch, which broke the old single-runner setup)
+          #  - windows/amd64: mingw-w64 cross gcc
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            packages: gcc-aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
+          - runner: macos-latest
+            goos: darwin
+            goarch: amd64
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+          - runner: ubuntu-latest
+            goos: windows
+            goarch: amd64
+            packages: gcc-mingw-w64-x86-64
+            cc: x86_64-w64-mingw32-gcc
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.24'
 
+      - name: Install cross-compiler
+        if: matrix.packages != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
+
       - name: Install UPX
+        if: matrix.goos == 'linux'
         run: sudo apt-get install -y upx
 
-      - name: Build Frontend
-        run: |
-          cd frontend
-          npm install
-          npm run build
-
-      - name: Prepare web archive
-        run: |
-          mkdir -p release
-          cp -r frontend/dist release/web
-          cd release
-          tar -czf web.tar.gz web/
-
-      - name: Build MCP Server
-        run: |
-          cd mcp-server
-          npm install
-          npm run build
+      - name: Download frontend dist
+        uses: actions/download-artifact@v5
+        with:
+          name: frontend-dist
+          path: ./dist
 
       - name: Prepare backend embed directory
         run: |
           mkdir -p backend/cmd/server/web
-          cp -r frontend/dist/* backend/cmd/server/web/
+          cp -r ./dist/. backend/cmd/server/web/
 
-      - name: Install mingw-w64 cross-compiler (Windows builds)
-        run: sudo apt-get install -y gcc-mingw-w64-x86-64
-
-      - name: Build Backend (cross-compile)
+      - name: Build Backend
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CC: ${{ matrix.cc }}
         run: |
           cd backend
-          PLATFORMS=("darwin amd64" "darwin arm64" "linux amd64" "linux arm64" "windows amd64")
-          for PLATFORM in "${PLATFORMS[@]}"; do
-            set -- $PLATFORM
-            GOOS=$1 GOARCH=$2
-            OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}"
-            [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
-            echo "Building $OUTPUT_NAME..."
-            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -o "../release/$OUTPUT_NAME" ./cmd/server
+          OUTPUT_NAME="kanban-server-${GOOS}-${GOARCH}"
+          [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          echo "Building $OUTPUT_NAME..."
+          CGO_ENABLED=1 go build -ldflags="-s -w" -o "../release/$OUTPUT_NAME" ./cmd/server
+          if [ "$GOOS" = "linux" ]; then
             upx -9 --best "../release/$OUTPUT_NAME" || true
-          done
+          fi
 
-      - name: Build Backend MySQL-only (cross-compile)
+      - name: Build Backend MySQL-only
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
+          # The mysql build tag excludes the SQLite driver (the only cgo
+          # dependency), so this variant cross-compiles with CGO disabled
+          # and needs no cross toolchain.
           cd backend
-          PLATFORMS=("darwin amd64" "darwin arm64" "linux amd64" "linux arm64" "windows amd64")
-          for PLATFORM in "${PLATFORMS[@]}"; do
-            set -- $PLATFORM
-            GOOS=$1 GOARCH=$2
-            OUTPUT_NAME="kanban-server-mysql-${GOOS}-${GOARCH}"
-            [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
-            echo "Building $OUTPUT_NAME (MySQL-only)..."
-            CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -tags mysql -o "../release/$OUTPUT_NAME" ./cmd/server
+          OUTPUT_NAME="kanban-server-mysql-${GOOS}-${GOARCH}"
+          [ "$GOOS" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          echo "Building $OUTPUT_NAME (MySQL-only)..."
+          CGO_ENABLED=0 go build -ldflags="-s -w" -tags mysql -o "../release/$OUTPUT_NAME" ./cmd/server
+          if [ "$GOOS" = "linux" ]; then
             upx -9 --best "../release/$OUTPUT_NAME" || true
-          done
+          fi
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v5
+        with:
+          name: backend-binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [prepare, build-backend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Download web archive
+        uses: actions/download-artifact@v5
+        with:
+          name: release-assets
+          path: release
+
+      - name: Download backend binaries
+        uses: actions/download-artifact@v5
+        with:
+          pattern: backend-binaries-*
+          path: release
+          merge-multiple: true
 
       - name: Copy Skill file
         run: |
